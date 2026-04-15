@@ -19,7 +19,8 @@
     "test:e2e:install": "playwright install --with-deps",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "postinstall": "tsr generate"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.4.0",

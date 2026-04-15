@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.output/
+.vinxi/
+dist/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Generated files
+app/routeTree.gen.ts

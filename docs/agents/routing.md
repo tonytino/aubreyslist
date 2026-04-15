@@ -15,7 +15,7 @@ Framework: TanStack Router (file-based). Routes live in `app/routes/`.
 ## Rules
 
 - Every route file must use `createFileRoute` with the correct path string.
-- `app/routeTree.gen.ts` is auto-generated on `pnpm dev` / `pnpm build`. Never edit it.
+- `app/routeTree.gen.ts` is auto-generated and gitignored. It is regenerated on `pnpm dev` / `pnpm build`, and also via the `postinstall` script (`tsr generate`) after `pnpm install`. Never edit it.
 - Use `Route.useParams()`, `Route.useSearch()` etc. — never `useParams` from React Router.
 - Loaders go in the route file via `createFileRoute`'s `loader` option, not in separate files.
 - For data that needs to be shared across routes, use TanStack Query — not route context.
