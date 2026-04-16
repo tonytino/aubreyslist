@@ -26,8 +26,8 @@
     "@hono/zod-validator": "^0.4.0",
     "@neondatabase/serverless": "^0.10.0",
     "@tanstack/react-query": "^5.67.0",
-    "@tanstack/react-router": "^1.114.0",
-    "@tanstack/react-start": "^1.114.0",
+    "@tanstack/react-router": "~1.114.3",
+    "@tanstack/react-start": "~1.114.3",
     "drizzle-orm": "^0.40.0",
     "hono": "^4.7.0",
     "react": "^19.0.0",
@@ -50,6 +50,28 @@
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
     "vite-tsconfig-paths": "^5.1.0",
+    "@tanstack/router-cli": "~1.114.3",
     "vitest": "^2.1.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@tanstack/react-router": "~1.114.3",
+      "@tanstack/react-start": "~1.114.3",
+      "@tanstack/react-start-client": "~1.114.3",
+      "@tanstack/react-start-server": "~1.114.3",
+      "@tanstack/react-start-config": "~1.114.3",
+      "@tanstack/react-start-plugin": "~1.114.3",
+      "@tanstack/react-start-router-manifest": "~1.114.3",
+      "@tanstack/router-plugin": "~1.114.3",
+      "@tanstack/router-generator": "~1.114.3",
+      "@tanstack/router-core": "~1.114.3",
+      "@tanstack/start-api-routes": "~1.114.3",
+      "@tanstack/server-functions-plugin": "~1.114.3",
+      "@tanstack/start-server-functions-server": "~1.114.3",
+      "@tanstack/start-server-functions-client": "~1.114.3",
+      "@tanstack/start-server-functions-handler": "~1.114.3",
+      "@tanstack/start-server-functions-ssr": "~1.114.3",
+      "@tanstack/router-cli": "~1.114.3"
+    }
   }
 }

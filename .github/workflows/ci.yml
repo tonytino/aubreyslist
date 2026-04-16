@@ -28,9 +28,8 @@ jobs:
       - name: Lint & format check
         run: pnpm exec biome check .
 
-      # Type check disabled pending TanStack Start v1 type fixes — see issue #6
-      # - name: Type check
-      #   run: pnpm typecheck
+      - name: Type check
+        run: pnpm typecheck
 
       - name: Unit tests
         run: pnpm exec vitest run
