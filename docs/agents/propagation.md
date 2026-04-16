@@ -10,13 +10,23 @@ When construct is updated, some changes should be rolled out to projects that we
 
 ---
 
+## How Scaffolded Projects Track Their Template Version
+
+Every project scaffolded from construct has a `.construct` JSON file at the repository root. This is the **single source of truth** for which template version the project was created from. The scaffold script (`scripts/scaffold.mjs`) writes this file automatically during setup.
+
+The key field is **`constructVersion`** — it records the construct `package.json` version at the time of scaffolding. During propagation, you update this field to the current construct version after applying changes.
+
+Always check `.construct` first when working with a scaffolded project. If the file is missing or the `constructVersion` field is absent, the project predates version tracking and should be treated as version `0.0.0`.
+
+---
+
 ## Setup
 
 You will be pointed at a directory containing one or more construct instances. Each instance has a `.construct` file at its root:
 
 ```json
 {
-  "constructVersion": "0.1.0",
+  "constructVersion": "0.2.0",
   "projectName": "my-project",
   "projectSlug": "my-project",
   "scaffoldedAt": "2026-04-13T00:00:00.000Z"

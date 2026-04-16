@@ -66,6 +66,7 @@ git worktree add -b issue-<NUMBER>-<short-slug> .claude/worktrees/issue-<NUMBER>
 3. Work in the branch created above.
 4. Commit early and often. Commit message format: `type: brief description` (e.g., `feat: add avatar upload endpoint`).
 5. Run `pnpm check` before every commit.
+6. Run `pnpm preflight` before declaring work complete — it runs lint, typecheck, and tests in one command.
 
 ---
 

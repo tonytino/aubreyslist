@@ -13,16 +13,17 @@ Source of truth for all agents in this repo. Read this file fully before making 
 
 ### Sub-Doc Index
 
-| Task involves...             | Read this first                  |
-| ---------------------------- | -------------------------------- |
-| Finding and claiming work    | `docs/agents/tasks.md`           |
-| Routes, pages, navigation    | `docs/agents/routing.md`         |
-| API endpoints, server logic  | `docs/agents/api.md`             |
-| Database, schema, migrations | `docs/agents/database.md`        |
-| Tests (unit, component, E2E) | `docs/agents/testing.md`         |
-| Styling, Tailwind, CSS       | `docs/agents/styling.md`         |
-| Environment variables        | `docs/agents/environment.md`     |
-| Propagating construct updates to instances | `docs/agents/propagation.md` |
+| Task involves...                           | Read this first                  |
+| ------------------------------------------ | -------------------------------- |
+| Finding and claiming work                  | `docs/agents/tasks.md`           |
+| Routes, pages, navigation                  | `docs/agents/routing.md`         |
+| API endpoints, server logic                | `docs/agents/api.md`             |
+| Database, schema, migrations               | `docs/agents/database.md`        |
+| Tests (unit, component, E2E)               | `docs/agents/testing.md`         |
+| Styling, Tailwind, CSS                     | `docs/agents/styling.md`         |
+| Environment variables                      | `docs/agents/environment.md`     |
+| Propagating construct updates to instances | `docs/agents/propagation.md`     |
+| Dependencies, versioning, overrides        | `docs/agents/dependencies.md`    |
 
 ---
 
@@ -72,6 +73,7 @@ These apply everywhere, always, with no exceptions.
 - **No new dependencies** without checking if the existing stack already covers the need.
 - **No skipping tests** for code you add.
 - **pnpm only.** Never use npm or yarn.
+- **Run `pnpm preflight` before declaring work complete.** This single command runs lint, typecheck, and tests.
 - **Run `pnpm check` before every commit.**
 
 ---
@@ -97,6 +99,12 @@ After work is done, open a PR with `Closes #<NUMBER>` and relabel to `status:nee
 
 ---
 
+## Template Version Tracking
+
+Projects scaffolded from construct contain a `.construct` JSON file at the repo root. Its `constructVersion` field records which version of the template was used. Agents working in a scaffolded project should check this file to understand what template features are available. See `docs/agents/propagation.md` for the full propagation workflow.
+
+---
+
 ## Commands
 
 ```bash
@@ -110,5 +118,6 @@ pnpm test:e2e         # Playwright E2E (headless)
 pnpm test:e2e:ui      # Playwright interactive UI
 pnpm db:generate      # Generate migrations after schema changes
 pnpm db:migrate       # Apply pending migrations
+pnpm preflight        # Single-command validation: lint + typecheck + tests
 pnpm db:studio        # Open Drizzle Studio
 ```

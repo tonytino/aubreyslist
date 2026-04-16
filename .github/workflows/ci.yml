@@ -35,11 +35,11 @@ jobs:
         run: pnpm exec vitest run
 
       - name: Install Playwright browsers
-        if: ${{ secrets.DATABASE_URL != '' }}
+        if: ${{ secrets.CI_E2E_DATABASE_URL != '' }}
         run: pnpm test:e2e:install
 
       - name: E2E tests
-        if: ${{ secrets.DATABASE_URL != '' }}
+        if: ${{ secrets.CI_E2E_DATABASE_URL != '' }}
         run: pnpm test:e2e
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}

@@ -1,0 +1,104 @@
+name: Validate Template
+
+on:
+  pull_request:
+
+jobs:
+  validate:
+    name: Scaffold & Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      # Install template deps first (needed for scaffold script)
+      - name: Install template dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Copy the repo to a temp directory to scaffold without destroying the checkout
+      - name: Copy template to temp directory
+        run: |
+          mkdir -p /tmp/scaffold-test
+          rsync -a --exclude='.git' --exclude='node_modules' . /tmp/scaffold-test/
+
+      # Run scaffold with piped answers: yes → project name → description → no (skip labels)
+      - name: Scaffold a test project
+        working-directory: /tmp/scaffold-test
+        run: printf 'yes\nmy-test-app\nA CI test application\nno\n' | node scripts/scaffold.mjs
+
+      # Verify the scaffold transformed AGENTS.md correctly
+      - name: Verify AGENTS.md substitution
+        working-directory: /tmp/scaffold-test
+        run: |
+          if head -1 AGENTS.md | grep -q "^# my-test-app$"; then
+            echo "✓ AGENTS.md heading substituted correctly"
+          else
+            echo "✗ AGENTS.md heading was not substituted"
+            echo "First line: $(head -1 AGENTS.md)"
+            exit 1
+          fi
+
+      # Verify .construct metadata was written
+      - name: Verify .construct metadata
+        working-directory: /tmp/scaffold-test
+        run: |
+          if [ -f .construct ]; then
+            echo "✓ .construct file exists"
+            cat .construct
+          else
+            echo "✗ .construct file missing"
+            exit 1
+          fi
+
+      # Verify scaffold self-destructed
+      - name: Verify scaffold removed itself
+        working-directory: /tmp/scaffold-test
+        run: |
+          if [ -f scripts/scaffold.mjs ]; then
+            echo "✗ scaffold.mjs should have been removed"
+            exit 1
+          else
+            echo "✓ scaffold.mjs removed"
+          fi
+
+      # Install deps in the scaffolded project (lockfile is stale after scaffold changes package.json)
+      - name: Install scaffolded project dependencies
+        working-directory: /tmp/scaffold-test
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Lint & format check
+        working-directory: /tmp/scaffold-test
+        run: pnpm exec biome check .
+
+      - name: Type check
+        working-directory: /tmp/scaffold-test
+        run: pnpm typecheck
+
+      - name: Unit tests
+        working-directory: /tmp/scaffold-test
+        run: pnpm exec vitest run
+
+      - name: Build
+        working-directory: /tmp/scaffold-test
+        run: pnpm build
+
+      - name: Install Playwright browsers
+        if: ${{ secrets.CI_E2E_DATABASE_URL != '' }}
+        working-directory: /tmp/scaffold-test
+        run: pnpm test:e2e:install
+
+      - name: E2E tests
+        if: ${{ secrets.CI_E2E_DATABASE_URL != '' }}
+        working-directory: /tmp/scaffold-test
+        run: pnpm test:e2e
+        env:
+          DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
