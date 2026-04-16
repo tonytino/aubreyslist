@@ -163,7 +163,16 @@ export default app;
 writeFile(path.join(ROOT, "app/server/index.ts"), serverIndex);
 console.log("✓ Example routes cleaned up");
 
-// 8. Set up GitHub issue labels (optional, requires gh auth login)
+// 8. Substitute project name into AGENTS.md
+const agentsPath = path.join(ROOT, "AGENTS.md");
+let agents = fs.readFileSync(agentsPath, "utf-8");
+agents = agents.replace(/^# AGENTS\.md$/m, `# ${projectName}`);
+agents = agents.replace(/the construct template/g, `the ${projectName} template`);
+agents = agents.replace(/Propagating construct updates/g, `Propagating ${projectName} updates`);
+writeFile(agentsPath, agents);
+console.log("✓ AGENTS.md updated");
+
+// 9. Set up GitHub issue labels (optional, requires gh auth login)
 console.log("\n📋 GitHub Label Setup\n");
 console.log("This will create the agentic task management labels in your GitHub repo.");
 console.log("Requires: gh CLI installed and authenticated (gh auth login)\n");
@@ -206,7 +215,7 @@ if (setupLabels.trim() === "yes") {
   console.log("  node scripts/labels.mjs  (or re-run and choose yes)\n");
 }
 
-// 9. Remove scaffold scripts
+// 10. Remove scaffold scripts
 removeFile(path.join(ROOT, "scripts/labels.mjs"));
 removeFile(path.join(ROOT, "scripts/scaffold.mjs"));
 try {

@@ -20,25 +20,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Lint & format check
         run: pnpm exec biome check .
 
-      # Type check disabled pending TanStack Start v1 type fixes — see issue #6
-      # - name: Type check
-      #   run: pnpm typecheck
+      - name: Type check
+        run: pnpm typecheck
 
       - name: Unit tests
         run: pnpm exec vitest run
 
-      # E2E tests disabled pending lockfile fix — see issue #8
-      # Requires: pnpm-lock.yaml committed from pnpm v9, DATABASE_URL secret configured
-      # - name: Install Playwright browsers
-      #   run: pnpm test:e2e:install
-      # - name: E2E tests
-      #   run: pnpm test:e2e
-      #   env:
-      #     DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Install Playwright browsers
+        if: ${{ secrets.DATABASE_URL != '' }}
+        run: pnpm test:e2e:install
+
+      - name: E2E tests
+        if: ${{ secrets.DATABASE_URL != '' }}
+        run: pnpm test:e2e
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

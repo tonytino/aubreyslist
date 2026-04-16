@@ -46,7 +46,7 @@ This repo uses **progressive documentation** — `AGENTS.md` stays lean and link
 | Framework            | TanStack Start v1             | Built on Vinxi                             |
 | Routing              | TanStack Router (file-based)  | Type-safe, auto-generates route tree       |
 | Server State         | TanStack Query v5             | For all async/server data                  |
-| API Layer            | Hono v4                       | Mounted at `/api/*`, RPC-typed             |
+| API Layer            | Hono v4 + server functions    | Dual-layer: server fns for route data, Hono for portable endpoints. See `docs/agents/api.md` |
 | Database             | Neon (serverless Postgres)    | Drizzle ORM, schema in `db/schema.ts`      |
 | Styling              | Tailwind CSS v4               | Oxide engine, CSS-first config             |
 | Linting + Formatting | Biome                         | Replaces ESLint + Prettier                 |

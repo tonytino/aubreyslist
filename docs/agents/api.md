@@ -6,16 +6,33 @@ This repo uses two complementary backend patterns. Choosing correctly matters.
 
 **Ask: could anything outside this app's frontend ever need this data?**
 
-- No → use a TanStack Start server function
-- Yes (or unsure) → use a Hono route
+| Question                                                        | Answer | Use                  |
+| --------------------------------------------------------------- | ------ | -------------------- |
+| Is this data consumed only by the route/component that loads it? | Yes    | Server function      |
+| Will a webhook, mobile app, cron job, or third party call this? | Yes    | Hono route           |
+| Does it need to be RESTful / independently testable via curl?    | Yes    | Hono route           |
+| Not sure yet?                                                    | —      | Start with Hono route (easier to consume later) |
 
 ## Layer 1 — Server Functions
 
-For data tightly coupled to a single route or component.
+For data tightly coupled to a single route or component.  Server functions run
+only on the server but are called like normal async functions from loaders or
+components — no endpoint URL, no fetch, no client wiring needed.
+
+### Live example
+
+`app/routes/index.tsx` contains a working server function (`getWelcome`).  Refer
+to it as the canonical pattern.
+
+### Minimal pattern
 
 ```ts
 // Inside a route file
+import { createFileRoute } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
+
 const getData = createServerFn().handler(async () => {
+  // Server-only code (DB access, secrets, etc.) is safe here
   return await db.select().from(myTable);
 });
 
@@ -23,11 +40,35 @@ export const Route = createFileRoute("/my-route")({
   loader: () => getData(),
   component: MyComponent,
 });
+
+function MyComponent() {
+  const data = Route.useLoaderData();
+  return <div>{JSON.stringify(data)}</div>;
+}
+```
+
+### When to validate inputs
+
+If the server function accepts user-supplied arguments, validate with Zod:
+
+```ts
+import { z } from "zod";
+
+const getItem = createServerFn()
+  .validator(z.object({ id: z.string().uuid() }))
+  .handler(async ({ data: { id } }) => {
+    return await db.select().from(items).where(eq(items.id, id));
+  });
 ```
 
 ## Layer 2 — Hono Routes
 
 For portable endpoints: webhooks, CRUD, anything consumable outside this frontend.
+
+### Live example
+
+`app/server/routes/example.ts` contains a working Hono route group (`exampleRoutes`).
+Refer to it as the canonical pattern.
 
 ### Adding a new Hono route group
 

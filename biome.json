@@ -30,6 +30,14 @@
     }
   },
   "files": {
-    "ignore": ["app/routeTree.gen.ts", "node_modules", ".vinxi", ".output", "dist"]
+    "ignore": [
+      "app/routeTree.gen.ts",
+      "app.config.timestamp_*",
+      "node_modules",
+      ".vinxi",
+      ".output",
+      "dist",
+      ".claude"
+    ]
   }
 }
