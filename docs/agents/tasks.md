@@ -70,6 +70,16 @@ git worktree add -b issue-<NUMBER>-<short-slug> .claude/worktrees/issue-<NUMBER>
 
 ---
 
+## Pre-commit Hooks
+
+This project uses [Lefthook](https://github.com/evilmartians/lefthook) to run pre-commit hooks automatically. After running `pnpm install`, Lefthook installs its Git hooks via the `prepare` lifecycle script. No manual setup is required.
+
+When you commit, Lefthook runs `biome check --staged` on all staged files matching common source extensions (`.ts`, `.tsx`, `.js`, `.jsx`, `.json`, `.css`). This catches lint and formatting issues before they enter the repository. If the check fails, the commit is blocked until you fix the reported problems.
+
+You can still run `pnpm check` manually for a full project-wide lint and format pass, but the pre-commit hook ensures that every commit is at least locally clean.
+
+---
+
 ## Updating the Changelog
 
 Before opening a PR, add an entry to `CHANGELOG.md` under `## [Unreleased]` (create the section if it doesn't exist):

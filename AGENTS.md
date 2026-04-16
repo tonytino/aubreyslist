@@ -24,6 +24,10 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Environment variables                      | `docs/agents/environment.md`     |
 | Propagating construct updates to instances | `docs/agents/propagation.md`     |
 | Dependencies, versioning, overrides        | `docs/agents/dependencies.md`    |
+| Architecture decisions, tradeoffs           | `docs/decisions/`                |
+| Upgrading a spawned project to a new version | `docs/migrations/`               |
+
+When you face a fork-in-the-road decision -- choosing between technologies, patterns, or approaches -- check `docs/decisions/` first. The ADRs there explain why specific choices were made and what constraints apply. This prevents re-litigating settled decisions.
 
 ---
 

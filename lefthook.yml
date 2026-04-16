@@ -1,0 +1,5 @@
+pre-commit:
+  commands:
+    lint-format:
+      glob: "*.{ts,tsx,js,jsx,json,css}"
+      run: pnpm exec biome check --staged --no-errors-on-unmatched {staged_files}

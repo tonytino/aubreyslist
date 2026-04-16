@@ -21,7 +21,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "postinstall": "tsr generate"
+    "postinstall": "tsr generate",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.4.0",
@@ -52,6 +53,7 @@
     "typescript": "^5.7.0",
     "vite-tsconfig-paths": "^5.1.0",
     "@tanstack/router-cli": "~1.114.3",
+    "lefthook": "^1.11.0",
     "vitest": "^2.1.0"
   },
   "pnpm": {
