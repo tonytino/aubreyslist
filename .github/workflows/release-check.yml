@@ -6,8 +6,6 @@ name: Release Check
 
 on:
   pull_request:
-    paths:
-      - "package.json"
 
 jobs:
   release-check:

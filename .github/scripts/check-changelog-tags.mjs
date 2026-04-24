@@ -25,7 +25,7 @@ for (const line of lines) {
     inTarget = match[1] === version;
     continue;
   }
-  if (inTarget && /^\s*-\s/.test(line)) {
+  if (inTarget && /^- /.test(line)) {
     bullets.push(line);
   }
 }
@@ -35,12 +35,12 @@ if (bullets.length === 0) {
   process.exit(1);
 }
 
-const tagRegex = /^\s*-\s+`\[(propagate|template-only|manual)\]`/;
+const tagRegex = /^- `\[(propagate|template-only|manual)\]`/;
 const untagged = bullets.filter((b) => !tagRegex.test(b));
 
 if (untagged.length > 0) {
   console.error(`CHANGELOG entries for [${version}] missing propagation tags:`);
-  for (const b of untagged) console.error("  " + b);
+  for (const b of untagged) console.error(`  ${b}`);
   console.error(
     "\nEach bullet must start with `[propagate]`, `[template-only]`, or `[manual]`. See docs/agents/releases.md."
   );
