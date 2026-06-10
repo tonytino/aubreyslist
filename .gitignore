@@ -6,6 +6,9 @@ node_modules/
 .vinxi/
 dist/
 
+# Test coverage
+coverage/
+
 # Environment variables
 .env
 .env.*
