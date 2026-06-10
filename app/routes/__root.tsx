@@ -1,5 +1,9 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
+// Import the stylesheet as a bundled URL so the bundler emits a hashed asset
+// and rewrites the href. Referencing the source path ("/app/styles/app.css")
+// works in dev but 404s after `vinxi build`.
+import appCss from "~/styles/app.css?url";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -8,7 +12,7 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "App" },
     ],
-    links: [{ rel: "stylesheet", href: "/app/styles/app.css" }],
+    links: [{ rel: "stylesheet", href: appCss }],
   }),
   component: RootComponent,
   notFoundComponent: NotFound,
