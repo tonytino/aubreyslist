@@ -13,7 +13,7 @@ if (!version) {
 }
 
 const changelog = readFileSync("CHANGELOG.md", "utf8");
-const lines = changelog.split("\n");
+const lines = changelog.split(/\r?\n/);
 
 const headerRegex = /^## \[(.+?)\]/;
 let inTarget = false;

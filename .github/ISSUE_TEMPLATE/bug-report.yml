@@ -39,8 +39,9 @@ body:
     id: size
     attributes:
       label: Size estimate
-      description: How big does this fix look?
+      description: How big does this fix look? Leave on "— select —" if unsure.
       options:
+        - "— select —"
         - "size:xs — < 30 min, single file"
         - "size:s — < 2 hrs, isolated change"
         - "size:m — 2–4 hrs, touches multiple files"
@@ -50,6 +51,8 @@ body:
     id: safety
     attributes:
       label: Safety
+      description: Leave on "— select —" if unsure; a maintainer will triage.
       options:
+        - "— select —"
         - "safe:agent — no pre-approval needed"
         - "safe:human — human must approve before agent acts"
