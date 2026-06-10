@@ -184,9 +184,12 @@ console.log("✓ .construct metadata written");
 removeFile(path.join(ROOT, "TEMPLATE.md"));
 console.log("✓ TEMPLATE.md removed");
 
-// 7. Remove example Hono route and clean up server index
+// 7. Remove example Hono route (and its test) and clean up server index.
+// Keep the handler block below in sync with app/server/index.ts.
 removeFile(path.join(ROOT, "app/server/routes/example.ts"));
+removeFile(path.join(ROOT, "app/server/index.test.ts"));
 const serverIndex = `import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 
 // Mount your route groups here
 // import { yourRoutes } from "./routes/your-resource";
@@ -194,6 +197,19 @@ const serverIndex = `import { Hono } from "hono";
 const app = new Hono().basePath("/api");
 
 // app.route("/your-resource", yourRoutes);
+
+// Consistent JSON for unmatched routes instead of Hono's default text 404.
+app.notFound((c) => c.json({ error: "Not Found" }, 404));
+
+// Centralized error handling. Honor intentional HTTPExceptions; otherwise log
+// and return a generic 500 without leaking internals (e.g. stack traces).
+app.onError((err, c) => {
+  if (err instanceof HTTPException) {
+    return err.getResponse();
+  }
+  console.error(err);
+  return c.json({ error: "Internal Server Error" }, 500);
+});
 
 export type AppType = typeof app;
 

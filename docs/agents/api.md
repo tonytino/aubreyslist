@@ -92,6 +92,23 @@ export const yourResourceRoutes = new Hono()
 
 Always validate request bodies with `zValidator` from `@hono/zod-validator`.
 
+## Errors and Not Found
+
+The Hono app (`app/server/index.ts`) centralizes both:
+
+- Unmatched routes return JSON `{ "error": "Not Found" }` with status 404.
+- Unhandled exceptions are logged and return `{ "error": "Internal Server Error" }` with status 500 — no stack traces leak.
+
+To return a specific status from a route, throw an `HTTPException` (it is passed through verbatim) rather than crafting an ad-hoc error response:
+
+```ts
+import { HTTPException } from "hono/http-exception";
+
+if (!item) throw new HTTPException(404, { message: "Item not found" });
+```
+
+The catch-all in `app/routes/api.$.ts` forwards every method — including `OPTIONS` (CORS preflight) and `HEAD` — to Hono, so add CORS middleware there if you need it.
+
 ## RPC Client — Frontend Consuming Hono
 
 Never use raw `fetch` against Hono routes from the frontend. Use the typed RPC client:
