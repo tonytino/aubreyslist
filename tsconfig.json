@@ -16,10 +16,13 @@
     // Paths
     "baseUrl": ".",
     "paths": {
+      // More specific first: ~/db/* resolves to the repo-root db/ directory,
+      // everything else under ~/ resolves to app/.
+      "~/db/*": ["./db/*"],
       "~/*": ["./app/*"]
     },
 
     "skipLibCheck": true
   },
-  "include": ["app", "tests"]
+  "include": ["app", "tests", "db"]
 }
