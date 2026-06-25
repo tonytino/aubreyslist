@@ -1,0 +1,1 @@
+- `[propagate]` Added an interactive `Counter` example component with a `@testing-library/user-event` test, demonstrating the full Testing Library + Vitest flow (render → real click → assert). Switched the jest-dom setup import to the Vitest-specific entry (`@testing-library/jest-dom/vitest`).

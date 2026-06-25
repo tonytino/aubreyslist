@@ -1,0 +1,1 @@
+- `[propagate]` Added an unused-dependency CI check (`pnpm knip`, configured in `knip.json`) that fails when a declared dependency is imported nowhere — the guardrail that would have caught the previously-unused `@tanstack/react-query`. Documented in `docs/agents/dependencies.md`.

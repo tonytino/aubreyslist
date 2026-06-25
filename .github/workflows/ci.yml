@@ -42,6 +42,9 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      - name: Unused dependency check
+        run: pnpm knip
+
       - name: Unit tests
         run: pnpm exec vitest run
 

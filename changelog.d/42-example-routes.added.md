@@ -1,0 +1,1 @@
+- `[propagate]` Added a `GET /api/health` liveness route (kept in scaffolded projects) and made the request-validation example route optional: scaffold no longer strips it, and `node scripts/remove-example.mjs` deletes it plus drops `@hono/zod-validator` for projects that don't want it.

@@ -95,3 +95,26 @@ Before adding a package:
 5. **Dev dependencies stay dev.** Test utilities, type packages, and build tools go in `devDependencies`.
 
 The hard rule from `AGENTS.md` applies: **no new dependencies without checking if the existing stack already covers the need.**
+
+## Unused Dependency Check
+
+CI runs [`knip`](https://knip.dev) via `pnpm knip` to fail the build when a
+declared dependency is imported nowhere (or an import has no corresponding
+dependency). This is the guardrail that would have caught `@tanstack/react-query`
+sitting in the stack unused before it was wired up.
+
+Config lives in `knip.json`. Three repo-specific settings keep false positives at zero:
+
+- **Entry points** list the vinxi / TanStack Start entries (`app/client.tsx`,
+  `app/ssr.tsx`, `app/router.tsx`, `app/routes/**`, `app/server/index.ts`) and the
+  standalone scripts — knip can't infer the framework's entrypoints on its own.
+- **`tailwindcss` is in `ignoreDependencies`** — it's consumed via
+  `@import "tailwindcss"` in `app/styles/app.css` and the `@tailwindcss/vite`
+  plugin, neither of which knip traces, so it would otherwise be a false "unused".
+- **The drizzle plugin is disabled** (`"drizzle": false`) so knip doesn't execute
+  `drizzle.config.ts` (which throws without `DATABASE_URL`). `drizzle-kit` is still
+  detected via the `db:*` scripts.
+
+Run it locally with `pnpm knip`. If knip flags a dependency you intend to keep
+unused, add it to `ignoreDependencies` in `knip.json` and note why in this
+section — don't silence the whole check.

@@ -100,6 +100,11 @@ For portable endpoints: webhooks, CRUD, anything consumable outside this fronten
 `app/server/routes/example.ts` contains a working Hono route group (`exampleRoutes`).
 Refer to it as the canonical pattern.
 
+The app also mounts a `GET /api/health` liveness route
+(`app/server/routes/health.ts`), kept by default. If you don't need the
+validation example, run `node scripts/remove-example.mjs` to delete it and drop
+`@hono/zod-validator`.
+
 ### Adding a new Hono route group
 
 1. Create `app/server/routes/your-resource.ts`

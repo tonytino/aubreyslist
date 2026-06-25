@@ -1,12 +1,18 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { exampleRoutes } from "./routes/example";
+import { healthRoutes } from "./routes/health";
 
 // All API routes are mounted under /api
 // This app is handed off from TanStack Start's catch-all API route
 const app = new Hono().basePath("/api");
 
-// Mount route groups here
+// Health check — a useful liveness probe. Keep it.
+app.route("/health", healthRoutes);
+
+// Example route demonstrating request validation with @hono/zod-validator.
+// Don't need it? Run `node scripts/remove-example.mjs` to delete the route and
+// drop the dependency (see docs/agents/api.md).
 app.route("/example", exampleRoutes);
 
 // Consistent JSON for unmatched routes instead of Hono's default text 404.

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "app/client.tsx",
+    "app/ssr.tsx",
+    "app/router.tsx",
+    "app/routes/**/*.tsx",
+    "app/server/index.ts",
+    "app.config.ts",
+    "scripts/labels.mjs",
+    "scripts/remove-example.mjs"
+  ],
+  "project": ["app/**/*.{ts,tsx}", "db/**/*.ts", "scripts/*.mjs"],
+  "ignoreDependencies": ["tailwindcss"],
+  "drizzle": false
+}
