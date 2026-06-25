@@ -69,6 +69,13 @@ pnpm test:e2e        # Headless
 pnpm test:e2e:ui     # Interactive UI (good for debugging)
 ```
 
+> Playwright's dev server (`playwright.config.ts`) runs `pnpm dev`, so it does
+> not exercise the production build. CI has a separate **Production build smoke**
+> job (`.github/workflows/ci.yml`) that runs `pnpm build && pnpm start` and
+> asserts the homepage and its stylesheet asset resolve — this catches
+> build-only breakage (e.g. an asset referenced by source path) that `pnpm dev`
+> hides. It needs no database.
+
 ## Coverage Requirements
 
 | What you add              | What you must test                        |

@@ -62,3 +62,45 @@ jobs:
         run: pnpm test:e2e
         env:
           DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+
+  build-smoke:
+    name: Production build smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # Serve the production build and smoke-test it. `pnpm dev` can't catch
+      # build-only breakage (e.g. a stylesheet referenced by source path, or a
+      # missing ?url asset import), so we assert the served HTML returns 200 and
+      # that its stylesheet asset actually resolves. No database required.
+      - name: Smoke-test the production server
+        run: |
+          pnpm start &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000 >/dev/null 2>&1 && break
+            sleep 1
+          done
+          HTML=$(curl -fsS http://localhost:3000) || { echo "::error::Homepage did not return 200 from the production server"; exit 1; }
+          CSS=$(printf '%s' "$HTML" | grep -oE '/[^"]*\.css' | head -1)
+          if [ -z "$CSS" ]; then
+            echo "::error::No stylesheet <link> found in served HTML"
+            exit 1
+          fi
+          echo "Stylesheet: $CSS"
+          curl -fsS "http://localhost:3000$CSS" -o /dev/null || { echo "::error::Stylesheet asset $CSS did not resolve (production asset path broken)"; exit 1; }
+          echo "✓ Production build serves the homepage (200) and the stylesheet resolves"
