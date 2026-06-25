@@ -14,6 +14,18 @@ Every version bump to construct **must** land with three things in the same PR:
 
 If any of these is missing, the PR is incomplete. The `.github/workflows/release-check.yml` workflow enforces this mechanically — it fails the PR if `version` changed without a matching CHANGELOG section and migration guide.
 
+## Changelog Entries Are Fragments
+
+Day to day you do **not** edit `CHANGELOG.md`'s `[Unreleased]` block. Each PR
+instead adds a fragment file under `changelog.d/` named `<slug>.<category>.md`
+(category = `added` / `changed` / `fixed` / …) with bullets that each carry a
+propagation tag. Because every PR adds its own file, PRs never collide on the
+changelog. CI requires every PR to add a fragment (skippable with the
+`skip-changelog` label) and `pnpm changelog:check` validates their format;
+`pnpm changelog:preview` renders the pending section. See
+`changelog.d/README.md` for the format. The release step (below) folds the
+fragments into a real `## [X.Y.Z]` section.
+
 ## Why All Three
 
 - `package.json` is what scaffolded projects capture in `.construct` when they are created. It is the ground truth for "which version am I on."
@@ -31,7 +43,7 @@ None of the three is redundant. The changelog answers *what*. The migration guid
 
 2. Bump `version` in `package.json`.
 
-3. Add a new section in `CHANGELOG.md` above the `[Unreleased]` block. Follow the pattern of the previous release: `Added` / `Changed` / `Fixed`, each entry tagged with `[propagate]` / `[template-only]` / `[manual]`.
+3. Run `pnpm changelog:release <version>` to fold the accumulated `changelog.d/` fragments into a new `## [<version>] - <date>` section in `CHANGELOG.md` (grouped `Added` / `Changed` / `Fixed`, propagation tags preserved) and delete the consumed fragments. Run `pnpm changelog:preview` first to see exactly what will land.
 
 4. Create `docs/migrations/vX.Y.md` using `docs/migrations/template.md` as a starting point. Cover every `[propagate]` CHANGELOG entry.
 

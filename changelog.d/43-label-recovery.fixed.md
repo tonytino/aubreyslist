@@ -1,0 +1,1 @@
+- `[template-only]` Scaffold's label-setup recovery path now works. `scripts/labels.mjs` is runnable directly (`node scripts/labels.mjs`) via an `import.meta.url` main guard and is no longer deleted during scaffold, so the printed "set up labels later" instruction actually creates the labels. Scaffold reuses the same `createLabels()` helper.

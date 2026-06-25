@@ -81,6 +81,13 @@ export const LABELS = [
     color: "e4b429",
     description: "Human must approve before the agent begins work",
   },
+
+  // ── Meta ──────────────────────────────────────────────────────────────────
+  {
+    name: "skip-changelog",
+    color: "ededed",
+    description: "PR intentionally ships without a changelog fragment",
+  },
 ];
 
 /**

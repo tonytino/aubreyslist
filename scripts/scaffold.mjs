@@ -205,7 +205,9 @@ Read [\`AGENTS.md\`](./AGENTS.md) before making any changes.
 writeFile(path.join(ROOT, "README.md"), readme);
 console.log("✓ README.md updated");
 
-// 4. Initialize a fresh CHANGELOG.md for the project
+// 4. Initialize a fresh CHANGELOG.md for the project and reset the changelog
+// fragments. Pending entries live as files under changelog.d/ (see the kept
+// scripts/changelog.mjs); the instance starts with none of construct's own.
 const changelog = `# Changelog
 
 All notable changes to ${projectName} will be documented here.
@@ -214,9 +216,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
+
+<!--
+Pending entries live as fragment files under changelog.d/ (one per PR). Run
+\`pnpm changelog:preview\` to render them and \`pnpm changelog:release <version>\`
+to cut a release. Do not hand-edit this block.
+-->
 `;
 writeFile(path.join(ROOT, "CHANGELOG.md"), changelog);
-console.log("✓ CHANGELOG.md initialized");
+const fragmentDir = path.join(ROOT, "changelog.d");
+if (fs.existsSync(fragmentDir)) {
+  for (const f of fs.readdirSync(fragmentDir)) {
+    if (f !== "README.md") removeFile(path.join(fragmentDir, f));
+  }
+}
+console.log("✓ CHANGELOG.md initialized (changelog.d/ reset)");
 
 // 5. Write .construct metadata
 const constructMeta = {

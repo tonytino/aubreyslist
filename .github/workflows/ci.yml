@@ -36,6 +36,9 @@ jobs:
       - name: Lint & format check
         run: pnpm exec biome check .
 
+      - name: Validate changelog fragments
+        run: pnpm changelog:check
+
       - name: Type check
         run: pnpm typecheck
 
@@ -104,3 +107,31 @@ jobs:
           echo "Stylesheet: $CSS"
           curl -fsS "http://localhost:3000$CSS" -o /dev/null || { echo "::error::Stylesheet asset $CSS did not resolve (production asset path broken)"; exit 1; }
           echo "✓ Production build serves the homepage (200) and the stylesheet resolves"
+
+  changelog-fragment:
+    name: Changelog fragment present
+    # PRs must add a changelog fragment (see changelog.d/). Skippable via the
+    # `skip-changelog` label for changes that genuinely need no entry (typo
+    # fixes, CI tweaks, the release PR itself).
+    if: >-
+      github.event_name == 'pull_request' &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-changelog')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Require a changelog fragment
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          ADDED=$(git diff --name-only --diff-filter=AM "$BASE_SHA" HEAD -- changelog.d/ \
+            | grep -v '^changelog.d/README.md$' || true)
+          if [ -z "$ADDED" ]; then
+            echo "::error::This PR adds no changelog fragment under changelog.d/. Add a <slug>.<category>.md fragment (see changelog.d/README.md), or apply the 'skip-changelog' label if no changelog entry is warranted."
+            exit 1
+          fi
+          echo "Changelog fragment(s) in this PR:"
+          echo "$ADDED"

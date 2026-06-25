@@ -16,6 +16,7 @@ Resolves #
 ## Propagation
 <!-- Fill this out if this PR changes anything an existing instance would care about. -->
 
+- [ ] Added a changelog fragment under `changelog.d/` (or applied the `skip-changelog` label if this change needs none — see `changelog.d/README.md`).
 - [ ] This PR does **not** bump `package.json` `version`. (If it does, the three items below are required — see `docs/agents/releases.md`.)
 - [ ] **OR** this PR bumps the version and includes:
   - [ ] A new `## [X.Y.Z]` section in `CHANGELOG.md` with every bullet tagged `[propagate]`, `[template-only]`, or `[manual]`
