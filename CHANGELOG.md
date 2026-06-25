@@ -17,6 +17,10 @@ Each entry is tagged to guide agents propagating changes to construct instances:
 
 ## [Unreleased]
 
+### Added
+
+- `[propagate]` Pinned the Node version: `engines.node` (`>=22`) in `package.json` and a root `.nvmrc`. CI now reads the pin via `actions/setup-node` `node-version-file` (in `ci.yml` and `validate-template.yml`) so the declared version and CI can't drift.
+
 ### Changed
 
 - `[propagate]` Completed the `pnpm.overrides` set and switched it to exact pins: all **25** `@tanstack/*` router/start internal packages are now pinned to their exact resolved versions (`1.114.29`–`1.114.35`) instead of the original `~1.114.3` range, matching the policy in `docs/agents/dependencies.md`. (The `[0.2.0]` entry's "17 packages / `~1.114.3`" records what that release shipped; this entry records the later completion so the CHANGELOG no longer contradicts `package.json`.)

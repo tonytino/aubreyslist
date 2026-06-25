@@ -16,6 +16,8 @@ A single-app template optimized for agentic engineering. Clone it, scaffold it, 
 
 ## Starting a New Project
 
+Requires **Node >= 22** (see `.nvmrc`) and **pnpm** (pinned via `packageManager`).
+
 ```bash
 git clone https://github.com/tonytino/construct my-project
 cd my-project
