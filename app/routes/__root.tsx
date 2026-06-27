@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import {
   HeadContent,
   Link,
@@ -7,6 +8,7 @@ import {
   createRootRouteWithContext,
 } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
+import { fetchCurrentUser } from "~/server/auth/current-user.fn";
 // Import the stylesheet as a bundled URL so the bundler emits a hashed asset
 // and rewrites the href. Referencing the source path ("/app/styles/app.css")
 // works in dev but 404s after `vinxi build`.
@@ -18,6 +20,13 @@ export interface RouterContext {
   queryClient: QueryClient;
 }
 
+// Who is signed in. Prefetched in the root loader so the header renders the
+// correct state on first paint (no useEffect/useState, no loading flash).
+const currentUserQuery = queryOptions({
+  queryKey: ["current-user"],
+  queryFn: () => fetchCurrentUser(),
+});
+
 export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
@@ -27,6 +36,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
+  loader: async ({ context }) => {
+    // Prefetch on the server so the header hydrates with the right auth state.
+    await context.queryClient.ensureQueryData(currentUserQuery);
+  },
   component: RootComponent,
   notFoundComponent: NotFound,
   errorComponent: RootErrorBoundary,
@@ -96,15 +109,49 @@ function SiteHeader() {
           </ul>
         </nav>
 
-        {/* Sign-in entry point PLACEHOLDER — non-functional; wired up in EPIC 1. */}
-        <button
-          type="button"
-          className="ml-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Sign in
-        </button>
+        <AuthControl />
       </div>
     </header>
+  );
+}
+
+// Sign-in / signed-in state. Reads the prefetched current-user query (hydrated
+// from the root loader), so it renders correctly on first paint.
+function AuthControl() {
+  const { data: user } = useSuspenseQuery(currentUserQuery);
+
+  if (!user) {
+    // Full-page navigation to the OAuth initiation route (not an RPC data
+    // fetch) — a plain anchor is the correct mechanism for the redirect dance.
+    return (
+      <a
+        href="/api/auth/google"
+        className="ml-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+      >
+        Continue with Google
+      </a>
+    );
+  }
+
+  return (
+    <div className="ml-auto flex items-center gap-3">
+      <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+        {user.avatarUrl ? (
+          <img src={user.avatarUrl} alt="" className="h-6 w-6 rounded-full" />
+        ) : null}
+        {user.name}
+      </span>
+      {/* Sign-out clears the session server-side then redirects home; a form
+          POST is the right mechanism for a state-changing, full-page action. */}
+      <form method="post" action="/api/auth/sign-out">
+        <button
+          type="submit"
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Sign out
+        </button>
+      </form>
+    </div>
   );
 }
 

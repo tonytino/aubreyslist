@@ -1,0 +1,6 @@
+- `[manual]` Google OAuth sign-in ("Continue with Google") and sign-out, the sole auth provider (ADR-006).
+- `[manual]` Stateless, server-signed session as a sealed cookie (`iron-webcrypto`, `SESSION_SECRET`) — no sessions table.
+- `[manual]` Hono auth routes under `/api/auth/*` with the callback at `/api/auth/callback/google`, hardened with OAuth `state` (CSRF) + PKCE.
+- `[manual]` First sign-in creates a `users` row (role `user`, ADR-010) keyed on the Google subject (`google_sub`); returning users resolve to the existing row.
+- `[manual]` Server-only `getCurrentUser()` accessor that verifies the session cookie and re-reads the live user row; the site header now shows real signed-in state.
+- `[manual]` CI applies `pnpm db:migrate` before the E2E steps (gated on `CI_E2E_DATABASE_URL`), since auth is the first DB-touching feature.
