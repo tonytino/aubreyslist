@@ -11,6 +11,25 @@ import { z } from "zod";
 export const envSchema = z.object({
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid URL"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+
+  // Human-provisioned secret (safe:human, Bucket 1). Optional for now so
+  // preflight/CI stay green while it's absent; promoted to required by the
+  // auth issue (#15) once Google OAuth is wired up. See ADR-006.
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+
+  // Human-provisioned secret (safe:human, Bucket 1). Optional until the auth
+  // issue (#15) wires Google OAuth and promotes it to required. See ADR-006.
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+
+  // Human-provisioned secret (safe:human, Bucket 1). Server-side Places key —
+  // never exposed client-side. Optional until the Places provider issue (#22)
+  // wires it and promotes it to required. See ADR-008.
+  GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
+
+  // Human-provisioned secret (safe:human, Bucket 1). Long random string for
+  // session signing (`openssl rand -hex 32`). Optional until the auth issue
+  // (#15) wires sessions and promotes it to required. See ADR-006.
+  SESSION_SECRET: z.string().min(1).optional(),
 });
 
 /** Validated environment shape. */

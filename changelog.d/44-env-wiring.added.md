@@ -1,0 +1,3 @@
+- `[manual]` Wired the human-provisioned secrets into the Zod env schema (`app/env.ts`): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_PLACES_API_KEY`, and `SESSION_SECRET`, all optional for now so preflight/CI stay green until #15/#22 promote them to required. `DATABASE_URL` stays required.
+- `[manual]` Documented every variable in `.env.example` with where to get it (Neon, Google Cloud Console, `openssl rand -hex 32`), mirroring `docs/setup/provisioning.md`.
+- `[manual]` Added env tests covering the optional secrets (absent parses, present passes through, empty-string rejected) and synced `docs/agents/environment.md` (new variables table) and `docs/setup/provisioning.md` (names finalized in #44).
