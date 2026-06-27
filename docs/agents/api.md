@@ -97,13 +97,16 @@ For portable endpoints: webhooks, CRUD, anything consumable outside this fronten
 
 ### Live example
 
-`app/server/routes/example.ts` contains a working Hono route group (`exampleRoutes`).
-Refer to it as the canonical pattern.
+The app mounts a `GET /api/health` liveness route
+(`app/server/routes/health.ts`). For the canonical route-group pattern, see
+**Adding a new Hono route group** below.
 
-The app also mounts a `GET /api/health` liveness route
-(`app/server/routes/health.ts`), kept by default. If you don't need the
-validation example, run `node scripts/remove-example.mjs` to delete it and drop
-`@hono/zod-validator`.
+> **Request validation:** `@hono/zod-validator` is not a dependency yet — the
+> example that demonstrated it was removed for a clean base. Add it
+> (`pnpm add @hono/zod-validator`) when you build the first endpoint that takes
+> a request body. It remains the standard validator for this layer: it is used
+> in the snippet below and required by the "Do Not" rules at the bottom of this
+> doc.
 
 ### Adding a new Hono route group
 

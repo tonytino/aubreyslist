@@ -1,0 +1,2 @@
+- `[manual]` Removed construct example scaffolding (Counter/Greeting components, /api/example route, format util) to build on a clean base.
+- `[manual]` Dropped the now-unused `@hono/zod-validator` and `@testing-library/user-event` dev dependencies; re-add them when the first validated endpoint / interaction test needs them (the validation pattern stays documented in `docs/agents/api.md`).
