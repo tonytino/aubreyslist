@@ -2,6 +2,23 @@
 
 All environment variables are validated with Zod in `app/env.ts`. Validation runs lazily on the first call to `getEnv()` (memoized thereafter), not at import time — so importing modules that depend on env, such as `db/client.ts`, stays safe in tests and non-Node contexts. Invalid env throws a descriptive `Error` rather than exiting the process.
 
+## Current Variables
+
+| Variable                | Required? | Provisioned by | Notes |
+| ----------------------- | --------- | -------------- | ----- |
+| `DATABASE_URL`          | Required  | human (#19)    | Neon Postgres connection string. |
+| `NODE_ENV`              | Optional  | runtime        | `development` \| `production` \| `test`; defaults to `development`. |
+| `GOOGLE_CLIENT_ID`      | Optional* | human (#14)    | Google OAuth client ID (ADR-006). Promoted to required by #15. |
+| `GOOGLE_CLIENT_SECRET`  | Optional* | human (#14)    | Google OAuth client secret. Promoted to required by #15. |
+| `GOOGLE_PLACES_API_KEY` | Optional* | human (#21)    | Server-side Places key (ADR-008). Promoted to required by #22. |
+| `SESSION_SECRET`        | Optional* | human (#14)    | Long random string for session signing. Promoted to required by #15. |
+
+\* The human-provisioned secrets are declared `optional()` for now so
+`pnpm preflight` / CI stay green while they're unprovisioned. The auth (#15) and
+Places (#22) issues promote them to required as they're wired up. The var names
+above are finalized here (#44) and in `.env.example` — they are the source of
+truth if the provisioning guide differs.
+
 ## Adding a New Variable
 
 1. Add it to the schema in `app/env.ts`:
@@ -33,6 +50,13 @@ console.log(env.YOUR_NEW_VAR);
 ## Rules
 
 - Never access `process.env` directly outside of `app/env.ts`.
+  - **Narrow exception — build config only:** `app.config.ts` (and other
+    build-time tooling that never ships to the client) may read **non-secret
+    platform build flags** directly, e.g. `process.env.VERCEL` to pick a Nitro
+    deployment preset. The rule exists to keep **secrets** validated and
+    client-safe via `getEnv()`; a public build flag is neither. **Secrets must
+    still never be read outside `app/env.ts`** — do not use this exception for
+    `DATABASE_URL`, session, or API keys.
 - Never commit `.env`. It is gitignored.
 - Always keep `.env.example` in sync with `app/env.ts`.
 - In CI, secrets are injected via GitHub Actions secrets — see `.github/workflows/ci.yml`.

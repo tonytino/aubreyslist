@@ -28,4 +28,36 @@ describe("parseEnv", () => {
     // Regression guard: parseEnv must throw (catchable), never process.exit.
     expect(() => parseEnv({ DATABASE_URL: "" })).toThrow();
   });
+
+  it("parses when the optional human-provisioned secrets are absent", () => {
+    const env = parseEnv({ DATABASE_URL: "postgres://user:pass@host/db" });
+    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+    expect(env.GOOGLE_CLIENT_SECRET).toBeUndefined();
+    expect(env.GOOGLE_PLACES_API_KEY).toBeUndefined();
+    expect(env.SESSION_SECRET).toBeUndefined();
+  });
+
+  it("passes through the optional secrets when present", () => {
+    const env = parseEnv({
+      DATABASE_URL: "postgres://user:pass@host/db",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_PLACES_API_KEY: "places-key",
+      SESSION_SECRET: "a-long-random-session-secret",
+    });
+    expect(env.GOOGLE_CLIENT_ID).toBe("client-id");
+    expect(env.GOOGLE_CLIENT_SECRET).toBe("client-secret");
+    expect(env.GOOGLE_PLACES_API_KEY).toBe("places-key");
+    expect(env.SESSION_SECRET).toBe("a-long-random-session-secret");
+  });
+
+  it("rejects an empty string for an optional secret", () => {
+    // Provided-but-empty is a misconfiguration, not an absent var.
+    expect(() =>
+      parseEnv({
+        DATABASE_URL: "postgres://user:pass@host/db",
+        SESSION_SECRET: "",
+      })
+    ).toThrowError(/SESSION_SECRET/);
+  });
 });
