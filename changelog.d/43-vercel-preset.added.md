@@ -1,2 +1,3 @@
-- `[manual]` Target Vercel via the Nitro/Vinxi `vercel` deployment preset in `app.config.ts` so the build emits Vercel Build Output API output (`.vercel/output`), resolving the "No Output Directory named 'dist'" build failure.
+- `[manual]` Target Vercel via the Nitro/Vinxi `vercel` deployment preset in `app.config.ts`, applied only when building on Vercel (`VERCEL=1`), so the build emits Vercel Build Output API output (`.vercel/output`) and resolves the "No Output Directory named 'dist'" failure — while local/CI builds keep the default node-server output so `pnpm build && pnpm start` and the production-build smoke test still work.
 - `[manual]` Added `.vercel/` to `.gitignore` so the generated Build Output API directory is never committed.
+- `[manual]` Documented a narrow carve-out to the no-`process.env` rule: build-time tooling (e.g. `app.config.ts`) may read non-secret platform build flags like `VERCEL` directly; secrets still flow only through `app/env.ts`.
