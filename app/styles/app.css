@@ -1,8 +1,110 @@
 @import "tailwindcss";
 
+/*
+ * Aubrey's List — brand identity + accessible design tokens (issue #12).
+ *
+ * Direction: clean / clinical-but-warm, mobile-first. Purple-led brand with
+ * soft pastel accents. Tailwind v4 is CSS-first: every token below is exposed
+ * to JSX as a utility (e.g. `--color-brand` -> `bg-brand text-brand`,
+ * `--text-display` -> `text-display`, `--spacing-gutter` -> `p-gutter`).
+ *
+ * ACCESSIBILITY NON-NEGOTIABLE (see docs/product/overview.md + docs/agents/styling.md):
+ * Safety signals NEVER rely on colour alone. The pastel accents are decorative;
+ * every safety state pairs a colour with an icon AND a text label, and the
+ * *-foreground tokens below meet WCAG AA (>= 4.5:1) against their *-soft
+ * backgrounds and against white. Pastels are used for fills only — never to
+ * carry the meaning by themselves.
+ */
+
 @theme {
+  /* ----------------------------------------------------------------------- */
+  /* Brand — purple-led                                                      */
+  /* ----------------------------------------------------------------------- */
+  --color-brand: oklch(0.51 0.21 295); /* #6d28d9-ish — primary purple */
+  --color-brand-foreground: oklch(0.99 0 0); /* white text on brand */
+  --color-brand-strong: oklch(0.42 0.2 293); /* hover/active, AA on white */
+  --color-brand-soft: oklch(0.96 0.02 295); /* tinted surfaces / chips */
+  --color-brand-ring: oklch(0.62 0.18 295); /* focus ring */
+
+  /* Pastel accents — decorative only, never load-bearing for safety meaning */
+  --color-accent-lavender: oklch(0.92 0.05 295);
+  --color-accent-mint: oklch(0.93 0.06 165);
+  --color-accent-peach: oklch(0.93 0.05 55);
+  --color-accent-sky: oklch(0.93 0.05 235);
+
+  /* ----------------------------------------------------------------------- */
+  /* Neutrals / surfaces                                                     */
+  /* ----------------------------------------------------------------------- */
+  --color-background: oklch(0.99 0.004 295);
+  --color-foreground: oklch(0.22 0.02 295); /* near-black, AAA on background */
+  --color-surface: oklch(1 0 0);
+  --color-border: oklch(0.9 0.01 295);
+
   /* Muted/secondary text — backs the `text-muted-foreground` utility used by
      the starter routes. Tailwind v4 emits nothing for an undefined color
-     utility, so this token must exist for that class to render. */
-  --color-muted-foreground: oklch(0.556 0 0);
+     utility, so this token must exist for that class to render. KEEP. */
+  --color-muted-foreground: oklch(0.476 0.02 295);
+
+  /* ----------------------------------------------------------------------- */
+  /* Safety states — the headline domain signal (see docs/agents/domain.md). */
+  /* Each state has: a strong colour (text/icon/border, AA on white + on soft) */
+  /* and a soft pastel fill. Colour is ALWAYS paired with icon + label in the  */
+  /* SafetySignal component; these tokens never stand alone as meaning.        */
+  /* ----------------------------------------------------------------------- */
+
+  /* celiac-safe — the trustworthy headline state (green, not pastel-weak) */
+  --color-celiac-safe: oklch(0.43 0.13 155); /* ~6.6:1 on white */
+  --color-celiac-safe-foreground: oklch(0.99 0 0);
+  --color-celiac-safe-soft: oklch(0.95 0.04 160);
+
+  /* gluten-friendly — caution / "GF-ish", deliberately distinct from safe */
+  --color-gluten-friendly: oklch(0.47 0.12 75); /* warm amber-brown, ~5.5:1 */
+  --color-gluten-friendly-foreground: oklch(0.99 0 0);
+  --color-gluten-friendly-soft: oklch(0.95 0.05 80);
+
+  /* stale — "may be stale" freshness flag (slate/blue-grey, neutral) */
+  --color-stale: oklch(0.45 0.04 255); /* ~6.1:1 on white */
+  --color-stale-foreground: oklch(0.99 0 0);
+  --color-stale-soft: oklch(0.95 0.02 255);
+
+  /* incident — recent "got glutened" harm flag (strong red, highest urgency) */
+  --color-incident: oklch(0.48 0.2 25); /* ~5.4:1 on white */
+  --color-incident-foreground: oklch(0.99 0 0);
+  --color-incident-soft: oklch(0.95 0.04 25);
+
+  /* ----------------------------------------------------------------------- */
+  /* Type scale — mobile-first, fluid-friendly. Backs `text-*` utilities.     */
+  /* ----------------------------------------------------------------------- */
+  --text-caption: 0.75rem; /* 12px */
+  --text-caption--line-height: 1rem;
+  --text-body-sm: 0.875rem; /* 14px */
+  --text-body-sm--line-height: 1.25rem;
+  --text-body: 1rem; /* 16px */
+  --text-body--line-height: 1.5rem;
+  --text-lead: 1.125rem; /* 18px */
+  --text-lead--line-height: 1.75rem;
+  --text-title: 1.5rem; /* 24px */
+  --text-title--line-height: 2rem;
+  --text-title--font-weight: 600;
+  --text-headline: 2rem; /* 32px */
+  --text-headline--line-height: 2.5rem;
+  --text-headline--font-weight: 700;
+  --text-display: 2.75rem; /* 44px */
+  --text-display--line-height: 3rem;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.02em;
+
+  /* ----------------------------------------------------------------------- */
+  /* Spacing — semantic aliases on top of Tailwind's default scale.           */
+  /* Backs `p-*`, `m-*`, `gap-*` etc. (e.g. `gap-gutter`, `p-card`).          */
+  /* ----------------------------------------------------------------------- */
+  --spacing-gutter: 1rem; /* page gutter, mobile-first */
+  --spacing-card: 1.25rem; /* card inner padding */
+  --spacing-section: 2.5rem; /* vertical rhythm between sections */
+
+  /* ----------------------------------------------------------------------- */
+  /* Radii                                                                    */
+  /* ----------------------------------------------------------------------- */
+  --radius-chip: 9999px;
+  --radius-card: 0.75rem;
 }
