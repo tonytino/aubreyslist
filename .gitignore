@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 .output/
 .vinxi/
+.vercel/
 dist/
 
 # Test coverage

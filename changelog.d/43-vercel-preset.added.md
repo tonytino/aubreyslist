@@ -1,0 +1,2 @@
+- `[manual]` Target Vercel via the Nitro/Vinxi `vercel` deployment preset in `app.config.ts` so the build emits Vercel Build Output API output (`.vercel/output`), resolving the "No Output Directory named 'dist'" build failure.
+- `[manual]` Added `.vercel/` to `.gitignore` so the generated Build Output API directory is never committed.
