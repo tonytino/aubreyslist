@@ -1,0 +1,1 @@
+- `[manual]` Removed construct example scaffolding (Counter/Greeting components, /api/example route, format util) to build on a clean base.

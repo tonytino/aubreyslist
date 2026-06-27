@@ -35,9 +35,6 @@ importers:
 
   .:
     dependencies:
-      '@hono/zod-validator':
-        specifier: ^0.4.0
-        version: 0.4.3(hono@4.12.14)(zod@3.25.76)
       '@neondatabase/serverless':
         specifier: ^0.10.0
         version: 0.10.4
@@ -1372,12 +1369,6 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
-
-  '@hono/zod-validator@0.4.3':
-    resolution: {integrity: sha512-xIgMYXDyJ4Hj6ekm9T9Y27s080Nl9NXHcJkOvkXPhubOLj8hZkOL8pDnnXfvCf5xEE8Q4oMFenQUZZREUY2gqQ==}
-    peerDependencies:
-      hono: '>=3.9.0'
-      zod: ^3.19.1
 
   '@ioredis/commands@1.5.1':
     resolution: {integrity: sha512-JH8ZL/ywcJyR9MmJ5BNqZllXNZQqQbnVZOqpPQqE1vHiFgAw4NHbvE0FOduNU8IX9babitBT46571OnPTT0Zcw==}
@@ -5512,11 +5503,6 @@ snapshots:
 
   '@esbuild/win32-x64@0.27.7':
     optional: true
-
-  '@hono/zod-validator@0.4.3(hono@4.12.14)(zod@3.25.76)':
-    dependencies:
-      hono: 4.12.14
-      zod: 3.25.76
 
   '@ioredis/commands@1.5.1': {}
 
