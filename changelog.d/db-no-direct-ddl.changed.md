@@ -1,0 +1,1 @@
+- `[propagate]` Documented an explicit database rule: never create/alter tables directly in the DB (e.g. Neon SQL editor) — all schema changes go through Drizzle migrations, to prevent schema drift.

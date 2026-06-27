@@ -56,6 +56,7 @@ await db.delete(posts).where(eq(posts.id, "1"));
 
 - `db` is **server-only**. Never import it in components, hooks, or any file that runs in the browser.
 - Never edit files in `db/migrations/` manually.
+- **Never create or alter tables directly in the database** (e.g. the Neon SQL editor/console, or any hand-written DDL). All schema changes go through `db/schema.ts` + `pnpm db:generate` → `pnpm db:migrate`. Writing DDL straight to the database causes drift between the live schema and the migrations — the database must only ever be changed by applying migrations.
 - Always export `$inferSelect` and `$inferInsert` types alongside new tables.
 - Use `pnpm db:studio` to inspect the database visually during development.
 
