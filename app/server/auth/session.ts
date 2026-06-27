@@ -89,10 +89,23 @@ export async function readSessionCookieValue(sealed: string): Promise<SessionPay
   return parsed.data;
 }
 
-/** `Set-Cookie` attributes shared by the session cookie set/clear paths. */
+/**
+ * Whether auth cookies set the `Secure` attribute. Disabled outside production
+ * so sign-in works over local `http://localhost` (browsers drop `Secure`
+ * cookies on non-HTTPS); enabled in production, where the app is served over
+ * HTTPS. Evaluated per-request — never at module load — to keep `getEnv()` lazy.
+ */
+export function cookieSecure(): boolean {
+  return getEnv().NODE_ENV === "production";
+}
+
+/**
+ * `Set-Cookie` attributes shared by the session cookie set/clear paths. The
+ * `secure` attribute is applied separately via {@link cookieSecure} at the set
+ * site so it reflects the runtime environment.
+ */
 export const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: true,
   sameSite: "Lax",
   path: "/",
 } as const;

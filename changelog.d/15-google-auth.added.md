@@ -4,3 +4,4 @@
 - `[manual]` First sign-in creates a `users` row (role `user`, ADR-010) keyed on the Google subject (`google_sub`); returning users resolve to the existing row.
 - `[manual]` Server-only `getCurrentUser()` accessor that verifies the session cookie and re-reads the live user row; the site header now shows real signed-in state.
 - `[manual]` CI applies `pnpm db:migrate` before the E2E steps (gated on `CI_E2E_DATABASE_URL`), since auth is the first DB-touching feature.
+- `[manual]` Auth cookies (session + OAuth state/PKCE) set `Secure` only in production (`NODE_ENV`), so sign-in works over local `http://localhost` dev while staying HTTPS-only in prod.

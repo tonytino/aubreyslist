@@ -12,6 +12,7 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_COOKIE_OPTIONS,
   SESSION_MAX_AGE_SECONDS,
+  cookieSecure,
   createSessionCookieValue,
 } from "../auth/session";
 import { upsertUserFromGoogle } from "../auth/users";
@@ -35,13 +36,17 @@ const VERIFIER_COOKIE_NAME = "al_oauth_verifier";
 // Short-lived: the OAuth round-trip should complete in well under 10 minutes.
 const OAUTH_TX_MAX_AGE_SECONDS = 60 * 10;
 
-const TX_COOKIE_OPTIONS = {
+const TX_COOKIE_BASE = {
   httpOnly: true,
-  secure: true,
   sameSite: "Lax",
   path: "/",
   maxAge: OAUTH_TX_MAX_AGE_SECONDS,
 } as const;
+
+/** Transaction-cookie attributes with the env-aware `secure` flag applied. */
+function txCookieOptions() {
+  return { ...TX_COOKIE_BASE, secure: cookieSecure() } as const;
+}
 
 /** Compute the absolute callback URL from the incoming request's origin. */
 function callbackUrl(requestUrl: string): string {
@@ -55,8 +60,8 @@ export const authRoutes = new Hono()
     const codeVerifier = generateRandomToken();
     const codeChallenge = await deriveCodeChallenge(codeVerifier);
 
-    setCookie(c, STATE_COOKIE_NAME, state, TX_COOKIE_OPTIONS);
-    setCookie(c, VERIFIER_COOKIE_NAME, codeVerifier, TX_COOKIE_OPTIONS);
+    setCookie(c, STATE_COOKIE_NAME, state, txCookieOptions());
+    setCookie(c, VERIFIER_COOKIE_NAME, codeVerifier, txCookieOptions());
 
     const authUrl = buildAuthorizationUrl({
       redirectUri: callbackUrl(c.req.url),
@@ -102,6 +107,7 @@ export const authRoutes = new Hono()
     const sessionValue = await createSessionCookieValue(user.id);
     setCookie(c, SESSION_COOKIE_NAME, sessionValue, {
       ...SESSION_COOKIE_OPTIONS,
+      secure: cookieSecure(),
       maxAge: SESSION_MAX_AGE_SECONDS,
     });
 
