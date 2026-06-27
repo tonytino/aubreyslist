@@ -1,0 +1,1 @@
+- `[manual]` Added v1 product overview (`docs/product/overview.md`), domain model (`docs/agents/domain.md`), and ADRs 006–010 capturing the Aubrey's List planning decisions (Google OAuth, trust model, Places intake, Vercel hosting, RBAC).

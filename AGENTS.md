@@ -1,4 +1,9 @@
-# aubreyslist
+# Aubrey's List
+
+A community-driven directory of how safe restaurants are for people with a
+gluten-free / celiac need — built **agent-first**. Start with
+`docs/product/overview.md` for the product vision and v1 decision record, and
+`docs/agents/domain.md` for the domain model (taxonomy, trust mechanics, roles).
 
 Source of truth for all agents in this repo. Read this file fully before making any changes.
 
@@ -15,6 +20,8 @@ Source of truth for all agents in this repo. Read this file fully before making 
 
 | Task involves...                              | Read this first               |
 | --------------------------------------------- | ----------------------------- |
+| Understanding what/why we're building         | `docs/product/overview.md`    |
+| Domain: listings, GF taxonomy, trust, roles   | `docs/agents/domain.md`       |
 | Finding and claiming work                     | `docs/agents/tasks.md`        |
 | Routes, pages, navigation                     | `docs/agents/routing.md`      |
 | API endpoints, server logic                   | `docs/agents/api.md`          |
