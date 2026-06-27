@@ -27,6 +27,28 @@ tag (`` `[propagate]` ``, `` `[template-only]` ``, or `` `[manual]` `` — see
 - `[propagate]` Added a `knip` CI check that fails on unused dependencies.
 ```
 
+### Which propagation tag in this repo
+
+This project was **scaffolded from the construct template**. Propagation tags
+exist so template changes can flow *down* to spawned instances — but this repo
+is an **instance (a leaf)**, so the tags do not drive any automatic propagation
+here. They are still required for format consistency (`changelog:check` enforces
+one per bullet). Convention for this repo:
+
+- **`[manual]`** — default for app-specific work (most changes). Use this unless
+  the change is genuinely reusable upstream.
+- **`[propagate]`** — use *only* to flag a change worth upstreaming to the
+  construct template because every instance would want it (e.g. a generic doc
+  rule, a tooling/CI fix). It does nothing automatically here, so when you use
+  it you **must also open a tracking issue on
+  [`tonytino/construct`](https://github.com/tonytino/construct)** describing the
+  change, so it actually gets ported back to the template (and thus to every
+  other instance) instead of getting lost. Bots: opening that construct issue is
+  part of the task whenever you tag a fragment `[propagate]`.
+- **`[template-only]`** — not applicable in an instance; don't use it here.
+
+When unsure, use `[manual]`.
+
 ## Commands
 
 ```bash

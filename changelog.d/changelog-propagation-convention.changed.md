@@ -1,0 +1,1 @@
+- `[propagate]` Documented the propagation-tag convention for this instance repo in `changelog.d/README.md`: default to `[manual]` for app-specific changes; use `[propagate]` only to flag a change worth upstreaming to the construct template, and open a tracking issue on `tonytino/construct` when you do. Clears up `[manual]` vs `[propagate]` ambiguity for a leaf instance.
