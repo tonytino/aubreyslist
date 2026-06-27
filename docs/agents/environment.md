@@ -50,6 +50,13 @@ console.log(env.YOUR_NEW_VAR);
 ## Rules
 
 - Never access `process.env` directly outside of `app/env.ts`.
+  - **Narrow exception — build config only:** `app.config.ts` (and other
+    build-time tooling that never ships to the client) may read **non-secret
+    platform build flags** directly, e.g. `process.env.VERCEL` to pick a Nitro
+    deployment preset. The rule exists to keep **secrets** validated and
+    client-safe via `getEnv()`; a public build flag is neither. **Secrets must
+    still never be read outside `app/env.ts`** — do not use this exception for
+    `DATABASE_URL`, session, or API keys.
 - Never commit `.env`. It is gitignored.
 - Always keep `.env.example` in sync with `app/env.ts`.
 - In CI, secrets are injected via GitHub Actions secrets — see `.github/workflows/ci.yml`.

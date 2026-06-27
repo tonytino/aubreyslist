@@ -77,7 +77,7 @@ This repo uses **progressive documentation** — `AGENTS.md` stays lean and link
 
 These apply everywhere, always, with no exceptions.
 
-- **No `process.env` access outside `app/env.ts`.** All env vars go through the Zod-validated `getEnv()` accessor.
+- **No `process.env` access outside `app/env.ts`.** All env vars go through the Zod-validated `getEnv()` accessor. (One narrow exception: build-time tooling like `app.config.ts` may read **non-secret** platform build flags such as `VERCEL` directly — never secrets. See `docs/agents/environment.md`.)
 - **No `any`.** Use `unknown` and narrow it, or fix the type properly.
 - **No `@ts-ignore` or `@ts-expect-error`** without a comment explaining why.
 - **No `useEffect` + `useState` for data fetching.** Use TanStack Query.
