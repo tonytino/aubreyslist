@@ -1,4 +1,4 @@
-# AGENTS.md
+# aubreyslist
 
 Source of truth for all agents in this repo. Read this file fully before making any changes.
 
@@ -7,7 +7,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 ## Before You Start Any Task
 
 1. Read this file fully.
-2. **If `TEMPLATE.md` exists in this repo**, read it before doing anything else — it means you are modifying the construct template itself, not a project built from it. The design principles there govern every decision.
+2. **If `TEMPLATE.md` exists in this repo**, read it before doing anything else — it means you are modifying the aubreyslist template itself, not a project built from it. The design principles there govern every decision.
 3. Check `docs/agents/` for a sub-doc relevant to your task and read it fully before proceeding.
 4. If no relevant sub-doc exists yet, follow the **Documentation Philosophy** below before creating one.
 

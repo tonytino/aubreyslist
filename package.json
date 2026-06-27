@@ -1,6 +1,6 @@
 {
-  "name": "construct",
-  "version": "0.3.0",
+  "name": "aubreyslist",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.0",
@@ -8,7 +8,6 @@
     "node": ">=22"
   },
   "scripts": {
-    "scaffold": "node scripts/scaffold.mjs",
     "dev": "vinxi dev",
     "build": "vinxi build",
     "start": "vinxi start",
@@ -96,5 +95,6 @@
       "@tanstack/virtual-file-routes": "1.114.29",
       "@tanstack/router-cli": "1.114.35"
     }
-  }
+  },
+  "description": "A web app built from the construct template."
 }

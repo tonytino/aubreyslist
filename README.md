@@ -1,6 +1,6 @@
-# construct
+# aubreyslist
 
-A single-app template optimized for agentic engineering. Clone it, scaffold it, build.
+A web app built from the construct template.
 
 ## Stack
 
@@ -14,19 +14,16 @@ A single-app template optimized for agentic engineering. Clone it, scaffold it, 
 - **Hono** — API layer with RPC
 - **Drizzle + Neon** — type-safe Postgres
 
-## Starting a New Project
-
-Requires **Node >= 22** (see `.nvmrc`) and **pnpm** (pinned via `packageManager`).
+## Getting Started
 
 ```bash
-git clone https://github.com/tonytino/construct my-project
-cd my-project
 pnpm install
-pnpm scaffold
+cp .env.example .env   # then fill in DATABASE_URL — see docs/agents/environment.md
+pnpm dev
 ```
+
+Running E2E tests? Install browsers first with `pnpm test:e2e:install`.
 
 ## For Agents
 
-- Building a project from this template → read [`AGENTS.md`](./AGENTS.md)
-- Modifying the template itself → read [`TEMPLATE.md`](./TEMPLATE.md)
-- Propagating changes to instances → read [`docs/agents/propagation.md`](./docs/agents/propagation.md)
+Read [`AGENTS.md`](./AGENTS.md) before making any changes.
