@@ -1,6 +1,9 @@
-# aubreyslist
+# Aubrey's List
 
-A web app built from the construct template.
+A community-driven directory of how safe restaurants are for people with a
+gluten-free / celiac need, piloting in Denver, CO. Built from the construct
+template, agent-first. See [`docs/product/overview.md`](./docs/product/overview.md)
+for the product vision and v1 decision record.
 
 ## Stack
 

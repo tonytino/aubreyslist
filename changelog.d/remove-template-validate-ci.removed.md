@@ -1,0 +1,1 @@
+- `[manual]` Removed the template-only `validate-template.yml` workflow. It runs `scripts/scaffold.mjs`, which self-destructs during scaffolding, so it failed on every PR in spawned instances.
