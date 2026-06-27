@@ -4,3 +4,4 @@
 - `[manual]` `flags` model the moderation target as an exclusive arc: nullable `listing_id`/`claim_id`/`incident_id` FKs (cascade delete) plus a `flags_one_target` CHECK enforcing exactly one target — so a flag can never dangle or mismatch its target and needs no app-side orphan cleanup.
 - `[manual]` Uniqueness guarantees: unique Google Place ID per listing (nullable so manual entries coexist), one claim per (listing, attribute), and one attestation per (claim, user).
 - `[manual]` Initial generated migration under `db/migrations/` (not yet applied — database provisioning is a separate `safe:human` step).
+- `[manual]` Documented a schema-governance rule in `docs/agents/database.md`: never create/alter tables directly in the database (e.g. the Neon console) — all changes go through `db/schema.ts` + `pnpm db:generate`/`db:migrate` to avoid DB↔migration drift.
