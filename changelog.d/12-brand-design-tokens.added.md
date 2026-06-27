@@ -1,0 +1,6 @@
+- `[manual]` Brand identity + accessible design tokens: purple-led palette with pastel accents, defined as Tailwind v4 `@theme` CSS variables in `app/styles/app.css`.
+- `[manual]` Semantic safety-state colour tokens (celiac-safe / gluten-friendly / stale / incident) with WCAG AA foreground pairings, plus a type scale, spacing, and radius tokens.
+- `[manual]` `Wordmark` component (`app/components/Wordmark.tsx`) for the app header.
+- `[manual]` Accessible, reusable `SafetySignal` component (`app/components/SafetySignal.tsx`) that always pairs colour + icon + text label across all four trust states — never colour alone.
+- `[manual]` `/style-guide` route showcasing the palette, type scale, and every safety signal for visual review.
+- `[manual]` Documented the safety-signal pattern and token usage in `docs/agents/styling.md`.
