@@ -52,7 +52,6 @@
     "@tanstack/router-cli": "~1.114.3",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.2.0",
-    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
