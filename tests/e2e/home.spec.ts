@@ -13,8 +13,9 @@ test("home page renders the app shell header, brand, and nav", async ({ page }) 
   await expect(nav).toBeVisible();
   await expect(nav.getByRole("link", { name: "Browse" })).toBeVisible();
 
-  // The sign-in entry-point placeholder is present.
-  await expect(header.getByRole("button", { name: "Sign in" })).toBeVisible();
+  // The sign-in entry point renders as the "Continue with Google" link for an
+  // anonymous visitor (Google is the sole provider — ADR-006).
+  await expect(header.getByRole("link", { name: "Continue with Google" })).toBeVisible();
 
   // The landing page hero renders its mission heading.
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
