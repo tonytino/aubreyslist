@@ -1,8 +1,9 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   date,
   doublePrecision,
   index,
-  integer,
   pgEnum,
   pgTable,
   text,
@@ -14,11 +15,21 @@ import {
 // Run `pnpm db:generate` after changes, then `pnpm db:migrate` to apply.
 //
 // Conventions:
-// - Primary keys are text IDs (caller-supplied / generated in app code), matching
-//   the scaffolded `example` table this file replaces.
+// - Primary keys are text IDs generated app-side via `crypto.randomUUID()`
+//   (`$defaultFn`), so inserts never need to pass an id and the scheme stays
+//   portable across any Postgres (no DB-side uuid dependency). `app_settings`
+//   is the exception: its PK is a semantic `key`.
 // - All tables carry `created_at`; mutable rows also carry `updated_at`.
 // - Enums are declared with `pgEnum` so Postgres enforces membership at the DB
 //   level (mirrored by the exported `*.enumValues` tuples for app-side reuse).
+
+const id = () =>
+  text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID());
+
+const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -45,8 +56,8 @@ export const claimAttribute = pgEnum("claim_attribute", [
 /** A single user's vote on a claim — confirm or dispute. */
 export const attestationValue = pgEnum("attestation_value", ["confirm", "dispute"]);
 
-/** Moderation flag target kinds. */
-export const flagTargetType = pgEnum("flag_target_type", ["listing", "claim", "incident"]);
+/** Optional severity of a reported "got glutened" reaction. */
+export const incidentSeverity = pgEnum("incident_severity", ["mild", "moderate", "severe"]);
 
 /** Moderation flag lifecycle status. */
 export const flagStatus = pgEnum("flag_status", ["open", "reviewing", "resolved", "dismissed"]);
@@ -57,14 +68,14 @@ export const flagStatus = pgEnum("flag_status", ["open", "reviewing", "resolved"
 
 /** Google-authenticated accounts. Identity anchors on `googleSub`. */
 export const users = pgTable("users", {
-  id: text("id").primaryKey(),
+  id: id(),
   googleSub: text("google_sub").notNull().unique(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   avatarUrl: text("avatar_url"),
   role: userRole("role").notNull().default("user"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
 });
 
 /**
@@ -78,7 +89,7 @@ export const users = pgTable("users", {
  * free-form and not reliably unique.
  */
 export const listings = pgTable("listings", {
-  id: text("id").primaryKey(),
+  id: id(),
   placeId: text("place_id").unique(),
   name: text("name").notNull(),
   address: text("address").notNull(),
@@ -86,8 +97,8 @@ export const listings = pgTable("listings", {
   lng: doublePrecision("lng").notNull(),
   mapsUrl: text("maps_url").notNull(),
   menuUrl: text("menu_url"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
 });
 
 /**
@@ -98,14 +109,14 @@ export const listings = pgTable("listings", {
 export const claims = pgTable(
   "claims",
   {
-    id: text("id").primaryKey(),
+    id: id(),
     listingId: text("listing_id")
       .notNull()
       .references(() => listings.id, { onDelete: "cascade" }),
     attribute: claimAttribute("attribute").notNull(),
     lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (table) => [
     unique("claims_listing_attribute_unique").on(table.listingId, table.attribute),
@@ -121,7 +132,7 @@ export const claims = pgTable(
 export const attestations = pgTable(
   "attestations",
   {
-    id: text("id").primaryKey(),
+    id: id(),
     claimId: text("claim_id")
       .notNull()
       .references(() => claims.id, { onDelete: "cascade" }),
@@ -129,8 +140,8 @@ export const attestations = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     value: attestationValue("value").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (table) => [
     unique("attestations_claim_user_unique").on(table.claimId, table.userId),
@@ -139,11 +150,15 @@ export const attestations = pgTable(
   ]
 );
 
-/** A "got glutened here" report on a listing. `occurredOn` is required. */
+/**
+ * A "got glutened here" report on a listing. `occurredOn` is required; severity
+ * and note are optional. Carries `updatedAt` because users may edit/retract
+ * their own incidents (domain.md, Roles).
+ */
 export const incidents = pgTable(
   "incidents",
   {
-    id: text("id").primaryKey(),
+    id: id(),
     listingId: text("listing_id")
       .notNull()
       .references(() => listings.id, { onDelete: "cascade" }),
@@ -151,9 +166,10 @@ export const incidents = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     occurredOn: date("occurred_on").notNull(),
-    severity: integer("severity"),
+    severity: incidentSeverity("severity"),
     note: text("note"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (table) => [
     index("incidents_listing_idx").on(table.listingId),
@@ -165,29 +181,44 @@ export const incidents = pgTable(
 export const appSettings = pgTable("app_settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: updatedAt(),
 });
 
 /**
  * A user report that a listing / claim / incident is inappropriate, spam, or
- * wrong. Feeds the moderation queue. `targetId` is a free reference to the
- * target row keyed by `targetType` (polymorphic by design — not a hard FK).
+ * wrong. Feeds the moderation queue.
+ *
+ * The target is modeled as an EXCLUSIVE ARC: exactly one of `listingId`,
+ * `claimId`, `incidentId` is set, enforced by the `flags_one_target` CHECK.
+ * Each is a real FK with `onDelete: cascade`, so a flag can never dangle or
+ * point at the wrong table, and deleting content auto-removes its flags — no
+ * orphan cleanup or app-side referential validation needed. Trade-off: adding a
+ * new flaggable entity type later means a migration (new nullable FK column +
+ * extend the CHECK), not just an enum value.
  */
 export const flags = pgTable(
   "flags",
   {
-    id: text("id").primaryKey(),
-    targetType: flagTargetType("target_type").notNull(),
-    targetId: text("target_id").notNull(),
+    id: id(),
+    listingId: text("listing_id").references(() => listings.id, { onDelete: "cascade" }),
+    claimId: text("claim_id").references(() => claims.id, { onDelete: "cascade" }),
+    incidentId: text("incident_id").references(() => incidents.id, { onDelete: "cascade" }),
     reporterId: text("reporter_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     reason: text("reason").notNull(),
     status: flagStatus("status").notNull().default("open"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (table) => [
-    index("flags_target_idx").on(table.targetType, table.targetId),
+    check(
+      "flags_one_target",
+      sql`num_nonnulls(${table.listingId}, ${table.claimId}, ${table.incidentId}) = 1`
+    ),
+    index("flags_listing_idx").on(table.listingId),
+    index("flags_claim_idx").on(table.claimId),
+    index("flags_incident_idx").on(table.incidentId),
     index("flags_status_idx").on(table.status),
     index("flags_reporter_idx").on(table.reporterId),
   ]
@@ -226,5 +257,5 @@ export type NewFlag = typeof flags.$inferInsert;
 export const userRoles = userRole.enumValues;
 export const claimAttributes = claimAttribute.enumValues;
 export const attestationValues = attestationValue.enumValues;
-export const flagTargetTypes = flagTargetType.enumValues;
+export const incidentSeverities = incidentSeverity.enumValues;
 export const flagStatuses = flagStatus.enumValues;

@@ -63,8 +63,11 @@ describe("core schema — enums", () => {
     expect(schema.attestationValues).toEqual(["confirm", "dispute"]);
   });
 
-  it("declares flag target types and statuses", () => {
-    expect(schema.flagTargetTypes).toEqual(["listing", "claim", "incident"]);
+  it("declares incident severity levels", () => {
+    expect(schema.incidentSeverities).toEqual(["mild", "moderate", "severe"]);
+  });
+
+  it("declares flag statuses", () => {
     expect(schema.flagStatuses).toEqual(["open", "reviewing", "resolved", "dismissed"]);
   });
 });
@@ -123,7 +126,17 @@ describe("core schema — constraints", () => {
     expect(getTableConfig(schema.claims).foreignKeys.length).toBeGreaterThan(0);
     expect(getTableConfig(schema.attestations).foreignKeys.length).toBe(2);
     expect(getTableConfig(schema.incidents).foreignKeys.length).toBe(2);
-    expect(getTableConfig(schema.flags).foreignKeys.length).toBe(1);
+    // flags use an exclusive arc: 3 nullable target FKs + reporter.
+    expect(getTableConfig(schema.flags).foreignKeys.length).toBe(4);
+  });
+
+  it("models flag targets as an exclusive arc (nullable target FKs + required reporter)", () => {
+    const cols = getTableConfig(schema.flags).columns;
+    const byName = (name: string) => cols.find((c) => c.name === name);
+    expect(byName("listing_id")?.notNull).toBe(false);
+    expect(byName("claim_id")?.notNull).toBe(false);
+    expect(byName("incident_id")?.notNull).toBe(false);
+    expect(byName("reporter_id")?.notNull).toBe(true);
   });
 
   it("uses key as the primary key for app_settings", () => {
@@ -148,8 +161,13 @@ describe("core schema — inferred types", () => {
     expectTypeOf<schema.AppSetting>().toHaveProperty("key");
     expectTypeOf<schema.NewAppSetting>().toHaveProperty("value");
     expectTypeOf<schema.Flag>().toHaveProperty("status");
-    expectTypeOf<schema.NewFlag>().toHaveProperty("targetType");
+    expectTypeOf<schema.Flag>().toHaveProperty("listingId");
+    expectTypeOf<schema.NewFlag>().toHaveProperty("reason");
     // role is the constrained union from the enum, not a bare string.
     expectTypeOf<schema.User["role"]>().toEqualTypeOf<"admin" | "moderator" | "user">();
+    // severity is the constrained enum union (nullable), not a bare number.
+    expectTypeOf<schema.Incident["severity"]>().toEqualTypeOf<
+      "mild" | "moderate" | "severe" | null
+    >();
   });
 });

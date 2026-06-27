@@ -1,5 +1,5 @@
 {
-  "id": "bacf9faf-2758-496d-970b-80f4930e08c2",
+  "id": "2c936a6e-0ebd-47e8-88a2-d80712cbe1f6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -238,18 +238,23 @@
           "primaryKey": true,
           "notNull": true
         },
-        "target_type": {
-          "name": "target_type",
-          "type": "flag_target_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "target_id": {
-          "name": "target_id",
+        "listing_id": {
+          "name": "listing_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "claim_id": {
+          "name": "claim_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "incident_id": {
+          "name": "incident_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "reporter_id": {
           "name": "reporter_id",
@@ -277,20 +282,51 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
-        "flags_target_idx": {
-          "name": "flags_target_idx",
+        "flags_listing_idx": {
+          "name": "flags_listing_idx",
           "columns": [
             {
-              "expression": "target_type",
+              "expression": "listing_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            },
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flags_claim_idx": {
+          "name": "flags_claim_idx",
+          "columns": [
             {
-              "expression": "target_id",
+              "expression": "claim_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flags_incident_idx": {
+          "name": "flags_incident_idx",
+          "columns": [
+            {
+              "expression": "incident_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -333,6 +369,33 @@
         }
       },
       "foreignKeys": {
+        "flags_listing_id_listings_id_fk": {
+          "name": "flags_listing_id_listings_id_fk",
+          "tableFrom": "flags",
+          "tableTo": "listings",
+          "columnsFrom": ["listing_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flags_claim_id_claims_id_fk": {
+          "name": "flags_claim_id_claims_id_fk",
+          "tableFrom": "flags",
+          "tableTo": "claims",
+          "columnsFrom": ["claim_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flags_incident_id_incidents_id_fk": {
+          "name": "flags_incident_id_incidents_id_fk",
+          "tableFrom": "flags",
+          "tableTo": "incidents",
+          "columnsFrom": ["incident_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "flags_reporter_id_users_id_fk": {
           "name": "flags_reporter_id_users_id_fk",
           "tableFrom": "flags",
@@ -346,7 +409,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "flags_one_target": {
+          "name": "flags_one_target",
+          "value": "num_nonnulls(\"flags\".\"listing_id\", \"flags\".\"claim_id\", \"flags\".\"incident_id\") = 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.incidents": {
@@ -379,7 +447,8 @@
         },
         "severity": {
           "name": "severity",
-          "type": "integer",
+          "type": "incident_severity",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
@@ -391,6 +460,13 @@
         },
         "created_at": {
           "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -637,10 +713,10 @@
       "schema": "public",
       "values": ["open", "reviewing", "resolved", "dismissed"]
     },
-    "public.flag_target_type": {
-      "name": "flag_target_type",
+    "public.incident_severity": {
+      "name": "incident_severity",
       "schema": "public",
-      "values": ["listing", "claim", "incident"]
+      "values": ["mild", "moderate", "severe"]
     },
     "public.user_role": {
       "name": "user_role",
