@@ -1,0 +1,4 @@
+- `[manual]` Core domain schema in `db/schema.ts`: `users`, `listings`, `claims`, `attestations`, `incidents`, `app_settings`, and `flags` tables with foreign keys, indexes, and `$inferSelect`/`$inferInsert` types.
+- `[manual]` Postgres enums for user roles (`admin`/`moderator`/`user`), the fixed 7-item GF attribute taxonomy, attestation values, and flag target types/statuses.
+- `[manual]` Uniqueness guarantees: unique Google Place ID per listing (nullable so manual entries coexist), one claim per (listing, attribute), and one attestation per (claim, user).
+- `[manual]` Initial generated migration under `db/migrations/` (not yet applied — database provisioning is a separate `safe:human` step).
