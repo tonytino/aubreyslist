@@ -1,0 +1,3 @@
+- `[manual]` Added the app shell: a root layout with a header (brand wordmark placeholder), primary navigation, a sign-in entry-point placeholder, and a main content region.
+- `[manual]` Replaced the example home page with a real Aubrey's List landing page — a mobile-first hero stating the mission with placeholder calls-to-action.
+- `[manual]` Set the document title to "Aubrey's List" and added a Playwright smoke test for the header, brand, and nav.
