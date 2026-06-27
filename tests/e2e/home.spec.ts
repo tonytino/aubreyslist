@@ -1,14 +1,21 @@
 import { expect, test } from "@playwright/test";
 
-test("home page renders server-function data", async ({ page }) => {
+test("home page renders the app shell header, brand, and nav", async ({ page }) => {
   await page.goto("/");
 
-  // Assert the heading by role, so the test survives a project rename via
-  // `pnpm scaffold` (no hard-coded title/text that scaffolding may change).
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  // The header app shell renders with the brand wordmark placeholder.
+  const header = page.getByRole("banner");
+  await expect(header).toBeVisible();
+  await expect(header.getByRole("link", { name: "Aubrey's List home" })).toBeVisible();
 
-  // The loader's server-function `message` must actually render — this proves
-  // SSR + the route loader + the server function all work end-to-end, not just
-  // that some markup mounted.
-  await expect(page.getByText("Hello from a server function")).toBeVisible();
+  // Primary navigation renders inside the header.
+  const nav = page.getByRole("navigation", { name: "Primary" });
+  await expect(nav).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Browse" })).toBeVisible();
+
+  // The sign-in entry-point placeholder is present.
+  await expect(header.getByRole("button", { name: "Sign in" })).toBeVisible();
+
+  // The landing page hero renders its mission heading.
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });

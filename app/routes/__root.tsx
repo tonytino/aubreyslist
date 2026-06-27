@@ -23,7 +23,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "App" },
+      { title: "Aubrey's List" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
@@ -32,17 +32,79 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   errorComponent: RootErrorBoundary,
 });
 
+// Primary navigation. These are placeholder destinations for the app shell —
+// the routes themselves are built by later issues (browse/search, add a
+// listing, about). They render as in-page links now so the nav is real and
+// navigable as those routes land.
+const NAV_ITEMS = [
+  { to: "/", label: "Browse" },
+  { to: "/", label: "Add a listing" },
+  { to: "/", label: "About" },
+] as const;
+
 function RootComponent() {
   return (
     <html lang="en">
       <head>
         <HeadContent />
       </head>
-      <body>
-        <Outlet />
+      <body className="min-h-screen bg-white text-gray-900 antialiased">
+        <AppShell>
+          <Outlet />
+        </AppShell>
         <Scripts />
       </body>
     </html>
+  );
+}
+
+function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <SiteHeader />
+      <main className="flex-1">{children}</main>
+    </div>
+  );
+}
+
+function SiteHeader() {
+  return (
+    <header className="border-b border-gray-200">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
+        {/* Brand wordmark PLACEHOLDER — the real logo/wordmark is issue #12. */}
+        <Link
+          to="/"
+          className="text-lg font-bold tracking-tight sm:text-xl"
+          aria-label="Aubrey's List home"
+        >
+          Aubrey's List
+        </Link>
+
+        <nav aria-label="Primary" className="order-last w-full sm:order-none sm:w-auto">
+          <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-medium text-gray-600">
+            {NAV_ITEMS.map((item) => (
+              <li key={item.label}>
+                <Link
+                  to={item.to}
+                  className="hover:text-gray-900"
+                  activeProps={{ className: "text-gray-900" }}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* Sign-in entry point PLACEHOLDER — non-functional; wired up in EPIC 1. */}
+        <button
+          type="button"
+          className="ml-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Sign in
+        </button>
+      </div>
+    </header>
   );
 }
 

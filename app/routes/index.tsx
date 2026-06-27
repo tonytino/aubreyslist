@@ -1,67 +1,42 @@
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
-
-// Example server function — runs only on the server, callable from loaders or
-// components.  Use server functions for data that is tightly coupled to this
-// route and does not need to be exposed as a standalone API endpoint.
-// See docs/agents/api.md for the full decision rule.
-const getWelcome = createServerFn().handler(async () => {
-  return { message: "Hello from a server function", timestamp: Date.now() };
-});
-
-// Example TanStack Query. The queryFn is a server function, so it runs on the
-// server during SSR prefetch and as a typed RPC on the client — no self-fetch.
-const getItems = createServerFn().handler(async () => {
-  return [
-    { id: "1", name: "First item" },
-    { id: "2", name: "Second item" },
-  ];
-});
-
-const itemsQuery = queryOptions({
-  queryKey: ["items"],
-  queryFn: () => getItems(),
-});
+import { Link, createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({
-  // Prefetch the query on the server so it's dehydrated into the HTML and
-  // hydrated on the client (no loading flash); useSuspenseQuery then reads it
-  // synchronously. Rule of thumb: use Query for data you cache/refetch/share;
-  // use a plain server function (like getWelcome) for one-shot route data.
-  loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(itemsQuery);
-    return getWelcome();
-  },
   component: Home,
 });
 
 function Home() {
-  const { message, timestamp } = Route.useLoaderData();
-  const { data: items } = useSuspenseQuery(itemsQuery);
-
-  // Format the time on the client only. `toLocaleTimeString()` depends on the
-  // runtime's locale/timezone, so rendering it during SSR and again on the
-  // client produces a hydration mismatch. Start empty (matching the server
-  // markup) and fill it in after mount.
-  const [loadedAt, setLoadedAt] = useState<string | null>(null);
-  useEffect(() => {
-    setLoadedAt(new Date(timestamp).toLocaleTimeString());
-  }, [timestamp]);
-
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <h1 className="text-4xl font-bold tracking-tight">App Template</h1>
-      <p className="text-muted-foreground text-lg">{message}</p>
-      <ul className="text-muted-foreground text-sm">
-        {items.map((item) => (
-          <li key={item.id}>{item.name}</li>
-        ))}
-      </ul>
-      <p className="text-muted-foreground text-sm">
-        {loadedAt ? `Loaded at ${loadedAt}` : "Loading…"}
-      </p>
-    </main>
+    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+      <section className="flex flex-col items-start gap-6 py-16 sm:py-24">
+        <p className="text-sm font-semibold uppercase tracking-wide text-gray-500">Denver pilot</p>
+
+        <h1 className="max-w-3xl text-3xl font-bold tracking-tight sm:text-5xl">
+          Find restaurants you can actually trust to be gluten-free.
+        </h1>
+
+        <p className="max-w-2xl text-base text-gray-600 sm:text-lg">
+          Aubrey's List is a community directory of how safe restaurants really are for people with
+          a gluten-free or celiac need. Every listing is contributed, attested, and kept fresh by
+          people who live with the same stakes — so you can tell celiac-safe from merely
+          "gluten-friendly" before you order.
+        </p>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {/* Placeholder CTA — browse/search lands in a later issue. */}
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center rounded-md bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-700"
+          >
+            Browse Denver listings
+          </Link>
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center rounded-md border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Add a listing
+          </Link>
+        </div>
+      </section>
+    </div>
   );
 }

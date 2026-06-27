@@ -3,10 +3,12 @@
 > Step-by-step for the account/secret tasks only the repo owner can do. These
 > unblock the agent build pipeline. Corresponds to issues **#14, #19, #21, #42**.
 >
-> **Note on exact names:** the precise env-var names and the OAuth callback path
-> are finalized by the auth sub-issue (#15) and the Places provider (#22) in
-> `app/env.ts` / `.env.example`. The names below are the expected defaults — if
-> the implemented code differs, the code wins; update accordingly.
+> **Note on exact names:** the env-var **names** are now finalized in
+> `app/env.ts` / `.env.example` by #44 (`DATABASE_URL`, `GOOGLE_CLIENT_ID`,
+> `GOOGLE_CLIENT_SECRET`, `GOOGLE_PLACES_API_KEY`, `SESSION_SECRET`) and match
+> the names below. The OAuth **callback path** is still finalized by the auth
+> sub-issue (#15). If the implemented code ever differs, the code wins; update
+> accordingly.
 
 All secrets go in **two places**: your local `.env` (gitignored) and the
 **Vercel project env** (set during #42). **Never commit secrets.**
