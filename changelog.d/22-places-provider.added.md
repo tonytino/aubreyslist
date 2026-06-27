@@ -1,0 +1,4 @@
+- `[manual]` Server-side Google Places provider (ADR-008): `autocompletePlaces` and `getPlaceDetails` server functions backing the add-listing intake flow.
+- `[manual]` Autocomplete returns `placeId` + `description` predictions; place details return name, formatted address, lat/lng, the canonical Place ID (dedup key), and a Google Maps deep-link URL.
+- `[manual]` Calls the Google Places API (New) server-side with `fetch` (no new dependency); the `GOOGLE_PLACES_API_KEY` is read via `getEnv()` and never sent to the client.
+- `[manual]` Respects the admin `intake_mode` app-setting (defaults to `places`); short-circuits with a friendly "Places intake disabled" result when set to `manual`, and guards a missing key with a typed friendly error instead of requiring the env var.

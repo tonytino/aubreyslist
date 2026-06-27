@@ -6,6 +6,7 @@
     "app/router.tsx",
     "app/routes/**/*.tsx",
     "app/server/index.ts",
+    "app/server/places.ts",
     "app.config.ts",
     "scripts/labels.mjs",
     "scripts/remove-example.mjs"
