@@ -1,0 +1,57 @@
+# Dependabot: keep dependencies current while leaving room to vet releases.
+#
+# Supply-chain posture:
+# - `cooldown` delays adopting a release until it has been published for 7 days,
+#   so a version that is yanked or found to be compromised shortly after publish
+#   is NOT pulled in immediately (mitigates the publish-then-attack window).
+# - Updates are grouped to keep the review surface small; majors stay separate
+#   so each lands its own reviewable PR.
+# - PRs carry `skip-changelog` so they satisfy the changelog-fragment CI gate
+#   (Dependabot can't author changelog fragments).
+#
+# NOTE: cooldown also delays version-update-driven security bumps by 7 days.
+# Enable **Dependabot security updates** + **alerts** in repo Settings for
+# urgent, CVE-driven fixes — those are the right channel for fast security
+# patches and are independent of this version-update cadence.
+version: 2
+updates:
+  # GitHub Actions — resolves the Node 20 deprecation and keeps actions current.
+  # Dependabot preserves SHA-pinning (it bumps the SHA + the version comment).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - skip-changelog
+    commit-message:
+      prefix: "chore(actions)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # npm / pnpm dependencies (Dependabot reads pnpm-lock.yaml).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - skip-changelog
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+    groups:
+      # Batch low-risk updates into a single PR to minimize churn. Major bumps
+      # are intentionally left ungrouped so each gets its own reviewable PR.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
