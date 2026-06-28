@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
+import { Wordmark } from "~/components/Wordmark";
 import { fetchCurrentUser } from "~/server/auth/current-user.fn";
 // Import the stylesheet as a bundled URL so the bundler emits a hashed asset
 // and rewrites the href. Referencing the source path ("/app/styles/app.css")
@@ -46,10 +47,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   errorComponent: RootErrorBoundary,
 });
 
-// Primary navigation. These are placeholder destinations for the app shell —
-// the routes themselves are built by later issues (browse/search, add a
-// listing, about). They render as in-page links now so the nav is real and
-// navigable as those routes land.
+// Primary navigation. Each item targets its real, existing route so the active
+// state is accurate. "About" has no dedicated route yet, so it stays at "/" as a
+// deliberate placeholder until that page lands.
 const NAV_ITEMS = [
   { to: "/listings", label: "Browse" },
   { to: "/listings/new", label: "Add a listing" },
@@ -86,13 +86,8 @@ function SiteHeader() {
   return (
     <header className="border-b border-gray-200">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
-        {/* Brand wordmark PLACEHOLDER — the real logo/wordmark is issue #12. */}
-        <Link
-          to="/"
-          className="text-lg font-bold tracking-tight sm:text-xl"
-          aria-label="Aubrey's List home"
-        >
-          Aubrey's List
+        <Link to="/" aria-label="Aubrey's List home">
+          <Wordmark />
         </Link>
 
         <nav aria-label="Primary" className="order-last w-full sm:order-none sm:w-auto">

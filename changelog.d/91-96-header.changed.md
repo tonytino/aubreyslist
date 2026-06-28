@@ -1,0 +1,1 @@
+- `[manual]` Wired the `Wordmark` brand component into the site header in place of the plaintext placeholder (#91), and pointed each primary nav item at its real route so "Add a listing" reaches `/listings/new` and the active state is accurate per page (#96).
