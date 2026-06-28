@@ -1,0 +1,1 @@
+- `[manual]` Added an admin-only server function to grant/revoke the moderator role (#16).
