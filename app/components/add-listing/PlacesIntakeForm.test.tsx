@@ -59,6 +59,19 @@ describe("PlacesIntakeForm", () => {
     expect(await screen.findByText("Two Hands, Denver")).toBeInTheDocument();
   });
 
+  it("shows an error (not a silent empty state) when the search throws", async () => {
+    // The server function rejecting (transport/uncaught error) leaves React Query
+    // with `isError` and no data. The UI must surface an error rather than fall
+    // through to "No matches found" — the first-search "no results" of #98.
+    autocompleteMock.mockRejectedValueOnce(new Error("boom"));
+    renderWithQuery(<PlacesIntakeForm onCreated={vi.fn()} />);
+
+    search("Two Hands, Denver");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/temporarily unavailable/i);
+    expect(screen.queryByText(/No matches found/i)).not.toBeInTheDocument();
+  });
+
   it("re-runs the search when the same term is submitted again after a failure", async () => {
     // First attempt fails transiently; the UI tells the user to try again.
     autocompleteMock.mockResolvedValueOnce({

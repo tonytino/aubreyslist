@@ -48,8 +48,18 @@ export function PlacesIntakeForm({
   });
 
   const predictions = suggestions.data?.ok ? suggestions.data.data : [];
+  // Two failure shapes: the server function *returns* a typed `ok:false` result
+  // (key missing, upstream/network error it caught), or it *throws* before
+  // returning one (transport failure, an uncaught server-side error). The latter
+  // surfaces as `suggestions.isError` with no `data`; without handling it the UI
+  // would fall through to the "No matches found" branch and show a silent empty
+  // state instead of an error — the first-search "no results come back" of #98.
   const searchError =
-    suggestions.data && !suggestions.data.ok ? suggestions.data.message : undefined;
+    suggestions.data && !suggestions.data.ok
+      ? suggestions.data.message
+      : suggestions.isError
+        ? "Place search is temporarily unavailable. Please try again."
+        : undefined;
 
   return (
     <div className="flex flex-col gap-section">
