@@ -1,0 +1,1 @@
+- `[manual]` Added an admin-only `/admin` panel shell (server-side role-gated): placeholder sections for role management (#16) and the moderation queue (#40, also visible to moderators), plus a read-only view of current app settings (write UI lands with #24).
