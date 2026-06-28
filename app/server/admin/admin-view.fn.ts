@@ -43,28 +43,37 @@ export type AdminView =
   | { access: "forbidden" }
   | { access: "granted"; role: Exclude<Role, "user">; settings: AdminSettingsView | null };
 
-export const fetchAdminView = createServerFn({ method: "GET" }).handler(
-  async (): Promise<AdminView> => {
-    const user = await getCurrentUser();
+/**
+ * Pure access-gate logic behind {@link fetchAdminView}, factored out of the
+ * `createServerFn` handler so it can be unit-tested directly against mocked
+ * collaborators (the client-callable wrapper below is a thin delegate). This is
+ * the same plain-function seam the other server modules expose for testing
+ * (e.g. `runCreateListing`).
+ */
+export async function resolveAdminView(): Promise<AdminView> {
+  const user = await getCurrentUser();
 
-    if (!user) {
-      return { access: "anonymous" };
-    }
-
-    // Anyone below moderator may not see the panel at all.
-    if (user.role === "user") {
-      return { access: "forbidden" };
-    }
-
-    // Settings are admin-only data, so fetch them only for admins.
-    const settings =
-      user.role === "admin"
-        ? {
-            intakeMode: await getSetting("intake_mode"),
-            stalenessMonths: await getSetting("staleness_months"),
-          }
-        : null;
-
-    return { access: "granted", role: user.role, settings };
+  if (!user) {
+    return { access: "anonymous" };
   }
+
+  // Anyone below moderator may not see the panel at all.
+  if (user.role === "user") {
+    return { access: "forbidden" };
+  }
+
+  // Settings are admin-only data, so fetch them only for admins.
+  const settings =
+    user.role === "admin"
+      ? {
+          intakeMode: await getSetting("intake_mode"),
+          stalenessMonths: await getSetting("staleness_months"),
+        }
+      : null;
+
+  return { access: "granted", role: user.role, settings };
+}
+
+export const fetchAdminView = createServerFn({ method: "GET" }).handler(
+  (): Promise<AdminView> => resolveAdminView()
 );
