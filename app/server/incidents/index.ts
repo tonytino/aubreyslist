@@ -1,9 +1,15 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
+import { HTTPException } from "hono/http-exception";
 import { getDb } from "~/db/client";
 import { type Incident, incidents } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { enforceWriteLimit } from "~/server/rate-limit";
-import type { ListIncidentsInput, ReportIncidentInput } from "~/trust/incident-recency";
+import type {
+  EditIncidentInput,
+  ListIncidentsInput,
+  ReportIncidentInput,
+  RetractIncidentInput,
+} from "~/trust/incident-recency";
 
 /**
  * "Got glutened here" incident reports — the db-touching READ + WRITE
@@ -34,6 +40,15 @@ import type { ListIncidentsInput, ReportIncidentInput } from "~/trust/incident-r
  * anonymous callers) and then rate-limited per user via {@link enforceWriteLimit}
  * (issue #18; throws 429 on an abusive burst) before any DB work. Reads
  * ({@link listIncidents}) are open and unmetered.
+ *
+ * Users may also EDIT and RETRACT their OWN incidents (issue #32, domain.md
+ * "Edit / retract own contributions"). {@link editIncident} and
+ * {@link retractIncident} are login-gated + rate-limited like the report path,
+ * and additionally enforce OWNERSHIP server-side: the mutation only matches a
+ * row whose `userId` equals the current user, so a non-owner (or anonymous)
+ * caller can never edit or delete someone else's report — this is enforced in
+ * the DB predicate, not just hidden in the UI. Moderators removing ANY content
+ * is a separate concern (EPIC 6), out of scope here.
  */
 
 // ---------------------------------------------------------------------------
@@ -85,4 +100,80 @@ export async function reportIncident(input: ReportIncidentInput): Promise<Incide
     throw new Error("Incident insert returned no row.");
   }
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Edit — update an OWN incident (login-gated, rate-limited, ownership-checked)
+// ---------------------------------------------------------------------------
+
+/**
+ * Edit the current user's own incident — `occurredOn` / `severity` / `note`.
+ *
+ * Login-gated then rate-limited (like {@link reportIncident}). Ownership is
+ * enforced SERVER-SIDE: the UPDATE matches on BOTH the incident `id` AND
+ * `userId = current user`, so a non-owner's edit affects zero rows and we throw
+ * `403`. `updatedAt` is bumped to now. Editing `occurredOn` in/out of the
+ * recency window naturally flows through {@link findRecentIncident} on the next
+ * read, so the recent-incident banner recomputes correctly after the change.
+ *
+ * @throws {HTTPException} `401` anonymous, `429` over the rate limit, `403`/`404`
+ *   when the row does not exist or is not owned by the current user.
+ */
+export async function editIncident(input: EditIncidentInput): Promise<Incident> {
+  const user = await requireCurrentUser();
+  await enforceWriteLimit(user.id);
+
+  const updated = await getDb()
+    .update(incidents)
+    .set({
+      occurredOn: input.occurredOn,
+      severity: input.severity ?? null,
+      note: input.note ?? null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(incidents.id, input.id), eq(incidents.userId, user.id)))
+    .returning();
+
+  // Zero rows ⇒ the incident does not exist OR is not owned by this user. Either
+  // way the caller may not edit it; reject rather than silently no-op so the UI
+  // surfaces the failure (ownership is enforced here, not just in the UI).
+  const row = updated[0];
+  if (!row) {
+    throw new HTTPException(403, {
+      message: "You can only edit your own incident reports.",
+    });
+  }
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// Retract — delete an OWN incident (login-gated, rate-limited, ownership-checked)
+// ---------------------------------------------------------------------------
+
+/**
+ * Retract (delete) the current user's own incident.
+ *
+ * Login-gated then rate-limited (like {@link reportIncident}). Ownership is
+ * enforced SERVER-SIDE: the DELETE matches on BOTH the incident `id` AND
+ * `userId = current user`, so a non-owner's request deletes zero rows and we
+ * throw `403`. Deleting a recent incident drops it from the next read, so the
+ * recent-incident banner and aggregates recompute correctly after the change.
+ *
+ * @throws {HTTPException} `401` anonymous, `429` over the rate limit, `403`/`404`
+ *   when the row does not exist or is not owned by the current user.
+ */
+export async function retractIncident(input: RetractIncidentInput): Promise<void> {
+  const user = await requireCurrentUser();
+  await enforceWriteLimit(user.id);
+
+  const deleted = await getDb()
+    .delete(incidents)
+    .where(and(eq(incidents.id, input.id), eq(incidents.userId, user.id)))
+    .returning({ id: incidents.id });
+
+  if (deleted.length === 0) {
+    throw new HTTPException(403, {
+      message: "You can only retract your own incident reports.",
+    });
+  }
 }

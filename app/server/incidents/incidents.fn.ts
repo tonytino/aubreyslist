@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
-import { listIncidentsInputSchema, reportIncidentInputSchema } from "~/trust/incident-recency";
-import { listIncidents, reportIncident } from "./index";
+import {
+  editIncidentInputSchema,
+  listIncidentsInputSchema,
+  reportIncidentInputSchema,
+  retractIncidentInputSchema,
+} from "~/trust/incident-recency";
+import { editIncident, listIncidents, reportIncident, retractIncident } from "./index";
 
 /**
  * Client-callable incident server functions (issue #30).
@@ -25,3 +30,19 @@ export const submitIncident = createServerFn({ method: "POST" })
 export const fetchIncidents = createServerFn({ method: "GET" })
   .validator(listIncidentsInputSchema)
   .handler(({ data }) => listIncidents(data));
+
+/**
+ * Edit-own-incident server function (login-gated, validated, ownership enforced
+ * server-side). See {@link editIncident}.
+ */
+export const updateIncident = createServerFn({ method: "POST" })
+  .validator(editIncidentInputSchema)
+  .handler(({ data }) => editIncident(data));
+
+/**
+ * Retract-own-incident server function (login-gated, validated, ownership
+ * enforced server-side). See {@link retractIncident}.
+ */
+export const removeIncident = createServerFn({ method: "POST" })
+  .validator(retractIncidentInputSchema)
+  .handler(({ data }) => retractIncident(data));

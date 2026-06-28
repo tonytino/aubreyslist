@@ -1,6 +1,21 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type { ReactElement } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ListingClaimAggregate } from "~/server/attestations/listing-summary";
+
+/**
+ * `ClaimVoteControls` (rendered per claim) calls attestation server functions
+ * via TanStack Query mutations, so we mock the server-only `*.fn` module and
+ * wrap renders in a QueryClientProvider. The roll-up display itself is pure.
+ */
+const submitVoteMock = vi.fn((_args: unknown) => Promise.resolve());
+const removeVoteMock = vi.fn((_args: unknown) => Promise.resolve());
+vi.mock("~/server/attestations/attestations.fn", () => ({
+  submitVote: (args: unknown) => submitVoteMock(args),
+  removeVote: (args: unknown) => removeVoteMock(args),
+}));
+
 import { CommunityClaims } from "./CommunityClaims";
 
 const NOW = new Date("2026-06-28T12:00:00Z");
@@ -13,13 +28,25 @@ const claim = (overrides: Partial<ListingClaimAggregate>): ListingClaimAggregate
   confirmCount: 0,
   disputeCount: 0,
   lastConfirmedAt: null,
+  viewerVote: null,
   ...overrides,
+});
+
+function renderWithQuery(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
+afterEach(() => {
+  vi.clearAllMocks();
 });
 
 describe("CommunityClaims", () => {
   it("renders one roll-up per claim", () => {
-    render(
+    renderWithQuery(
       <CommunityClaims
+        listingId="listing-1"
+        viewerId={null}
         now={NOW}
         claims={[
           claim({
@@ -47,7 +74,50 @@ describe("CommunityClaims", () => {
   });
 
   it("renders nothing when there are no claims (caller keeps its placeholder)", () => {
-    const { container } = render(<CommunityClaims now={NOW} claims={[]} />);
+    const { container } = renderWithQuery(
+      <CommunityClaims listingId="listing-1" viewerId={null} now={NOW} claims={[]} />
+    );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("hides the vote controls and shows a sign-in prompt for anonymous viewers", () => {
+    renderWithQuery(
+      <CommunityClaims
+        listingId="listing-1"
+        viewerId={null}
+        now={NOW}
+        claims={[claim({ claimId: "c1" })]}
+      />
+    );
+    expect(screen.queryByRole("button", { name: "Confirm" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("shows confirm/dispute controls for a signed-in viewer", () => {
+    renderWithQuery(
+      <CommunityClaims
+        listingId="listing-1"
+        viewerId="user-1"
+        now={NOW}
+        claims={[claim({ claimId: "c1" })]}
+      />
+    );
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dispute" })).toBeInTheDocument();
+    // No vote yet → no retract affordance.
+    expect(screen.queryByRole("button", { name: "Retract" })).not.toBeInTheDocument();
+  });
+
+  it("marks the viewer's own vote and offers a retract control", () => {
+    renderWithQuery(
+      <CommunityClaims
+        listingId="listing-1"
+        viewerId="user-1"
+        now={NOW}
+        claims={[claim({ claimId: "c1", confirmCount: 1, viewerVote: "confirm" })]}
+      />
+    );
+    expect(screen.getByRole("button", { name: "Confirm" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Retract" })).toBeInTheDocument();
   });
 });

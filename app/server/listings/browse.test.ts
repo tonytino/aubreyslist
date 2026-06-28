@@ -3,16 +3,18 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the browse-list loader (#33, extended for sort/search in #36).
+ * Tests for the browse-list loader (#33, extended for taxonomy filter in #35 and
+ * sort in #36).
  *
- * `getBrowseListings` issues a FIXED number of batched queries (page of
- * listings joined to a per-listing celiac-trust subquery for ordering, a total
- * count under the same search predicate, one grouped celiac-aggregate query,
- * one incidents query) — no N+1. We model the distinct drizzle chains so we can
- * assert the assembled cards' trust glance, pagination math, the empty-page
- * short-circuit, AND (new in #36) the ORDER BY produced per sort plus the search
- * predicate threaded into both the page and count queries — without a live
- * database (docs/agents/testing.md).
+ * `getBrowseListings` issues a FIXED number of batched queries (page of listings
+ * LEFT JOINed to a per-listing celiac-trust subquery for ordering, a total count
+ * under the SAME WHERE, one grouped celiac-aggregate query, one incidents query)
+ * — no N+1. We model the distinct drizzle chains so we can assert the assembled
+ * cards' trust glance, pagination math, the empty-page short-circuit, the ORDER
+ * BY produced per sort (#36), AND the WHERE composed from search + taxonomy
+ * filter (#34/#35) threaded into both the page and count queries — without a live
+ * database (docs/agents/testing.md). The exact filter SQL shape is asserted in
+ * `filter.test.ts`; here we assert composition (search + filter + sort + paging).
  */
 
 interface ListingRow {
@@ -27,15 +29,17 @@ const h = vi.hoisted(() => {
     total: 0,
     celiacRows: [] as Array<Record<string, unknown>>,
     incidentRows: [] as Array<Record<string, unknown>>,
-    // Captured ORDER BY args from the page query and the WHERE predicates.
+    /** Captured ORDER BY args from the page query. */
     orderByArgs: [] as unknown[],
+    /** The WHERE predicate handed to the page query (filter + search compose). */
     pageWhere: undefined as unknown,
+    /** The WHERE predicate handed to the count query (must match the page's). */
     countWhere: undefined as unknown,
   };
 
   // The page query chain (the celiac-trust JOIN form):
-  //   select({listing}).from().leftJoin().where().orderBy().limit().offset()
-  // The page query wraps each listing row as `{ listing }`.
+  //   select({listing}).from().leftJoin(trust).where().orderBy().limit().offset()
+  // Each row is wrapped as `{ listing }` because of the projection.
   const offsetMock = vi.fn(() =>
     Promise.resolve(state.pageListings.map((listing) => ({ listing })))
   );
@@ -49,57 +53,57 @@ const h = vi.hoisted(() => {
     return { orderBy: orderByMock };
   });
   const pageLeftJoinMock = vi.fn(() => ({ where: pageWhereMock }));
+  const pageFromMock = vi.fn(() => ({ leftJoin: pageLeftJoinMock }));
 
-  // The celiac-aggregate chain: select().from().leftJoin().where().groupBy()
+  // The celiac-aggregate chain: select(proj).from().leftJoin().where().groupBy()
   const groupByMock = vi.fn(() => Promise.resolve(state.celiacRows));
   const aggWhereMock = vi.fn(() => ({ groupBy: groupByMock }));
 
-  // The celiac-trust SUBQUERY chain:
+  // The celiac-trust SUBQUERY chain (builder, not awaited):
   //   select().from().leftJoin().where().groupBy().as()
-  // It is a builder (not awaited) — `.as()` returns a subquery-like object.
+  // `.as()` returns the subquery's referenceable columns.
   const subqueryGroupByMock = vi.fn(() => ({
-    as: () => ({ listingId: {}, netConfirms: {}, lastConfirmedAt: {} }),
+    as: () => ({
+      listingId: {},
+      confirmCount: {},
+      disputeCount: {},
+      lastConfirmedAt: {},
+    }),
   }));
   const subqueryWhereMock = vi.fn(() => ({ groupBy: subqueryGroupByMock }));
 
-  // `leftJoin` is used by BOTH the celiac-aggregate chain (→ where→groupBy, awaited)
-  // and the subquery chain (→ where→groupBy→as, builder). They differ only by the
-  // groupBy terminal, so we branch on call order: the subquery is built first in
-  // `getBrowseListings`, the aggregate query runs later.
+  // `leftJoin` is used by BOTH the trust subquery (→where→groupBy→as, a builder)
+  // and the celiac-aggregate query (→where→groupBy, awaited). They differ only by
+  // the groupBy terminal, so we branch on call order: the subquery is built first
+  // in `getBrowseListings`, the aggregate query runs later.
   let leftJoinCalls = 0;
   const leftJoinMock = vi.fn(() => {
     leftJoinCalls += 1;
-    // First leftJoin in a run is the trust subquery builder.
     return leftJoinCalls === 1 ? { where: subqueryWhereMock } : { where: aggWhereMock };
   });
+  const celiacFromMock = vi.fn(() => ({ leftJoin: leftJoinMock }));
 
-  // The incidents chain: select().from().where()
+  // The incidents chain: select(proj).from().where()  (awaited)
   const incidentWhereMock = vi.fn(() => Promise.resolve(state.incidentRows));
+  const incidentFromMock = vi.fn(() => ({ where: incidentWhereMock }));
 
-  // The page query's `.leftJoin` differs from the aggregate/subquery ones; we
-  // route from() on whether a projection was given (page query selects {listing}).
-  const fromMock = vi.fn(() => ({
-    leftJoin: leftJoinMock, // celiac aggregate + trust subquery
-    where: incidentWhereMock, // incidents
-  }));
-
-  const pageFromMock = vi.fn(() => ({ leftJoin: pageLeftJoinMock }));
-
-  // The total-count chain is `select({ total }).from().where()`.
+  // The count chain: select({ total }).from().where()  (awaited)
   const countWhereMock = vi.fn((predicate?: unknown) => {
     state.countWhere = predicate;
     return Promise.resolve([{ total: state.total }]);
   });
-  const totalFromMock = vi.fn(() => ({ where: countWhereMock }));
+  const countFromMock = vi.fn(() => ({ where: countWhereMock }));
 
+  // Route each query to the right chain by its select() projection:
+  //  - { listing }              → page listings (joined to the trust subquery)
+  //  - { total }                → count
+  //  - has `occurredOn`         → incidents
+  //  - otherwise (claim cols)   → celiac aggregate / trust subquery
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
-    if (projection && "total" in projection) {
-      return { from: totalFromMock };
-    }
-    if (projection && "listing" in projection) {
-      return { from: pageFromMock };
-    }
-    return { from: fromMock };
+    if (projection && "listing" in projection) return { from: pageFromMock };
+    if (projection && "total" in projection) return { from: countFromMock };
+    if (projection && "occurredOn" in projection) return { from: incidentFromMock };
+    return { from: celiacFromMock };
   });
 
   const resetCallCounters = () => {
@@ -113,12 +117,12 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({ select: h.selectMock }),
 }));
 
-import { getBrowseListings } from "./browse";
+import { type BrowseListingsInput, getBrowseListings } from "./browse";
 
 const { state } = h;
 const NOW = new Date("2026-06-28T00:00:00Z");
 
-// Render captured SQL ORDER BY args to inspect direction/columns.
+// Render captured SQL to inspect direction/columns/params.
 const dialect = new PgDialect();
 function renderArg(arg: unknown): string {
   return dialect.sqlToQuery(arg as SQL).sql.toLowerCase();
@@ -139,7 +143,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const baseInput = { page: 1, pageSize: 20, query: "", sort: "alpha" } as const;
+const baseInput: BrowseListingsInput = { page: 1, pageSize: 20, q: "", attrs: [], sort: "alpha" };
 
 describe("getBrowseListings", () => {
   it("returns an empty page (and skips signal queries) when there are no listings", async () => {
@@ -318,15 +322,38 @@ describe("getBrowseListings", () => {
     expect(result.sort).toBe("trust");
   });
 
-  // --- #36: combinable with text search -------------------------------------
+  // --- #34/#35: WHERE composition (search + taxonomy filter) ----------------
 
-  it("applies the search predicate to BOTH the page and count queries (combinable with sort)", async () => {
+  it("applies NO where filter when no attrs/search are given", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(baseInput, NOW);
+
+    // No search term + no attributes → no constraint on either query.
+    expect(state.pageWhere).toBeUndefined();
+    expect(state.countWhere).toBeUndefined();
+  });
+
+  it("applies the SAME where predicate to the page and count when filtering", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, attrs: ["dedicated_fryer"] }, NOW);
+
+    // A taxonomy filter produces a real predicate, and BOTH queries get it so
+    // the total count reflects the filter (pagination stays correct).
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+  });
+
+  it("applies the search predicate to BOTH the page and count queries", async () => {
     state.pageListings = [{ id: "l1", name: "Taco House", address: "1 Main St" }];
     state.total = 1;
 
-    await getBrowseListings({ ...baseInput, query: "taco", sort: "trust" }, NOW);
+    await getBrowseListings({ ...baseInput, q: "taco", sort: "trust" }, NOW);
 
-    // Same non-undefined predicate threads into the page and the count query.
     expect(state.pageWhere).toBeDefined();
     expect(state.countWhere).toBeDefined();
     expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toEqual(["%taco%", "%taco%"]);
@@ -335,9 +362,40 @@ describe("getBrowseListings", () => {
     expect(state.orderByArgs).toHaveLength(4);
   });
 
-  it("combines search + sort + pagination: same predicate on both queries, correct total/hasMore", async () => {
-    // Page 2 of a "taco" search sorted by trust. Total 5 with pageSize 2 → page 2
-    // holds rows 3–4, so hasMore is true (row 5 remains).
+  it("composes a search term with taxonomy attrs into one predicate", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      {
+        ...baseInput,
+        q: "taco",
+        attrs: ["dedicated_fryer", "celiac_safe_vs_gluten_friendly"],
+      },
+      NOW
+    );
+
+    // Search + filters compose into a single non-empty WHERE shared by both
+    // queries (the actual SQL shape is asserted in filter.test.ts).
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+  });
+
+  it("passes no WHERE predicate when the query is blank (shows everything)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, q: "  " }, NOW);
+
+    expect(state.pageWhere).toBeUndefined();
+    expect(state.countWhere).toBeUndefined();
+  });
+
+  // --- The full compose: filter + search + sort + pagination ----------------
+
+  it("combines filter + search + sort + pagination: shared WHERE, correct total/hasMore", async () => {
+    // Page 2 of a "taco" search filtered to dedicated_fryer, sorted by trust.
+    // Total 5 with pageSize 2 → page 2 holds rows 3–4, so hasMore is true.
     state.pageListings = [
       { id: "l3", name: "Taco C", address: "3 Main St" },
       { id: "l4", name: "Taco D", address: "4 Main St" },
@@ -345,28 +403,21 @@ describe("getBrowseListings", () => {
     state.total = 5;
 
     const result = await getBrowseListings(
-      { page: 2, pageSize: 2, query: "taco", sort: "trust" },
+      { page: 2, pageSize: 2, q: "taco", attrs: ["dedicated_fryer"], sort: "trust" },
       NOW
     );
 
-    // The SAME search predicate is applied to the page AND the count query, so
-    // the total (and thus hasMore) reflects the filtered set, not all listings.
-    expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toEqual(["%taco%", "%taco%"]);
-    expect(dialect.sqlToQuery(state.countWhere as SQL).params).toEqual(["%taco%", "%taco%"]);
+    // The SAME composed WHERE (search + filter) is applied to the page AND count
+    // queries, so total/hasMore reflect the filtered set, not all listings.
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+    // The search term is part of that composed predicate.
+    expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toContain("%taco%");
     expect(result.total).toBe(5);
     expect(result.page).toBe(2);
     expect(result.hasMore).toBe(true); // offset 2 + 2 rows < 5
-    // Trust sort still applied under search + pagination.
+    expect(result.sort).toBe("trust");
+    // Trust sort still applied under filter + search + pagination.
     expect(state.orderByArgs).toHaveLength(4);
-  });
-
-  it("passes no WHERE predicate when the query is blank (shows everything)", async () => {
-    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
-    state.total = 1;
-
-    await getBrowseListings({ ...baseInput, query: "  " }, NOW);
-
-    expect(state.pageWhere).toBeUndefined();
-    expect(state.countWhere).toBeUndefined();
   });
 });

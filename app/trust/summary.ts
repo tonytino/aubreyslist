@@ -214,6 +214,36 @@ export function summarizeClaim(
 }
 
 // ---------------------------------------------------------------------------
+// Positive consensus — "confirms outweigh disputes", the filter-match rule
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a claim has POSITIVE community consensus: there is evidence and
+ * confirms STRICTLY outnumber disputes.
+ *
+ * This is the single, explainable rule for "the community has affirmed this
+ * attribute" — the same `confirmCount > disputeCount` reading that
+ * {@link deriveHeadlineSafetyState} uses to separate `"celiac-safe"` (confirms
+ * lead) from `"gluten-friendly"` (disputes tie or lead). A tie is deliberately
+ * NOT positive: contested evidence must never read as affirmed (honest by
+ * construction — a celiac could be hurt by an overstated match).
+ *
+ * Recency/staleness is intentionally NOT part of this rule: a stale-but-
+ * uncontested claim still represents a real, visible community consensus and the
+ * taxonomy filter ("show me places the community says have a dedicated fryer")
+ * should surface it. The card's own glance still flags staleness separately.
+ *
+ * Used by the GF taxonomy browse filter (#35): a listing matches an attribute
+ * only when its claim for that attribute has positive consensus — never merely
+ * because a `claims` row exists.
+ */
+export function hasPositiveConsensus(
+  aggregate: Pick<ClaimAggregate, "confirmCount" | "disputeCount">
+): boolean {
+  return hasEvidence(aggregate) && aggregate.confirmCount > aggregate.disputeCount;
+}
+
+// ---------------------------------------------------------------------------
 // Headline safety state — celiac-safe vs gluten-friendly, from visible evidence
 // ---------------------------------------------------------------------------
 

@@ -1,4 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
 import { and, count, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
@@ -180,21 +179,7 @@ export async function retractVote(input: RetractInput): Promise<void> {
     .where(and(eq(attestations.claimId, input.claimId), eq(attestations.userId, user.id)));
 }
 
-// ---------------------------------------------------------------------------
-// Server-function wrappers — the entry points the listing-detail UI calls
-// ---------------------------------------------------------------------------
-
-/** Confirm/dispute server function (login-gated, validated). See {@link castVote}. */
-export const submitVote = createServerFn({ method: "POST" })
-  .validator(voteInputSchema)
-  .handler(({ data }) => castVote(data));
-
-/** Retract server function (login-gated, validated). See {@link retractVote}. */
-export const removeVote = createServerFn({ method: "POST" })
-  .validator(retractInputSchema)
-  .handler(({ data }) => retractVote(data));
-
-/** Read a claim's aggregate counts + recency. See {@link getClaimAggregate}. */
-export const fetchClaimAggregate = createServerFn({ method: "GET" })
-  .validator(claimAggregateInputSchema)
-  .handler(({ data }) => getClaimAggregate(data));
+// The client-callable `createServerFn` wrappers (submitVote / removeVote /
+// fetchClaimAggregate) live in `./attestations.fn.ts` (the `*.fn.ts`
+// convention), so client code never imports this db-touching module — see the
+// module docstring above.

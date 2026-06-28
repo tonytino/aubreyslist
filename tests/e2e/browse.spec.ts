@@ -29,10 +29,10 @@ test("home Browse CTA navigates to the browse list", async ({ page }) => {
 });
 
 /**
- * Sort control (#36). The labeled select renders regardless of DB content;
+ * Sort control (#36). The labeled `<select>` is rendered by the browse route;
  * choosing a sort drives the URL (`?sort=`) so the view is linkable, mirroring
- * the `?page=` pattern. We assert the accessible labeled control and the URL
- * wiring without assuming any specific listings exist.
+ * the `?page=`/`?attrs=` pattern. We assert the accessible labeled control and
+ * the URL wiring; the page-reset on sort change is covered by unit tests.
  */
 test("browse sort control is labeled and drives the URL", async ({ page }) => {
   await page.goto("/listings");
@@ -42,9 +42,33 @@ test("browse sort control is labeled and drives the URL", async ({ page }) => {
 
   await sort.selectOption("trust");
   await expect(page).toHaveURL(/sort=trust/);
-  // Selecting a sort resets to the first page.
-  await expect(page).toHaveURL(/page=1/);
 
   await sort.selectOption("recency");
   await expect(page).toHaveURL(/sort=recency/);
+
+  // Back to the default returns the list to alphabetical order.
+  await sort.selectOption("alpha");
+  await expect(page).toHaveURL(/sort=alpha/);
+});
+
+/**
+ * Taxonomy filter (#35) and sort (#36) compose: applying a filter and then a
+ * sort keeps BOTH params in the URL (they are orthogonal). Guards the merge of
+ * the two parallel features.
+ */
+test("filter and sort compose in the URL", async ({ page }) => {
+  await page.goto("/listings");
+
+  // Toggle the headline celiac-safe taxonomy filter (a labeled checkbox from #35).
+  const celiacFilter = page.getByRole("checkbox", {
+    name: "Celiac-safe vs. gluten-friendly",
+  });
+  await expect(celiacFilter).toBeVisible();
+  await celiacFilter.check();
+  await expect(page).toHaveURL(/attrs=celiac_safe_vs_gluten_friendly/);
+
+  // Now sort; the filter param must survive alongside the new sort param.
+  await page.getByLabel("Sort by").selectOption("trust");
+  await expect(page).toHaveURL(/sort=trust/);
+  await expect(page).toHaveURL(/attrs=/);
 });

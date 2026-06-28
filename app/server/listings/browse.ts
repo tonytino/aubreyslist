@@ -1,12 +1,20 @@
 import { type SQL, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
-import { type Listing, attestations, claims, incidents, listings } from "~/db/schema";
+import {
+  type Listing,
+  attestations,
+  claimAttributes,
+  claims,
+  incidents,
+  listings,
+} from "~/db/schema";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident } from "~/trust/incident-recency";
 import { DEFAULT_STALENESS_MONTHS } from "~/trust/summary";
+import { buildBrowseWhere } from "./filter";
 import { buildSearchPredicate } from "./search";
 
 /**
@@ -44,16 +52,24 @@ export const browseListingsInputSchema = z.object({
   /** Page size; clamped to a sane maximum. Defaults to {@link BROWSE_PAGE_SIZE}. */
   pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(BROWSE_PAGE_SIZE),
   /**
-   * Free-text search over name/address (#34). Empty/whitespace = no constraint,
-   * so the box being blank shows everything. COMBINABLE with sort + future
-   * filters — composed into the same `WHERE` (see {@link getBrowseListings}).
+   * Free-text search over name/address (#34). Empty/whitespace → no constraint.
+   * Threaded through so the GF taxonomy filter (#35) composes with search via
+   * `and(...)` — the count and page reflect search + filters together.
    */
-  query: z.string().max(256).default(""),
+  q: z.string().max(256).optional(),
+  /**
+   * Selected GF taxonomy attributes to filter by (#35), validated against the
+   * fixed `claim_attribute` enum so an unknown value can never reach the query.
+   * A listing matches only when each selected attribute has positive community
+   * consensus (confirms outnumber disputes) — see `./filter.ts`. Empty/omitted →
+   * no taxonomy constraint.
+   */
+  attrs: z.array(z.enum(claimAttributes)).default([]),
   /**
    * Sort order (#36). One of the {@link BrowseSort} tokens; an unknown token
    * degrades to the stable {@link DEFAULT_BROWSE_SORT} (alphabetical) rather than
-   * erroring. COMBINABLE with search/filters — sort only changes ORDER BY, never
-   * the `WHERE`, so pagination + total count stay correct.
+   * erroring. COMBINABLE with search + filters — sort only changes `ORDER BY`,
+   * never the `WHERE`, so the filtered total + pagination stay correct.
    */
   sort: z.enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]]).catch(DEFAULT_BROWSE_SORT),
 });
@@ -94,36 +110,36 @@ export async function getBrowseListings(
   const { page, pageSize, sort } = input;
   const offset = (page - 1) * pageSize;
 
-  // The text-search predicate (#34). COMBINABLE with sort/filters: it is the
-  // shared `WHERE` applied to BOTH the page query and the total-count query, so
-  // pagination math stays correct under search. Blank query → `undefined` → no
-  // constraint. A future filter step would `and(searchPredicate, …filters)` here.
-  const searchPredicate = buildSearchPredicate(input.query);
+  // Compose the WHERE from the text search (#34) and the GF taxonomy filter
+  // (#35), AND-combined. The SAME predicate constrains both the page query and
+  // the count query, so the total reflects the active filters and pagination
+  // stays correct. `undefined` (nothing selected) → drizzle applies no WHERE.
+  const where = buildBrowseWhere(buildSearchPredicate(input.q ?? ""), input.attrs);
 
-  // Per-listing celiac trust aggregate, as a subquery the ORDER BY can join to.
-  // This is the SAME visible evidence the glance derives from — confirm/dispute
-  // counts + `lastConfirmedAt` recency on the headline celiac claim — so the
-  // trust sort orders by the displayed safety tier (a roll-up of evidence), NOT
-  // an opaque score (ADR-007). Search/sort never touch each other: search lives
-  // in `WHERE`, sort in `ORDER BY`.
-  // Resolve the staleness window ONCE so the SQL "stale" boundary used to rank
-  // the trust sort matches the boundary the displayed glance uses (below).
+  // The ORDER BY (#36). Search/filter live in the WHERE above; sort only touches
+  // the ORDER BY, so the three compose cleanly. The trust sort joins a per-listing
+  // celiac-trust subquery and ranks by the SAME displayed safety tier (confirm/
+  // dispute counts + `lastConfirmedAt` staleness), a roll-up of visible evidence,
+  // NOT an opaque score (ADR-007). Resolve the staleness window ONCE so the SQL
+  // "stale" boundary matches the boundary the displayed glance uses (below).
   const resolvedStalenessMonths = stalenessMonths ?? DEFAULT_STALENESS_MONTHS;
   const trust = celiacTrustSubquery();
   const orderBy = buildOrderBy(sort, trust, now, resolvedStalenessMonths);
 
-  // 1. The page of listings under the current search + sort, plus the matching
-  //    total (same `WHERE`) so the UI can render "X of Y" + has-more.
+  // 1. The page of listings under the current search + filter + sort, plus the
+  //    matching total (same `WHERE`) so the UI can render "X of Y" + has-more.
+  //    The trust subquery is LEFT JOINed so the sort can order by its columns;
+  //    rows are wrapped as `{ listing }` because of the projection.
   const [pageListings, totalRows] = await Promise.all([
     db
       .select({ listing: listings })
       .from(listings)
       .leftJoin(trust, eq(trust.listingId, listings.id))
-      .where(searchPredicate)
+      .where(where)
       .orderBy(...orderBy)
       .limit(pageSize)
       .offset(offset),
-    db.select({ total: sql<number>`count(*)` }).from(listings).where(searchPredicate),
+    db.select({ total: sql<number>`count(*)` }).from(listings).where(where),
   ]);
 
   const total = Number(totalRows[0]?.total ?? 0);
