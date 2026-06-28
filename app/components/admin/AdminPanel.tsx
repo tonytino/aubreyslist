@@ -1,6 +1,7 @@
 import type { AdminSettingsView } from "~/server/admin/admin-view.fn";
 import type { Role } from "~/server/auth/guards";
 import { AdminSection } from "./AdminSection";
+import { ModerationQueue } from "./ModerationQueue";
 import { type AdminSectionId, visibleSections } from "./sections";
 
 interface AdminPanelProps {
@@ -58,9 +59,10 @@ function SectionFor({
       return (
         <AdminSection
           title="Moderation queue"
-          description="Flagged listings, claims, and incident reports awaiting review will appear here for moderators and admins to action."
-          badge="Coming soon"
-        />
+          description="Open flags on listings, claims, and incident reports awaiting review. Moderation actions land with issue #41."
+        >
+          <ModerationQueue />
+        </AdminSection>
       );
   }
 }

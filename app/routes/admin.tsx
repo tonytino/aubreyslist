@@ -1,5 +1,6 @@
 import { Link, createFileRoute, redirect } from "@tanstack/react-router";
 import { AdminPanel } from "~/components/admin/AdminPanel";
+import { moderationQueueQueryOptions } from "~/components/admin/moderation-queue-query";
 import { fetchAdminView } from "~/server/admin/admin-view.fn";
 
 /**
@@ -15,16 +16,24 @@ import { fetchAdminView } from "~/server/admin/admin-view.fn";
  * - `granted` → render the shell; {@link AdminPanel} then shows only the
  *   sections the role may see (admin: everything; moderator: the queue).
  *
- * This page hosts later work: role management (#16), app-settings write/toggle
- * (#24), and the moderation queue (#40). It is the SHELL only.
+ * Both moderators and admins see the moderation queue (#40), so when access is
+ * granted the loader prefetches it into the dehydrated TanStack Query cache —
+ * the queue's own server fn re-runs the SAME server-side moderator+ guard, so
+ * this prefetch is a render-time convenience, never the access control. Role
+ * management (#16) and app-settings write/toggle (#24) also live in this shell.
  */
 export const Route = createFileRoute("/admin")({
-  loader: async () => {
+  loader: async ({ context }) => {
     const view = await fetchAdminView();
     // Anonymous visitors are sent to sign in; the OAuth initiation route is a
     // plain server route (not a typed app route), so redirect by `href`.
     if (view.access === "anonymous") {
       throw redirect({ href: "/api/auth/google" });
+    }
+    // Prefetch the moderation queue for granted (moderator+) viewers so the
+    // section hydrates without a loading flash. The fn re-checks access itself.
+    if (view.access === "granted") {
+      await context.queryClient.ensureQueryData(moderationQueueQueryOptions());
     }
     return { view };
   },
