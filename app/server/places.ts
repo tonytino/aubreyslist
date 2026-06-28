@@ -4,6 +4,8 @@ import { z } from "zod";
 import { getDb } from "~/db/client";
 import { appSettings } from "~/db/schema";
 import { getEnv } from "~/env";
+import { requireCurrentUser } from "~/server/auth/guards";
+import { enforceWriteLimit } from "~/server/rate-limit";
 
 /**
  * Server-side Google Places provider for the add-listing intake flow (ADR-008).
@@ -303,12 +305,36 @@ export async function runPlaceDetails(
 // Server-function wrappers — the entry points the add-listing UI calls
 // ---------------------------------------------------------------------------
 
+/**
+ * Both wrappers proxy the *paid* Google Places API, so — like every write path
+ * (ADR-010, issue #18) — they must reject anonymous callers and meter authed
+ * ones BEFORE any upstream call, or an anonymous client could drive unbounded
+ * billed usage (cost/quota DoS, issue #86). The only caller is the signed-in
+ * add-listing intake form, so gating on auth is product-correct.
+ *
+ * Order of operations (mirrors `createListing`):
+ * 1. {@link requireCurrentUser} — auth gate (throws 401 if anonymous).
+ * 2. {@link enforceWriteLimit} — per-user rate limit (throws 429 over the cap),
+ *    applied AFTER the auth gate and BEFORE the upstream Places call so an
+ *    abusive burst is capped while anonymous callers still get a 401, not a 429.
+ *    We reuse the shared write limiter; a separate tighter bucket is a possible
+ *    follow-up, not required here.
+ */
+
 /** Autocomplete server function (validated input). See `runAutocomplete`. */
 export const autocompletePlaces = createServerFn({ method: "POST" })
   .validator(autocompleteInputSchema)
-  .handler(({ data }) => runAutocomplete(data));
+  .handler(async ({ data }) => {
+    const user = await requireCurrentUser();
+    await enforceWriteLimit(user.id);
+    return runAutocomplete(data);
+  });
 
 /** Place-details server function (validated input). See `runPlaceDetails`. */
 export const getPlaceDetails = createServerFn({ method: "POST" })
   .validator(placeDetailsInputSchema)
-  .handler(({ data }) => runPlaceDetails(data));
+  .handler(async ({ data }) => {
+    const user = await requireCurrentUser();
+    await enforceWriteLimit(user.id);
+    return runPlaceDetails(data);
+  });

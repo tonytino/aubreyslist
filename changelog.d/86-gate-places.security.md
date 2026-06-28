@@ -1,0 +1,1 @@
+- `[manual]` Gated the Places autocomplete/details server functions behind auth + per-user rate limiting so anonymous callers can no longer drive unbounded paid Google Places API usage (closes #86).
