@@ -1,0 +1,67 @@
+name: Migrate production database
+
+# Applies pending Drizzle migrations to the PRODUCTION database.
+#
+# Triggers:
+# - Automatically after a push to `main` that changes the schema or migrations
+#   (i.e. once a schema PR merges) — so no PR author is ever a manual blocker.
+# - On demand via the "Run workflow" button (workflow_dispatch) — use this for
+#   the first apply, or any time you want to force a run.
+#
+# Skips gracefully (with a warning, not a failure) if PROD_DATABASE_URL is not
+# configured, so the workflow is safe to merge before the secret exists.
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "db/migrations/**"
+      - "db/schema.ts"
+      - ".github/workflows/migrate.yml"
+  workflow_dispatch: {}
+
+# Least privilege: this workflow only reads the repo (the DB URL is a secret).
+permissions:
+  contents: read
+
+# Never let two production migrations run concurrently.
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The `secrets` context isn't allowed in step-level `if`, so detect the
+      # production DB secret here and gate the migrate step on this output.
+      - name: Check for production database secret
+        id: db
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          if [ -n "$PROD_DATABASE_URL" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::PROD_DATABASE_URL is not set — skipping production migration."
+          fi
+
+      - name: Apply migrations
+        if: steps.db.outputs.enabled == 'true'
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}

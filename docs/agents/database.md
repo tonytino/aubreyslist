@@ -63,3 +63,23 @@ await db.delete(posts).where(eq(posts.id, "1"));
 ## Environment
 
 `DATABASE_URL` must be set in `.env`. Copy `.env.example` to get started.
+
+## Production migrations
+
+Production migrations are applied **automatically by CI**, not by hand — no PR
+author is ever a blocker for a schema change.
+
+- **Automatic:** the `.github/workflows/migrate.yml` workflow runs `pnpm db:migrate`
+  against the production database whenever a push to `main` changes `db/schema.ts`
+  or `db/migrations/**` (i.e. when a schema PR merges).
+- **On demand:** trigger the same workflow from the Actions tab ("Run workflow")
+  or `gh workflow run "Migrate production database"` — use this for the **first
+  apply**, or any time you want to force a run.
+- **Secret:** the workflow reads `PROD_DATABASE_URL` (a repo Actions secret
+  pointing at the production database — distinct from `CI_E2E_DATABASE_URL`,
+  which targets the throwaway CI branch). If it's unset the workflow skips with a
+  warning instead of failing.
+- **Manual fallback** (one-off): `DATABASE_URL='<prod-connection-string>' pnpm db:migrate`.
+
+The CI **test** database (the `ci` Neon branch) is migrated separately inside the
+E2E job in `ci.yml`; the two never share a connection string.
