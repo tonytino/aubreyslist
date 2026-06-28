@@ -322,6 +322,93 @@ describe("getBrowseListings", () => {
     expect(result.sort).toBe("trust");
   });
 
+  // --- #37: "near me" distance sort -----------------------------------------
+
+  it("orders distance by the haversine term ascending, then name, when coords are given", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      { ...baseInput, sort: "distance", userLat: 39.7392, userLng: -104.9903 },
+      NOW
+    );
+
+    // Two ORDER BY terms: the haversine distance (asc), then the name tiebreak.
+    expect(state.orderByArgs).toHaveLength(2);
+    const [distance, tiebreak] = state.orderByArgs.map(renderArg);
+    // The distance term is the haversine: sin/cos over radians of the lat/lng
+    // deltas, ascending (closest first).
+    expect(distance).toContain("radians");
+    expect(distance).toContain("sin");
+    expect(distance).toContain("cos");
+    expect(distance).toContain("asc");
+    // The user's coords are bound as params (not hardcoded into the SQL).
+    const params = dialect.sqlToQuery(state.orderByArgs[0] as SQL).params;
+    expect(params).toContain(39.7392);
+    expect(params).toContain(-104.9903);
+    // Stable name tiebreak last.
+    expect(tiebreak).toContain('"name"');
+  });
+
+  it("falls back to alphabetical for distance sort when NO coords are supplied", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    // sort=distance but the user denied/unavailable geolocation (no coords).
+    await getBrowseListings({ ...baseInput, sort: "distance" }, NOW);
+
+    // Degrades to the stable single-term alphabetical order rather than erroring.
+    expect(state.orderByArgs).toHaveLength(1);
+    expect(renderArg(state.orderByArgs[0])).toContain('"name"');
+    expect(renderArg(state.orderByArgs[0])).toContain("asc");
+  });
+
+  it("falls back to alphabetical when only HALF a coordinate pair is supplied", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    // A lone lat (no lng) is meaningless for distance → fall back, don't error.
+    await getBrowseListings({ ...baseInput, sort: "distance", userLat: 39.7392 }, NOW);
+
+    expect(state.orderByArgs).toHaveLength(1);
+    expect(renderArg(state.orderByArgs[0])).toContain('"name"');
+  });
+
+  it("echoes distance back as the applied sort even when it fell back to alpha order", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    const result = await getBrowseListings({ ...baseInput, sort: "distance" }, NOW);
+    // The applied sort token is still "distance" (the UI reflects the user's
+    // selection); only the ORDER BY degraded.
+    expect(result.sort).toBe("distance");
+  });
+
+  it("combines distance sort with search + filters (shared WHERE, distance ORDER BY)", async () => {
+    state.pageListings = [{ id: "l1", name: "Taco House", address: "1 Main St" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      {
+        ...baseInput,
+        q: "taco",
+        attrs: ["dedicated_fryer"],
+        sort: "distance",
+        userLat: 39.7392,
+        userLng: -104.9903,
+      },
+      NOW
+    );
+
+    // Search + filter compose into the SAME WHERE on both queries; the distance
+    // sort only changes the ORDER BY.
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+    expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toContain("%taco%");
+    expect(state.orderByArgs).toHaveLength(2);
+    expect(renderArg(state.orderByArgs[0])).toContain("radians");
+  });
+
   // --- #34/#35: WHERE composition (search + taxonomy filter) ----------------
 
   it("applies NO where filter when no attrs/search are given", async () => {

@@ -48,6 +48,14 @@ export const BROWSE_SORT_OPTIONS = [
       "Most-recently-confirmed headline celiac-safe claim first, then by net " +
       "confirm count, then name. Listings never confirmed sort last.",
   },
+  {
+    value: "distance",
+    label: "Near me",
+    help:
+      "Closest first, by great-circle (haversine) distance from your location " +
+      "to each listing's coordinates, then name. Requires your browser location; " +
+      "if it's denied or unavailable the list falls back to alphabetical.",
+  },
 ] as const;
 
 /** One selectable browse sort, with its UI label and a short description. */

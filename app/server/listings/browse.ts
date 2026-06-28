@@ -9,6 +9,7 @@ import {
   incidents,
   listings,
 } from "~/db/schema";
+import type { Coords } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
@@ -72,6 +73,16 @@ export const browseListingsInputSchema = z.object({
    * never the `WHERE`, so the filtered total + pagination stay correct.
    */
   sort: z.enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]]).catch(DEFAULT_BROWSE_SORT),
+  /**
+   * The user's location for the "near me" distance sort (#37). Optional and
+   * validated to WGS84 ranges; only USED as a complete pair when `sort=distance`.
+   * When `sort=distance` but coords are absent (geolocation denied/unavailable,
+   * or SSR before the browser grants permission), the loader FALLS BACK to the
+   * default alphabetical order rather than erroring — the sort never crashes the
+   * page. Coords are ignored entirely for any non-distance sort.
+   */
+  userLat: z.number().finite().min(-90).max(90).optional(),
+  userLng: z.number().finite().min(-180).max(180).optional(),
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
@@ -124,7 +135,13 @@ export async function getBrowseListings(
   // "stale" boundary matches the boundary the displayed glance uses (below).
   const resolvedStalenessMonths = stalenessMonths ?? DEFAULT_STALENESS_MONTHS;
   const trust = celiacTrustSubquery();
-  const orderBy = buildOrderBy(sort, trust, now, resolvedStalenessMonths);
+  // Distance sort needs a COMPLETE coordinate pair; a half-pair (or none) means
+  // we can't compute distance, so `buildOrderBy` falls back to the default order.
+  const coords: Coords | undefined =
+    input.userLat !== undefined && input.userLng !== undefined
+      ? { lat: input.userLat, lng: input.userLng }
+      : undefined;
+  const orderBy = buildOrderBy(sort, trust, now, resolvedStalenessMonths, coords);
 
   // 1. The page of listings under the current search + filter + sort, plus the
   //    matching total (same `WHERE`) so the UI can render "X of Y" + has-more.
@@ -239,9 +256,11 @@ type CeliacTrustSubquery = ReturnType<typeof celiacTrustSubquery>;
  * card still shows the incident flag, so the warning remains visible; folding
  * incident-demotion into the ordering is a later issue, not v1.
  *
- * EXTENSIBLE: adding #37's `distance` is a new `case` here (ordering by the
- * haversine distance from the user's lat/lng) plus its registry entry — no
- * rewrite of this function or the loader.
+ * "near me" (#37): the `distance` case orders by the great-circle (haversine)
+ * distance from the user's coords (`coords`) to each listing's stored lat/lng,
+ * ascending — the SAME formula as the pure `haversineKm` helper, in SQL. When no
+ * coords are supplied (geolocation denied/unavailable, or SSR) it falls back to
+ * the alphabetical default rather than erroring, so the sort degrades gracefully.
  *
  * Every sort ends with `name ASC` as a stable tiebreaker so the order is
  * deterministic (no arbitrary row shuffling between requests).
@@ -250,7 +269,8 @@ function buildOrderBy(
   sort: BrowseSort,
   trust: CeliacTrustSubquery,
   now: Date,
-  stalenessMonths: number
+  stalenessMonths: number,
+  coords?: Coords
 ): SQL[] {
   const nameTiebreak = asc(listings.name);
 
@@ -285,6 +305,27 @@ function buildOrderBy(
       // (Independent of tier by design: "recency" answers "what was just
       // re-verified", a different question than "what is safest".)
       return [sql`${recency} desc nulls last`, desc(netConfirms), nameTiebreak];
+    case "distance": {
+      // "Near me" (#37). Without a complete user coordinate pair (geolocation
+      // denied/unavailable, or SSR before the browser grants permission) we
+      // CANNOT compute distance, so we fall back to the stable alphabetical order
+      // rather than erroring — the sort degrades gracefully, never crashes.
+      if (!coords) {
+        return [nameTiebreak];
+      }
+      // Closest first: order by great-circle distance from the user's coords to
+      // each listing's stored lat/lng. This is the SAME haversine the pure
+      // `haversineKm` helper computes (the explainable, shared definition of
+      // "distance"), expressed in SQL so the DB does the ranking. We omit the
+      // constant `2 * R` multiplier and the final `asin`/`sqrt` — both are
+      // monotonic in the haversine term `h`, so ordering by `h` ascending yields
+      // the identical order as the full helper while keeping the SQL cheap.
+      const distanceTerm = sql`
+        sin(radians(${listings.lat} - ${coords.lat}) / 2) ^ 2
+        + cos(radians(${coords.lat})) * cos(radians(${listings.lat}))
+        * sin(radians(${listings.lng} - ${coords.lng}) / 2) ^ 2`;
+      return [asc(distanceTerm), nameTiebreak];
+    }
     default:
       // Alphabetical — the stable, scannable default.
       return [nameTiebreak];
