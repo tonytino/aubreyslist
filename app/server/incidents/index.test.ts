@@ -31,6 +31,9 @@ const h = vi.hoisted(() => {
     // so we can assert ownership filters by BOTH `id` AND `userId` (#114).
     lastUpdateWhere: undefined as unknown,
     lastDeleteWhere: undefined as unknown,
+    // The WHERE predicate handed to the read list — captured to assert the #41
+    // public-read visibility filter (`moderation_status = 'visible'`).
+    lastListWhere: undefined as unknown,
     // Rows the UPDATE ... RETURNING resolves to: non-empty ⇒ owner match.
     updatedRows: [{ id: "incident-1" }] as Array<Record<string, unknown>>,
     // Rows the DELETE ... RETURNING resolves to: non-empty ⇒ owner match.
@@ -42,7 +45,10 @@ const h = vi.hoisted(() => {
     state.lastOrderByArgs = args;
     return Promise.resolve(state.listRows);
   });
-  const selectWhereMock = vi.fn(() => ({ orderBy: orderByMock }));
+  const selectWhereMock = vi.fn((predicate?: unknown) => {
+    state.lastListWhere = predicate;
+    return { orderBy: orderByMock };
+  });
   const fromMock = vi.fn(() => ({ where: selectWhereMock }));
   const selectMock = vi.fn(() => ({ from: fromMock }));
 
@@ -141,6 +147,7 @@ beforeEach(() => {
   state.lastUpdateSet = undefined;
   state.lastUpdateWhere = undefined;
   state.lastDeleteWhere = undefined;
+  state.lastListWhere = undefined;
   state.updatedRows = [{ id: "incident-1" }];
   state.deletedRows = [{ id: "incident-1" }];
   state.signedIn = true;
@@ -333,5 +340,21 @@ describe("listIncidents — most-recent first", () => {
     expect(state.lastOrderByArgs).toHaveLength(2);
     // Passes the DB ordering straight through.
     expect(rows.map((r) => r.id)).toEqual(["b", "a"]);
+  });
+
+  it("excludes hidden/removed incidents from this PUBLIC read (#41)", async () => {
+    // This is the read that feeds BOTH the incident list AND the recent-incident
+    // banner on the detail page. The WHERE must constrain to the listing AND to
+    // `moderation_status = 'visible'`, so a moderated-away incident drops out —
+    // while a still-visible recent incident is never buried (domain.md trust).
+    await listIncidents({ listingId: "listing-1" });
+
+    expect(state.lastListWhere).toBeDefined();
+    const { sql, params } = renderWhere(state.lastListWhere);
+    expect(sql).toContain("listing_id");
+    expect(sql).toContain("moderation_status");
+    expect(sql).toContain(" and ");
+    expect(params).toContain("listing-1");
+    expect(params).toContain("visible");
   });
 });

@@ -16,11 +16,15 @@ const h = vi.hoisted(() => {
     rows: [] as Array<Record<string, unknown>>,
     viewerVoteRows: [] as Array<{ claimId: string; value: string }>,
     viewer: null as { id: string } | null,
+    aggWhere: undefined as unknown,
   };
 
   // Aggregate chain: select().from().leftJoin().where().groupBy().
   const groupByMock = vi.fn(() => Promise.resolve(state.rows));
-  const aggWhereMock = vi.fn(() => ({ groupBy: groupByMock }));
+  const aggWhereMock = vi.fn((predicate?: unknown) => {
+    state.aggWhere = predicate;
+    return { groupBy: groupByMock };
+  });
   const leftJoinMock = vi.fn(() => ({ where: aggWhereMock }));
 
   // Viewer-vote chain: select().from().innerJoin().where() (terminal, awaited).
@@ -44,14 +48,18 @@ vi.mock("~/server/auth/current-user", () => ({
   getCurrentUser: h.getCurrentUserMock,
 }));
 
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { getListingClaimAggregates } from "./listing-summary";
 
 const { state, selectMock, getCurrentUserMock } = h;
+const dialect = new PgDialect();
 
 beforeEach(() => {
   state.rows = [];
   state.viewerVoteRows = [];
   state.viewer = null;
+  state.aggWhere = undefined;
 });
 
 afterEach(() => {
@@ -146,6 +154,27 @@ describe("getListingClaimAggregates", () => {
     expect(selectMock).toHaveBeenCalledTimes(2);
     expect(result.find((c) => c.claimId === "c1")?.viewerVote).toBe("confirm");
     expect(result.find((c) => c.claimId === "c2")?.viewerVote).toBe("dispute");
+  });
+
+  it("excludes hidden/removed claims from the PUBLIC aggregate (#41)", async () => {
+    state.rows = [
+      {
+        claimId: "c1",
+        attribute: "dedicated_fryer",
+        lastConfirmedAt: null,
+        confirmCount: "3",
+        disputeCount: "0",
+      },
+    ];
+
+    await getListingClaimAggregates({ listingId: "listing-1" });
+
+    // The aggregate WHERE constrains to `moderation_status = 'visible'`, so a
+    // hidden/removed claim drops off the surface AND out of the headline cue,
+    // whose counts then recompute from the surviving visible claims.
+    const lower = dialect.sqlToQuery(state.aggWhere as SQL).sql.toLowerCase();
+    expect(lower).toContain("moderation_status");
+    expect(dialect.sqlToQuery(state.aggWhere as SQL).params).toContain("visible");
   });
 
   it("leaves viewerVote null for claims the signed-in viewer has not voted on", async () => {

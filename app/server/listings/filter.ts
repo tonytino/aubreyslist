@@ -45,6 +45,11 @@ import type { ClaimAttribute } from "~/db/schema";
  * `count(*) filter (...)` over the claim's attestations (mirroring the browse
  * aggregate query), and `gt(confirms, disputes)` encodes the strict
  * positive-consensus rule. A claim with no attestations has `0 > 0` → excluded.
+ *
+ * Visibility (#41): only `visible` claims count toward consensus — a
+ * hidden/removed claim must never make a listing match the taxonomy filter
+ * (consistent with the browse card aggregate + the listing-detail roll-up, which
+ * also exclude non-visible claims).
  */
 function buildAttributeConsensusExists(attribute: ClaimAttribute): SQL {
   const confirmCount = sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`;
@@ -54,7 +59,7 @@ function buildAttributeConsensusExists(attribute: ClaimAttribute): SQL {
     select 1
     from ${claims}
     left join ${attestations} on ${eq(attestations.claimId, claims.id)}
-    where ${and(eq(claims.listingId, listings.id), eq(claims.attribute, attribute))}
+    where ${and(eq(claims.listingId, listings.id), eq(claims.attribute, attribute), eq(claims.moderationStatus, "visible"))}
     group by ${claims.id}
     having ${gt(confirmCount, disputeCount)}
   )`;

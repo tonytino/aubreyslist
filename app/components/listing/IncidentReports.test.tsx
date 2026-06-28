@@ -38,6 +38,7 @@ function incident(overrides: Partial<Incident> = {}): Incident {
     occurredOn: "2026-06-01",
     severity: null,
     note: null,
+    moderationStatus: "visible",
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

@@ -35,6 +35,12 @@ const h = vi.hoisted(() => {
     pageWhere: undefined as unknown,
     /** The WHERE predicate handed to the count query (must match the page's). */
     countWhere: undefined as unknown,
+    /** The WHERE predicate handed to the celiac-aggregate query (#41 visibility). */
+    aggWhere: undefined as unknown,
+    /** The WHERE predicate handed to the trust subquery (#41 visibility). */
+    subqueryWhere: undefined as unknown,
+    /** The WHERE predicate handed to the incidents query (#41 visibility). */
+    incidentWhere: undefined as unknown,
   };
 
   // The page query chain (the celiac-trust JOIN form):
@@ -57,7 +63,10 @@ const h = vi.hoisted(() => {
 
   // The celiac-aggregate chain: select(proj).from().leftJoin().where().groupBy()
   const groupByMock = vi.fn(() => Promise.resolve(state.celiacRows));
-  const aggWhereMock = vi.fn(() => ({ groupBy: groupByMock }));
+  const aggWhereMock = vi.fn((predicate?: unknown) => {
+    state.aggWhere = predicate;
+    return { groupBy: groupByMock };
+  });
 
   // The celiac-trust SUBQUERY chain (builder, not awaited):
   //   select().from().leftJoin().where().groupBy().as()
@@ -70,7 +79,10 @@ const h = vi.hoisted(() => {
       lastConfirmedAt: {},
     }),
   }));
-  const subqueryWhereMock = vi.fn(() => ({ groupBy: subqueryGroupByMock }));
+  const subqueryWhereMock = vi.fn((predicate?: unknown) => {
+    state.subqueryWhere = predicate;
+    return { groupBy: subqueryGroupByMock };
+  });
 
   // `leftJoin` is used by BOTH the trust subquery (→where→groupBy→as, a builder)
   // and the celiac-aggregate query (→where→groupBy, awaited). They differ only by
@@ -84,7 +96,10 @@ const h = vi.hoisted(() => {
   const celiacFromMock = vi.fn(() => ({ leftJoin: leftJoinMock }));
 
   // The incidents chain: select(proj).from().where()  (awaited)
-  const incidentWhereMock = vi.fn(() => Promise.resolve(state.incidentRows));
+  const incidentWhereMock = vi.fn((predicate?: unknown) => {
+    state.incidentWhere = predicate;
+    return Promise.resolve(state.incidentRows);
+  });
   const incidentFromMock = vi.fn(() => ({ where: incidentWhereMock }));
 
   // The count chain: select({ total }).from().where()  (awaited)
@@ -142,6 +157,9 @@ beforeEach(() => {
   state.orderByArgs = [];
   state.pageWhere = undefined;
   state.countWhere = undefined;
+  state.aggWhere = undefined;
+  state.subqueryWhere = undefined;
+  state.incidentWhere = undefined;
   h.resetCallCounters();
 });
 
@@ -434,15 +452,20 @@ describe("getBrowseListings", () => {
 
   // --- #34/#35: WHERE composition (search + taxonomy filter) ----------------
 
-  it("applies NO where filter when no attrs/search are given", async () => {
+  it("always constrains to visible listings even when no attrs/search are given (#41)", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
 
     await getBrowseListings(baseInput, NOW);
 
-    // No search term + no attributes → no constraint on either query.
-    expect(state.pageWhere).toBeUndefined();
-    expect(state.countWhere).toBeUndefined();
+    // No search term + no attributes → the ONLY constraint is the visibility
+    // predicate (hidden/removed listings are excluded from this public read),
+    // applied identically to both the page and count queries.
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+    const sql = renderArg(state.pageWhere);
+    expect(sql).toContain("moderation_status");
+    expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toContain("visible");
   });
 
   it("applies the SAME where predicate to the page and count when filtering", async () => {
@@ -466,8 +489,18 @@ describe("getBrowseListings", () => {
 
     expect(state.pageWhere).toBeDefined();
     expect(state.countWhere).toBeDefined();
-    expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toEqual(["%taco%", "%taco%"]);
-    expect(dialect.sqlToQuery(state.countWhere as SQL).params).toEqual(["%taco%", "%taco%"]);
+    // The composed WHERE is `visible AND (name ILIKE ? OR address ILIKE ?)`, so
+    // the bound params are the visibility literal followed by the two `%term%`s.
+    expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toEqual([
+      "visible",
+      "%taco%",
+      "%taco%",
+    ]);
+    expect(dialect.sqlToQuery(state.countWhere as SQL).params).toEqual([
+      "visible",
+      "%taco%",
+      "%taco%",
+    ]);
     // Sort still applied alongside the search filter (tier + net + recency + name).
     expect(state.orderByArgs).toHaveLength(4);
   });
@@ -491,14 +524,17 @@ describe("getBrowseListings", () => {
     expect(state.countWhere).toBe(state.pageWhere);
   });
 
-  it("passes no WHERE predicate when the query is blank (shows everything)", async () => {
+  it("applies only the visibility predicate when the query is blank (shows all VISIBLE)", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
 
     await getBrowseListings({ ...baseInput, q: "  " }, NOW);
 
-    expect(state.pageWhere).toBeUndefined();
-    expect(state.countWhere).toBeUndefined();
+    // A blank search adds no text constraint, but the public read still excludes
+    // hidden/removed listings (#41).
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+    expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toContain("visible");
   });
 
   // --- The full compose: filter + search + sort + pagination ----------------
@@ -529,6 +565,55 @@ describe("getBrowseListings", () => {
     expect(result.sort).toBe("trust");
     // Trust sort still applied under filter + search + pagination.
     expect(state.orderByArgs).toHaveLength(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #41: every browse signal query excludes non-visible content + recomputes
+// ---------------------------------------------------------------------------
+describe("browse visibility filtering (#41)", () => {
+  it("filters the celiac aggregate, the trust subquery, AND incidents to visible", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(baseInput, NOW);
+
+    // The headline celiac aggregate excludes hidden/removed claims, so a card's
+    // confirm/dispute counts recompute from the surviving visible claims.
+    expect(renderArg(state.aggWhere)).toContain("moderation_status");
+    expect(dialect.sqlToQuery(state.aggWhere as SQL).sql.toLowerCase()).toContain("'visible'");
+
+    // The trust-sort subquery excludes hidden/removed claims too.
+    expect(dialect.sqlToQuery(state.subqueryWhere as SQL).sql.toLowerCase()).toContain("'visible'");
+
+    // The recent-incident signal excludes hidden/removed incidents, so a
+    // moderated-away incident no longer flags the card — but a still-visible one
+    // always does ("recent harm is never buried").
+    expect(renderArg(state.incidentWhere)).toContain("moderation_status");
+    expect(dialect.sqlToQuery(state.incidentWhere as SQL).params).toContain("visible");
+  });
+
+  it("recomputes the recent-incident flag from VISIBLE incidents only — none survive → no flag", async () => {
+    // The browse incidents query excludes hidden incidents at the DB (asserted in
+    // SQL above). Here we prove the RECOMPUTE: with no visible incident rows, the
+    // glance flag is false even though a hidden one may exist in the DB.
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+    state.incidentRows = []; // a moderated-away incident does not reach the loader
+
+    const result = await getBrowseListings(baseInput, NOW);
+    expect(result.cards[0]?.glance.hasRecentIncident).toBe(false);
+  });
+
+  it("recomputes the recent-incident flag from VISIBLE incidents only — a visible one still flags", async () => {
+    // A still-visible recent incident survives the filter → the card flags it,
+    // upholding "recent harm is never buried".
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+    state.incidentRows = [{ listingId: "l1", occurredOn: "2026-06-18" }];
+
+    const result = await getBrowseListings(baseInput, NOW);
+    expect(result.cards[0]?.glance.hasRecentIncident).toBe(true);
   });
 });
 
