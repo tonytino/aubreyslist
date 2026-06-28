@@ -51,8 +51,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 // listing, about). They render as in-page links now so the nav is real and
 // navigable as those routes land.
 const NAV_ITEMS = [
-  { to: "/", label: "Browse" },
-  { to: "/", label: "Add a listing" },
+  { to: "/listings", label: "Browse" },
+  { to: "/listings/new", label: "Add a listing" },
   { to: "/", label: "About" },
 ] as const;
 
