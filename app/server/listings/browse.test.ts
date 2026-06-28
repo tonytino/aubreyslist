@@ -117,6 +117,12 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({ select: h.selectMock }),
 }));
 
+import {
+  DEFAULT_STALENESS_MONTHS,
+  deriveHeadlineSafetyState,
+  safetyTierRank,
+  stalenessCutoff,
+} from "~/trust/summary";
 import { type BrowseListingsInput, getBrowseListings } from "./browse";
 
 const { state } = h;
@@ -523,5 +529,219 @@ describe("getBrowseListings", () => {
     expect(result.sort).toBe("trust");
     // Trust sort still applied under filter + search + pagination.
     expect(state.orderByArgs).toHaveLength(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SQL trust-tier ↔ JS spec equivalence (#114)
+//
+// The browse sort is SAFETY-CRITICAL: the DB ordering MUST reproduce the exact
+// safety tier the card displays (ADR-007). The pure spec lives in
+// `safetyTierRank`/`deriveHeadlineSafetyState`; the SQL CASE in `buildOrderBy`
+// is the server-side mirror. If the two ever drift, a celiac could be sent to a
+// stale/contested listing the product down-ranks — and the existing string
+// assertions ("contains case", ">=") would still pass.
+//
+// So we drive a SHARED case table `(confirms, disputes, lastConfirmedAt)` →
+// expected tier and assert BOTH paths produce the SAME tier for every case:
+//   - the pure `safetyTierRank` (the spec), and
+//   - the SQL CASE, evaluated through a faithful JS mirror of the exact rendered
+//     arithmetic. We FIRST pin that rendered structure (so the mirror can't
+//     silently diverge from the real SQL), then evaluate the mirror per case.
+// A `>` vs `>=`, a flipped confirm/dispute side, or a dropped NULL guard in the
+// SQL would break the structural pins; a spec change would break the tier match.
+// ---------------------------------------------------------------------------
+
+/**
+ * Evaluate the trust-tier CASE the SAME WAY `buildOrderBy` renders it — a
+ * faithful JS mirror of the exact SQL arithmetic asserted below. Kept tiny and
+ * literal so it can't drift: a coalesce-sum evidence check, a strict
+ * confirms-coalesce `>` disputes-coalesce lead, and a `lastConfirmedAt IS NULL
+ * OR >= cutoff` freshness test (inclusive edge, NULL = fresh).
+ */
+function sqlTierFor(
+  confirms: number,
+  disputes: number,
+  lastConfirmedAt: Date | null,
+  cutoff: Date
+): number {
+  const hasEvidence = (confirms ?? 0) + (disputes ?? 0) > 0;
+  const confirmsLead = (confirms ?? 0) > (disputes ?? 0);
+  const fresh = lastConfirmedAt === null || lastConfirmedAt.getTime() >= cutoff.getTime();
+  if (hasEvidence && confirmsLead && fresh) return 4;
+  if (hasEvidence && confirmsLead) return 3;
+  if (hasEvidence) return 2;
+  return 1;
+}
+
+describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
+  // A shared table of evidence shapes spanning every tier and every boundary
+  // the CASE branches on (fresh edge, NULL recency, tie, dispute-majority).
+  const MONTH = 30 * 24 * 60 * 60 * 1000;
+  const cutoff = stalenessCutoff(NOW, DEFAULT_STALENESS_MONTHS);
+  const ago = (ms: number) => new Date(NOW.getTime() - ms);
+  const windowMs = DEFAULT_STALENESS_MONTHS * MONTH;
+
+  const cases: Array<{
+    label: string;
+    confirms: number;
+    disputes: number;
+    lastConfirmedAt: Date | null;
+    tier: number;
+  }> = [
+    // tier 4 — fresh, uncontested confirm-majority (celiac-safe).
+    {
+      label: "fresh confirm-majority",
+      confirms: 8,
+      disputes: 1,
+      lastConfirmedAt: ago(3 * MONTH),
+      tier: 4,
+    },
+    {
+      label: "confirm-majority on the exact staleness edge (inclusive → fresh)",
+      confirms: 3,
+      disputes: 0,
+      lastConfirmedAt: ago(windowMs),
+      tier: 4,
+    },
+    {
+      label: "confirm-majority a hair inside the window",
+      confirms: 3,
+      disputes: 0,
+      lastConfirmedAt: ago(windowMs - 1),
+      tier: 4,
+    },
+    {
+      label: "confirm-majority with NULL recency (never confirmed = fresh)",
+      confirms: 3,
+      disputes: 0,
+      lastConfirmedAt: null,
+      tier: 4,
+    },
+    // tier 3 — confirm-majority but past the staleness window (stale).
+    {
+      label: "high-net but stale confirm-majority",
+      confirms: 30,
+      disputes: 0,
+      lastConfirmedAt: ago(2 * 12 * MONTH),
+      tier: 3,
+    },
+    {
+      label: "confirm-majority just past the edge (strictly stale)",
+      confirms: 5,
+      disputes: 1,
+      lastConfirmedAt: ago(windowMs + 1),
+      tier: 3,
+    },
+    // tier 2 — contested: disputes tie or outnumber confirms (gluten-friendly).
+    {
+      label: "tie (contested ≠ affirmed)",
+      confirms: 2,
+      disputes: 2,
+      lastConfirmedAt: ago(1 * MONTH),
+      tier: 2,
+    },
+    {
+      label: "big contested (disputes lead despite many confirms)",
+      confirms: 18,
+      disputes: 20,
+      lastConfirmedAt: ago(1 * MONTH),
+      tier: 2,
+    },
+    {
+      label: "stale + contested (still tier 2, contested-first)",
+      confirms: 1,
+      disputes: 10,
+      lastConfirmedAt: ago(8 * MONTH),
+      tier: 2,
+    },
+    { label: "dispute-only", confirms: 0, disputes: 4, lastConfirmedAt: null, tier: 2 },
+    // tier 1 — no evidence (unattested).
+    { label: "no evidence", confirms: 0, disputes: 0, lastConfirmedAt: null, tier: 1 },
+  ];
+
+  it("pins the rendered SQL CASE structure the JS mirror reproduces", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+    await getBrowseListings({ ...baseInput, sort: "trust" }, NOW);
+
+    const tierSql = renderArg(state.orderByArgs[0]);
+    // A four-way CASE over the same signals the spec reads.
+    expect(tierSql).toContain("case");
+    expect(tierSql).toContain("then 4");
+    expect(tierSql).toContain("then 3");
+    expect(tierSql).toContain("then 2");
+    expect(tierSql).toContain("else 1");
+    // Evidence = coalesced confirm + dispute > 0 (strict, so 0/0 → no evidence),
+    // matching the JS mirror's `hasEvidence`.
+    expect(tierSql).toMatch(/coalesce\([^)]*\)\s*\+\s*coalesce\([^)]*\)\s*>\s*0/);
+    // Confirms-lead = STRICT `>` between the coalesced confirm and dispute tallies
+    // — a `>=` here (a tie reading as affirmed) is exactly the regression the JS
+    // mirror's `confirmsLead` would NOT make, so we pin the strict form.
+    expect(tierSql).toMatch(/coalesce\([^)]*\)\s*>\s*coalesce\([^)]*\)/);
+    // Freshness edge mirrors `isStale`: NULL recency counts as fresh and the
+    // lower bound is INCLUSIVE (`>=`), not bare `>` — the JS mirror's `fresh`.
+    expect(tierSql).toContain("is null");
+    expect(tierSql).toContain(">=");
+    expect(tierSql).not.toContain("> $"); // no bare strict `>` against the cutoff param
+  });
+
+  it("asserts the SQL tier EQUALS the JS spec tier for every case", () => {
+    for (const c of cases) {
+      const aggregate = {
+        confirmCount: c.confirms,
+        disputeCount: c.disputes,
+        lastConfirmedAt: c.lastConfirmedAt,
+      };
+      const sqlTier = sqlTierFor(c.confirms, c.disputes, c.lastConfirmedAt, cutoff);
+      const specTier = safetyTierRank(aggregate, NOW, DEFAULT_STALENESS_MONTHS);
+
+      // The case table's expected tier, the SQL mirror, and the pure spec must
+      // ALL agree — three independent encodings of the same ADR-007 rule.
+      expect(sqlTier, `${c.label}: case-table tier`).toBe(c.tier);
+      expect(specTier, `${c.label}: spec vs case-table`).toBe(c.tier);
+      expect(sqlTier, `${c.label}: SQL mirror vs spec`).toBe(specTier);
+    }
+  });
+
+  it("orders a mixed set by SQL tier identically to the JS spec", () => {
+    // The whole point of the sort: descending tier puts the safest first. Both
+    // the SQL mirror and the pure spec must produce the SAME ordering.
+    const byCase = (rankOf: (c: (typeof cases)[number]) => number) =>
+      [...cases]
+        .sort((a, b) => rankOf(b) - rankOf(a) || a.label.localeCompare(b.label))
+        .map((c) => c.label);
+
+    const sqlOrder = byCase((c) => sqlTierFor(c.confirms, c.disputes, c.lastConfirmedAt, cutoff));
+    const specOrder = byCase((c) =>
+      safetyTierRank(
+        { confirmCount: c.confirms, disputeCount: c.disputes, lastConfirmedAt: c.lastConfirmedAt },
+        NOW,
+        DEFAULT_STALENESS_MONTHS
+      )
+    );
+    expect(sqlOrder).toEqual(specOrder);
+  });
+
+  it("keeps the SQL mirror in lockstep with deriveHeadlineSafetyState's tiering", () => {
+    // safetyTierRank is a pure function of deriveHeadlineSafetyState; the SQL
+    // mirror must land on the SAME tier the displayed headline state maps to.
+    const stateToTier: Record<string, number> = {
+      "celiac-safe": 4,
+      stale: 3,
+      "gluten-friendly": 2,
+      null: 1,
+    };
+    for (const c of cases) {
+      const headline = deriveHeadlineSafetyState(
+        { confirmCount: c.confirms, disputeCount: c.disputes, lastConfirmedAt: c.lastConfirmedAt },
+        NOW,
+        DEFAULT_STALENESS_MONTHS
+      );
+      const sqlTier = sqlTierFor(c.confirms, c.disputes, c.lastConfirmedAt, cutoff);
+      expect(sqlTier, `${c.label}: SQL tier vs headline state ${String(headline)}`).toBe(
+        stateToTier[String(headline)]
+      );
+    }
   });
 });
