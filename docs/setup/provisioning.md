@@ -68,9 +68,10 @@ deployed URL). Do it in this order:
    GOOGLE_CLIENT_ID=...
    GOOGLE_CLIENT_SECRET=...
    ```
-6. Generate a session secret (any long random string):
+6. Generate a session secret (**at least 32 characters** — it signs every
+   session cookie, so a short value is weak):
    ```bash
-   SESSION_SECRET=$(openssl rand -hex 32)   # or any 32+ char random string
+   SESSION_SECRET=$(openssl rand -base64 32)   # or any 32+ char random string
    ```
    (Exact var name confirmed by #15.)
 
