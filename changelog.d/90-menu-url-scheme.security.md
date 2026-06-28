@@ -1,0 +1,1 @@
+- `[manual]` Restricted listing `menuUrl` to an http(s) scheme allowlist at intake and defensively guarded the detail-page link sinks (`menuUrl` and `mapsUrl`) so dangerous-scheme URLs (`javascript:`, `data:`) can no longer be persisted or rendered into an anchor `href` (#90).

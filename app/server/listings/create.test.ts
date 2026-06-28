@@ -63,7 +63,7 @@ vi.mock("~/server/rate-limit", () => ({
   enforceWriteLimit: (userId?: string) => enforceWriteLimitMock(userId),
 }));
 
-import { createListing, runCreateListing } from "./create";
+import { createListing, createListingInputSchema, runCreateListing } from "./create";
 
 // --- Fixtures --------------------------------------------------------------
 
@@ -237,6 +237,51 @@ describe("runCreateListing — manual mode", () => {
         lng: -104.99,
       })
     ).rejects.toThrow(/places/i);
+  });
+});
+
+// --- menuUrl scheme allowlist (#90) ----------------------------------------
+
+describe("createListingInputSchema — menuUrl scheme allowlist (#90)", () => {
+  const base = { mode: "places" as const, placeId: "place-123" };
+
+  it("accepts an https menu URL", () => {
+    const result = createListingInputSchema.safeParse({
+      ...base,
+      menuUrl: "https://corner.example/menu",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.menuUrl).toBe("https://corner.example/menu");
+  });
+
+  it("accepts an http menu URL", () => {
+    const result = createListingInputSchema.safeParse({
+      ...base,
+      menuUrl: "http://corner.example",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a javascript: scheme menu URL", () => {
+    const result = createListingInputSchema.safeParse({
+      ...base,
+      menuUrl: "javascript:alert(document.cookie)",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a data: scheme menu URL", () => {
+    const result = createListingInputSchema.safeParse({
+      ...base,
+      menuUrl: "data:text/html,<script>alert(1)</script>",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("still allows an empty string (blank field normalises to undefined)", () => {
+    const result = createListingInputSchema.safeParse({ ...base, menuUrl: "" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.menuUrl).toBeUndefined();
   });
 });
 
