@@ -22,15 +22,15 @@ function Home() {
         </p>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {/* Placeholder CTA — browse/search lands in a later issue. */}
+          {/* Browse list lands in #33; "Add a listing" target is #25's intake route. */}
           <Link
-            to="/"
+            to="/listings"
             className="inline-flex items-center justify-center rounded-md bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-700"
           >
             Browse Denver listings
           </Link>
           <Link
-            to="/"
+            to="/listings/new"
             className="inline-flex items-center justify-center rounded-md border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
           >
             Add a listing
