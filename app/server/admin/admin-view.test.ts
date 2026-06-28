@@ -4,8 +4,9 @@ import type { User } from "~/db/schema";
 /**
  * Tests for the admin-panel access gate (`resolveAdminView`, #38).
  *
- * `resolveAdminView` is the pure logic behind the `fetchAdminView` server fn and
- * the ADR-010 security boundary for `/admin`: the guard decision happens
+ * `resolveAdminView` (in the server-only `admin-view` module) is the logic
+ * behind the `fetchAdminView` server fn and the ADR-010 security boundary for
+ * `/admin`: the guard decision happens
  * server-side off the authoritative `users` row, and settings
  * are admin-only data. We mock its two server-only collaborators — the
  * current-user accessor and the settings reader — so we can assert all four
@@ -38,7 +39,7 @@ vi.mock("~/server/settings", () => ({
   getSetting: (key: string) => h.getSettingMock(key),
 }));
 
-import { resolveAdminView } from "./admin-view.fn";
+import { resolveAdminView } from "./admin-view";
 
 const { getCurrentUserMock, getSettingMock } = h;
 
