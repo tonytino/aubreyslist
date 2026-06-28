@@ -1,14 +1,20 @@
+import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { CommunityClaims } from "~/components/listing/CommunityClaims";
+import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
+import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { TrustPlaceholder } from "~/components/listing/TrustPlaceholder";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
+import { getCurrentUser } from "~/server/auth/current-user";
+import { fetchIncidents } from "~/server/incidents/incidents.fn";
 import { getSetting } from "~/server/settings";
+import { findRecentIncident } from "~/trust/incident-recency";
 import { deriveHeadlineSafetyState } from "~/trust/summary";
 
 /**
@@ -45,26 +51,56 @@ const getStalenessMonths = createServerFn({ method: "GET" }).handler(() =>
   getSetting("staleness_months")
 );
 
+/**
+ * Whether the visitor is signed in — gates the incident submission form (UX
+ * only; the write itself is re-gated server-side in `reportIncident`).
+ */
+const getViewerIsSignedIn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<boolean> => (await getCurrentUser()) !== null
+);
+
+/** Cached incident list for a listing — invalidated after a report is filed. */
+function incidentsQueryOptions(listingId: string) {
+  return queryOptions({
+    queryKey: incidentsQueryKey(listingId),
+    queryFn: () => fetchIncidents({ data: { listingId } }),
+  });
+}
+
 export const Route = createFileRoute("/listings/$id")({
-  loader: async ({ params: { id } }) => {
-    const listing = await getListing({ data: { id } });
+  loader: async ({ params: { id }, context }) => {
+    const [listing, isSignedIn] = await Promise.all([
+      getListing({ data: { id } }),
+      getViewerIsSignedIn(),
+      // Prefetch incidents so the list + banner render on first paint, then are
+      // refetchable client-side via TanStack Query after a new report.
+      context.queryClient.ensureQueryData(incidentsQueryOptions(id)),
+    ]);
     // A missing listing is a 404, not an error — surface the route's
     // notFoundComponent instead of the error boundary.
     if (!listing) {
       throw notFound();
     }
+    // Only fetch the trust roll-up once we know the listing exists (#29).
     const [claims, stalenessMonths] = await Promise.all([
       getListingClaims({ data: { id } }),
       getStalenessMonths(),
     ]);
-    return { listing, claims, stalenessMonths };
+    // Resolve "now" ONCE on the server and pass it down as epoch ms, so the
+    // recency window + relative phrasing use the same instant on SSR and after
+    // hydration — no banner flicker or off-by-one at day/window edges.
+    return { listing, isSignedIn, claims, stalenessMonths, nowMs: Date.now() };
   },
   component: ListingDetail,
   notFoundComponent: ListingNotFound,
 });
 
 function ListingDetail() {
-  const { listing, claims, stalenessMonths } = Route.useLoaderData();
+  const { listing, isSignedIn, claims, stalenessMonths, nowMs } = Route.useLoaderData();
+  const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
+  const now = new Date(nowMs);
+  // Recent harm flags the listing regardless of older confirmations (ADR-007).
+  const recentIncident = findRecentIncident(incidents, now);
 
   // Headline celiac-safe vs gluten-friendly cue, derived from the
   // `celiac_safe_vs_gluten_friendly` claim's VISIBLE aggregate (#29, ADR-007).
@@ -83,6 +119,12 @@ function ListingDetail() {
         <h1 className="text-headline font-bold tracking-tight">{listing.name}</h1>
         <p className="text-body text-muted-foreground">{listing.address}</p>
       </header>
+
+      {/* Recent harm is surfaced first and never buried by older confirmations
+          (ADR-007, domain.md → Trust Model). Reusable for the #33 list-card signal. */}
+      {recentIncident ? (
+        <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
+      ) : null}
 
       {/* Headline celiac-safe vs gluten-friendly cue, derived from visible evidence (#29). */}
       <SafetySummary state={safetyState} />
@@ -134,8 +176,10 @@ function ListingDetail() {
 
       <TrustPlaceholder
         title="Incident reports"
-        description="Recent “got glutened here” reports will be shown here, with the most recent flagged prominently. None have been reported yet."
-      />
+        description="Recent “got glutened here” reports are shown here, most recent first. Recent ones flag the listing at the top of the page regardless of older confirmations."
+      >
+        <IncidentReports listingId={listing.id} incidents={incidents} isSignedIn={isSignedIn} />
+      </TrustPlaceholder>
     </article>
   );
 }
