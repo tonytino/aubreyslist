@@ -255,22 +255,43 @@ describe("getBrowseListings", () => {
     expect(renderArg(state.orderByArgs[0])).toContain("asc");
   });
 
-  it("orders trust by net confirms desc, then recency desc, then name", async () => {
+  it("orders trust by displayed safety TIER, then net confirms, recency, name", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
 
     await getBrowseListings({ ...baseInput, sort: "trust" }, NOW);
 
-    expect(state.orderByArgs).toHaveLength(3);
-    const [first, second, third] = state.orderByArgs.map(renderArg);
-    // Net confirm consensus leads (coalesced so unattested sort last), desc.
-    expect(first).toContain("coalesce");
+    expect(state.orderByArgs).toHaveLength(4);
+    const [first, second, third, fourth] = state.orderByArgs.map(renderArg);
+    // SAFETY-CRITICAL: the displayed safety tier (a CASE over confirm/dispute +
+    // staleness) leads — NOT raw net confirms — so a stale/contested listing
+    // can't outrank a fresh celiac-safe one. Desc = safest tier first.
+    expect(first).toContain("case");
     expect(first).toContain("desc");
-    // Then recency, NULLS LAST, desc.
+    // Then net confirm consensus within the tier, desc.
+    expect(second).toContain("coalesce");
     expect(second).toContain("desc");
-    expect(second).toContain("nulls last");
+    // Then recency, NULLS LAST, desc.
+    expect(third).toContain("desc");
+    expect(third).toContain("nulls last");
     // Stable name tiebreak last.
-    expect(third).toContain('"name"');
+    expect(fourth).toContain('"name"');
+  });
+
+  it("threads the staleness cutoff into the trust tier so it matches the displayed window", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    // A 1-month admin window means the staleness cutoff is ~1 month before NOW.
+    await getBrowseListings({ ...baseInput, sort: "trust" }, NOW, 1);
+
+    const tierClause = dialect.sqlToQuery(state.orderByArgs[0] as SQL);
+    // The cutoff Date is bound as a param (not hardcoded), proving the SQL
+    // boundary is derived from the same `now`/`stalenessMonths` the glance uses.
+    const boundDate = tierClause.params.find((p) => p instanceof Date) as Date | undefined;
+    expect(boundDate).toBeInstanceOf(Date);
+    const monthMs = 30 * 24 * 60 * 60 * 1000;
+    expect(boundDate?.getTime()).toBe(NOW.getTime() - monthMs);
   });
 
   it("orders recency by last-confirmed desc (nulls last) before net confirms", async () => {
@@ -310,8 +331,33 @@ describe("getBrowseListings", () => {
     expect(state.countWhere).toBeDefined();
     expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toEqual(["%taco%", "%taco%"]);
     expect(dialect.sqlToQuery(state.countWhere as SQL).params).toEqual(["%taco%", "%taco%"]);
-    // Sort still applied alongside the search filter.
-    expect(state.orderByArgs).toHaveLength(3);
+    // Sort still applied alongside the search filter (tier + net + recency + name).
+    expect(state.orderByArgs).toHaveLength(4);
+  });
+
+  it("combines search + sort + pagination: same predicate on both queries, correct total/hasMore", async () => {
+    // Page 2 of a "taco" search sorted by trust. Total 5 with pageSize 2 → page 2
+    // holds rows 3–4, so hasMore is true (row 5 remains).
+    state.pageListings = [
+      { id: "l3", name: "Taco C", address: "3 Main St" },
+      { id: "l4", name: "Taco D", address: "4 Main St" },
+    ];
+    state.total = 5;
+
+    const result = await getBrowseListings(
+      { page: 2, pageSize: 2, query: "taco", sort: "trust" },
+      NOW
+    );
+
+    // The SAME search predicate is applied to the page AND the count query, so
+    // the total (and thus hasMore) reflects the filtered set, not all listings.
+    expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toEqual(["%taco%", "%taco%"]);
+    expect(dialect.sqlToQuery(state.countWhere as SQL).params).toEqual(["%taco%", "%taco%"]);
+    expect(result.total).toBe(5);
+    expect(result.page).toBe(2);
+    expect(result.hasMore).toBe(true); // offset 2 + 2 rows < 5
+    // Trust sort still applied under search + pagination.
+    expect(state.orderByArgs).toHaveLength(4);
   });
 
   it("passes no WHERE predicate when the query is blank (shows everything)", async () => {

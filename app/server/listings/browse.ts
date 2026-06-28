@@ -6,6 +6,7 @@ import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/list
 import type { ClaimAggregate } from "~/server/attestations";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident } from "~/trust/incident-recency";
+import { DEFAULT_STALENESS_MONTHS } from "~/trust/summary";
 import { buildSearchPredicate } from "./search";
 
 /**
@@ -100,13 +101,16 @@ export async function getBrowseListings(
   const searchPredicate = buildSearchPredicate(input.query);
 
   // Per-listing celiac trust aggregate, as a subquery the ORDER BY can join to.
-  // This is the SAME visible evidence the glance derives from — net confirm
-  // consensus + `lastConfirmedAt` recency on the headline celiac claim — so the
-  // trust/recency sorts order by a roll-up of evidence, NOT an opaque score
-  // (ADR-007). Search/sort never touch each other: search lives in `WHERE`, sort
-  // in `ORDER BY`.
+  // This is the SAME visible evidence the glance derives from — confirm/dispute
+  // counts + `lastConfirmedAt` recency on the headline celiac claim — so the
+  // trust sort orders by the displayed safety tier (a roll-up of evidence), NOT
+  // an opaque score (ADR-007). Search/sort never touch each other: search lives
+  // in `WHERE`, sort in `ORDER BY`.
+  // Resolve the staleness window ONCE so the SQL "stale" boundary used to rank
+  // the trust sort matches the boundary the displayed glance uses (below).
+  const resolvedStalenessMonths = stalenessMonths ?? DEFAULT_STALENESS_MONTHS;
   const trust = celiacTrustSubquery();
-  const orderBy = buildOrderBy(sort, trust);
+  const orderBy = buildOrderBy(sort, trust, now, resolvedStalenessMonths);
 
   // 1. The page of listings under the current search + sort, plus the matching
   //    total (same `WHERE`) so the UI can render "X of Y" + has-more.
@@ -146,7 +150,7 @@ export async function getBrowseListings(
       celiacAggregates.get(listing.id) ?? null,
       recentIncidentIds.has(listing.id),
       now,
-      stalenessMonths
+      resolvedStalenessMonths
     ),
   }));
 
@@ -154,26 +158,32 @@ export async function getBrowseListings(
 }
 
 /**
- * Subquery: per listing, the headline celiac claim's net confirm consensus and
- * recency — the SAME visible evidence the at-a-glance trust derives from.
+ * Subquery: per listing, the headline celiac claim's VISIBLE evidence — the raw
+ * confirm/dispute counts and the recency timestamp the at-a-glance trust derives
+ * from. We expose the raw counts (not just net) because the trust sort must
+ * reproduce the displayed safety TIER, which needs the contested check
+ * (`confirms <= disputes`) and the staleness comparison — the exact same signals
+ * `deriveHeadlineSafetyState` reads (ADR-007).
  *
- * - `netConfirms` = confirms − disputes on the `celiac_safe_vs_gluten_friendly`
- *   claim. Higher = stronger community consensus that cross-contamination is
- *   taken seriously. Listings with no such claim have no row here (LEFT JOIN
- *   yields NULL → coalesced to a floor when ordering, so they sort last).
- * - `lastConfirmedAt` = the claim's stored recency signal (NULL until first
- *   confirm).
+ * - `confirmCount` / `disputeCount` — confirm and dispute tallies on the
+ *   `celiac_safe_vs_gluten_friendly` claim.
+ * - `lastConfirmedAt` — the claim's stored recency signal (NULL until first
+ *   confirm; only confirms bump it).
  *
- * This is a roll-up of evidence the user can also see (ADR-007), never a score.
+ * Listings with no such claim have no row here (LEFT JOIN yields NULL → the
+ * ORDER BY treats them as the lowest tier, so they sort last). This is a roll-up
+ * of evidence the user can also see, never a score.
  */
 function celiacTrustSubquery() {
   return getDb()
     .select({
       listingId: claims.listingId,
-      netConfirms:
-        sql<number>`count(*) filter (where ${attestations.value} = 'confirm') - count(*) filter (where ${attestations.value} = 'dispute')`.as(
-          "net_confirms"
-        ),
+      confirmCount: sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`.as(
+        "confirm_count"
+      ),
+      disputeCount: sql<number>`count(*) filter (where ${attestations.value} = 'dispute')`.as(
+        "dispute_count"
+      ),
       lastConfirmedAt: sql<Date | null>`${claims.lastConfirmedAt}`.as("last_confirmed_at"),
     })
     .from(claims)
@@ -190,28 +200,74 @@ type CeliacTrustSubquery = ReturnType<typeof celiacTrustSubquery>;
  * are single-sourced and the registry in `app/listings/sort.ts` stays the only
  * other place to touch when adding a sort.
  *
+ * SAFETY-CRITICAL — the "trust" order MUST reproduce the same safety TIER the
+ * card displays (ADR-007: the sort must be derivable from the visible glance). A
+ * naive "net confirms desc" would rank a 30-confirm listing the card itself
+ * flags as "may be stale" — or a contested 20/18 listing — ABOVE a fresh,
+ * uncontested 3/0 celiac-safe listing, sending a celiac to a place the product
+ * down-ranks. So the trust sort orders by tier FIRST, mirroring
+ * `deriveHeadlineSafetyState` over the SAME signals (`confirmCount`,
+ * `disputeCount`, staleness against `lastConfirmedAt`):
+ *
+ *   tier 4  celiac-safe  — has evidence, confirms > disputes, fresh (within window)
+ *   tier 3  stale        — has evidence, confirms > disputes, but past the window
+ *   tier 2  contested    — has evidence, confirms <= disputes (gluten-friendly)
+ *   tier 1  unattested   — no celiac claim / no attestation evidence
+ *
+ * Within a tier we order by net confirms (confirms − disputes) desc, then most
+ * recently confirmed (`lastConfirmedAt DESC NULLS LAST`), then name. The
+ * staleness cutoff is the caller's `now − stalenessMonths` so the SQL boundary
+ * matches the displayed glance EXACTLY (no drift between sort and card).
+ *
+ * v1 NOTE: recent incidents deliberately do NOT influence the trust sort. The
+ * card still shows the incident flag, so the warning remains visible; folding
+ * incident-demotion into the ordering is a later issue, not v1.
+ *
  * EXTENSIBLE: adding #37's `distance` is a new `case` here (ordering by the
  * haversine distance from the user's lat/lng) plus its registry entry — no
  * rewrite of this function or the loader.
  *
- * NULL handling: listings with no celiac claim have NULL trust columns. We
- * coalesce `netConfirms` to a floor so unattested listings sort LAST on trust,
- * and put `lastConfirmedAt NULLS LAST` so never-confirmed listings sort last on
- * recency. Every sort ends with `name ASC` as a stable tiebreaker so the order
- * is deterministic (no arbitrary row shuffling between requests).
+ * Every sort ends with `name ASC` as a stable tiebreaker so the order is
+ * deterministic (no arbitrary row shuffling between requests).
  */
-function buildOrderBy(sort: BrowseSort, trust: CeliacTrustSubquery): SQL[] {
+function buildOrderBy(
+  sort: BrowseSort,
+  trust: CeliacTrustSubquery,
+  now: Date,
+  stalenessMonths: number
+): SQL[] {
   const nameTiebreak = asc(listings.name);
-  // Unattested → very low net so they fall to the bottom of a trust sort.
-  const netConfirms = sql`coalesce(${trust.netConfirms}, -2147483648)`;
+
+  // The staleness cutoff instant, computed the SAME way the glance does
+  // (`isStale`: age > stalenessMonths * 30 days). A confirmation strictly newer
+  // than this is "fresh"; null/older is stale. Bound as a parameter so the SQL
+  // boundary equals the displayed one.
+  const MS_PER_MONTH = 30 * 24 * 60 * 60 * 1000;
+  const stalenessCutoff = new Date(now.getTime() - stalenessMonths * MS_PER_MONTH);
+
+  const hasEvidence = sql`coalesce(${trust.confirmCount}, 0) + coalesce(${trust.disputeCount}, 0) > 0`;
+  const confirmsLead = sql`coalesce(${trust.confirmCount}, 0) > coalesce(${trust.disputeCount}, 0)`;
+  const fresh = sql`${trust.lastConfirmedAt} > ${stalenessCutoff}`;
+
+  // Safety tier mirroring `deriveHeadlineSafetyState` — higher sorts first.
+  const safetyTier = sql<number>`case
+    when ${hasEvidence} and ${confirmsLead} and ${fresh} then 4
+    when ${hasEvidence} and ${confirmsLead} then 3
+    when ${hasEvidence} then 2
+    else 1
+  end`;
+
+  const netConfirms = sql`coalesce(${trust.confirmCount}, 0) - coalesce(${trust.disputeCount}, 0)`;
   const recency = sql`${trust.lastConfirmedAt}`;
 
   switch (sort) {
     case "trust":
-      // Strongest consensus first, then most recently confirmed, then name.
-      return [desc(netConfirms), sql`${recency} desc nulls last`, nameTiebreak];
+      // Displayed safety tier first, then net consensus, recency, name.
+      return [desc(safetyTier), desc(netConfirms), sql`${recency} desc nulls last`, nameTiebreak];
     case "recency":
       // Most recently confirmed first, then strongest consensus, then name.
+      // (Independent of tier by design: "recency" answers "what was just
+      // re-verified", a different question than "what is safest".)
       return [sql`${recency} desc nulls last`, desc(netConfirms), nameTiebreak];
     default:
       // Alphabetical — the stable, scannable default.

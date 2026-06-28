@@ -9,6 +9,7 @@ import {
   formatVoteCounts,
   hasEvidence,
   isStale,
+  safetyTierRank,
   summarizeClaim,
   totalVotes,
 } from "./summary";
@@ -232,5 +233,55 @@ describe("deriveHeadlineSafetyState — honest celiac-safe vs gluten-friendly", 
     expect(
       deriveHeadlineSafetyState({ confirmCount: 0, disputeCount: 3, lastConfirmedAt: null }, NOW)
     ).toBe("gluten-friendly");
+  });
+});
+
+describe("safetyTierRank — the browse 'Most trusted' sort contract (#36)", () => {
+  // A fresh, uncontested confirm-majority — the displayed celiac-safe state.
+  const freshSafe = { confirmCount: 3, disputeCount: 0, lastConfirmedAt: ago(2 * MONTH) };
+  // Big confirm count but confirmed 2+ years ago — displayed "may be stale".
+  const staleHighNet = { confirmCount: 30, disputeCount: 0, lastConfirmedAt: ago(2 * YEAR) };
+  // Lots of votes but disputes outnumber confirms (contested) — the displayed
+  // state is gluten-friendly, NOT celiac-safe, even with a high confirm count.
+  const bigContested = { confirmCount: 18, disputeCount: 20, lastConfirmedAt: ago(1 * MONTH) };
+  // No evidence at all.
+  const unattested = { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null };
+
+  it("ranks the displayed tiers: celiac-safe > stale > contested > unattested", () => {
+    expect(safetyTierRank(freshSafe, NOW)).toBe(4);
+    expect(safetyTierRank(staleHighNet, NOW)).toBe(3);
+    expect(safetyTierRank(bigContested, NOW)).toBe(2);
+    expect(safetyTierRank(unattested, NOW)).toBe(1);
+    expect(safetyTierRank(null, NOW)).toBe(1);
+  });
+
+  it("BLOCKER GUARD: a fresh celiac-safe listing outranks a high-net stale one", () => {
+    // The exact regression: 30/0-but-stale must NOT beat a fresh 3/0.
+    expect(safetyTierRank(freshSafe, NOW)).toBeGreaterThan(safetyTierRank(staleHighNet, NOW));
+  });
+
+  it("BLOCKER GUARD: a fresh celiac-safe listing outranks a big contested one", () => {
+    expect(safetyTierRank(freshSafe, NOW)).toBeGreaterThan(safetyTierRank(bigContested, NOW));
+  });
+
+  it("sorts a mixed set by tier (desc) so the safest listing ranks first", () => {
+    const set = [staleHighNet, unattested, bigContested, freshSafe];
+    const ordered = [...set].sort((a, b) => safetyTierRank(b, NOW) - safetyTierRank(a, NOW));
+    expect(ordered).toEqual([freshSafe, staleHighNet, bigContested, unattested]);
+  });
+
+  it("never drifts from deriveHeadlineSafetyState (single source of truth)", () => {
+    // The rank is a pure function of the displayed state.
+    const cases = [freshSafe, staleHighNet, bigContested, unattested];
+    const expected: Record<string, number> = {
+      "celiac-safe": 4,
+      stale: 3,
+      "gluten-friendly": 2,
+      null: 1,
+    };
+    for (const c of cases) {
+      const state = deriveHeadlineSafetyState(c, NOW);
+      expect(safetyTierRank(c, NOW)).toBe(expected[String(state)]);
+    }
   });
 });
