@@ -13,6 +13,7 @@ import { type Listing, listings } from "~/db/schema";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
+import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
 import { findRecentIncident } from "~/trust/incident-recency";
 import { deriveHeadlineSafetyState } from "~/trust/summary";
@@ -147,19 +148,24 @@ function ListingDetail() {
       {/* Headline celiac-safe vs gluten-friendly cue, derived from visible evidence (#29). */}
       <SafetySummary state={safetyState} />
 
-      {/* Primary action: deep-link to Google Maps (ADR-009 — no embedded map). */}
+      {/* Primary action: deep-link to Google Maps (ADR-009 — no embedded map).
+          Both hrefs are guarded by `isHttpUrl` so only http(s) links ever reach
+          an anchor — defence-in-depth against a dangerous-scheme URL (#90). The
+          mapsUrl is app-generated (lower risk) but the sink is guarded too. */}
       <section aria-label="Links" className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <a
-          href={listing.mapsUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="inline-flex items-center justify-center gap-2 rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong"
-        >
-          <MapPinIcon />
-          Open in Google Maps
-        </a>
+        {isHttpUrl(listing.mapsUrl) ? (
+          <a
+            href={listing.mapsUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex items-center justify-center gap-2 rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong"
+          >
+            <MapPinIcon />
+            Open in Google Maps
+          </a>
+        ) : null}
 
-        {listing.menuUrl ? (
+        {isHttpUrl(listing.menuUrl) ? (
           <a
             href={listing.menuUrl}
             target="_blank"

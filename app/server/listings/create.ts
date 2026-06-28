@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
+import { isHttpUrl } from "~/server/listings/url";
 import { buildMapsUrl, runPlaceDetails } from "~/server/places";
 import { enforceWriteLimit } from "~/server/rate-limit";
 import { getSetting } from "~/server/settings";
@@ -55,9 +56,20 @@ export interface CreateListingResult {
  *
  * `menuUrl` is optional in both modes; an empty string is normalised to
  * `undefined` so a blank field stores `null` rather than `""`.
+ *
+ * The scheme is restricted to http(s) ({@link isHttpUrl}): `z.string().url()`
+ * alone accepts `javascript:`/`data:` URLs, which — rendered into the detail
+ * page's anchor `href` — is a stored-XSS / untrusted-navigation vector (#90).
  */
 const optionalMenuUrl = z
-  .union([z.string().url("Enter a valid URL (including https://).").max(2048), z.literal("")])
+  .union([
+    z
+      .string()
+      .url("Enter a valid URL (including https://).")
+      .max(2048)
+      .refine(isHttpUrl, "Menu URL must start with http:// or https://."),
+    z.literal(""),
+  ])
   .optional()
   .transform((value) => (value ? value : undefined));
 
