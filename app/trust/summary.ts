@@ -291,3 +291,44 @@ export function deriveHeadlineSafetyState(
   }
   return "celiac-safe";
 }
+
+// ---------------------------------------------------------------------------
+// Safety tier — the displayed headline state as a sortable rank (issue #36)
+// ---------------------------------------------------------------------------
+
+/**
+ * The browse "Most trusted" sort rank for a celiac aggregate — HIGHER is safer
+ * and sorts first. The rank is derived DIRECTLY from {@link deriveHeadlineSafetyState}
+ * so it can never drift from the state the card displays (ADR-007: the sort must
+ * be reproducible from the visible glance). The server reproduces these exact
+ * tiers in SQL (`buildOrderBy` in `app/server/listings/browse.ts`) so DB-ordered
+ * results match this ranking; this pure function is the single, testable
+ * specification of the contract.
+ *
+ *   4  celiac-safe  — fresh, uncontested confirm-majority (the safest, first)
+ *   3  stale        — confirm-majority but past the staleness window
+ *   2  gluten-friendly — contested (disputes tie/outnumber confirms)
+ *   1  unattested   — no evidence (`null` state)
+ *
+ * `null`/`undefined` (a listing with no celiac claim) ranks lowest (1).
+ */
+export function safetyTierRank(
+  aggregate:
+    | Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt">
+    | null
+    | undefined,
+  now: Date = new Date(),
+  stalenessMonths: number = DEFAULT_STALENESS_MONTHS
+): number {
+  const state = aggregate ? deriveHeadlineSafetyState(aggregate, now, stalenessMonths) : null;
+  switch (state) {
+    case "celiac-safe":
+      return 4;
+    case "stale":
+      return 3;
+    case "gluten-friendly":
+      return 2;
+    default:
+      return 1; // null → unattested
+  }
+}

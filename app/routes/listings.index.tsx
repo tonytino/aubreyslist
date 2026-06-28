@@ -4,6 +4,12 @@ import { z } from "zod";
 import { ListingCard } from "~/components/listing/ListingCard";
 import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
 import { type ClaimAttribute, claimAttributes } from "~/db/schema";
+import {
+  BROWSE_SORT_OPTIONS,
+  BROWSE_SORT_VALUES,
+  type BrowseSort,
+  DEFAULT_BROWSE_SORT,
+} from "~/listings/sort";
 import { BROWSE_PAGE_SIZE, type BrowseListingsPage } from "~/server/listings/browse";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
 
@@ -51,46 +57,57 @@ function serializeAttrs(attrs: readonly ClaimAttribute[]): string {
 
 const browseSearchSchema = z.object({
   page: z.number().int().min(1).catch(1),
-  /** Comma-separated taxonomy attributes; defaults to "" (no filter). */
+  /** Comma-separated taxonomy attributes (#35); defaults to "" (no filter). */
   attrs: z.string().catch("").default(""),
+  // `?sort=` mirrors the `?page=` URL-param pattern (#36): linkable, back/forward
+  // works. A plain enum (NOT a `.transform()`) so the value round-trips cleanly
+  // when the router re-serializes search state on navigation; unknown/garbage
+  // tokens degrade to the stable alphabetical default via `.catch`.
+  sort: z.enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]]).catch(DEFAULT_BROWSE_SORT),
 });
 
-function browseQueryOptions(page: number, attrs: ClaimAttribute[]) {
+function browseQueryOptions(page: number, attrs: ClaimAttribute[], sort: BrowseSort) {
   return queryOptions({
-    queryKey: ["browse-listings", page, attrs],
-    queryFn: () => fetchBrowseListings({ data: { page, pageSize: BROWSE_PAGE_SIZE, attrs } }),
+    queryKey: ["browse-listings", page, attrs, sort],
+    queryFn: () => fetchBrowseListings({ data: { page, pageSize: BROWSE_PAGE_SIZE, attrs, sort } }),
   });
 }
 
 export const Route = createFileRoute("/listings/")({
   validateSearch: browseSearchSchema,
-  loaderDeps: ({ search: { page, attrs } }) => ({ page, attrs }),
-  loader: async ({ context, deps: { page, attrs } }) => {
-    await context.queryClient.ensureQueryData(browseQueryOptions(page, parseAttrs(attrs)));
+  loaderDeps: ({ search: { page, attrs, sort } }) => ({ page, attrs, sort }),
+  loader: async ({ context, deps: { page, attrs, sort } }) => {
+    await context.queryClient.ensureQueryData(browseQueryOptions(page, parseAttrs(attrs), sort));
   },
   component: BrowseListings,
 });
 
 function BrowseListings() {
-  const { page, attrs: attrsParam } = Route.useSearch();
+  const { page, attrs: attrsParam, sort } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
-  const { data } = useSuspenseQuery(browseQueryOptions(page, attrs));
+  const { data } = useSuspenseQuery(browseQueryOptions(page, attrs, sort));
 
   const hasFilters = attrs.length > 0;
 
   // Toggling a filter always resets to page 1 — the old page may not exist under
   // the narrower (or wider) result set, and starting at the top is least
-  // surprising. The new selection is written straight to the URL.
+  // surprising. The current sort is preserved (filter and sort are orthogonal).
   function toggleAttribute(attribute: ClaimAttribute) {
     const next = attrs.includes(attribute)
       ? attrs.filter((a) => a !== attribute)
       : [...attrs, attribute];
-    navigate({ search: { page: 1, attrs: serializeAttrs(next) } });
+    navigate({ search: { page: 1, attrs: serializeAttrs(next), sort } });
   }
 
   function clearFilters() {
-    navigate({ search: { page: 1, attrs: "" } });
+    navigate({ search: { page: 1, attrs: "", sort } });
+  }
+
+  // Changing the sort also resets to page 1 (a page index is meaningless across
+  // a re-ordering) and preserves the active filter selection.
+  function changeSort(next: BrowseSort) {
+    navigate({ search: { page: 1, attrs: attrsParam, sort: next } });
   }
 
   return (
@@ -106,13 +123,54 @@ function BrowseListings() {
         </p>
       </header>
 
-      <TaxonomyFilter selected={attrs} onToggle={toggleAttribute} onClear={clearFilters} />
+      <div className="mt-section flex flex-col gap-4">
+        <TaxonomyFilter selected={attrs} onToggle={toggleAttribute} onClear={clearFilters} />
+        <SortControl sort={sort} onChange={changeSort} />
+      </div>
 
       {data.cards.length === 0 ? (
         <BrowseEmptyState hasFilters={hasFilters} onClear={clearFilters} />
       ) : (
         <BrowseResults data={data} attrs={attrs} />
       )}
+    </div>
+  );
+}
+
+/**
+ * URL-driven sort control (#36). An accessible, labeled `<select>` — selection,
+ * not colour, conveys state (styling.md). Changing it navigates to the same
+ * route with the new `?sort=` and RESETS to page 1 (the previous page index is
+ * meaningless under a new order) while PRESERVING the active filter, mirroring
+ * the `?page=`/`?attrs=` URL-param pattern.
+ *
+ * Options come from the shared `BROWSE_SORT_OPTIONS` registry, so #37's
+ * `distance` option appears here automatically once added there.
+ */
+function SortControl({
+  sort,
+  onChange,
+}: {
+  sort: BrowseSort;
+  onChange: (next: BrowseSort) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <label htmlFor="browse-sort" className="text-body-sm font-medium text-foreground">
+        Sort by
+      </label>
+      <select
+        id="browse-sort"
+        value={sort}
+        onChange={(event) => onChange(event.target.value as BrowseSort)}
+        className="rounded-card border border-border bg-surface px-3 py-2 text-body-sm font-medium text-foreground focus-visible:border-brand-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+      >
+        {BROWSE_SORT_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -152,7 +210,7 @@ function Pagination({ data, attrs }: { data: BrowseListingsPage; attrs: ClaimAtt
       {hasPrev ? (
         <Link
           to="/listings"
-          search={{ page: data.page - 1, attrs: attrsParam }}
+          search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort }}
           className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface"
         >
           ← Previous
@@ -166,7 +224,7 @@ function Pagination({ data, attrs }: { data: BrowseListingsPage; attrs: ClaimAtt
       {hasNext ? (
         <Link
           to="/listings"
-          search={{ page: data.page + 1, attrs: attrsParam }}
+          search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort }}
           className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface"
         >
           Next →
