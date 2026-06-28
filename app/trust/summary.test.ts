@@ -8,6 +8,7 @@ import {
   formatRelativeTime,
   formatVoteCounts,
   hasEvidence,
+  hasPositiveConsensus,
   isStale,
   summarizeClaim,
   totalVotes,
@@ -232,5 +233,35 @@ describe("deriveHeadlineSafetyState — honest celiac-safe vs gluten-friendly", 
     expect(
       deriveHeadlineSafetyState({ confirmCount: 0, disputeCount: 3, lastConfirmedAt: null }, NOW)
     ).toBe("gluten-friendly");
+  });
+});
+
+describe("hasPositiveConsensus — the taxonomy filter match rule (#35)", () => {
+  it("is false with no evidence (an unattested claim never matches)", () => {
+    expect(hasPositiveConsensus({ confirmCount: 0, disputeCount: 0 })).toBe(false);
+  });
+
+  it("is true when confirms strictly outnumber disputes", () => {
+    expect(hasPositiveConsensus({ confirmCount: 3, disputeCount: 1 })).toBe(true);
+  });
+
+  it("is false on a tie (contested evidence never reads as affirmed)", () => {
+    expect(hasPositiveConsensus({ confirmCount: 2, disputeCount: 2 })).toBe(false);
+  });
+
+  it("is false when disputes outnumber confirms", () => {
+    expect(hasPositiveConsensus({ confirmCount: 1, disputeCount: 5 })).toBe(false);
+  });
+
+  it("is false for a dispute-only claim", () => {
+    expect(hasPositiveConsensus({ confirmCount: 0, disputeCount: 4 })).toBe(false);
+  });
+
+  it("agrees with deriveHeadlineSafetyState's confirm/dispute split", () => {
+    // Wherever the headline reads celiac-safe (fresh confirm-majority), the
+    // filter rule must agree the consensus is positive — same single rule.
+    const fresh = { confirmCount: 5, disputeCount: 1, lastConfirmedAt: new Date() };
+    expect(deriveHeadlineSafetyState(fresh)).toBe("celiac-safe");
+    expect(hasPositiveConsensus(fresh)).toBe(true);
   });
 });

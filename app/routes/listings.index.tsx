@@ -1,7 +1,9 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { ListingCard } from "~/components/listing/ListingCard";
+import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
+import { type ClaimAttribute, claimAttributes } from "~/db/schema";
 import { BROWSE_PAGE_SIZE, type BrowseListingsPage } from "~/server/listings/browse";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
 
@@ -11,36 +13,85 @@ import { fetchBrowseListings } from "~/server/listings/browse.fn";
  * headline celiac-safe vs. gluten-friendly state and a recent-incident flag at a
  * glance. Open to anonymous visitors (reads are open).
  *
- * The page number lives in the URL (`?page=2`) so the view is linkable and
- * back/forward works. Data is prefetched in the loader and read via
- * `useSuspenseQuery`, so it is dehydrated into the SSR HTML and hydrates with no
- * loading flash (docs/agents/api.md pattern). The trust glance is computed
- * server-side (one batched query set, no N+1) by `fetchBrowseListings`.
+ * URL-DRIVEN STATE. Both the page number (`?page=2`) and the GF taxonomy filter
+ * (`?attrs=dedicated_fryer,celiac_safe_vs_gluten_friendly`, #35) live in the URL
+ * so the view is linkable/shareable, SSR-friendly, and back/forward works. The
+ * filter resets to page 1 whenever the selection changes. Data is prefetched in
+ * the loader and read via `useSuspenseQuery`, so it is dehydrated into the SSR
+ * HTML and hydrates with no loading flash (docs/agents/api.md). The trust glance
+ * and the consensus-based filtering are computed server-side (one batched query
+ * set, no N+1) by `fetchBrowseListings`.
  */
+
+/**
+ * Parse the `?attrs=` string into a de-duplicated list of valid taxonomy
+ * attributes. The param is a COMMA-SEPARATED list (e.g.
+ * `?attrs=dedicated_fryer,celiac_safe_vs_gluten_friendly`) — shareable and
+ * human-readable, mirroring `?page=`. Unknown/garbage values are dropped (not an
+ * error) so a hand-edited URL degrades gracefully to the valid subset.
+ *
+ * Kept as a single STRING in the URL (rather than a router-serialized array) so
+ * the encoding stays the clean comma form and not URL-encoded JSON.
+ */
+function parseAttrs(value: string): ClaimAttribute[] {
+  const valid = new Set<ClaimAttribute>();
+  for (const part of value.split(",")) {
+    const token = part.trim();
+    if ((claimAttributes as readonly string[]).includes(token)) {
+      valid.add(token as ClaimAttribute);
+    }
+  }
+  return [...valid];
+}
+
+/** Serialize a selection back to the canonical comma-separated `?attrs=` value. */
+function serializeAttrs(attrs: readonly ClaimAttribute[]): string {
+  return attrs.join(",");
+}
 
 const browseSearchSchema = z.object({
   page: z.number().int().min(1).catch(1),
+  /** Comma-separated taxonomy attributes; defaults to "" (no filter). */
+  attrs: z.string().catch("").default(""),
 });
 
-function browseQueryOptions(page: number) {
+function browseQueryOptions(page: number, attrs: ClaimAttribute[]) {
   return queryOptions({
-    queryKey: ["browse-listings", page],
-    queryFn: () => fetchBrowseListings({ data: { page, pageSize: BROWSE_PAGE_SIZE } }),
+    queryKey: ["browse-listings", page, attrs],
+    queryFn: () => fetchBrowseListings({ data: { page, pageSize: BROWSE_PAGE_SIZE, attrs } }),
   });
 }
 
 export const Route = createFileRoute("/listings/")({
   validateSearch: browseSearchSchema,
-  loaderDeps: ({ search: { page } }) => ({ page }),
-  loader: async ({ context, deps: { page } }) => {
-    await context.queryClient.ensureQueryData(browseQueryOptions(page));
+  loaderDeps: ({ search: { page, attrs } }) => ({ page, attrs }),
+  loader: async ({ context, deps: { page, attrs } }) => {
+    await context.queryClient.ensureQueryData(browseQueryOptions(page, parseAttrs(attrs)));
   },
   component: BrowseListings,
 });
 
 function BrowseListings() {
-  const { page } = Route.useSearch();
-  const { data } = useSuspenseQuery(browseQueryOptions(page));
+  const { page, attrs: attrsParam } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const attrs = parseAttrs(attrsParam);
+  const { data } = useSuspenseQuery(browseQueryOptions(page, attrs));
+
+  const hasFilters = attrs.length > 0;
+
+  // Toggling a filter always resets to page 1 — the old page may not exist under
+  // the narrower (or wider) result set, and starting at the top is least
+  // surprising. The new selection is written straight to the URL.
+  function toggleAttribute(attribute: ClaimAttribute) {
+    const next = attrs.includes(attribute)
+      ? attrs.filter((a) => a !== attribute)
+      : [...attrs, attribute];
+    navigate({ search: { page: 1, attrs: serializeAttrs(next) } });
+  }
+
+  function clearFilters() {
+    navigate({ search: { page: 1, attrs: "" } });
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
@@ -55,12 +106,18 @@ function BrowseListings() {
         </p>
       </header>
 
-      {data.cards.length === 0 ? <BrowseEmptyState /> : <BrowseResults data={data} />}
+      <TaxonomyFilter selected={attrs} onToggle={toggleAttribute} onClear={clearFilters} />
+
+      {data.cards.length === 0 ? (
+        <BrowseEmptyState hasFilters={hasFilters} onClear={clearFilters} />
+      ) : (
+        <BrowseResults data={data} attrs={attrs} />
+      )}
     </div>
   );
 }
 
-function BrowseResults({ data }: { data: BrowseListingsPage }) {
+function BrowseResults({ data, attrs }: { data: BrowseListingsPage; attrs: ClaimAttribute[] }) {
   const showingFrom = (data.page - 1) * data.pageSize + 1;
   const showingTo = (data.page - 1) * data.pageSize + data.cards.length;
 
@@ -76,14 +133,15 @@ function BrowseResults({ data }: { data: BrowseListingsPage }) {
         ))}
       </ul>
 
-      <Pagination data={data} />
+      <Pagination data={data} attrs={attrs} />
     </>
   );
 }
 
-function Pagination({ data }: { data: BrowseListingsPage }) {
+function Pagination({ data, attrs }: { data: BrowseListingsPage; attrs: ClaimAttribute[] }) {
   const hasPrev = data.page > 1;
   const hasNext = data.hasMore;
+  const attrsParam = serializeAttrs(attrs);
 
   if (!hasPrev && !hasNext) {
     return null;
@@ -94,7 +152,7 @@ function Pagination({ data }: { data: BrowseListingsPage }) {
       {hasPrev ? (
         <Link
           to="/listings"
-          search={{ page: data.page - 1 }}
+          search={{ page: data.page - 1, attrs: attrsParam }}
           className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface"
         >
           ← Previous
@@ -108,7 +166,7 @@ function Pagination({ data }: { data: BrowseListingsPage }) {
       {hasNext ? (
         <Link
           to="/listings"
-          search={{ page: data.page + 1 }}
+          search={{ page: data.page + 1, attrs: attrsParam }}
           className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface"
         >
           Next →
@@ -120,8 +178,37 @@ function Pagination({ data }: { data: BrowseListingsPage }) {
   );
 }
 
-/** Honest empty state — no listings yet, never fabricated rows (domain.md). */
-function BrowseEmptyState() {
+/**
+ * Honest empty state (domain.md — never fabricate rows). Distinguishes two
+ * cases: a filter that matched nothing (offer to clear it) vs. a genuinely empty
+ * directory (offer to add the first listing).
+ */
+function BrowseEmptyState({
+  hasFilters,
+  onClear,
+}: {
+  hasFilters: boolean;
+  onClear: () => void;
+}) {
+  if (hasFilters) {
+    return (
+      <div className="mt-section flex flex-col items-start gap-3 rounded-card border border-dashed border-border bg-surface p-gutter">
+        <h2 className="text-title font-semibold text-foreground">No matching listings</h2>
+        <p className="text-body text-muted-foreground">
+          No restaurants meet every attribute you selected with positive community consensus yet.
+          Try removing a filter to widen your search.
+        </p>
+        <button
+          type="button"
+          onClick={onClear}
+          className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong"
+        >
+          Clear filters
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-section flex flex-col items-start gap-3 rounded-card border border-dashed border-border bg-surface p-gutter">
       <h2 className="text-title font-semibold text-foreground">No listings yet</h2>

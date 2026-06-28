@@ -1,10 +1,19 @@
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
-import { type Listing, attestations, claims, incidents, listings } from "~/db/schema";
+import {
+  type Listing,
+  attestations,
+  claimAttributes,
+  claims,
+  incidents,
+  listings,
+} from "~/db/schema";
 import type { ClaimAggregate } from "~/server/attestations";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident } from "~/trust/incident-recency";
+import { buildBrowseWhere } from "./filter";
+import { buildSearchPredicate } from "./search";
 
 /**
  * Browse-list loader: every listing WITH its at-a-glance trust (issue #33).
@@ -40,6 +49,20 @@ export const browseListingsInputSchema = z.object({
   page: z.number().int().min(1).default(1),
   /** Page size; clamped to a sane maximum. Defaults to {@link BROWSE_PAGE_SIZE}. */
   pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(BROWSE_PAGE_SIZE),
+  /**
+   * Free-text search over name/address (#34). Empty/whitespace → no constraint.
+   * Threaded through so the GF taxonomy filter (#35) composes with search via
+   * `and(...)` — the count and page reflect search + filters together.
+   */
+  q: z.string().max(256).optional(),
+  /**
+   * Selected GF taxonomy attributes to filter by (#35), validated against the
+   * fixed `claim_attribute` enum so an unknown value can never reach the query.
+   * A listing matches only when each selected attribute has positive community
+   * consensus (confirms outnumber disputes) — see `./filter.ts`. Empty/omitted →
+   * no taxonomy constraint.
+   */
+  attrs: z.array(z.enum(claimAttributes)).default([]),
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
@@ -76,11 +99,23 @@ export async function getBrowseListings(
   const { page, pageSize } = input;
   const offset = (page - 1) * pageSize;
 
+  // Compose the WHERE from the text search (#34) and the GF taxonomy filter
+  // (#35), AND-combined. The SAME predicate constrains both the page query and
+  // the count query, so the total reflects the active filters and pagination
+  // stays correct. `undefined` (nothing selected) → drizzle applies no WHERE.
+  const where = buildBrowseWhere(buildSearchPredicate(input.q ?? ""), input.attrs);
+
   // 1. The page of listings (alphabetical — a stable, scannable default order).
   //    One extra query for the total so the UI can render "X of Y" + has-more.
   const [pageListings, totalRows] = await Promise.all([
-    db.select().from(listings).orderBy(asc(listings.name)).limit(pageSize).offset(offset),
-    db.select({ total: sql<number>`count(*)` }).from(listings),
+    db
+      .select()
+      .from(listings)
+      .where(where)
+      .orderBy(asc(listings.name))
+      .limit(pageSize)
+      .offset(offset),
+    db.select({ total: sql<number>`count(*)` }).from(listings).where(where),
   ]);
 
   const total = Number(totalRows[0]?.total ?? 0);
