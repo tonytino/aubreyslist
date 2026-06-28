@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { waitForHydration } from "./helpers";
+
 /**
  * Regression guard for app hydration (the "no-JS site" bug).
  *
@@ -55,9 +57,7 @@ test("the app hydrates: a <Link> does client-side navigation, not a full reload"
   // before it resolves would hit a not-yet-hydrated <Link> (a dead <a>) and read
   // as a full reload. If hydration never happens (the bug), this never resolves
   // and the test fails here, which is the regression we guard.
-  await page.waitForFunction(
-    () => typeof (window as unknown as { __TSR_ROUTER__?: unknown }).__TSR_ROUTER__ !== "undefined"
-  );
+  await waitForHydration(page);
 
   // Plant a sentinel on the live JS context. A real SPA navigation preserves the
   // document (and this variable); a full page load wipes it.

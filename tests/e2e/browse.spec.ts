@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { waitForBrowseReady } from "./helpers";
+
 /**
  * Smoke test for the browse-list route (#33). Open to anonymous visitors. The
  * test DB content is not assumed (it may be empty or seeded), so we assert the
@@ -40,6 +42,12 @@ test("browse sort control is labeled and drives the URL", async ({ page }) => {
   const sort = page.getByLabel("Sort by");
   await expect(sort).toBeVisible();
 
+  // Wait for hydration AND the route's initial search-param canonicalization
+  // before interacting: the <select>'s onChange only writes the URL once the
+  // client bundle runs, and selecting during the post-hydration canonicalizing
+  // navigation gets clobbered back to the default. See waitForBrowseReady.
+  await waitForBrowseReady(page);
+
   await sort.selectOption("trust");
   await expect(page).toHaveURL(/sort=trust/);
 
@@ -64,7 +72,20 @@ test("filter and sort compose in the URL", async ({ page }) => {
     name: "Celiac-safe vs. gluten-friendly",
   });
   await expect(celiacFilter).toBeVisible();
-  await celiacFilter.check();
+
+  // Wait for hydration AND the route's initial search-param canonicalization
+  // before interacting: the checkbox's onChange only writes the URL once the
+  // client bundle runs, and checking during the post-hydration canonicalizing
+  // navigation gets clobbered. See waitForBrowseReady.
+  await waitForBrowseReady(page);
+
+  // Use click(), not check(): the checkbox is a controlled input whose state is
+  // derived from the URL, so toggling it fires a navigation that re-renders it.
+  // Playwright's check() asserts the resulting `checked` state synchronously after
+  // the click and races that controlled re-render (it can momentarily read the
+  // pre-navigation value); click() just performs the toggle and lets the URL
+  // assertion below be the source of truth.
+  await celiacFilter.click();
   await expect(page).toHaveURL(/attrs=celiac_safe_vs_gluten_friendly/);
 
   // Now sort; the filter param must survive alongside the new sort param.
