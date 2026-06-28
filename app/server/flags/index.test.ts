@@ -62,7 +62,7 @@ vi.mock("~/server/rate-limit", () => ({
 
 import { type CreateFlagInput, createFlag, createFlagInputSchema } from "./index";
 
-const { state, insertMock, valuesMock, enforceWriteLimitMock } = h;
+const { state, insertMock, valuesMock, requireCurrentUserMock, enforceWriteLimitMock } = h;
 
 beforeEach(() => {
   state.lastInsertValues = undefined;
@@ -180,19 +180,28 @@ describe("createFlag — inserts an open flag attributed to the reporter", () =>
     });
   });
 
-  it("requires a signed-in user (401 gate); no write happens", async () => {
+  it("requires a signed-in user (401 gate); no write or rate-limit happens", async () => {
     state.signedIn = false;
     await expect(
       createFlag({ target: "listing", listingId: "listing-1", reason: "Spam" })
     ).rejects.toThrow("Authentication required.");
     expect(insertMock).not.toHaveBeenCalled();
+    // The auth gate short-circuits BEFORE the rate limiter — an anonymous caller
+    // gets a 401, never a 429. Locks the security-critical ordering.
+    expect(enforceWriteLimitMock).not.toHaveBeenCalled();
   });
 
-  it("rate-limits the authenticated user before writing (#18)", async () => {
+  it("rate-limits the authenticated user before writing (#18), after the auth gate", async () => {
     await createFlag({ target: "listing", listingId: "listing-1", reason: "Spam" });
 
     expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
     expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
+    // Auth must run BEFORE the rate limiter so anonymous callers get 401, not 429.
+    const authOrder = requireCurrentUserMock.mock.invocationCallOrder[0];
+    const limitOrder = enforceWriteLimitMock.mock.invocationCallOrder[0];
+    expect(authOrder).toBeDefined();
+    expect(limitOrder).toBeDefined();
+    expect(authOrder as number).toBeLessThan(limitOrder as number);
   });
 
   it("does not write when the rate limit is exceeded (429)", async () => {

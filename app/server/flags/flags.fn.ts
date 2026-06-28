@@ -12,13 +12,14 @@ import { createFlag } from "./index";
  * the TanStack Start plugin strips this handler body out of the browser bundle —
  * so importing from here never drags `getDb` (neon/drizzle) into the client.
  *
- * The Zod validator is declared HERE as a client-safe mirror of
- * `createFlagInputSchema` (declaring it in `./index.ts` would couple the
- * validator to that db-touching module). It enforces the same exclusive-arc
- * invariant — exactly one of listing/claim/incident — via a discriminated union,
- * plus a non-empty, length-bounded reason. The server re-validates with the
- * authoritative schema, and the DB `flags_one_target` CHECK is the ultimate
- * guarantee.
+ * The Zod validator is declared HERE as a client-safe schema (declaring it in
+ * `./index.ts` would couple the validator to that db-touching module). It
+ * enforces the exclusive-arc invariant — exactly one of listing/claim/incident —
+ * via a discriminated union, plus a non-empty, length-bounded reason. This
+ * `createServerFn().validator(flagFnInputSchema)` boundary IS the authoritative
+ * server-side validation (it runs on every call); `createFlagInputSchema` in
+ * `./index.ts` mirrors it for direct callers/tests, and the DB
+ * `flags_one_target` CHECK is the ultimate guarantee.
  *
  * Server-only at runtime; safe to import from client modules.
  */

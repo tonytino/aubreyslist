@@ -52,6 +52,11 @@ const reasonSchema = z
  * exactly one target id, so a payload with zero targets fails to match any
  * branch and a payload with multiple target ids is rejected for the unknown
  * extra key — mirroring the DB `num_nonnulls(...) = 1` CHECK at the app layer.
+ *
+ * Authority note: the authoritative server-side validation is the
+ * `createServerFn().validator(flagFnInputSchema)` boundary in `./flags.fn.ts`
+ * (it runs on every client call). This schema mirrors that validator for direct
+ * callers/tests of {@link createFlag}; the DB CHECK is the ultimate guarantee.
  */
 export const createFlagInputSchema = z.discriminatedUnion("target", [
   z
