@@ -15,6 +15,17 @@ import { TaxonomyFilter } from "./TaxonomyFilter";
  */
 
 describe("TaxonomyFilter", () => {
+  it("exposes the legend as the fieldset's accessible group name", () => {
+    render(<TaxonomyFilter selected={[]} onToggle={() => {}} onClear={() => {}} />);
+
+    // The <legend> must be the fieldset's caption (its first child) so AT
+    // announces it as the group name. getByRole("group", { name }) resolves the
+    // name from the legend — this fails if the legend isn't a recognized caption.
+    expect(
+      screen.getByRole("group", { name: "Filter by gluten-free attributes" })
+    ).toBeInTheDocument();
+  });
+
   it("renders a labeled checkbox for every taxonomy attribute", () => {
     render(<TaxonomyFilter selected={[]} onToggle={() => {}} onClear={() => {}} />);
 

@@ -39,21 +39,24 @@ export function TaxonomyFilter({ selected, onToggle, onClear }: TaxonomyFilterPr
   const hasSelection = selectedSet.size > 0;
 
   return (
-    <fieldset className="mt-section rounded-card border border-border bg-surface p-gutter">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <legend className="text-body-sm font-semibold text-foreground">
-          Filter by gluten-free attributes
-        </legend>
-        {hasSelection ? (
-          <button
-            type="button"
-            onClick={onClear}
-            className="text-body-sm font-semibold text-brand hover:text-brand-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring rounded-chip px-1"
-          >
-            Clear ({selectedSet.size})
-          </button>
-        ) : null}
-      </div>
+    <fieldset className="relative mt-section rounded-card border border-border bg-surface p-gutter">
+      {/* Real <legend> as the fieldset's FIRST child so assistive tech announces
+          it as the group's accessible name. The Clear control is a sibling
+          positioned top-right (not wrapped around the legend), preserving the
+          a11y caption association while keeping the visual layout. */}
+      <legend className="text-body-sm font-semibold text-foreground">
+        Filter by gluten-free attributes
+      </legend>
+
+      {hasSelection ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="absolute right-gutter top-gutter text-body-sm font-semibold text-brand hover:text-brand-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring rounded-chip px-1"
+        >
+          Clear ({selectedSet.size})
+        </button>
+      ) : null}
 
       <p className="mt-1 text-caption text-muted-foreground">
         Show only places the community has affirmed for every attribute you pick.
