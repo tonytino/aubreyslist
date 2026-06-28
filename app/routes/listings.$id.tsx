@@ -8,6 +8,7 @@ import { TrustPlaceholder } from "~/components/listing/TrustPlaceholder";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
+import { getSetting } from "~/server/settings";
 import { deriveHeadlineSafetyState } from "~/trust/summary";
 
 /**
@@ -34,6 +35,16 @@ const getListingClaims = createServerFn({ method: "GET" })
   .validator(z.object({ id: z.string().min(1) }))
   .handler(({ data: { id } }) => getListingClaimAggregates({ listingId: id }));
 
+/**
+ * Server-only read of the admin-tunable staleness window (ADR-007). Read here so
+ * the staleness flag on the headline cue + each claim's roll-up reflects the
+ * configured `staleness_months` AppSetting rather than a hard-coded default;
+ * {@link getSetting} falls back to the in-code default on an unset/corrupt row.
+ */
+const getStalenessMonths = createServerFn({ method: "GET" }).handler(() =>
+  getSetting("staleness_months")
+);
+
 export const Route = createFileRoute("/listings/$id")({
   loader: async ({ params: { id } }) => {
     const listing = await getListing({ data: { id } });
@@ -42,15 +53,18 @@ export const Route = createFileRoute("/listings/$id")({
     if (!listing) {
       throw notFound();
     }
-    const claims = await getListingClaims({ data: { id } });
-    return { listing, claims };
+    const [claims, stalenessMonths] = await Promise.all([
+      getListingClaims({ data: { id } }),
+      getStalenessMonths(),
+    ]);
+    return { listing, claims, stalenessMonths };
   },
   component: ListingDetail,
   notFoundComponent: ListingNotFound,
 });
 
 function ListingDetail() {
-  const { listing, claims } = Route.useLoaderData();
+  const { listing, claims, stalenessMonths } = Route.useLoaderData();
 
   // Headline celiac-safe vs gluten-friendly cue, derived from the
   // `celiac_safe_vs_gluten_friendly` claim's VISIBLE aggregate (#29, ADR-007).
@@ -59,7 +73,9 @@ function ListingDetail() {
   const headlineClaim = claims.find(
     (claim) => claim.attribute === "celiac_safe_vs_gluten_friendly"
   );
-  const safetyState = headlineClaim ? deriveHeadlineSafetyState(headlineClaim) : null;
+  const safetyState = headlineClaim
+    ? deriveHeadlineSafetyState(headlineClaim, new Date(), stalenessMonths)
+    : null;
 
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-section bg-background px-4 py-10 text-foreground sm:px-6">
@@ -107,7 +123,7 @@ function ListingDetail() {
             What the community has confirmed or disputed about this restaurant. Each summary is a
             roll-up of the visible attestations below it — never a hidden score.
           </p>
-          <CommunityClaims claims={claims} />
+          <CommunityClaims claims={claims} stalenessMonths={stalenessMonths} />
         </section>
       ) : (
         <TrustPlaceholder

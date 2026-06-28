@@ -216,6 +216,18 @@ describe("deriveHeadlineSafetyState — honest celiac-safe vs gluten-friendly", 
     ).toBe("stale");
   });
 
+  it("never lets staleness mask a live dispute majority (contested-first)", () => {
+    // Confirmed long ago (lastConfirmedAt only moves on confirms), then heavily
+    // disputed since. A "may be stale" chip here would bury fresh contested
+    // evidence — the dispute majority must win and read as gluten-friendly.
+    expect(
+      deriveHeadlineSafetyState(
+        { confirmCount: 1, disputeCount: 10, lastConfirmedAt: ago(8 * MONTH) },
+        NOW
+      )
+    ).toBe("gluten-friendly");
+  });
+
   it("treats a dispute-only claim as gluten-friendly, not null (it has evidence)", () => {
     expect(
       deriveHeadlineSafetyState({ confirmCount: 0, disputeCount: 3, lastConfirmedAt: null }, NOW)

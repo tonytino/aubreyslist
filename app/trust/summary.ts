@@ -224,14 +224,19 @@ export function summarizeClaim(
  * HONEST BY CONSTRUCTION (a celiac could get hurt by a fabricated rating):
  * - **No evidence** (zero confirms and disputes) → `null`. The headline renders
  *   its existing "Not yet attested" empty state; we never invent a verdict.
- * - **Stale** confirmation (older than the window) → `"stale"`. Recency is
- *   weighted (ADR-007): an aged consensus is flagged, not trusted as fresh.
- * - **Confirms strictly outnumber disputes** → `"celiac-safe"`: the community
- *   consensus, from visible counts, is that cross-contamination is taken
- *   seriously.
- * - **Otherwise** (disputes tie or outnumber confirms) → `"gluten-friendly"`:
- *   the safer, lower claim. We deliberately fall back to the *less* reassuring
- *   state when the evidence is contested — never overstate safety.
+ * - **Disputes tie or outnumber confirms** → `"gluten-friendly"`: the safer,
+ *   lower claim. This is checked FIRST — a live dispute majority must NEVER be
+ *   masked by staleness. `lastConfirmedAt` is only bumped by confirms, so a
+ *   claim confirmed long ago then freshly disputed (e.g. 1 confirm / 10 dispute)
+ *   would otherwise read as a neutral "may be stale" and bury contested fresh
+ *   evidence. We deliberately fall back to the less reassuring state when the
+ *   evidence is contested — never overstate safety.
+ * - **Stale** confirmation (older than the window) while confirms lead →
+ *   `"stale"`. Recency is weighted (ADR-007): an aged, uncontested consensus is
+ *   flagged, not trusted as fresh.
+ * - **Confirms strictly outnumber disputes** and the confirmation is fresh →
+ *   `"celiac-safe"`: the community consensus, from visible counts, is that
+ *   cross-contamination is taken seriously.
  *
  * This is NOT a score: it is a direct reading of the visible confirm/dispute
  * counts and recency, reproducible by any user looking at the same evidence.
@@ -244,8 +249,15 @@ export function deriveHeadlineSafetyState(
   if (!hasEvidence(aggregate)) {
     return null;
   }
+  // Contested-first: a live dispute majority outranks staleness so fresh harm
+  // is never hidden behind an "outdated" chip (the confirm-only recency signal
+  // can be stale even as disputes pile up).
+  if (aggregate.confirmCount <= aggregate.disputeCount) {
+    return "gluten-friendly";
+  }
+  // Confirms lead, but an aged consensus is flagged rather than trusted.
   if (isStale(aggregate.lastConfirmedAt, now, stalenessMonths)) {
     return "stale";
   }
-  return aggregate.confirmCount > aggregate.disputeCount ? "celiac-safe" : "gluten-friendly";
+  return "celiac-safe";
 }
