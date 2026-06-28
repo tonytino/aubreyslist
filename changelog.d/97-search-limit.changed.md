@@ -1,0 +1,1 @@
+- `[manual]` Bounded listing text search: every query now runs with a `LIMIT` (default 50) plus offset-based pagination (`page`/`pageSize`), validated with safe defaults and an upper bound so a broad/empty search can no longer stream the whole table. Results are ordered alphabetically by name to match the browse list.
