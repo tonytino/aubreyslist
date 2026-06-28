@@ -1,0 +1,225 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Listing } from "~/db/schema";
+import type { PlaceDetails, PlacesResult } from "~/server/places";
+
+/**
+ * Unit tests for the add-listing write logic (`runCreateListing`).
+ *
+ * We exercise the pure logic against mocked collaborators (no live DB, no real
+ * Places call): the active intake-mode read (`getSetting`), the Places details
+ * provider (`runPlaceDetails`), and the drizzle handle. The auth gate lives on
+ * the `createListing` server-fn wrapper, not on `runCreateListing`, so it is out
+ * of scope here (guards have their own coverage in `auth/guards.test.ts`).
+ */
+
+// --- Mocks -----------------------------------------------------------------
+
+const getSettingMock = vi.fn();
+vi.mock("~/server/settings", () => ({ getSetting: (key: string) => getSettingMock(key) }));
+
+const runPlaceDetailsMock = vi.fn();
+vi.mock("~/server/places", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/server/places")>();
+  return {
+    ...actual,
+    runPlaceDetails: (input: unknown) => runPlaceDetailsMock(input),
+  };
+});
+
+// Model the two DB shapes `insertListing` uses:
+//   db.query.listings.findFirst({ where })  — dedup lookup
+//   db.insert(...).values(...).onConflictDoNothing(...).returning()  — the write
+let findFirstResult: Listing | undefined;
+let returningResult: Listing[] = [];
+
+const findFirstMock = vi.fn(() => Promise.resolve(findFirstResult));
+const returningMock = vi.fn(() => Promise.resolve(returningResult));
+const onConflictDoNothingMock = vi.fn((_args?: unknown) => ({ returning: returningMock }));
+const valuesMock = vi.fn((_values?: Record<string, unknown>) => ({
+  onConflictDoNothing: onConflictDoNothingMock,
+}));
+const insertMock = vi.fn(() => ({ values: valuesMock }));
+
+vi.mock("~/db/client", () => ({
+  getDb: () => ({
+    query: { listings: { findFirst: findFirstMock } },
+    insert: insertMock,
+  }),
+}));
+
+import { runCreateListing } from "./create";
+
+// --- Fixtures --------------------------------------------------------------
+
+function listingRow(overrides: Partial<Listing> = {}): Listing {
+  return {
+    id: "listing-1",
+    placeId: "place-123",
+    name: "Sweet Action",
+    address: "52 Broadway, Denver, CO",
+    lat: 39.7,
+    lng: -104.9,
+    mapsUrl: "https://maps.example/place-123",
+    menuUrl: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  } as Listing;
+}
+
+function placeDetailsOk(): PlacesResult<PlaceDetails> {
+  return {
+    ok: true,
+    data: {
+      placeId: "place-123",
+      name: "Sweet Action",
+      formattedAddress: "52 Broadway, Denver, CO",
+      lat: 39.7,
+      lng: -104.9,
+      mapsUrl: "https://maps.example/place-123",
+    },
+  };
+}
+
+beforeEach(() => {
+  findFirstResult = undefined;
+  returningResult = [];
+  getSettingMock.mockResolvedValue("places");
+  runPlaceDetailsMock.mockResolvedValue(placeDetailsOk());
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+// --- Places mode -----------------------------------------------------------
+
+describe("runCreateListing — places mode", () => {
+  it("resolves Place details server-side and inserts a new listing", async () => {
+    const created = listingRow();
+    returningResult = [created];
+
+    const result = await runCreateListing({ mode: "places", placeId: "place-123" });
+
+    expect(result).toEqual({ listing: created, created: true });
+    // The submitted placeId drives the details lookup (client never sends name/coords).
+    expect(runPlaceDetailsMock).toHaveBeenCalledWith({ placeId: "place-123" });
+    // Resolved canonical fields are what we insert.
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        placeId: "place-123",
+        name: "Sweet Action",
+        address: "52 Broadway, Denver, CO",
+        lat: 39.7,
+        lng: -104.9,
+      })
+    );
+  });
+
+  it("routes to the existing listing on a duplicate Place ID (no error)", async () => {
+    const existing = listingRow({ id: "existing-1" });
+    findFirstResult = existing;
+
+    const result = await runCreateListing({ mode: "places", placeId: "place-123" });
+
+    expect(result).toEqual({ listing: existing, created: false });
+    // Dedup short-circuits before any insert.
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("treats a concurrent-insert conflict as 'already listed' and re-reads the row", async () => {
+    // No row on the first dedup read, but the insert returns nothing (conflict);
+    // the post-insert re-read finds the row a concurrent request created.
+    const winner = listingRow({ id: "winner-1" });
+    findFirstMock
+      .mockResolvedValueOnce(undefined) // pre-insert dedup miss
+      .mockResolvedValueOnce(winner); // post-conflict re-read
+    returningResult = [];
+
+    const result = await runCreateListing({ mode: "places", placeId: "place-123" });
+
+    expect(result).toEqual({ listing: winner, created: false });
+    expect(onConflictDoNothingMock).toHaveBeenCalledWith({ target: expect.anything() });
+  });
+
+  it("rejects a places submission while intake is in manual mode", async () => {
+    getSettingMock.mockResolvedValue("manual");
+
+    await expect(runCreateListing({ mode: "places", placeId: "place-123" })).rejects.toThrow(
+      /manual/i
+    );
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the provider's friendly message when details fail", async () => {
+    runPlaceDetailsMock.mockResolvedValue({
+      ok: false,
+      reason: "upstream_error",
+      message: "Place details came back incomplete. Please try a different result.",
+    });
+
+    await expect(runCreateListing({ mode: "places", placeId: "place-123" })).rejects.toThrow(
+      /came back incomplete/
+    );
+  });
+});
+
+// --- Manual mode -----------------------------------------------------------
+
+describe("runCreateListing — manual mode", () => {
+  beforeEach(() => {
+    getSettingMock.mockResolvedValue("manual");
+  });
+
+  it("inserts the submitted fields with placeId null and a search Maps URL", async () => {
+    const created = listingRow({ placeId: null });
+    returningResult = [created];
+
+    const result = await runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St, Denver",
+      lat: 39.74,
+      lng: -104.99,
+      menuUrl: "https://corner.example/menu",
+    });
+
+    expect(result).toEqual({ listing: created, created: true });
+    // No Places call in manual mode.
+    expect(runPlaceDetailsMock).not.toHaveBeenCalled();
+    // Manual entries never carry a Place ID, so they never collide on the unique index.
+    const inserted = valuesMock.mock.calls[0]?.[0];
+    expect(inserted?.placeId).toBeNull();
+    expect(inserted?.name).toBe("Corner Cafe");
+    expect(inserted?.menuUrl).toBe("https://corner.example/menu");
+    expect(String(inserted?.mapsUrl)).toContain("https://www.google.com/maps/search/");
+  });
+
+  it("does not dedup-lookup for a manual entry (placeId is null)", async () => {
+    returningResult = [listingRow({ placeId: null })];
+
+    await runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St, Denver",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    expect(findFirstMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a manual submission while intake is in places mode", async () => {
+    getSettingMock.mockResolvedValue("places");
+
+    await expect(
+      runCreateListing({
+        mode: "manual",
+        name: "Corner Cafe",
+        address: "1 Main St, Denver",
+        lat: 39.74,
+        lng: -104.99,
+      })
+    ).rejects.toThrow(/places/i);
+  });
+});
