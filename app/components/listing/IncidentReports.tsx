@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { SafetySignal } from "~/components/SafetySignal";
 import type { Incident } from "~/db/schema";
-import { incidentSeverities } from "~/db/schema";
-import { submitIncident } from "~/server/incidents";
+import { submitIncident } from "~/server/incidents/incidents.fn";
+import { INCIDENT_SEVERITIES } from "~/trust/incident-recency";
 import { formatIncidentDate, formatSeverity } from "./incident-format";
 
 /** Query key for a listing's incident list — shared so a write can invalidate it. */
@@ -83,7 +83,7 @@ function IncidentList({ incidents }: { incidents: readonly Incident[] }) {
 }
 
 /** A severity selection plus the "" sentinel meaning "not specified". */
-type SeverityChoice = (typeof incidentSeverities)[number] | "";
+type SeverityChoice = (typeof INCIDENT_SEVERITIES)[number] | "";
 
 /** The login-gated submission form. */
 function IncidentForm({ listingId }: { listingId: string }) {
@@ -152,7 +152,7 @@ function IncidentForm({ listingId }: { listingId: string }) {
           className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
         >
           <option value="">Not specified</option>
-          {incidentSeverities.map((value) => (
+          {INCIDENT_SEVERITIES.map((value) => (
             <option key={value} value={value}>
               {formatSeverity(value)}
             </option>

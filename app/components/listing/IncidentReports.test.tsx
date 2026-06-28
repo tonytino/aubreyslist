@@ -11,7 +11,7 @@ import type { Incident } from "~/db/schema";
  * behaviour (gate + query invalidation), not the real DB write.
  */
 const submitIncidentMock = vi.fn((_args: unknown) => Promise.resolve({} as Incident));
-vi.mock("~/server/incidents", () => ({
+vi.mock("~/server/incidents/incidents.fn", () => ({
   submitIncident: (args: unknown) => submitIncidentMock(args),
 }));
 

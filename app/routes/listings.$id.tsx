@@ -12,8 +12,9 @@ import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
-import { fetchIncidents, findRecentIncident } from "~/server/incidents";
+import { fetchIncidents } from "~/server/incidents/incidents.fn";
 import { getSetting } from "~/server/settings";
+import { findRecentIncident } from "~/trust/incident-recency";
 import { deriveHeadlineSafetyState } from "~/trust/summary";
 
 /**

@@ -2,14 +2,15 @@ import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the incident reports write + recency layer (#30).
+ * Tests for the incident reports DB layer (#30) — the login-gated, rate-limited
+ * write and the most-recent-first read.
  *
  * The module's only server-only dependencies are the DB client and the auth
  * guard. We model the exact drizzle chains it uses so we can assert behaviour
- * — the login gate, validation, most-recent-first ordering, and the rate-limit
+ * — the login gate, most-recent-first ordering, and the rate-limit
  * short-circuit — without a live database, per `docs/agents/testing.md`. The
- * pure recency helpers ({@link isRecentIncident} / {@link findRecentIncident})
- * need no mocks.
+ * pure recency helpers + input schema live in `app/trust/incident-recency.ts`
+ * and are tested there (no mocks needed).
  */
 
 // --- Mocks -----------------------------------------------------------------
@@ -76,14 +77,7 @@ vi.mock("~/server/rate-limit", () => ({
   enforceWriteLimit: h.enforceWriteLimitMock,
 }));
 
-import {
-  RECENT_INCIDENT_WINDOW_DAYS,
-  findRecentIncident,
-  isRecentIncident,
-  listIncidents,
-  reportIncident,
-  reportIncidentInputSchema,
-} from "./index";
+import { listIncidents, reportIncident } from "./index";
 
 const { state, insertMock, orderByMock, requireCurrentUserMock, enforceWriteLimitMock } = h;
 
@@ -96,81 +90,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
-});
-
-describe("reportIncidentInputSchema — validation", () => {
-  it("requires occurredOn (date is required)", () => {
-    const result = reportIncidentInputSchema.safeParse({ listingId: "listing-1" });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects a non-YYYY-MM-DD date", () => {
-    const result = reportIncidentInputSchema.safeParse({
-      listingId: "listing-1",
-      occurredOn: "June 1 2026",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("accepts a date with no severity or note (both optional)", () => {
-    const result = reportIncidentInputSchema.safeParse({
-      listingId: "listing-1",
-      occurredOn: "2026-06-01",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects an unknown severity", () => {
-    const result = reportIncidentInputSchema.safeParse({
-      listingId: "listing-1",
-      occurredOn: "2026-06-01",
-      severity: "deadly",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("normalises a blank note to undefined", () => {
-    const result = reportIncidentInputSchema.safeParse({
-      listingId: "listing-1",
-      occurredOn: "2026-06-01",
-      note: "   ",
-    });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.note).toBeUndefined();
-    }
-  });
-
-  it("rejects a future-dated incident (cannot pin the banner forever)", () => {
-    // Far enough out to be future regardless of when the suite runs.
-    const result = reportIncidentInputSchema.safeParse({
-      listingId: "listing-1",
-      occurredOn: "2099-01-01",
-    });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues.some((i) => /future/i.test(i.message))).toBe(true);
-    }
-  });
-
-  it("rejects an invalid calendar date that matches the format (e.g. 2026-02-31)", () => {
-    for (const bad of ["2026-02-31", "2026-13-45", "2026-00-00"]) {
-      const result = reportIncidentInputSchema.safeParse({
-        listingId: "listing-1",
-        occurredOn: bad,
-      });
-      expect(result.success).toBe(false);
-    }
-  });
-
-  it("accepts today's date (boundary of the no-future rule)", () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const result = reportIncidentInputSchema.safeParse({
-      listingId: "listing-1",
-      occurredOn: today,
-    });
-    expect(result.success).toBe(true);
-  });
 });
 
 describe("reportIncident — login-gated, rate-limited write", () => {
@@ -229,57 +148,5 @@ describe("listIncidents — most-recent first", () => {
     expect(state.lastOrderByArgs).toHaveLength(2);
     // Passes the DB ordering straight through.
     expect(rows.map((r) => r.id)).toEqual(["b", "a"]);
-  });
-});
-
-describe("isRecentIncident — window boundary", () => {
-  const now = new Date("2026-06-28T12:00:00Z");
-
-  it("counts an incident exactly at the window edge as recent (inclusive)", () => {
-    const edge = new Date(now.getTime() - RECENT_INCIDENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-    const edgeIso = edge.toISOString().slice(0, 10);
-    expect(isRecentIncident(edgeIso, now)).toBe(true);
-  });
-
-  it("counts an incident one day past the window as NOT recent", () => {
-    const past = new Date(now.getTime() - (RECENT_INCIDENT_WINDOW_DAYS + 1) * 24 * 60 * 60 * 1000);
-    const pastIso = past.toISOString().slice(0, 10);
-    expect(isRecentIncident(pastIso, now)).toBe(false);
-  });
-
-  it("does NOT count a future-dated incident as recent (defense in depth)", () => {
-    expect(isRecentIncident("2026-12-31", now)).toBe(false);
-  });
-
-  it("returns false for an unparseable date", () => {
-    expect(isRecentIncident("not-a-date", now)).toBe(false);
-  });
-
-  it("returns false for an invalid calendar date that matches the format", () => {
-    expect(isRecentIncident("2026-02-31", now)).toBe(false);
-  });
-});
-
-describe("findRecentIncident — picks the most recent within the window", () => {
-  const now = new Date("2026-06-28T12:00:00Z");
-
-  it("returns the most recent incident when one is within the window", () => {
-    const result = findRecentIncident(
-      [
-        { occurredOn: "2026-06-20", id: "fresh" },
-        { occurredOn: "2026-01-01", id: "old" },
-      ],
-      now
-    );
-    expect(result?.id).toBe("fresh");
-  });
-
-  it("returns null when every incident is outside the window", () => {
-    const result = findRecentIncident([{ occurredOn: "2025-01-01", id: "ancient" }], now);
-    expect(result).toBeNull();
-  });
-
-  it("returns null for an empty list", () => {
-    expect(findRecentIncident([], now)).toBeNull();
   });
 });

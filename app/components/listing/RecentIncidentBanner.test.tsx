@@ -1,14 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { findRecentIncident } from "~/trust/incident-recency";
 import { RecentIncidentBanner } from "./RecentIncidentBanner";
-
-// `findRecentIncident` is a pure helper, but it lives in a module that also
-// imports server-only deps (DB client, auth guards). Stub those so the helper
-// can be exercised in jsdom — we want to assert the route's banner-visibility
-// composition (helper output -> banner render), not the DB.
-vi.mock("~/db/client", () => ({ getDb: () => ({}) }));
-vi.mock("~/server/auth/guards", () => ({ requireCurrentUser: vi.fn() }));
-vi.mock("~/server/rate-limit", () => ({ enforceWriteLimit: vi.fn() }));
 
 describe("RecentIncidentBanner", () => {
   it("renders a labelled region carrying the incident text label (not colour alone)", () => {
@@ -30,38 +23,20 @@ describe("RecentIncidentBanner", () => {
 describe("recent-incident banner visibility (route composition)", () => {
   const now = new Date("2026-06-28T12:00:00Z");
 
-  function BannerForIncidents({
-    incidents,
-    findRecent,
-  }: {
-    incidents: Array<{ occurredOn: string }>;
-    findRecent: (list: Array<{ occurredOn: string }>, now: Date) => { occurredOn: string } | null;
-  }) {
-    const recent = findRecent(incidents, now);
+  function BannerForIncidents({ incidents }: { incidents: Array<{ occurredOn: string }> }) {
+    const recent = findRecentIncident(incidents, now);
     return recent ? (
       <RecentIncidentBanner occurredOn={recent.occurredOn} nowMs={now.getTime()} />
     ) : null;
   }
 
-  it("renders the banner when a recent incident exists", async () => {
-    const { findRecentIncident } = await import("~/server/incidents");
-    render(
-      <BannerForIncidents
-        incidents={[{ occurredOn: "2026-06-20" }]}
-        findRecent={findRecentIncident}
-      />
-    );
+  it("renders the banner when a recent incident exists", () => {
+    render(<BannerForIncidents incidents={[{ occurredOn: "2026-06-20" }]} />);
     expect(screen.getByRole("region", { name: "Recent incident warning" })).toBeInTheDocument();
   });
 
-  it("does NOT render the banner when only old incidents exist", async () => {
-    const { findRecentIncident } = await import("~/server/incidents");
-    render(
-      <BannerForIncidents
-        incidents={[{ occurredOn: "2025-01-01" }]}
-        findRecent={findRecentIncident}
-      />
-    );
+  it("does NOT render the banner when only old incidents exist", () => {
+    render(<BannerForIncidents incidents={[{ occurredOn: "2025-01-01" }]} />);
     expect(
       screen.queryByRole("region", { name: "Recent incident warning" })
     ).not.toBeInTheDocument();
