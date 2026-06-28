@@ -23,4 +23,13 @@ describe("TrustPlaceholder", () => {
     );
     expect(screen.getByText("Dedicated fryer — 8 confirm / 1 dispute")).toBeInTheDocument();
   });
+
+  it("drops the coming-soon badge once real evidence fills the slot", () => {
+    render(
+      <TrustPlaceholder title="Incident reports" description="…">
+        <p>A real incident</p>
+      </TrustPlaceholder>
+    );
+    expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
+  });
 });

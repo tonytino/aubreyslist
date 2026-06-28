@@ -38,9 +38,13 @@ export function TrustPlaceholder({ title, description, children }: TrustPlacehol
         <h2 id={`${slugify(title)}-heading`} className="text-title">
           {title}
         </h2>
-        <span className="rounded-chip bg-brand-soft px-2.5 py-1 text-caption font-medium text-brand">
-          Coming soon
-        </span>
+        {/* The "coming soon" badge is only honest while the slot is empty; once
+            EPIC 4 feeds real evidence in via `children`, drop it. */}
+        {children === undefined ? (
+          <span className="rounded-chip bg-brand-soft px-2.5 py-1 text-caption font-medium text-brand">
+            Coming soon
+          </span>
+        ) : null}
       </div>
       <p className="text-body-sm text-muted-foreground">{description}</p>
       {children}

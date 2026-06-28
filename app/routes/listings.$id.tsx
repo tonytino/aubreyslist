@@ -1,11 +1,16 @@
+import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
+import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { TrustPlaceholder } from "~/components/listing/TrustPlaceholder";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
+import { getCurrentUser } from "~/server/auth/current-user";
+import { fetchIncidents, findRecentIncident } from "~/server/incidents";
 
 /**
  * Server-only loader for a single listing by id. Validated input (the dynamic
@@ -22,22 +27,47 @@ const getListing = createServerFn({ method: "GET" })
     return listing ?? null;
   });
 
+/**
+ * Whether the visitor is signed in — gates the incident submission form (UX
+ * only; the write itself is re-gated server-side in `reportIncident`).
+ */
+const getViewerIsSignedIn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<boolean> => (await getCurrentUser()) !== null
+);
+
+/** Cached incident list for a listing — invalidated after a report is filed. */
+function incidentsQueryOptions(listingId: string) {
+  return queryOptions({
+    queryKey: incidentsQueryKey(listingId),
+    queryFn: () => fetchIncidents({ data: { listingId } }),
+  });
+}
+
 export const Route = createFileRoute("/listings/$id")({
-  loader: async ({ params: { id } }) => {
-    const listing = await getListing({ data: { id } });
+  loader: async ({ params: { id }, context }) => {
+    const [listing, isSignedIn] = await Promise.all([
+      getListing({ data: { id } }),
+      getViewerIsSignedIn(),
+      // Prefetch incidents so the list + banner render on first paint, then are
+      // refetchable client-side via TanStack Query after a new report.
+      context.queryClient.ensureQueryData(incidentsQueryOptions(id)),
+    ]);
     // A missing listing is a 404, not an error — surface the route's
     // notFoundComponent instead of the error boundary.
     if (!listing) {
       throw notFound();
     }
-    return { listing };
+    return { listing, isSignedIn };
   },
   component: ListingDetail,
   notFoundComponent: ListingNotFound,
 });
 
 function ListingDetail() {
-  const { listing } = Route.useLoaderData();
+  const { listing, isSignedIn } = Route.useLoaderData();
+  const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
+  // Recent harm flags the listing regardless of older confirmations (ADR-007).
+  const recentIncident = findRecentIncident(incidents);
 
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-section bg-background px-4 py-10 text-foreground sm:px-6">
@@ -45,6 +75,10 @@ function ListingDetail() {
         <h1 className="text-headline font-bold tracking-tight">{listing.name}</h1>
         <p className="text-body text-muted-foreground">{listing.address}</p>
       </header>
+
+      {/* Recent harm is surfaced first and never buried by older confirmations
+          (ADR-007, domain.md → Trust Model). Reusable for the #33 list-card signal. */}
+      {recentIncident ? <RecentIncidentBanner occurredOn={recentIncident.occurredOn} /> : null}
 
       {/* Headline celiac-safe vs gluten-friendly cue (placeholder until EPIC 4). */}
       <SafetySummary state={null} />
@@ -81,8 +115,10 @@ function ListingDetail() {
 
       <TrustPlaceholder
         title="Incident reports"
-        description="Recent “got glutened here” reports will be shown here, with the most recent flagged prominently. None have been reported yet."
-      />
+        description="Recent “got glutened here” reports are shown here, most recent first. Recent ones flag the listing at the top of the page regardless of older confirmations."
+      >
+        <IncidentReports listingId={listing.id} incidents={incidents} isSignedIn={isSignedIn} />
+      </TrustPlaceholder>
     </article>
   );
 }
