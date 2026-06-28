@@ -9,6 +9,7 @@ import {
   incidents,
   listings,
 } from "~/db/schema";
+import { BROWSE_PAGE_SIZE, MAX_PAGE_SIZE } from "~/listings/browse-params";
 import type { Coords } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
@@ -41,10 +42,6 @@ import { buildSearchPredicate } from "./search";
  * entry point lives in `./browse.fn.ts` (the `*.fn.ts` convention) so the
  * browse route's client bundle never drags in `getDb`.
  */
-
-/** Default and max page size for the browse list. */
-export const BROWSE_PAGE_SIZE = 20;
-const MAX_PAGE_SIZE = 50;
 
 /** Validated input for a page of the browse list. */
 export const browseListingsInputSchema = z.object({
