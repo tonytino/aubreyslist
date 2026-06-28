@@ -83,3 +83,47 @@ author is ever a blocker for a schema change.
 
 The CI **test** database (the `ci` Neon branch) is migrated separately inside the
 E2E job in `ci.yml`; the two never share a connection string.
+
+## Seeding the first admin (`pnpm db:seed-admin`)
+
+The in-app role tool (`setRole`, ADR-010) can only grant/revoke the `moderator`
+role — it **cannot mint an admin**. So the first admin (the repo owner) must be
+promoted out-of-band, **once per database/environment**. This is a documented,
+irreducible `safe:human` bootstrap (you need that env's `DATABASE_URL`), not
+something an agent can automate away.
+
+Why it can't be pre-seeded: identity anchors on the Google subject
+(`google_sub`, ADR-006), and a `users` row only exists **after that account signs
+in once**. Seeding by email alone would create an orphaned, unreachable row — so
+this command never inserts; it only promotes an existing row.
+
+### Per-environment flow
+
+For each environment, run this **once**:
+
+1. **Sign in once** to the app with the Google account that should be admin
+   (this creates the `users` row).
+2. Run the helper against that environment's `DATABASE_URL`:
+
+   ```bash
+   pnpm db:seed-admin anthony@brbcoding.com
+   ```
+
+   - **Local** — uses the `DATABASE_URL` in your `.env` (your dev DB, if it is
+     separate from prod).
+   - **Production** — the Neon database behind Vercel. Point the command at it
+     explicitly with that connection string, e.g.:
+
+     ```bash
+     DATABASE_URL='<prod-connection-string>' pnpm db:seed-admin anthony@brbcoding.com
+     ```
+
+It is **idempotent**: re-running on a user who is already `admin` is a no-op
+success. If the user hasn't signed in yet, it exits non-zero with an actionable
+message ("sign in once with this Google account first, then re-run"). Missing or
+empty email argument prints usage and exits non-zero.
+
+The script reads `DATABASE_URL` through the validated `getEnv()` accessor (never
+raw `process.env`) and runs via `node --experimental-strip-types` plus a small
+dependency-free alias loader (`scripts/register-aliases.mjs`) — no `tsx`/`ts-node`
+dependency is added. See `scripts/seed-admin.ts`.
