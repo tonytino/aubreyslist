@@ -37,7 +37,10 @@
       ".vinxi",
       ".output",
       "dist",
-      ".claude"
+      ".claude",
+      "test-results",
+      "playwright-report",
+      "coverage"
     ]
   }
 }
