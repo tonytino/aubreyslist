@@ -129,6 +129,39 @@ Back in **Google Cloud → Credentials → your OAuth client**:
 
 ---
 
+## Auth on preview deployments
+
+Google OAuth requires **exact-match redirect URIs — no wildcards.** You cannot
+register `https://*-brbcoding.vercel.app/...`, so every origin/callback must be
+spelled out.
+
+Vercel preview URLs come in two forms:
+
+- **Per-deployment** (e.g. `aubreyslist-<hash>-brbcoding.vercel.app`) — a new
+  hash every push, so **not registerable**.
+- **Per-branch** (e.g. `aubreyslist-git-<branch>-brbcoding.vercel.app`) —
+  **stable per branch**, so it CAN be registered.
+
+**To test sign-in on a specific preview branch**, in the Google Cloud OAuth
+client add:
+
+- **Authorized JavaScript origin:**
+  `https://aubreyslist-git-<branch>-brbcoding.vercel.app`
+- **Authorized redirect URI:**
+  `https://aubreyslist-git-<branch>-brbcoding.vercel.app/api/auth/callback/google`
+
+**Recommended:** test auth on `http://localhost:3000` and prod
+`https://aubreyslist.vercel.app` (both already registered). Only register a
+branch preview URL if you need repeated sign-in testing on it. (The session
+cookie's `Secure` flag is gated on `NODE_ENV=production`, so local
+`http://localhost` sign-in works.)
+
+**Advanced / not needed at pilot scale:** a single fixed callback domain plus a
+`state`-based redirect proxy enables auth on *any* preview URL, at the cost of an
+auth-proxy code path.
+
+---
+
 ## Where this plugs into the build
 
 - `DATABASE_URL` → unblocks applying migrations for the core schema (#20).

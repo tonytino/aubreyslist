@@ -1,0 +1,1 @@
+- `[manual]` Documented Google OAuth on Vercel preview deployments (exact-match redirect URIs, per-branch stable URLs) in `docs/setup/provisioning.md`.
