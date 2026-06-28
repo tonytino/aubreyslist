@@ -1,18 +1,23 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Incident } from "~/db/schema";
 
 /**
- * Component tests for the "Incident reports" body (#30): the signed-out gate and
- * the list-refresh-after-submit path. `submitIncident` is a server function, so
- * we mock the server-only module — the test only needs to assert the component's
- * behaviour (gate + query invalidation), not the real DB write.
+ * Component tests for the "Incident reports" body (#30 + #32): the signed-out
+ * gate, the list-refresh-after-submit path, and the OWNER-ONLY edit/retract
+ * controls. The incident server functions are mocked — the test only asserts the
+ * component's behaviour (gate + permission visibility + query invalidation), not
+ * the real DB write.
  */
 const submitIncidentMock = vi.fn((_args: unknown) => Promise.resolve({} as Incident));
+const updateIncidentMock = vi.fn((_args: unknown) => Promise.resolve({} as Incident));
+const removeIncidentMock = vi.fn((_args: unknown) => Promise.resolve());
 vi.mock("~/server/incidents/incidents.fn", () => ({
   submitIncident: (args: unknown) => submitIncidentMock(args),
+  updateIncident: (args: unknown) => updateIncidentMock(args),
+  removeIncident: (args: unknown) => removeIncidentMock(args),
 }));
 
 import { IncidentReports, incidentsQueryKey } from "./IncidentReports";
@@ -45,7 +50,7 @@ afterEach(() => {
 
 describe("IncidentReports", () => {
   it("shows a sign-in link and NO form when signed out", () => {
-    renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} isSignedIn={false} />);
+    renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} viewerId={null} />);
 
     expect(screen.getByRole("link", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Report an incident" })).not.toBeInTheDocument();
@@ -53,7 +58,7 @@ describe("IncidentReports", () => {
   });
 
   it("shows the submission form when signed in", () => {
-    renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} isSignedIn={true} />);
+    renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} viewerId="user-1" />);
 
     expect(screen.getByRole("button", { name: /Submit report/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
@@ -64,7 +69,7 @@ describe("IncidentReports", () => {
       <IncidentReports
         listingId="listing-1"
         incidents={[incident({ severity: "severe", note: "Sick for a day" })]}
-        isSignedIn={false}
+        viewerId={null}
       />
     );
 
@@ -75,7 +80,7 @@ describe("IncidentReports", () => {
 
   it("invalidates the incident list query after a successful submit", async () => {
     const queryClient = renderWithQuery(
-      <IncidentReports listingId="listing-1" incidents={[]} isSignedIn={true} />
+      <IncidentReports listingId="listing-1" incidents={[]} viewerId="user-1" />
     );
     // Seed a cached list so we can observe it being invalidated.
     queryClient.setQueryData(incidentsQueryKey("listing-1"), []);
@@ -91,6 +96,87 @@ describe("IncidentReports", () => {
     });
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: incidentsQueryKey("listing-1"),
+    });
+  });
+
+  describe("owner-only edit/retract controls (#32)", () => {
+    it("shows Edit/Retract only on the viewer's OWN incident", () => {
+      renderWithQuery(
+        <IncidentReports
+          listingId="listing-1"
+          incidents={[
+            incident({ id: "own", userId: "user-1" }),
+            incident({ id: "other", userId: "user-2", occurredOn: "2026-05-01" }),
+          ]}
+          viewerId="user-1"
+        />
+      );
+      // Exactly one Edit + one Retract — for the owned incident only.
+      expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
+      expect(screen.getAllByRole("button", { name: "Retract" })).toHaveLength(1);
+    });
+
+    it("shows NO edit/retract controls for an anonymous viewer", () => {
+      renderWithQuery(
+        <IncidentReports
+          listingId="listing-1"
+          incidents={[incident({ id: "own", userId: "user-1" })]}
+          viewerId={null}
+        />
+      );
+      expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Retract" })).not.toBeInTheDocument();
+    });
+
+    it("edits an own incident and invalidates the list", async () => {
+      const queryClient = renderWithQuery(
+        <IncidentReports
+          listingId="listing-1"
+          incidents={[incident({ id: "own", userId: "user-1" })]}
+          viewerId="user-1"
+        />
+      );
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+      fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+      // Scope to the inline edit form — the report form below also has a date.
+      const editForm = screen.getByRole("form", { name: "Edit incident" });
+      fireEvent.change(within(editForm).getByLabelText(/Date it happened/i), {
+        target: { value: "2026-06-15" },
+      });
+      fireEvent.click(within(editForm).getByRole("button", { name: /Save changes/i }));
+
+      await waitFor(() => {
+        expect(updateIncidentMock).toHaveBeenCalledTimes(1);
+      });
+      expect(updateIncidentMock).toHaveBeenCalledWith({
+        data: { id: "own", occurredOn: "2026-06-15", severity: undefined, note: undefined },
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: incidentsQueryKey("listing-1") });
+    });
+
+    it("requires confirmation before retracting, then invalidates the list", async () => {
+      const queryClient = renderWithQuery(
+        <IncidentReports
+          listingId="listing-1"
+          incidents={[incident({ id: "own", userId: "user-1" })]}
+          viewerId="user-1"
+        />
+      );
+      const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+      // First click only reveals the confirm step — no delete yet.
+      fireEvent.click(screen.getByRole("button", { name: "Retract" }));
+      expect(removeIncidentMock).not.toHaveBeenCalled();
+      expect(screen.getByText(/Retract this report\?/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /Yes, retract/i }));
+
+      await waitFor(() => {
+        expect(removeIncidentMock).toHaveBeenCalledTimes(1);
+      });
+      expect(removeIncidentMock).toHaveBeenCalledWith({ data: { id: "own" } });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: incidentsQueryKey("listing-1") });
     });
   });
 });

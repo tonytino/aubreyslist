@@ -142,6 +142,48 @@ export const listIncidentsInputSchema = z.object({
 });
 export type ListIncidentsInput = z.infer<typeof listIncidentsInputSchema>;
 
+/**
+ * Editing an OWN incident (issue #32). Carries the incident `id` and the same
+ * editable fields a report accepts — `occurredOn` (re-validated as a real, non-
+ * future calendar date), optional `severity`, optional `note`. The actor is the
+ * current user; ownership is enforced server-side (the incident's `userId` must
+ * match) — this schema does not carry a user id, so a caller can never spoof one.
+ *
+ * Reuses the exact `occurredOn` rules from {@link reportIncidentInputSchema} so
+ * an edit can never sneak a future or impossible date past the report path, and
+ * so editing a date to outside the window correctly drops the recent-incident
+ * banner (and vice versa).
+ */
+export const editIncidentInputSchema = z.object({
+  id: z.string().min(1, "id is required"),
+  occurredOn: z
+    .string()
+    .refine((value) => parseCalendarDay(value) !== null, {
+      message: "occurredOn must be a real YYYY-MM-DD date",
+    })
+    .refine(
+      (value) => {
+        const day = parseCalendarDay(value);
+        return day !== null && day <= todayUtcMidnight();
+      },
+      { message: "occurredOn cannot be in the future" }
+    ),
+  severity: z.enum(INCIDENT_SEVERITIES).optional(),
+  note: z
+    .string()
+    .trim()
+    .max(2000, "note is too long")
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+});
+export type EditIncidentInput = z.infer<typeof editIncidentInputSchema>;
+
+/** Retracting (deleting) an OWN incident needs only the incident id. */
+export const retractIncidentInputSchema = z.object({
+  id: z.string().min(1, "id is required"),
+});
+export type RetractIncidentInput = z.infer<typeof retractIncidentInputSchema>;
+
 // ---------------------------------------------------------------------------
 // Recency helpers — reusable across the listing banner and (later) list cards
 // ---------------------------------------------------------------------------

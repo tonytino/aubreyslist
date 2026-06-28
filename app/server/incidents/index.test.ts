@@ -15,13 +15,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // --- Mocks -----------------------------------------------------------------
 // DB chains modeled:
-//   read list: getDb().select().from().where().orderBy() -> rows
-//   insert:    getDb().insert().values().returning()      -> [row]
+//   read list: getDb().select().from().where().orderBy()          -> rows
+//   insert:    getDb().insert().values().returning()              -> [row]
+//   edit:      getDb().update().set().where().returning()         -> updatedRows
+//   retract:   getDb().delete().where().returning({ id })         -> deletedRows
 const h = vi.hoisted(() => {
   const state = {
     listRows: [] as Array<Record<string, unknown>>,
     lastInsertValues: undefined as unknown,
     lastOrderByArgs: [] as unknown[],
+    lastUpdateSet: undefined as unknown,
+    // Rows the UPDATE ... RETURNING resolves to: non-empty ⇒ owner match.
+    updatedRows: [{ id: "incident-1" }] as Array<Record<string, unknown>>,
+    // Rows the DELETE ... RETURNING resolves to: non-empty ⇒ owner match.
+    deletedRows: [{ id: "incident-1" }] as Array<Record<string, unknown>>,
     signedIn: true,
   };
 
@@ -42,6 +49,20 @@ const h = vi.hoisted(() => {
   });
   const insertMock = vi.fn(() => ({ values: valuesMock }));
 
+  // update().set().where().returning() — ownership is the (id, userId) predicate.
+  const updateReturningMock = vi.fn(() => Promise.resolve(state.updatedRows));
+  const updateWhereMock = vi.fn(() => ({ returning: updateReturningMock }));
+  const setMock = vi.fn((vals: unknown) => {
+    state.lastUpdateSet = vals;
+    return { where: updateWhereMock };
+  });
+  const updateMock = vi.fn(() => ({ set: setMock }));
+
+  // delete().where().returning({ id }) — ownership is the (id, userId) predicate.
+  const deleteReturningMock = vi.fn(() => Promise.resolve(state.deletedRows));
+  const deleteWhereMock = vi.fn(() => ({ returning: deleteReturningMock }));
+  const deleteMock = vi.fn(() => ({ where: deleteWhereMock }));
+
   const requireCurrentUserMock = vi.fn(() => {
     if (!state.signedIn) {
       return Promise.reject(new Error("Authentication required."));
@@ -57,6 +78,9 @@ const h = vi.hoisted(() => {
     orderByMock,
     insertMock,
     valuesMock,
+    updateMock,
+    setMock,
+    deleteMock,
     requireCurrentUserMock,
     enforceWriteLimitMock,
   };
@@ -66,6 +90,8 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({
     select: h.selectMock,
     insert: h.insertMock,
+    update: h.updateMock,
+    delete: h.deleteMock,
   }),
 }));
 
@@ -77,14 +103,25 @@ vi.mock("~/server/rate-limit", () => ({
   enforceWriteLimit: h.enforceWriteLimitMock,
 }));
 
-import { listIncidents, reportIncident } from "./index";
+import { editIncident, listIncidents, reportIncident, retractIncident } from "./index";
 
-const { state, insertMock, orderByMock, requireCurrentUserMock, enforceWriteLimitMock } = h;
+const {
+  state,
+  insertMock,
+  orderByMock,
+  updateMock,
+  deleteMock,
+  requireCurrentUserMock,
+  enforceWriteLimitMock,
+} = h;
 
 beforeEach(() => {
   state.listRows = [];
   state.lastInsertValues = undefined;
   state.lastOrderByArgs = [];
+  state.lastUpdateSet = undefined;
+  state.updatedRows = [{ id: "incident-1" }];
+  state.deletedRows = [{ id: "incident-1" }];
   state.signedIn = true;
 });
 
@@ -129,6 +166,100 @@ describe("reportIncident — login-gated, rate-limited write", () => {
       tooFast
     );
     expect(insertMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("editIncident — owner-only, server-enforced", () => {
+  it("updates the incident when the current user owns it", async () => {
+    const row = await editIncident({
+      id: "incident-1",
+      occurredOn: "2026-06-15",
+      severity: "moderate",
+      note: "updated",
+    });
+
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    // The new field values (and a bumped updatedAt) are written.
+    const set = state.lastUpdateSet as Record<string, unknown>;
+    expect(set.occurredOn).toBe("2026-06-15");
+    expect(set.severity).toBe("moderate");
+    expect(set.note).toBe("updated");
+    expect(set.updatedAt).toBeInstanceOf(Date);
+    expect(row).toEqual({ id: "incident-1" });
+  });
+
+  it("rejects a non-owner: zero rows updated ⇒ 403, surfaced as a throw", async () => {
+    // The (id, userId) predicate matches nothing when the row is not the user's.
+    state.updatedRows = [];
+    await expect(editIncident({ id: "incident-1", occurredOn: "2026-06-15" })).rejects.toThrow(
+      /your own incident/i
+    );
+  });
+
+  it("rejects an anonymous caller (401 gate); no update happens", async () => {
+    state.signedIn = false;
+    await expect(editIncident({ id: "incident-1", occurredOn: "2026-06-15" })).rejects.toThrow(
+      "Authentication required."
+    );
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits the authenticated user before writing (#18)", async () => {
+    await editIncident({ id: "incident-1", occurredOn: "2026-06-15" });
+
+    expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
+    expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does not update when the rate limit is exceeded (429)", async () => {
+    const tooFast = new HTTPException(429, { message: "too fast" });
+    enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
+
+    await expect(editIncident({ id: "incident-1", occurredOn: "2026-06-15" })).rejects.toBe(
+      tooFast
+    );
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("clears optional severity/note when omitted (edit can blank them)", async () => {
+    await editIncident({ id: "incident-1", occurredOn: "2026-06-15" });
+
+    const set = state.lastUpdateSet as Record<string, unknown>;
+    expect(set.severity).toBeNull();
+    expect(set.note).toBeNull();
+  });
+});
+
+describe("retractIncident — owner-only, server-enforced", () => {
+  it("deletes the incident when the current user owns it", async () => {
+    await retractIncident({ id: "incident-1" });
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a non-owner: zero rows deleted ⇒ 403, surfaced as a throw", async () => {
+    state.deletedRows = [];
+    await expect(retractIncident({ id: "incident-1" })).rejects.toThrow(/your own incident/i);
+  });
+
+  it("rejects an anonymous caller (401 gate); no delete happens", async () => {
+    state.signedIn = false;
+    await expect(retractIncident({ id: "incident-1" })).rejects.toThrow("Authentication required.");
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits the authenticated user before deleting (#18)", async () => {
+    await retractIncident({ id: "incident-1" });
+
+    expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
+    expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does not delete when the rate limit is exceeded (429)", async () => {
+    const tooFast = new HTTPException(429, { message: "too fast" });
+    enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
+
+    await expect(retractIncident({ id: "incident-1" })).rejects.toBe(tooFast);
+    expect(deleteMock).not.toHaveBeenCalled();
   });
 });
 

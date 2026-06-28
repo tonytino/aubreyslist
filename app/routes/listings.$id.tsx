@@ -3,7 +3,7 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { CommunityClaims } from "~/components/listing/CommunityClaims";
+import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
@@ -52,11 +52,14 @@ const getStalenessMonths = createServerFn({ method: "GET" }).handler(() =>
 );
 
 /**
- * Whether the visitor is signed in — gates the incident submission form (UX
- * only; the write itself is re-gated server-side in `reportIncident`).
+ * The current viewer's user id, or `null` when anonymous. Drives both the
+ * incident submission form gate (UX) and the OWNER-ONLY edit/retract controls on
+ * the viewer's own incidents (#32). The controls are UX only — the edit/retract
+ * writes are re-gated AND ownership-checked server-side in `editIncident` /
+ * `retractIncident`, so hiding a button is never the actual access control.
  */
-const getViewerIsSignedIn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<boolean> => (await getCurrentUser()) !== null
+const getViewerId = createServerFn({ method: "GET" }).handler(
+  async (): Promise<string | null> => (await getCurrentUser())?.id ?? null
 );
 
 /** Cached incident list for a listing — invalidated after a report is filed. */
@@ -67,11 +70,23 @@ function incidentsQueryOptions(listingId: string) {
   });
 }
 
+/**
+ * Cached claim roll-up for a listing — invalidated after the viewer changes or
+ * retracts their own attestation (#32), so the per-claim counts, recency, the
+ * viewer's own vote, and the headline cue all recompute from fresh evidence.
+ */
+function claimsQueryOptions(listingId: string) {
+  return queryOptions({
+    queryKey: claimsQueryKey(listingId),
+    queryFn: () => getListingClaims({ data: { id: listingId } }),
+  });
+}
+
 export const Route = createFileRoute("/listings/$id")({
   loader: async ({ params: { id }, context }) => {
-    const [listing, isSignedIn] = await Promise.all([
+    const [listing, viewerId] = await Promise.all([
       getListing({ data: { id } }),
-      getViewerIsSignedIn(),
+      getViewerId(),
       // Prefetch incidents so the list + banner render on first paint, then are
       // refetchable client-side via TanStack Query after a new report.
       context.queryClient.ensureQueryData(incidentsQueryOptions(id)),
@@ -82,22 +97,25 @@ export const Route = createFileRoute("/listings/$id")({
       throw notFound();
     }
     // Only fetch the trust roll-up once we know the listing exists (#29).
-    const [claims, stalenessMonths] = await Promise.all([
-      getListingClaims({ data: { id } }),
+    // Prefetch the claims query too so the roll-up renders on first paint and is
+    // refetchable client-side after the viewer changes/retracts a vote (#32).
+    const [, stalenessMonths] = await Promise.all([
+      context.queryClient.ensureQueryData(claimsQueryOptions(id)),
       getStalenessMonths(),
     ]);
     // Resolve "now" ONCE on the server and pass it down as epoch ms, so the
     // recency window + relative phrasing use the same instant on SSR and after
     // hydration — no banner flicker or off-by-one at day/window edges.
-    return { listing, isSignedIn, claims, stalenessMonths, nowMs: Date.now() };
+    return { listing, viewerId, stalenessMonths, nowMs: Date.now() };
   },
   component: ListingDetail,
   notFoundComponent: ListingNotFound,
 });
 
 function ListingDetail() {
-  const { listing, isSignedIn, claims, stalenessMonths, nowMs } = Route.useLoaderData();
+  const { listing, viewerId, stalenessMonths, nowMs } = Route.useLoaderData();
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
+  const { data: claims } = useSuspenseQuery(claimsQueryOptions(listing.id));
   const now = new Date(nowMs);
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
   const recentIncident = findRecentIncident(incidents, now);
@@ -165,7 +183,12 @@ function ListingDetail() {
             What the community has confirmed or disputed about this restaurant. Each summary is a
             roll-up of the visible attestations below it — never a hidden score.
           </p>
-          <CommunityClaims claims={claims} stalenessMonths={stalenessMonths} />
+          <CommunityClaims
+            listingId={listing.id}
+            claims={claims}
+            viewerId={viewerId}
+            stalenessMonths={stalenessMonths}
+          />
         </section>
       ) : (
         <TrustPlaceholder
@@ -178,7 +201,7 @@ function ListingDetail() {
         title="Incident reports"
         description="Recent “got glutened here” reports are shown here, most recent first. Recent ones flag the listing at the top of the page regardless of older confirmations."
       >
-        <IncidentReports listingId={listing.id} incidents={incidents} isSignedIn={isSignedIn} />
+        <IncidentReports listingId={listing.id} incidents={incidents} viewerId={viewerId} />
       </TrustPlaceholder>
     </article>
   );
