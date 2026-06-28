@@ -14,7 +14,7 @@ import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/list
 import type { ClaimAggregate } from "~/server/attestations";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident } from "~/trust/incident-recency";
-import { DEFAULT_STALENESS_MONTHS } from "~/trust/summary";
+import { DEFAULT_STALENESS_MONTHS, stalenessCutoff } from "~/trust/summary";
 import { buildBrowseWhere } from "./filter";
 import { buildSearchPredicate } from "./search";
 
@@ -274,16 +274,24 @@ function buildOrderBy(
 ): SQL[] {
   const nameTiebreak = asc(listings.name);
 
-  // The staleness cutoff instant, computed the SAME way the glance does
-  // (`isStale`: age > stalenessMonths * 30 days). A confirmation strictly newer
-  // than this is "fresh"; null/older is stale. Bound as a parameter so the SQL
-  // boundary equals the displayed one.
-  const MS_PER_MONTH = 30 * 24 * 60 * 60 * 1000;
-  const stalenessCutoff = new Date(now.getTime() - stalenessMonths * MS_PER_MONTH);
+  // The staleness cutoff instant, derived from the SAME shared `stalenessCutoff`
+  // helper the glance's `isStale` uses, so the SQL boundary equals the displayed
+  // one EXACTLY (no drift between sort and card). Bound as a parameter below.
+  const cutoff = stalenessCutoff(now, stalenessMonths);
 
   const hasEvidence = sql`coalesce(${trust.confirmCount}, 0) + coalesce(${trust.disputeCount}, 0) > 0`;
   const confirmsLead = sql`coalesce(${trust.confirmCount}, 0) > coalesce(${trust.disputeCount}, 0)`;
-  const fresh = sql`${trust.lastConfirmedAt} > ${stalenessCutoff}`;
+  // "Fresh" mirrors `isStale` exactly:
+  //  - INCLUSIVE lower bound (`>=`): a confirmation EXACTLY on the staleness edge
+  //    is fresh, matching `isStale`'s `age > window` rule (stale only once age
+  //    STRICTLY exceeds the window). A bare `>` would flip the exact-edge instant
+  //    to stale in SQL while the card showed it fresh.
+  //  - NULL lastConfirmedAt is fresh, NOT stale: a confirm-majority claim that
+  //    has never been confirmed is "not yet confirmed", which `isStale(null)`
+  //    treats as not-stale → celiac-safe (tier 4). Bare `lastConfirmedAt >= cutoff`
+  //    is NULL (false) for a null timestamp, which would wrongly demote it to the
+  //    stale tier (3); the explicit `IS NULL` keeps SQL and JS on the same tier.
+  const fresh = sql`(${trust.lastConfirmedAt} is null or ${trust.lastConfirmedAt} >= ${cutoff})`;
 
   // Safety tier mirroring `deriveHeadlineSafetyState` — higher sorts first.
   const safetyTier = sql<number>`case

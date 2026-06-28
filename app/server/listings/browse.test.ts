@@ -298,6 +298,23 @@ describe("getBrowseListings", () => {
     expect(boundDate?.getTime()).toBe(NOW.getTime() - monthMs);
   });
 
+  it("classifies the staleness boundary the same as the glance (inclusive >=, NULL = fresh)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, sort: "trust" }, NOW);
+
+    // The trust tier CASE is the first ORDER BY term. Its `fresh` predicate must
+    // mirror `isStale` exactly: an INCLUSIVE lower bound (`>=`, so an exact-edge
+    // confirmation is fresh, not flipped to stale) and NULL lastConfirmedAt
+    // counted as fresh (a never-confirmed confirm-majority is celiac-safe, not
+    // stale — ADR-007), not bare `>` which would drift from the displayed card.
+    const tierSql = renderArg(state.orderByArgs[0]);
+    expect(tierSql).toContain(">=");
+    expect(tierSql).toContain("is null");
+    expect(tierSql).not.toContain("> $"); // no bare strict `>` against the cutoff param
+  });
+
   it("orders recency by last-confirmed desc (nulls last) before net confirms", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;

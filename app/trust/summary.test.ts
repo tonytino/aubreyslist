@@ -135,6 +135,17 @@ describe("isStale", () => {
     expect(isStale(ago(2 * MONTH), NOW, 1)).toBe(true);
     expect(isStale(ago(2 * MONTH), NOW, DEFAULT_STALENESS_MONTHS)).toBe(false);
   });
+
+  it("classifies the boundary consistently: just-inside / exact-edge / just-outside", () => {
+    // The boundary is INCLUSIVE: a confirmation EXACTLY one window old is FRESH
+    // (age == window is not yet "older than"), and so is one a hair inside it.
+    // Only a confirmation strictly past the edge is stale. The SQL `fresh`
+    // predicate mirrors this exact rule (`lastConfirmedAt >= cutoff`).
+    const window = DEFAULT_STALENESS_MONTHS * MONTH;
+    expect(isStale(ago(window - 1), NOW)).toBe(false); // just inside → fresh
+    expect(isStale(ago(window), NOW)).toBe(false); // exactly on the edge → fresh
+    expect(isStale(ago(window + 1), NOW)).toBe(true); // just outside → stale
+  });
 });
 
 describe("summarizeClaim", () => {
@@ -234,6 +245,19 @@ describe("deriveHeadlineSafetyState — honest celiac-safe vs gluten-friendly", 
     expect(
       deriveHeadlineSafetyState({ confirmCount: 0, disputeCount: 3, lastConfirmedAt: null }, NOW)
     ).toBe("gluten-friendly");
+  });
+
+  it("treats a confirm-majority with NULL recency as celiac-safe, NOT stale (ADR-007)", () => {
+    // `lastConfirmedAt` only moves on confirms, so a confirm-majority claim can
+    // carry a NULL timestamp. A never-confirmed claim is "not yet confirmed", not
+    // stale — so the headline is celiac-safe, not "may be stale". The SQL tiering
+    // in `browse.ts` mirrors this (NULL lastConfirmedAt counts as fresh → tier 4).
+    expect(
+      deriveHeadlineSafetyState({ confirmCount: 3, disputeCount: 0, lastConfirmedAt: null }, NOW)
+    ).toBe("celiac-safe");
+    expect(safetyTierRank({ confirmCount: 3, disputeCount: 0, lastConfirmedAt: null }, NOW)).toBe(
+      4
+    );
   });
 });
 
