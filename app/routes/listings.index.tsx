@@ -1,7 +1,13 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { ListingCard } from "~/components/listing/ListingCard";
+import {
+  BROWSE_SORT_OPTIONS,
+  type BrowseSort,
+  DEFAULT_BROWSE_SORT,
+  parseBrowseSort,
+} from "~/listings/sort";
 import { BROWSE_PAGE_SIZE, type BrowseListingsPage } from "~/server/listings/browse";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
 
@@ -20,27 +26,30 @@ import { fetchBrowseListings } from "~/server/listings/browse.fn";
 
 const browseSearchSchema = z.object({
   page: z.number().int().min(1).catch(1),
+  // `?sort=` mirrors the `?page=` URL-param pattern (#36): linkable, back/forward
+  // works. Unknown tokens degrade to the stable alphabetical default.
+  sort: z.string().catch(DEFAULT_BROWSE_SORT).transform(parseBrowseSort),
 });
 
-function browseQueryOptions(page: number) {
+function browseQueryOptions(page: number, sort: BrowseSort) {
   return queryOptions({
-    queryKey: ["browse-listings", page],
-    queryFn: () => fetchBrowseListings({ data: { page, pageSize: BROWSE_PAGE_SIZE } }),
+    queryKey: ["browse-listings", page, sort],
+    queryFn: () => fetchBrowseListings({ data: { page, pageSize: BROWSE_PAGE_SIZE, sort } }),
   });
 }
 
 export const Route = createFileRoute("/listings/")({
   validateSearch: browseSearchSchema,
-  loaderDeps: ({ search: { page } }) => ({ page }),
-  loader: async ({ context, deps: { page } }) => {
-    await context.queryClient.ensureQueryData(browseQueryOptions(page));
+  loaderDeps: ({ search: { page, sort } }) => ({ page, sort }),
+  loader: async ({ context, deps: { page, sort } }) => {
+    await context.queryClient.ensureQueryData(browseQueryOptions(page, sort));
   },
   component: BrowseListings,
 });
 
 function BrowseListings() {
-  const { page } = Route.useSearch();
-  const { data } = useSuspenseQuery(browseQueryOptions(page));
+  const { page, sort } = Route.useSearch();
+  const { data } = useSuspenseQuery(browseQueryOptions(page, sort));
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
@@ -55,7 +64,46 @@ function BrowseListings() {
         </p>
       </header>
 
+      <SortControl sort={sort} />
+
       {data.cards.length === 0 ? <BrowseEmptyState /> : <BrowseResults data={data} />}
+    </div>
+  );
+}
+
+/**
+ * URL-driven sort control (#36). An accessible, labeled `<select>` — selection,
+ * not colour, conveys state (styling.md). Changing it navigates to the same
+ * route with the new `?sort=` and RESETS to page 1 (the previous page index is
+ * meaningless under a new order), mirroring the `?page=` URL-param pattern.
+ *
+ * Options come from the shared `BROWSE_SORT_OPTIONS` registry, so #37's
+ * `distance` option appears here automatically once added there.
+ */
+function SortControl({ sort }: { sort: BrowseSort }) {
+  const navigate = useNavigate({ from: Route.fullPath });
+
+  return (
+    <div className="mt-section flex items-center gap-2">
+      <label htmlFor="browse-sort" className="text-body-sm font-medium text-foreground">
+        Sort by
+      </label>
+      <select
+        id="browse-sort"
+        value={sort}
+        onChange={(event) => {
+          const next = event.target.value as BrowseSort;
+          // Reset to page 1: a page index is meaningless across a re-ordering.
+          navigate({ search: { page: 1, sort: next } });
+        }}
+        className="rounded-card border border-border bg-surface px-3 py-2 text-body-sm font-medium text-foreground focus-visible:border-brand-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+      >
+        {BROWSE_SORT_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -94,7 +142,7 @@ function Pagination({ data }: { data: BrowseListingsPage }) {
       {hasPrev ? (
         <Link
           to="/listings"
-          search={{ page: data.page - 1 }}
+          search={{ page: data.page - 1, sort: data.sort }}
           className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface"
         >
           ← Previous
@@ -108,7 +156,7 @@ function Pagination({ data }: { data: BrowseListingsPage }) {
       {hasNext ? (
         <Link
           to="/listings"
-          search={{ page: data.page + 1 }}
+          search={{ page: data.page + 1, sort: data.sort }}
           className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface"
         >
           Next →

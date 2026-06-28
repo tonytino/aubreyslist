@@ -1,10 +1,12 @@
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { type SQL, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import { type Listing, attestations, claims, incidents, listings } from "~/db/schema";
+import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident } from "~/trust/incident-recency";
+import { buildSearchPredicate } from "./search";
 
 /**
  * Browse-list loader: every listing WITH its at-a-glance trust (issue #33).
@@ -40,6 +42,19 @@ export const browseListingsInputSchema = z.object({
   page: z.number().int().min(1).default(1),
   /** Page size; clamped to a sane maximum. Defaults to {@link BROWSE_PAGE_SIZE}. */
   pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(BROWSE_PAGE_SIZE),
+  /**
+   * Free-text search over name/address (#34). Empty/whitespace = no constraint,
+   * so the box being blank shows everything. COMBINABLE with sort + future
+   * filters — composed into the same `WHERE` (see {@link getBrowseListings}).
+   */
+  query: z.string().max(256).default(""),
+  /**
+   * Sort order (#36). One of the {@link BrowseSort} tokens; an unknown token
+   * degrades to the stable {@link DEFAULT_BROWSE_SORT} (alphabetical) rather than
+   * erroring. COMBINABLE with search/filters — sort only changes ORDER BY, never
+   * the `WHERE`, so pagination + total count stay correct.
+   */
+  sort: z.enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]]).catch(DEFAULT_BROWSE_SORT),
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
@@ -54,7 +69,9 @@ export interface BrowseListingsPage {
   cards: BrowseListingCard[];
   page: number;
   pageSize: number;
-  /** Total listing count (across all pages) for "showing X of Y" + paging. */
+  /** The sort applied to this page (echoed back so the UI can reflect state). */
+  sort: BrowseSort;
+  /** Total listing count (after search/filters) for "showing X of Y" + paging. */
   total: number;
   /** Whether a further page exists after this one. */
   hasMore: boolean;
@@ -73,14 +90,36 @@ export async function getBrowseListings(
   stalenessMonths?: number
 ): Promise<BrowseListingsPage> {
   const db = getDb();
-  const { page, pageSize } = input;
+  const { page, pageSize, sort } = input;
   const offset = (page - 1) * pageSize;
 
-  // 1. The page of listings (alphabetical — a stable, scannable default order).
-  //    One extra query for the total so the UI can render "X of Y" + has-more.
+  // The text-search predicate (#34). COMBINABLE with sort/filters: it is the
+  // shared `WHERE` applied to BOTH the page query and the total-count query, so
+  // pagination math stays correct under search. Blank query → `undefined` → no
+  // constraint. A future filter step would `and(searchPredicate, …filters)` here.
+  const searchPredicate = buildSearchPredicate(input.query);
+
+  // Per-listing celiac trust aggregate, as a subquery the ORDER BY can join to.
+  // This is the SAME visible evidence the glance derives from — net confirm
+  // consensus + `lastConfirmedAt` recency on the headline celiac claim — so the
+  // trust/recency sorts order by a roll-up of evidence, NOT an opaque score
+  // (ADR-007). Search/sort never touch each other: search lives in `WHERE`, sort
+  // in `ORDER BY`.
+  const trust = celiacTrustSubquery();
+  const orderBy = buildOrderBy(sort, trust);
+
+  // 1. The page of listings under the current search + sort, plus the matching
+  //    total (same `WHERE`) so the UI can render "X of Y" + has-more.
   const [pageListings, totalRows] = await Promise.all([
-    db.select().from(listings).orderBy(asc(listings.name)).limit(pageSize).offset(offset),
-    db.select({ total: sql<number>`count(*)` }).from(listings),
+    db
+      .select({ listing: listings })
+      .from(listings)
+      .leftJoin(trust, eq(trust.listingId, listings.id))
+      .where(searchPredicate)
+      .orderBy(...orderBy)
+      .limit(pageSize)
+      .offset(offset),
+    db.select({ total: sql<number>`count(*)` }).from(listings).where(searchPredicate),
   ]);
 
   const total = Number(totalRows[0]?.total ?? 0);
@@ -88,10 +127,12 @@ export async function getBrowseListings(
   // No listings on this page → return early; the batched signal queries below
   // would otherwise run `IN ()` (empty), which is wasteful.
   if (pageListings.length === 0) {
-    return { cards: [], page, pageSize, total, hasMore: false };
+    return { cards: [], page, pageSize, sort, total, hasMore: false };
   }
 
-  const listingIds = pageListings.map((listing) => listing.id);
+  const pageRows = pageListings.map((row) => row.listing);
+
+  const listingIds = pageRows.map((listing) => listing.id);
 
   // 2. + 3. Batch the two trust signals for exactly this page's listings.
   const [celiacAggregates, recentIncidentIds] = await Promise.all([
@@ -99,7 +140,7 @@ export async function getBrowseListings(
     getRecentIncidentListingIds(listingIds, now),
   ]);
 
-  const cards: BrowseListingCard[] = pageListings.map((listing) => ({
+  const cards: BrowseListingCard[] = pageRows.map((listing) => ({
     listing,
     glance: deriveListingTrustGlance(
       celiacAggregates.get(listing.id) ?? null,
@@ -109,7 +150,73 @@ export async function getBrowseListings(
     ),
   }));
 
-  return { cards, page, pageSize, total, hasMore: offset + pageListings.length < total };
+  return { cards, page, pageSize, sort, total, hasMore: offset + pageRows.length < total };
+}
+
+/**
+ * Subquery: per listing, the headline celiac claim's net confirm consensus and
+ * recency — the SAME visible evidence the at-a-glance trust derives from.
+ *
+ * - `netConfirms` = confirms − disputes on the `celiac_safe_vs_gluten_friendly`
+ *   claim. Higher = stronger community consensus that cross-contamination is
+ *   taken seriously. Listings with no such claim have no row here (LEFT JOIN
+ *   yields NULL → coalesced to a floor when ordering, so they sort last).
+ * - `lastConfirmedAt` = the claim's stored recency signal (NULL until first
+ *   confirm).
+ *
+ * This is a roll-up of evidence the user can also see (ADR-007), never a score.
+ */
+function celiacTrustSubquery() {
+  return getDb()
+    .select({
+      listingId: claims.listingId,
+      netConfirms:
+        sql<number>`count(*) filter (where ${attestations.value} = 'confirm') - count(*) filter (where ${attestations.value} = 'dispute')`.as(
+          "net_confirms"
+        ),
+      lastConfirmedAt: sql<Date | null>`${claims.lastConfirmedAt}`.as("last_confirmed_at"),
+    })
+    .from(claims)
+    .leftJoin(attestations, eq(attestations.claimId, claims.id))
+    .where(sql`${claims.attribute} = 'celiac_safe_vs_gluten_friendly'`)
+    .groupBy(claims.listingId, claims.lastConfirmedAt)
+    .as("celiac_trust");
+}
+
+type CeliacTrustSubquery = ReturnType<typeof celiacTrustSubquery>;
+
+/**
+ * The explicit ORDER BY for each sort (#36). Defined here so the ordering rules
+ * are single-sourced and the registry in `app/listings/sort.ts` stays the only
+ * other place to touch when adding a sort.
+ *
+ * EXTENSIBLE: adding #37's `distance` is a new `case` here (ordering by the
+ * haversine distance from the user's lat/lng) plus its registry entry — no
+ * rewrite of this function or the loader.
+ *
+ * NULL handling: listings with no celiac claim have NULL trust columns. We
+ * coalesce `netConfirms` to a floor so unattested listings sort LAST on trust,
+ * and put `lastConfirmedAt NULLS LAST` so never-confirmed listings sort last on
+ * recency. Every sort ends with `name ASC` as a stable tiebreaker so the order
+ * is deterministic (no arbitrary row shuffling between requests).
+ */
+function buildOrderBy(sort: BrowseSort, trust: CeliacTrustSubquery): SQL[] {
+  const nameTiebreak = asc(listings.name);
+  // Unattested → very low net so they fall to the bottom of a trust sort.
+  const netConfirms = sql`coalesce(${trust.netConfirms}, -2147483648)`;
+  const recency = sql`${trust.lastConfirmedAt}`;
+
+  switch (sort) {
+    case "trust":
+      // Strongest consensus first, then most recently confirmed, then name.
+      return [desc(netConfirms), sql`${recency} desc nulls last`, nameTiebreak];
+    case "recency":
+      // Most recently confirmed first, then strongest consensus, then name.
+      return [sql`${recency} desc nulls last`, desc(netConfirms), nameTiebreak];
+    default:
+      // Alphabetical — the stable, scannable default.
+      return [nameTiebreak];
+  }
 }
 
 /**
