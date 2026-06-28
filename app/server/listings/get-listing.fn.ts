@@ -9,8 +9,9 @@ import { getListing, getListingInputSchema } from "./get-listing";
  * `app/server/listings/browse.fn.ts`, `app/server/incidents/incidents.fn.ts`),
  * the db-touching implementation lives in `./get-listing.ts` and the TanStack
  * Start plugin strips this handler's body out of the browser bundle — so the
- * route loader running on the client during navigation never drags `getDb`
- * (neon/drizzle) into the client build (the #93 client-bundle-leak pattern).
+ * `/listings/$id` route loader running on the client during navigation no longer
+ * pulls `getDb` (neon/drizzle) into its own client graph: the `findFirst` body
+ * now lives behind this server fn (the #93 client-bundle-leak pattern).
  *
  * Validated input (the dynamic `$id` segment), so a malformed id is rejected
  * before it reaches the DB. Returns `null` for a non-existent id; the route
