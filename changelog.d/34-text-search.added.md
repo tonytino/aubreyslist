@@ -1,0 +1,1 @@
+- `[manual]` Added server-side text search over listing name/address (case-insensitive `ILIKE`, composable with the filters/sort to come). Cuisine isn't modeled in v1, so search covers name + address for now.

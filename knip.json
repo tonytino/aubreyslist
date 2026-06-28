@@ -9,6 +9,7 @@
     "app/routes/api.$.ts",
     "app/server/index.ts",
     "app/server/places.ts",
+    "app/server/listings/search.ts",
     "app.config.ts",
     "scripts/labels.mjs",
     "scripts/remove-example.mjs"
