@@ -3,14 +3,18 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { CommunityClaims } from "~/components/listing/CommunityClaims";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { TrustPlaceholder } from "~/components/listing/TrustPlaceholder";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
+import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents, findRecentIncident } from "~/server/incidents";
+import { getSetting } from "~/server/settings";
+import { deriveHeadlineSafetyState } from "~/trust/summary";
 
 /**
  * Server-only loader for a single listing by id. Validated input (the dynamic
@@ -26,6 +30,25 @@ const getListing = createServerFn({ method: "GET" })
     });
     return listing ?? null;
   });
+
+/**
+ * Server-only loader for a listing's claims WITH their aggregates (confirm/
+ * dispute counts + recency) in one batched query — the transparent trust
+ * roll-up the detail page renders (#29, ADR-007). Reads are open/anonymous.
+ */
+const getListingClaims = createServerFn({ method: "GET" })
+  .validator(z.object({ id: z.string().min(1) }))
+  .handler(({ data: { id } }) => getListingClaimAggregates({ listingId: id }));
+
+/**
+ * Server-only read of the admin-tunable staleness window (ADR-007). Read here so
+ * the staleness flag on the headline cue + each claim's roll-up reflects the
+ * configured `staleness_months` AppSetting rather than a hard-coded default;
+ * {@link getSetting} falls back to the in-code default on an unset/corrupt row.
+ */
+const getStalenessMonths = createServerFn({ method: "GET" }).handler(() =>
+  getSetting("staleness_months")
+);
 
 /**
  * Whether the visitor is signed in — gates the incident submission form (UX
@@ -57,21 +80,37 @@ export const Route = createFileRoute("/listings/$id")({
     if (!listing) {
       throw notFound();
     }
+    // Only fetch the trust roll-up once we know the listing exists (#29).
+    const [claims, stalenessMonths] = await Promise.all([
+      getListingClaims({ data: { id } }),
+      getStalenessMonths(),
+    ]);
     // Resolve "now" ONCE on the server and pass it down as epoch ms, so the
     // recency window + relative phrasing use the same instant on SSR and after
     // hydration — no banner flicker or off-by-one at day/window edges.
-    return { listing, isSignedIn, nowMs: Date.now() };
+    return { listing, isSignedIn, claims, stalenessMonths, nowMs: Date.now() };
   },
   component: ListingDetail,
   notFoundComponent: ListingNotFound,
 });
 
 function ListingDetail() {
-  const { listing, isSignedIn, nowMs } = Route.useLoaderData();
+  const { listing, isSignedIn, claims, stalenessMonths, nowMs } = Route.useLoaderData();
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
   const now = new Date(nowMs);
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
   const recentIncident = findRecentIncident(incidents, now);
+
+  // Headline celiac-safe vs gluten-friendly cue, derived from the
+  // `celiac_safe_vs_gluten_friendly` claim's VISIBLE aggregate (#29, ADR-007).
+  // No such claim / no attestation evidence → `null`, so SafetySummary keeps
+  // its honest "Not yet attested" empty state (never a fabricated rating).
+  const headlineClaim = claims.find(
+    (claim) => claim.attribute === "celiac_safe_vs_gluten_friendly"
+  );
+  const safetyState = headlineClaim
+    ? deriveHeadlineSafetyState(headlineClaim, new Date(), stalenessMonths)
+    : null;
 
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-section bg-background px-4 py-10 text-foreground sm:px-6">
@@ -86,8 +125,8 @@ function ListingDetail() {
         <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
       ) : null}
 
-      {/* Headline celiac-safe vs gluten-friendly cue (placeholder until EPIC 4). */}
-      <SafetySummary state={null} />
+      {/* Headline celiac-safe vs gluten-friendly cue, derived from visible evidence (#29). */}
+      <SafetySummary state={safetyState} />
 
       {/* Primary action: deep-link to Google Maps (ADR-009 — no embedded map). */}
       <section aria-label="Links" className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -113,11 +152,26 @@ function ListingDetail() {
         ) : null}
       </section>
 
-      {/* EPIC 4 (#28/#29) slots — honest empty states, never fake data. */}
-      <TrustPlaceholder
-        title="Community claims"
-        description="Confirmed and disputed claims about this restaurant — dedicated fryer, cross-contamination protocol, GF menu, and more — will appear here once the community starts attesting."
-      />
+      {/* EPIC 4 slots — honest empty states, never fake data. */}
+      {claims.length > 0 ? (
+        // Real, transparent trust roll-up — confirm/dispute counts + recency,
+        // all derived from visible evidence (#29, ADR-007).
+        <section aria-labelledby="community-claims-heading" className="flex flex-col gap-3">
+          <h2 id="community-claims-heading" className="text-title">
+            Community claims
+          </h2>
+          <p className="text-body-sm text-muted-foreground">
+            What the community has confirmed or disputed about this restaurant. Each summary is a
+            roll-up of the visible attestations below it — never a hidden score.
+          </p>
+          <CommunityClaims claims={claims} stalenessMonths={stalenessMonths} />
+        </section>
+      ) : (
+        <TrustPlaceholder
+          title="Community claims"
+          description="Confirmed and disputed claims about this restaurant — dedicated fryer, cross-contamination protocol, GF menu, and more — will appear here once the community starts attesting."
+        />
+      )}
 
       <TrustPlaceholder
         title="Incident reports"
