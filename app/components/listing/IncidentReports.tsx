@@ -4,6 +4,7 @@ import { SafetySignal } from "~/components/SafetySignal";
 import type { Incident } from "~/db/schema";
 import { removeIncident, submitIncident, updateIncident } from "~/server/incidents/incidents.fn";
 import { INCIDENT_SEVERITIES } from "~/trust/incident-recency";
+import { FlagControl } from "./FlagControl";
 import { formatIncidentDate, formatSeverity } from "./incident-format";
 
 /** Query key for a listing's incident list — shared so a write can invalidate it. */
@@ -80,6 +81,8 @@ function IncidentList({
           incident={incident}
           // Owner-only controls: render edit/retract iff the viewer owns this row.
           isOwn={viewerId !== null && viewerId === incident.userId}
+          // Any signed-in viewer can flag a report (#39); the server re-gates.
+          isSignedIn={viewerId !== null}
         />
       ))}
     </ul>
@@ -91,10 +94,12 @@ function IncidentItem({
   listingId,
   incident,
   isOwn,
+  isSignedIn,
 }: {
   listingId: string;
   incident: Incident;
   isOwn: boolean;
+  isSignedIn: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -128,6 +133,15 @@ function IncidentItem({
               onEdit={() => setIsEditing(true)}
             />
           ) : null}
+          {/* Flag this report as inappropriate/spam/wrong (#39). Login-gated;
+              the control renders nothing for anonymous viewers and the server
+              re-gates regardless. */}
+          <FlagControl
+            target="incident"
+            incidentId={incident.id}
+            isSignedIn={isSignedIn}
+            label="Flag report"
+          />
         </>
       )}
     </li>

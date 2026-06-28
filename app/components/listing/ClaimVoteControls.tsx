@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { AttestationValue } from "~/db/schema";
 import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
 import { claimsQueryKey } from "./CommunityClaims";
+import { FlagControl } from "./FlagControl";
 
 interface ClaimVoteControlsProps {
   listingId: string;
@@ -100,6 +101,9 @@ export function ClaimVoteControls({
             Retract
           </button>
         ) : null}
+        {/* Flag this claim as inappropriate/spam/wrong (#39). Login-gated; the
+            server re-gates regardless, so the control is UX only. */}
+        <FlagControl target="claim" claimId={claimId} isSignedIn={isSignedIn} label="Flag claim" />
       </div>
 
       {error ? (

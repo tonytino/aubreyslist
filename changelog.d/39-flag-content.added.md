@@ -1,0 +1,1 @@
+- `[manual]` Added login-gated, rate-limited content flagging for listings, claims, and incidents (#39).
