@@ -17,8 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // hoisted block exposes the mock fns + mutable test state we assert on.
 //
 // DB chains modeled:
+//   read claim:    getDb().select().from().where().limit()   -> [{ moderationStatus, lastConfirmedAt }]
 //   read counts:   getDb().select().from().where().groupBy() -> grouped rows
-//   read claim:    getDb().select().from().where().limit()   -> [{ lastConfirmedAt }]
 //   recompute max: getDb().select().from().where()           -> [{ lastConfirmedAt }]
 //   upsert:        getDb().insert().values().onConflictDoUpdate()
 //   bump/recompute:getDb().update().set().where()
@@ -26,7 +26,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => {
   const state = {
     groupByRows: [] as Array<{ value: string; n: number }>,
-    limitRows: [] as Array<{ lastConfirmedAt: Date | null }>,
+    // The claim-row lookup now also carries `moderationStatus` (#41): the
+    // aggregate only scans attestations for a `visible` claim.
+    limitRows: [] as Array<{
+      moderationStatus?: "visible" | "hidden" | "removed";
+      lastConfirmedAt: Date | null;
+    }>,
     // The recompute helper's `select().from().where()` resolves directly (no
     // `.groupBy()`/`.limit()`): MAX(updatedAt) over the surviving confirms.
     maxRows: [] as Array<{ lastConfirmedAt: Date | null }>,
@@ -321,7 +326,7 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       { value: "dispute", n: 1 },
     ];
     const when = new Date("2026-06-01T00:00:00Z");
-    state.limitRows = [{ lastConfirmedAt: when }];
+    state.limitRows = [{ moderationStatus: "visible", lastConfirmedAt: when }];
 
     const agg = await getClaimAggregate({ claimId: "claim-1" });
 
@@ -335,7 +340,7 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
 
   it("returns zero counts and null recency for a claim with no attestations", async () => {
     state.groupByRows = [];
-    state.limitRows = [{ lastConfirmedAt: null }];
+    state.limitRows = [{ moderationStatus: "visible", lastConfirmedAt: null }];
 
     const agg = await getClaimAggregate({ claimId: "claim-empty" });
 
@@ -353,7 +358,8 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
 
     const agg = await getClaimAggregate({ claimId: "ghost" });
 
-    expect(agg.confirmCount).toBe(2);
+    // A missing claim is treated as not-found: zeroed aggregate, never counts.
+    expect(agg.confirmCount).toBe(0);
     expect(agg.disputeCount).toBe(0);
     expect(agg.lastConfirmedAt).toBeNull();
   });
@@ -361,11 +367,51 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
   it("does not require auth (reads are open)", async () => {
     state.signedIn = false; // would block a write, but reads must stay anonymous
     state.groupByRows = [{ value: "dispute", n: 3 }];
-    state.limitRows = [{ lastConfirmedAt: null }];
+    state.limitRows = [{ moderationStatus: "visible", lastConfirmedAt: null }];
 
     const agg = await getClaimAggregate({ claimId: "claim-1" });
 
     expect(agg.disputeCount).toBe(3);
     expect(requireCurrentUserMock).not.toHaveBeenCalled();
+  });
+
+  // --- #41: a hidden/removed claim must NOT leak its trust roll-up ----------
+  it("returns the ZEROED aggregate for a HIDDEN claim — never its counts (#41, ADR-007)", async () => {
+    // The DB has real attestations, but the claim is hidden. The public read
+    // must NOT expose them: it bails on visibility BEFORE scanning attestations.
+    state.groupByRows = [
+      { value: "confirm", n: 9 },
+      { value: "dispute", n: 0 },
+    ];
+    state.limitRows = [
+      { moderationStatus: "hidden", lastConfirmedAt: new Date("2026-06-01T00:00:00Z") },
+    ];
+
+    const agg = await getClaimAggregate({ claimId: "claim-hidden" });
+
+    expect(agg).toEqual({
+      claimId: "claim-hidden",
+      confirmCount: 0,
+      disputeCount: 0,
+      lastConfirmedAt: null,
+    });
+    // No attestation scan happened — the visibility gate short-circuited first.
+    expect(h.groupByMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the ZEROED aggregate for a REMOVED claim", async () => {
+    state.groupByRows = [{ value: "confirm", n: 4 }];
+    state.limitRows = [
+      { moderationStatus: "removed", lastConfirmedAt: new Date("2026-06-01T00:00:00Z") },
+    ];
+
+    const agg = await getClaimAggregate({ claimId: "claim-removed" });
+
+    expect(agg).toEqual({
+      claimId: "claim-removed",
+      confirmCount: 0,
+      disputeCount: 0,
+      lastConfirmedAt: null,
+    });
   });
 });

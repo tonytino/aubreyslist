@@ -43,6 +43,10 @@ describe("buildTaxonomyFilterPredicate", () => {
     expect(lower).toContain("'dispute'");
     // Scoped to the requested attribute (bound as a parameter).
     expect(params).toContain("dedicated_fryer");
+    // Visibility (#41): only `visible` claims count toward consensus, so a
+    // hidden/removed claim can never make a listing match the filter.
+    expect(lower).toContain("moderation_status");
+    expect(params).toContain("visible");
   });
 
   it("AND-combines one EXISTS per attribute for a multi-attribute selection", () => {

@@ -1,4 +1,4 @@
-import { type SQL, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import {
@@ -122,7 +122,13 @@ export async function getBrowseListings(
   // (#35), AND-combined. The SAME predicate constrains both the page query and
   // the count query, so the total reflects the active filters and pagination
   // stays correct. `undefined` (nothing selected) → drizzle applies no WHERE.
-  const where = buildBrowseWhere(buildSearchPredicate(input.q ?? ""), input.attrs);
+  //
+  // Visibility (#41): this is a PUBLIC read, so non-`visible` listings
+  // (hidden/removed) are excluded — `AND`-folded with the search/filter so the
+  // page, the total count, and pagination all reflect ONLY visible listings.
+  const visibleListing = eq(listings.moderationStatus, "visible");
+  const searchAndFilter = buildBrowseWhere(buildSearchPredicate(input.q ?? ""), input.attrs);
+  const where = searchAndFilter ? and(visibleListing, searchAndFilter) : visibleListing;
 
   // The ORDER BY (#36). Search/filter live in the WHERE above; sort only touches
   // the ORDER BY, so the three compose cleanly. The trust sort joins a per-listing
@@ -205,22 +211,28 @@ export async function getBrowseListings(
  * of evidence the user can also see, never a score.
  */
 function celiacTrustSubquery() {
-  return getDb()
-    .select({
-      listingId: claims.listingId,
-      confirmCount: sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`.as(
-        "confirm_count"
-      ),
-      disputeCount: sql<number>`count(*) filter (where ${attestations.value} = 'dispute')`.as(
-        "dispute_count"
-      ),
-      lastConfirmedAt: sql<Date | null>`${claims.lastConfirmedAt}`.as("last_confirmed_at"),
-    })
-    .from(claims)
-    .leftJoin(attestations, eq(attestations.claimId, claims.id))
-    .where(sql`${claims.attribute} = 'celiac_safe_vs_gluten_friendly'`)
-    .groupBy(claims.listingId, claims.lastConfirmedAt)
-    .as("celiac_trust");
+  return (
+    getDb()
+      .select({
+        listingId: claims.listingId,
+        confirmCount: sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`.as(
+          "confirm_count"
+        ),
+        disputeCount: sql<number>`count(*) filter (where ${attestations.value} = 'dispute')`.as(
+          "dispute_count"
+        ),
+        lastConfirmedAt: sql<Date | null>`${claims.lastConfirmedAt}`.as("last_confirmed_at"),
+      })
+      .from(claims)
+      .leftJoin(attestations, eq(attestations.claimId, claims.id))
+      // Visibility (#41): only `visible` claims feed the trust sort, so a hidden/
+      // removed claim cannot influence ordering (matches the displayed glance).
+      .where(
+        sql`${claims.attribute} = 'celiac_safe_vs_gluten_friendly' and ${claims.moderationStatus} = 'visible'`
+      )
+      .groupBy(claims.listingId, claims.lastConfirmedAt)
+      .as("celiac_trust")
+  );
 }
 
 type CeliacTrustSubquery = ReturnType<typeof celiacTrustSubquery>;
@@ -360,8 +372,11 @@ async function getCeliacAggregatesByListing(
     })
     .from(claims)
     .leftJoin(attestations, eq(attestations.claimId, claims.id))
+    // Visibility (#41): only `visible` claims contribute to a card's headline
+    // celiac aggregate, so a hidden/removed claim drops out and the confirm/
+    // dispute counts recompute from the survivors.
     .where(
-      sql`${claims.listingId} in ${listingIds} and ${claims.attribute} = 'celiac_safe_vs_gluten_friendly'`
+      sql`${claims.listingId} in ${listingIds} and ${claims.attribute} = 'celiac_safe_vs_gluten_friendly' and ${claims.moderationStatus} = 'visible'`
     )
     .groupBy(claims.listingId, claims.id, claims.lastConfirmedAt);
 
@@ -387,7 +402,13 @@ async function getRecentIncidentListingIds(listingIds: string[], now: Date): Pro
   const rows = await getDb()
     .select({ listingId: incidents.listingId, occurredOn: incidents.occurredOn })
     .from(incidents)
-    .where(inArray(incidents.listingId, listingIds));
+    // Visibility (#41): a hidden/removed incident no longer flags the card's
+    // recent-incident signal — only `visible` incidents count. This is the
+    // trust-model guarantee in reverse: moderation can drop a moderated-away
+    // incident, but a real, still-visible recent incident is never buried.
+    .where(
+      and(inArray(incidents.listingId, listingIds), eq(incidents.moderationStatus, "visible"))
+    );
 
   // Group incidents per listing, then ask `findRecentIncident` per group so the
   // window definition stays single-sourced (#30).

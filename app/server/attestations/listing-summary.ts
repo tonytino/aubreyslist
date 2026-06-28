@@ -67,7 +67,11 @@ export async function getListingClaimAggregates(
     })
     .from(claims)
     .leftJoin(attestations, eq(attestations.claimId, claims.id))
-    .where(eq(claims.listingId, input.listingId))
+    // Visibility (#41): this is a PUBLIC read, so a hidden/removed claim is
+    // excluded entirely — it drops off the "Community claims" surface AND out of
+    // the headline celiac-safe vs. gluten-friendly cue, whose counts recompute
+    // from the surviving visible claims/attestations.
+    .where(and(eq(claims.listingId, input.listingId), eq(claims.moderationStatus, "visible")))
     .groupBy(claims.id, claims.attribute, claims.lastConfirmedAt);
 
   // Resolve the viewer's OWN vote per claim so the UI can show + change/retract

@@ -59,12 +59,19 @@ import type {
  * List a listing's incidents ordered most-recent-first by `occurredOn` (ties
  * broken by `createdAt` so the same-day ordering is stable and deterministic).
  * Open and unmetered — reads stay anonymous (domain.md, "Read is open").
+ *
+ * Visibility-aware (#41): this is a PUBLIC read, so a hidden/removed incident
+ * (`moderationStatus != 'visible'`) is excluded from BOTH the incident list and
+ * the recent-incident banner (which is derived from this same list on the detail
+ * page). This directly serves the trust principle "recent harm is never buried"
+ * (domain.md → Trust Model): a real, still-visible recent incident always stays
+ * — only an incident a moderator has hidden/removed drops out.
  */
 export async function listIncidents(input: ListIncidentsInput): Promise<Incident[]> {
   return getDb()
     .select()
     .from(incidents)
-    .where(eq(incidents.listingId, input.listingId))
+    .where(and(eq(incidents.listingId, input.listingId), eq(incidents.moderationStatus, "visible")))
     .orderBy(desc(incidents.occurredOn), desc(incidents.createdAt));
 }
 

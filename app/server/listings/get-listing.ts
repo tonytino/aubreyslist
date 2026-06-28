@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
@@ -17,6 +17,14 @@ export type GetListingInput = z.infer<typeof getListingInputSchema>;
  * non-existent id; the route loader turns that into a `notFound()` so the
  * not-found UI renders (rather than crashing or 500-ing).
  *
+ * Visibility-aware (#41): this is a PUBLIC read, so a hidden/removed listing
+ * (`moderationStatus != 'visible'`) is treated exactly like a non-existent one —
+ * it returns `null` and the route 404s. A moderated-away listing must not be
+ * reachable by direct link; the content is only soft-moderated, so a moderator
+ * can restore it, but the public never sees it. Hidden/removed CLAIMS and
+ * INCIDENTS are filtered out in their own loaders (`listing-summary`,
+ * `incidents/index`).
+ *
  * Server-only: imports the DB client. The client-callable `createServerFn`
  * wrapper lives in `./get-listing.fn.ts`, whose handler body the TanStack Start
  * plugin strips from the browser bundle — so this never drags `getDb`
@@ -24,7 +32,7 @@ export type GetListingInput = z.infer<typeof getListingInputSchema>;
  */
 export async function getListing({ id }: GetListingInput): Promise<Listing | null> {
   const listing = await getDb().query.listings.findFirst({
-    where: eq(listings.id, id),
+    where: and(eq(listings.id, id), eq(listings.moderationStatus, "visible")),
   });
   return listing ?? null;
 }

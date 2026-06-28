@@ -6,8 +6,8 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   ModerationQueue as ModerationQueueData,
   QueueItem,
@@ -16,18 +16,34 @@ import { ModerationQueue } from "./ModerationQueue";
 import { moderationQueueQueryKey } from "./moderation-queue-query";
 
 /**
- * Component tests for the moderation-queue surface (#40).
+ * Component tests for the moderation-queue surface (#40, ACTIONS #41).
  *
  * The queue reads its data from TanStack Query via `useSuspenseQuery`, so we
  * seed the cache directly (no network) and assert the rendered triage context:
  * the target chip (icon SHAPE + TEXT label, never colour alone), the reason, the
- * reporter, the date, and the disabled "actions coming" placeholder (#41 not
- * built). It also renders TanStack Router `Link`s for targets with a listing, so
+ * reporter, the date, and the real Dismiss / Hide / Remove action controls
+ * (#41). It also renders TanStack Router `Link`s for targets with a listing, so
  * we mount inside a tiny in-memory router whose tree includes `/listings/$id`.
  *
- * The ACCESS gate itself is covered server-side in `queue.test.ts`; here the
- * cache always holds a granted verdict (what a moderator/admin would receive).
+ * The action server functions are mocked so we assert the UI wires the right
+ * payload (exclusive-arc target + prompting flag id) and invalidates the queue on
+ * success — the real server gate/validation is covered in `actions.test.ts`. The
+ * ACCESS gate itself is covered server-side in `queue.test.ts`; here the cache
+ * always holds a granted verdict (what a moderator/admin would receive).
  */
+
+const mocks = vi.hoisted(() => ({
+  dismissFlagAction: vi.fn(() => Promise.resolve()),
+  hideContentAction: vi.fn(() => Promise.resolve()),
+  removeContentAction: vi.fn(() => Promise.resolve()),
+  restoreContentAction: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("~/server/moderation/actions.fn", () => mocks);
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 function reporter() {
   return { name: "Rep Orter", email: "rep@example.com" };
@@ -132,11 +148,58 @@ describe("ModerationQueue", () => {
     expect(screen.getByText("Got glutened")).toBeInTheDocument();
   });
 
-  it("renders a disabled 'actions coming' placeholder (actions land with #41)", async () => {
+  it("renders the Dismiss / Hide / Remove action controls (icon + text label) (#41)", async () => {
     renderQueue({ access: "granted", items: [item({})] });
 
-    const action = await screen.findByRole("button", { name: /Actions coming soon/i });
-    expect(action).toBeDisabled();
+    expect(await screen.findByRole("button", { name: /Dismiss/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Hide/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Remove/i })).toBeEnabled();
+  });
+
+  it("Hide calls hideContentAction with the exclusive-arc target + prompting flag id", async () => {
+    renderQueue({
+      access: "granted",
+      items: [
+        item({
+          id: "flag-7",
+          target: { type: "listing", id: "listing-9", label: "Cafe", listingId: "listing-9" },
+        }),
+      ],
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Hide/i }));
+
+    await waitFor(() => expect(mocks.hideContentAction).toHaveBeenCalledTimes(1));
+    expect(mocks.hideContentAction).toHaveBeenCalledWith({
+      data: { target: "listing", listingId: "listing-9", flagId: "flag-7" },
+    });
+  });
+
+  it("Dismiss/Remove send the target type matching the flagged content (claim/incident)", async () => {
+    renderQueue({
+      access: "granted",
+      items: [
+        item({
+          id: "flag-c",
+          target: { type: "claim", id: "claim-2", label: "Dedicated fryer", listingId: "l2" },
+        }),
+      ],
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Dismiss/i }));
+    await waitFor(() => expect(mocks.dismissFlagAction).toHaveBeenCalledTimes(1));
+    expect(mocks.dismissFlagAction).toHaveBeenCalledWith({
+      data: { target: "claim", claimId: "claim-2", flagId: "flag-c" },
+    });
+  });
+
+  it("shows an inline error when an action fails", async () => {
+    mocks.removeContentAction.mockRejectedValueOnce(new Error("Requires moderator privileges."));
+    renderQueue({ access: "granted", items: [item({})] });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Remove/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/moderator privileges/i);
   });
 
   it("shows a no-access message when the verdict is not granted", async () => {

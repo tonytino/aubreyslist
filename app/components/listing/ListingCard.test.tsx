@@ -32,6 +32,7 @@ const baseListing: Listing = {
   lng: -104.9903,
   mapsUrl: "https://maps.google.com/?q=acme",
   menuUrl: null,
+  moderationStatus: "visible",
   createdAt: new Date(),
   updatedAt: new Date(),
 };

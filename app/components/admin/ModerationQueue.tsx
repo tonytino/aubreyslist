@@ -1,23 +1,36 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useId, useState } from "react";
 import type { ReactNode } from "react";
-import type { QueueItem, QueueTargetType } from "~/server/moderation/queue.fn";
-import { moderationQueueQueryOptions } from "./moderation-queue-query";
+import {
+  dismissFlagAction,
+  hideContentAction,
+  removeContentAction,
+} from "~/server/moderation/actions.fn";
+import type { QueueItem, QueueTarget, QueueTargetType } from "~/server/moderation/queue.fn";
+import { moderationQueueQueryKey, moderationQueueQueryOptions } from "./moderation-queue-query";
 
 /**
- * The moderation-queue surface inside the admin panel (issue #40).
+ * The moderation-queue surface inside the admin panel (issue #40, ACTIONS #41).
  *
  * Lists OPEN flags for moderators/admins to triage — each with its target
  * (type + human label), the reporter, the reason, and the date filed. Data comes
  * from TanStack Query (the route loader prefetches it; this reads the hydrated
  * cache), per the API doc's "no useEffect + useState for data fetching" rule.
  *
- * Moderation ACTIONS (hide / remove / dismiss) land with #41; this surface only
- * renders the queue and a clearly-labelled, disabled "actions coming" affordance
- * so there is an obvious place for them without faking behaviour here.
+ * Moderation ACTIONS (#41): each row now carries real Dismiss / Hide / Remove
+ * controls wired through `*.fn.ts` server functions via TanStack Query
+ * `useMutation`. The server re-gates every action to moderator+ (admins pass;
+ * `user` 403; anon 401) and validates input, so the UI is convenience only — it
+ * is never the access control. On success the queue is invalidated and refetched,
+ * so the acted-on flag (now resolved/dismissed) drops out of the open-flags view.
+ * (`restore` exists in the action layer for un-hiding content, but is not
+ * surfaced HERE because the open-flags queue only ever shows still-visible,
+ * un-acted content — there is nothing to restore in this view.)
  *
- * Accessibility: the per-item target type is conveyed by an icon SHAPE plus a
- * TEXT label (never colour alone), mirroring `SafetySignal`'s contract.
+ * Accessibility: the per-item target type AND every action are conveyed by an
+ * icon SHAPE plus a TEXT label (never colour alone), mirroring `SafetySignal`'s
+ * contract.
  */
 export function ModerationQueue() {
   const { data } = useSuspenseQuery(moderationQueueQueryOptions());
@@ -54,7 +67,7 @@ export function ModerationQueue() {
   );
 }
 
-/** One flagged item: target, reason, reporter, date, and the (pending) actions. */
+/** One flagged item: target, reason, reporter, date, and the moderation actions. */
 function QueueRow({ item }: { item: QueueItem }) {
   const { target } = item;
   return (
@@ -91,20 +104,147 @@ function QueueRow({ item }: { item: QueueItem }) {
         Reported by {item.reporter.name} ({item.reporter.email})
       </p>
 
-      {/* Moderation actions (hide / remove / dismiss) land with #41. A disabled,
-          clearly-labelled control marks where they go without faking behaviour. */}
-      <div className="mt-1">
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          title="Moderation actions are coming soon (#41)."
-          className="rounded-chip border border-border px-2.5 py-1 text-caption font-medium text-muted-foreground opacity-60"
-        >
-          Actions coming soon
-        </button>
-      </div>
+      <QueueActions flagId={item.id} target={target} />
     </article>
+  );
+}
+
+/** The exclusive-arc action payload (target + prompting flag) the server fns accept. */
+type ActionPayload =
+  | { target: "listing"; listingId: string; flagId: string }
+  | { target: "claim"; claimId: string; flagId: string }
+  | { target: "incident"; incidentId: string; flagId: string };
+
+/**
+ * Build the exclusive-arc action payload from the queue row's resolved target
+ * (its `id` is the listing/claim/incident id, never the flag id) plus the
+ * prompting `flagId`. Returning the discriminated union directly keeps the
+ * payload's `target` literal in lockstep with its id field for the server fns.
+ */
+function buildActionPayload(target: QueueTarget, flagId: string): ActionPayload {
+  switch (target.type) {
+    case "listing":
+      return { target: "listing", listingId: target.id, flagId };
+    case "claim":
+      return { target: "claim", claimId: target.id, flagId };
+    case "incident":
+      return { target: "incident", incidentId: target.id, flagId };
+  }
+}
+
+/**
+ * Dismiss / Hide / Remove controls for one open flag (#41).
+ *
+ * Each calls its `*.fn.ts` server function (which re-gates to moderator+ and
+ * validates server-side) via `useMutation`, passing the prompting `flagId` and
+ * the exclusive-arc target. On success the whole queue query is invalidated so
+ * the now-resolved/dismissed flag drops out — a simple, always-correct refresh
+ * (the acted-on row leaves the open-flags set). An inline alert surfaces any
+ * error; controls disable while a mutation is in flight.
+ */
+function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget }) {
+  const queryClient = useQueryClient();
+  const errorId = useId();
+  const [error, setError] = useState<string | null>(null);
+
+  const payload = buildActionPayload(target, flagId);
+
+  function onError(err: unknown) {
+    setError(
+      err instanceof Error ? err.message : "Could not complete the action. Please try again."
+    );
+  }
+
+  function onSuccess() {
+    setError(null);
+    // Invalidate-on-success: refetch the queue so the acted-on flag leaves the
+    // open-flags view (it is now resolved/dismissed).
+    void queryClient.invalidateQueries({ queryKey: moderationQueueQueryKey });
+  }
+
+  const dismiss = useMutation({
+    mutationFn: () => dismissFlagAction({ data: payload }),
+    onSuccess,
+    onError,
+  });
+  const hide = useMutation({
+    mutationFn: () => hideContentAction({ data: payload }),
+    onSuccess,
+    onError,
+  });
+  const remove = useMutation({
+    mutationFn: () => removeContentAction({ data: payload }),
+    onSuccess,
+    onError,
+  });
+
+  const pending = dismiss.isPending || hide.isPending || remove.isPending;
+
+  return (
+    <div className="mt-1 flex flex-col gap-2">
+      <div className="flex flex-wrap gap-2">
+        <ActionButton
+          label="Dismiss"
+          tone="neutral"
+          disabled={pending}
+          onClick={() => dismiss.mutate()}
+          icon={<DismissIcon />}
+        />
+        <ActionButton
+          label="Hide"
+          tone="caution"
+          disabled={pending}
+          onClick={() => hide.mutate()}
+          icon={<HideIcon />}
+        />
+        <ActionButton
+          label="Remove"
+          tone="danger"
+          disabled={pending}
+          onClick={() => remove.mutate()}
+          icon={<RemoveIcon />}
+        />
+      </div>
+      {error ? (
+        <p id={errorId} role="alert" className="text-caption text-incident">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Tailwind classes per action tone — colour is REINFORCEMENT, never the only cue. */
+const ACTION_TONE: Record<"neutral" | "caution" | "danger", string> = {
+  neutral: "border-border text-foreground hover:bg-surface",
+  caution: "border-border text-foreground hover:bg-surface",
+  danger: "border-incident text-incident hover:bg-incident/10",
+};
+
+/** A single moderation action: icon SHAPE + visible TEXT label (never colour alone). */
+function ActionButton({
+  label,
+  tone,
+  disabled,
+  onClick,
+  icon,
+}: {
+  label: string;
+  tone: "neutral" | "caution" | "danger";
+  disabled: boolean;
+  onClick: () => void;
+  icon: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-chip border px-2.5 py-1 text-caption font-medium disabled:opacity-50 ${ACTION_TONE[tone]}`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -155,6 +295,57 @@ function TargetIcon({ children }: { children: ReactNode }) {
       fill="none"
       stroke="currentColor"
       strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {children}
+    </svg>
+  );
+}
+
+/** Decorative glyph for "dismiss" (an X) — the adjacent label carries meaning. */
+function DismissIcon() {
+  return (
+    <ActionIcon>
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </ActionIcon>
+  );
+}
+
+/** Decorative glyph for "hide" (an eye with a slash). */
+function HideIcon() {
+  return (
+    <ActionIcon>
+      <path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M3 3l18 18" />
+    </ActionIcon>
+  );
+}
+
+/** Decorative glyph for "remove" (a trash can). */
+function RemoveIcon() {
+  return (
+    <ActionIcon>
+      <path d="M4 7h16" />
+      <path d="M9 7V4h6v3" />
+      <path d="M6 7l1 13h10l1-13" />
+    </ActionIcon>
+  );
+}
+
+/** Shared small inline action glyph. */
+function ActionIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
     >

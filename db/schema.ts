@@ -62,6 +62,36 @@ export const incidentSeverity = pgEnum("incident_severity", ["mild", "moderate",
 /** Moderation flag lifecycle status. */
 export const flagStatus = pgEnum("flag_status", ["open", "reviewing", "resolved", "dismissed"]);
 
+/**
+ * Content moderation state (issue #41). Applied per content row
+ * (listings/claims/incidents) and default `visible`. Both non-visible states are
+ * SOFT — content is never hard-deleted, so every action is fully reversible and
+ * fully audited:
+ *
+ * - `visible` — public (the default; the only state public reads surface).
+ * - `hidden` — a reversible takedown (a moderator may `restore` it to visible).
+ * - `removed` — a terminal moderator decision (still soft; `restore`-able, but
+ *   the intended end state for genuinely-abusive content).
+ */
+export const moderationStatus = pgEnum("moderation_status", ["visible", "hidden", "removed"]);
+
+/**
+ * The moderation actions a moderator/admin can take on flagged content
+ * (issue #41) — the audit-trail verbs written to `moderation_actions`:
+ *
+ * - `dismiss` — the flag was reviewed and needs no content change (flag →
+ *   `dismissed`; content untouched).
+ * - `hide` — reversible takedown (content → `hidden`; flag → `resolved`).
+ * - `remove` — terminal takedown (content → `removed`; flag → `resolved`).
+ * - `restore` — undo a hide/remove (content → `visible`).
+ */
+export const moderationAction = pgEnum("moderation_action", [
+  "dismiss",
+  "hide",
+  "remove",
+  "restore",
+]);
+
 // ---------------------------------------------------------------------------
 // Tables
 // ---------------------------------------------------------------------------
@@ -97,6 +127,8 @@ export const listings = pgTable("listings", {
   lng: doublePrecision("lng").notNull(),
   mapsUrl: text("maps_url").notNull(),
   menuUrl: text("menu_url"),
+  // Moderation state (#41). Default `visible`; public reads filter to visible.
+  moderationStatus: moderationStatus("moderation_status").notNull().default("visible"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -115,6 +147,8 @@ export const claims = pgTable(
       .references(() => listings.id, { onDelete: "cascade" }),
     attribute: claimAttribute("attribute").notNull(),
     lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
+    // Moderation state (#41). Default `visible`; public reads filter to visible.
+    moderationStatus: moderationStatus("moderation_status").notNull().default("visible"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -168,6 +202,8 @@ export const incidents = pgTable(
     occurredOn: date("occurred_on").notNull(),
     severity: incidentSeverity("severity"),
     note: text("note"),
+    // Moderation state (#41). Default `visible`; public reads filter to visible.
+    moderationStatus: moderationStatus("moderation_status").notNull().default("visible"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -224,6 +260,56 @@ export const flags = pgTable(
   ]
 );
 
+/**
+ * The append-only AUDIT TRAIL of moderation actions (issue #41): who acted, what
+ * they did, on which target, optionally prompted by which flag, with an optional
+ * note, and when. One row per action so the history is complete and immutable —
+ * a `hide` then a later `restore` are two rows, never an overwrite (the soft,
+ * reversible, fully-audited design: content state lives on the content row, the
+ * decision history lives here).
+ *
+ * The target mirrors the `flags` EXCLUSIVE ARC: exactly one of `listingId`,
+ * `claimId`, `incidentId` is set, enforced by the `moderation_actions_one_target`
+ * CHECK. Each is a real FK with `onDelete: cascade`, so an action can never
+ * dangle — though content is soft-moderated rather than deleted, so cascade is a
+ * safety net, not the normal path.
+ *
+ * `flagId` records the flag that prompted the action (the queue acts per-flag),
+ * `ON DELETE SET NULL` so an action survives its flag being cleaned up — the
+ * audit record outlives the triage item. It is nullable because an action may be
+ * taken without a prompting flag (e.g. a `restore`, or a direct moderator
+ * decision).
+ *
+ * `actorId` is NOT NULL: every action is attributable to a moderator/admin.
+ */
+export const moderationActions = pgTable(
+  "moderation_actions",
+  {
+    id: id(),
+    actorId: text("actor_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    action: moderationAction("action").notNull(),
+    listingId: text("listing_id").references(() => listings.id, { onDelete: "cascade" }),
+    claimId: text("claim_id").references(() => claims.id, { onDelete: "cascade" }),
+    incidentId: text("incident_id").references(() => incidents.id, { onDelete: "cascade" }),
+    flagId: text("flag_id").references(() => flags.id, { onDelete: "set null" }),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    check(
+      "moderation_actions_one_target",
+      sql`num_nonnulls(${table.listingId}, ${table.claimId}, ${table.incidentId}) = 1`
+    ),
+    index("moderation_actions_listing_idx").on(table.listingId),
+    index("moderation_actions_claim_idx").on(table.claimId),
+    index("moderation_actions_incident_idx").on(table.incidentId),
+    index("moderation_actions_flag_idx").on(table.flagId),
+    index("moderation_actions_actor_idx").on(table.actorId),
+  ]
+);
+
 // ---------------------------------------------------------------------------
 // Inferred types (export $inferSelect + $inferInsert for every table)
 // ---------------------------------------------------------------------------
@@ -249,6 +335,9 @@ export type NewAppSetting = typeof appSettings.$inferInsert;
 export type Flag = typeof flags.$inferSelect;
 export type NewFlag = typeof flags.$inferInsert;
 
+export type ModerationActionRow = typeof moderationActions.$inferSelect;
+export type NewModerationActionRow = typeof moderationActions.$inferInsert;
+
 // ---------------------------------------------------------------------------
 // Enum value tuples (for app-side validation / filter UIs without re-importing
 // the pgEnum). These mirror the `pgEnum` declarations above.
@@ -259,6 +348,8 @@ export const claimAttributes = claimAttribute.enumValues;
 export const attestationValues = attestationValue.enumValues;
 export const incidentSeverities = incidentSeverity.enumValues;
 export const flagStatuses = flagStatus.enumValues;
+export const moderationStatuses = moderationStatus.enumValues;
+export const moderationActionTypes = moderationAction.enumValues;
 
 // ---------------------------------------------------------------------------
 // Enum value types (string-union of each enum's members, for typed app-side
@@ -270,3 +361,5 @@ export type ClaimAttribute = (typeof claimAttributes)[number];
 export type AttestationValue = (typeof attestationValues)[number];
 export type IncidentSeverity = (typeof incidentSeverities)[number];
 export type FlagStatus = (typeof flagStatuses)[number];
+export type ModerationStatus = (typeof moderationStatuses)[number];
+export type ModerationActionType = (typeof moderationActionTypes)[number];
