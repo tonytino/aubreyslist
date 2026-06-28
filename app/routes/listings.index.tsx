@@ -3,7 +3,14 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { ListingCard } from "~/components/listing/ListingCard";
 import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
-import { type ClaimAttribute, claimAttributes } from "~/db/schema";
+import type { ClaimAttribute } from "~/db/schema";
+import {
+  BROWSE_PAGE_SIZE,
+  type UserCoords,
+  coordsFromSearch,
+  parseAttrs,
+  serializeAttrs,
+} from "~/listings/browse-params";
 import {
   BROWSE_SORT_OPTIONS,
   BROWSE_SORT_VALUES,
@@ -11,7 +18,7 @@ import {
   DEFAULT_BROWSE_SORT,
 } from "~/listings/sort";
 import { useGeolocation } from "~/listings/use-geolocation";
-import { BROWSE_PAGE_SIZE, type BrowseListingsPage } from "~/server/listings/browse";
+import type { BrowseListingsPage } from "~/server/listings/browse";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
 
 /**
@@ -30,32 +37,6 @@ import { fetchBrowseListings } from "~/server/listings/browse.fn";
  * set, no N+1) by `fetchBrowseListings`.
  */
 
-/**
- * Parse the `?attrs=` string into a de-duplicated list of valid taxonomy
- * attributes. The param is a COMMA-SEPARATED list (e.g.
- * `?attrs=dedicated_fryer,celiac_safe_vs_gluten_friendly`) — shareable and
- * human-readable, mirroring `?page=`. Unknown/garbage values are dropped (not an
- * error) so a hand-edited URL degrades gracefully to the valid subset.
- *
- * Kept as a single STRING in the URL (rather than a router-serialized array) so
- * the encoding stays the clean comma form and not URL-encoded JSON.
- */
-function parseAttrs(value: string): ClaimAttribute[] {
-  const valid = new Set<ClaimAttribute>();
-  for (const part of value.split(",")) {
-    const token = part.trim();
-    if ((claimAttributes as readonly string[]).includes(token)) {
-      valid.add(token as ClaimAttribute);
-    }
-  }
-  return [...valid];
-}
-
-/** Serialize a selection back to the canonical comma-separated `?attrs=` value. */
-function serializeAttrs(attrs: readonly ClaimAttribute[]): string {
-  return attrs.join(",");
-}
-
 const browseSearchSchema = z.object({
   page: z.number().int().min(1).catch(1),
   /** Comma-separated taxonomy attributes (#35); defaults to "" (no filter). */
@@ -71,15 +52,9 @@ const browseSearchSchema = z.object({
   // out-of-range/garbage values degrade to `undefined` (no coords → the server
   // falls back to alphabetical). Both are independent optionals but only USED as
   // a pair.
-  lat: z.number().min(-90).max(90).optional().catch(undefined),
-  lng: z.number().min(-180).max(180).optional().catch(undefined),
+  lat: z.number().finite().min(-90).max(90).optional().catch(undefined),
+  lng: z.number().finite().min(-180).max(180).optional().catch(undefined),
 });
-
-/** A complete user coordinate pair, or undefined when only a partial/none is set. */
-interface UserCoords {
-  lat: number;
-  lng: number;
-}
 
 function browseQueryOptions(
   page: number,
@@ -100,14 +75,6 @@ function browseQueryOptions(
         data: { page, pageSize: BROWSE_PAGE_SIZE, attrs, sort, userLat, userLng },
       }),
   });
-}
-
-/** Build a complete coord pair from the search params, or undefined if incomplete. */
-function coordsFromSearch(
-  lat: number | undefined,
-  lng: number | undefined
-): UserCoords | undefined {
-  return lat !== undefined && lng !== undefined ? { lat, lng } : undefined;
 }
 
 export const Route = createFileRoute("/listings/")({
