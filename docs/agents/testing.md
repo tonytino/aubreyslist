@@ -76,6 +76,21 @@ pnpm test:e2e:ui     # Interactive UI (good for debugging)
 > build-only breakage (e.g. an asset referenced by source path) that `pnpm dev`
 > hides. It needs no database.
 
+### DB-touching E2E tests must clean up after themselves
+
+CI applies migrations (`pnpm db:migrate`) before the Playwright steps, gated on
+the `CI_E2E_DATABASE_URL` secret. **That CI Neon branch is persistent — state
+accumulates across runs.** There is no per-run reset, so any E2E test that
+writes to the database must manage its own data:
+
+- Use **unique per-run identifiers** (e.g. suffix emails / names with a random
+  token or timestamp) so concurrent or repeated runs never collide on unique
+  constraints (`users.email`, `users.google_sub`, `listings.place_id`, …).
+- **Clean up what you create** (delete rows in an `afterEach`/`afterAll`, or
+  scope assertions to your unique identifier) so the branch doesn't fill with
+  orphaned fixtures.
+- Never assume an empty database or a fixed row count.
+
 ## Coverage Requirements
 
 | What you add              | What you must test                        |

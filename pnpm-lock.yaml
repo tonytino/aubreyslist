@@ -56,6 +56,9 @@ importers:
       hono:
         specifier: ^4.7.0
         version: 4.12.14
+      iron-webcrypto:
+        specifier: ^1.2.1
+        version: 1.2.1
       react:
         specifier: ^19.0.0
         version: 19.2.5

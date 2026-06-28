@@ -63,6 +63,17 @@ jobs:
         if: steps.e2e.outputs.enabled == 'true'
         run: pnpm test:e2e:install
 
+      # Apply migrations before E2E so DB-touching features (auth is the first)
+      # run against an up-to-date schema. Gated on the same secret as the E2E
+      # steps. NOTE: the CI Neon branch is persistent (state accumulates across
+      # runs), so DB-touching E2E tests must manage their own data — see
+      # docs/agents/testing.md.
+      - name: Apply database migrations
+        if: steps.e2e.outputs.enabled == 'true'
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+
       - name: E2E tests
         if: steps.e2e.outputs.enabled == 'true'
         run: pnpm test:e2e
