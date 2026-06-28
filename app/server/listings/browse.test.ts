@@ -23,36 +23,52 @@ const h = vi.hoisted(() => {
     total: 0,
     celiacRows: [] as Array<Record<string, unknown>>,
     incidentRows: [] as Array<Record<string, unknown>>,
+    /** The WHERE predicate handed to the page query (filter + search compose). */
+    pageWhere: undefined as unknown,
+    /** The WHERE predicate handed to the count query (must match the page's). */
+    countWhere: undefined as unknown,
   };
 
-  // The listings page chain: select().from().orderBy().limit().offset()
+  // The listings page chain now carries a `.where()` before ordering:
+  //   select().from().where().orderBy().limit().offset()
   const offsetMock = vi.fn(() => Promise.resolve(state.pageListings));
   const limitMock = vi.fn(() => ({ offset: offsetMock }));
   const orderByMock = vi.fn(() => ({ limit: limitMock }));
+  const pageWhereMock = vi.fn((predicate?: unknown) => {
+    state.pageWhere = predicate;
+    return { orderBy: orderByMock };
+  });
 
-  // The celiac-aggregate chain: select().from().leftJoin().where().groupBy()
+  // The celiac-aggregate chain: select(proj).from().leftJoin().where().groupBy()
   const groupByMock = vi.fn(() => Promise.resolve(state.celiacRows));
   const aggWhereMock = vi.fn(() => ({ groupBy: groupByMock }));
   const leftJoinMock = vi.fn(() => ({ where: aggWhereMock }));
 
-  // The incidents chain: select().from().where()
+  // The incidents chain: select(proj).from().where()  (awaited)
   const incidentWhereMock = vi.fn(() => Promise.resolve(state.incidentRows));
 
-  // The listings page + celiac + incidents chains all start `select().from()…`.
-  const fromMock = vi.fn(() => ({
-    orderBy: orderByMock,
-    leftJoin: leftJoinMock,
-    where: incidentWhereMock,
-  }));
+  // The count chain: select({ total }).from().where()  (awaited)
+  const countWhereMock = vi.fn((predicate?: unknown) => {
+    state.countWhere = predicate;
+    return Promise.resolve([{ total: state.total }]);
+  });
 
-  // The total-count chain is `select({ total }).from()` and is AWAITED directly
-  // (no further chaining). We route on the select() argument: a `{ total }`
-  // projection returns a promise of the count rows; everything else returns the
-  // chainable `from`. This avoids a `then`-bearing object (biome noThenProperty).
-  const totalFromMock = vi.fn(() => Promise.resolve([{ total: state.total }]));
-  const selectMock = vi.fn((projection?: Record<string, unknown>) =>
-    projection && "total" in projection ? { from: totalFromMock } : { from: fromMock }
-  );
+  // Route each query to the right chain by its select() projection:
+  //  - no projection            → page listings  (full-row select)
+  //  - { total }                → count
+  //  - has `occurredOn`         → incidents
+  //  - otherwise (claim cols)   → celiac aggregate
+  const pageFromMock = vi.fn(() => ({ where: pageWhereMock }));
+  const countFromMock = vi.fn(() => ({ where: countWhereMock }));
+  const incidentFromMock = vi.fn(() => ({ where: incidentWhereMock }));
+  const celiacFromMock = vi.fn(() => ({ leftJoin: leftJoinMock }));
+
+  const selectMock = vi.fn((projection?: Record<string, unknown>) => {
+    if (!projection) return { from: pageFromMock };
+    if ("total" in projection) return { from: countFromMock };
+    if ("occurredOn" in projection) return { from: incidentFromMock };
+    return { from: celiacFromMock };
+  });
 
   return { state, selectMock };
 });
@@ -82,7 +98,7 @@ describe("getBrowseListings", () => {
     state.pageListings = [];
     state.total = 0;
 
-    const result = await getBrowseListings({ page: 1, pageSize: 20 }, NOW);
+    const result = await getBrowseListings({ page: 1, pageSize: 20, attrs: [] }, NOW);
 
     expect(result.cards).toEqual([]);
     expect(result.total).toBe(0);
@@ -102,7 +118,7 @@ describe("getBrowseListings", () => {
       },
     ];
 
-    const result = await getBrowseListings({ page: 1, pageSize: 20 }, NOW);
+    const result = await getBrowseListings({ page: 1, pageSize: 20, attrs: [] }, NOW);
 
     expect(result.cards).toHaveLength(1);
     expect(result.cards[0]?.listing.name).toBe("Acme GF");
@@ -115,7 +131,7 @@ describe("getBrowseListings", () => {
     state.total = 1;
     state.celiacRows = []; // no celiac aggregate for this listing
 
-    const result = await getBrowseListings({ page: 1, pageSize: 20 }, NOW);
+    const result = await getBrowseListings({ page: 1, pageSize: 20, attrs: [] }, NOW);
 
     expect(result.cards[0]?.glance.safetyState).toBeNull();
   });
@@ -135,7 +151,7 @@ describe("getBrowseListings", () => {
     // Incident 10 days ago — well inside the 90-day recency window.
     state.incidentRows = [{ listingId: "l1", occurredOn: "2026-06-18" }];
 
-    const result = await getBrowseListings({ page: 1, pageSize: 20 }, NOW);
+    const result = await getBrowseListings({ page: 1, pageSize: 20, attrs: [] }, NOW);
 
     expect(result.cards[0]?.glance.safetyState).toBe("celiac-safe");
     expect(result.cards[0]?.glance.hasRecentIncident).toBe(true);
@@ -147,7 +163,7 @@ describe("getBrowseListings", () => {
     // ~1 year old — outside the 90-day window.
     state.incidentRows = [{ listingId: "l1", occurredOn: "2025-06-18" }];
 
-    const result = await getBrowseListings({ page: 1, pageSize: 20 }, NOW);
+    const result = await getBrowseListings({ page: 1, pageSize: 20, attrs: [] }, NOW);
 
     expect(result.cards[0]?.glance.hasRecentIncident).toBe(false);
   });
@@ -159,7 +175,7 @@ describe("getBrowseListings", () => {
     ];
     state.total = 5;
 
-    const result = await getBrowseListings({ page: 1, pageSize: 2 }, NOW);
+    const result = await getBrowseListings({ page: 1, pageSize: 2, attrs: [] }, NOW);
 
     expect(result.page).toBe(1);
     expect(result.pageSize).toBe(2);
@@ -171,8 +187,52 @@ describe("getBrowseListings", () => {
     state.pageListings = [{ id: "l5", name: "E", address: "e" }];
     state.total = 5;
 
-    const result = await getBrowseListings({ page: 3, pageSize: 2 }, NOW);
+    const result = await getBrowseListings({ page: 3, pageSize: 2, attrs: [] }, NOW);
 
     expect(result.hasMore).toBe(false);
+  });
+
+  it("applies NO where filter when no attrs/search are given", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ page: 1, pageSize: 20, attrs: [] }, NOW);
+
+    // No search term + no attributes → no constraint on either query.
+    expect(state.pageWhere).toBeUndefined();
+    expect(state.countWhere).toBeUndefined();
+  });
+
+  it("applies the SAME where predicate to the page and count when filtering", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ page: 1, pageSize: 20, attrs: ["dedicated_fryer"] }, NOW);
+
+    // A taxonomy filter produces a real predicate, and BOTH queries get it so
+    // the total count reflects the filter (pagination stays correct).
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+  });
+
+  it("composes a search term with taxonomy attrs into one predicate", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      {
+        page: 1,
+        pageSize: 20,
+        q: "taco",
+        attrs: ["dedicated_fryer", "celiac_safe_vs_gluten_friendly"],
+      },
+      NOW
+    );
+
+    // Search + filters compose into a single non-empty WHERE shared by both
+    // queries (the actual SQL shape is asserted in filter.test.ts).
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
   });
 });
