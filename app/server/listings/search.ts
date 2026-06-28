@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { type SQL, asc, ilike, or } from "drizzle-orm";
+import { type SQL, and, asc, eq, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
@@ -76,20 +76,31 @@ export function buildSearchPredicate(query: string): SQL | undefined {
  * Run a listing text search against the database.
  *
  * Thin wrapper over {@link buildSearchPredicate} + a single bounded `select`. An
- * empty or whitespace-only query matches **all** listings (the predicate is
- * `undefined`, so no `WHERE` is applied) — chosen over returning `[]` so the
- * browse route can treat a blank search box as "show everything" and let filters/
- * sort narrow from there. Either way the result is bounded by `LIMIT pageSize`
- * with an `OFFSET` derived from the 1-based `page`, ordered alphabetically by
- * `name` so paging is stable (matches the browse list's order).
+ * empty or whitespace-only query matches **all VISIBLE** listings (the text
+ * predicate is `undefined`, so only the visibility constraint applies) — chosen
+ * over returning `[]` so the browse route can treat a blank search box as "show
+ * everything" and let filters/sort narrow from there. Either way the result is
+ * bounded by `LIMIT pageSize` with an `OFFSET` derived from the 1-based `page`,
+ * ordered alphabetically by `name` so paging is stable (matches the browse
+ * list's order).
+ *
+ * Visibility-aware (#41): this is a PUBLIC, addressable read (every
+ * `createServerFn` is an RPC mounted via `app/routes/api.$.ts`), so the
+ * visibility predicate is ALWAYS applied — hidden/removed listings can never be
+ * surfaced by a name/address search. The text predicate is AND-folded with it,
+ * mirroring `browse.ts`'s composition.
  */
 export async function runListingSearch(input: ListingSearchInput): Promise<Listing[]> {
   const { query, page, pageSize } = input;
   const offset = (page - 1) * pageSize;
+  // Always constrain to visible listings; AND-fold the optional text predicate.
+  const visibleListing = eq(listings.moderationStatus, "visible");
+  const searchPredicate = buildSearchPredicate(query);
+  const where = searchPredicate ? and(visibleListing, searchPredicate) : visibleListing;
   return getDb()
     .select()
     .from(listings)
-    .where(buildSearchPredicate(query))
+    .where(where)
     .orderBy(asc(listings.name))
     .limit(pageSize)
     .offset(offset);

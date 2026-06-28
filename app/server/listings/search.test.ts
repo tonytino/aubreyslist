@@ -86,7 +86,8 @@ describe("runListingSearch", () => {
     // The predicate passed to `.where()` is a real SQL node (not undefined).
     const predicate = whereMock.mock.calls[0]?.[0] as SQL | undefined;
     expect(predicate).toBeDefined();
-    expect(renderSql(predicate as SQL).params).toEqual(["%taco%", "%taco%"]);
+    // Visibility (#41) is AND-folded first, then the two `%term%` search params.
+    expect(renderSql(predicate as SQL).params).toEqual(["visible", "%taco%", "%taco%"]);
   });
 
   it("returns an empty array when nothing matches", async () => {
@@ -104,14 +105,31 @@ describe("runListingSearch", () => {
     expect(upper.params).toEqual(["%TACO%", "%TACO%"]);
   });
 
-  it("passes no WHERE filter for an empty query (returns all listings)", async () => {
+  it("applies only the visibility filter for an empty query (returns all VISIBLE listings)", async () => {
     returnedRows = [{ id: "1" }, { id: "2" }];
 
     const result = await search({ query: "  " });
 
     expect(result).toHaveLength(2);
-    // `undefined` predicate -> drizzle applies no WHERE -> all rows.
-    expect(whereMock.mock.calls[0]?.[0]).toBeUndefined();
+    // A blank query adds no text constraint, but the public read still excludes
+    // hidden/removed listings (#41) — the ONLY bound param is the visibility one.
+    const predicate = whereMock.mock.calls[0]?.[0] as SQL | undefined;
+    expect(predicate).toBeDefined();
+    expect(renderSql(predicate as SQL).params).toEqual(["visible"]);
+  });
+
+  it("excludes hidden/removed listings from search results (#41)", async () => {
+    // This is a PUBLIC, addressable RPC (mounted via api.$.ts), so hidden/removed
+    // listings must never be returned by a name/address search. Assert the WHERE
+    // always carries `moderation_status = 'visible'`, AND-folded with the search.
+    await search({ query: "taco" });
+
+    const predicate = whereMock.mock.calls[0]?.[0] as SQL;
+    const { sql, params } = renderSql(predicate);
+    const lower = sql.toLowerCase();
+    expect(lower).toContain("moderation_status");
+    expect(lower).toContain(" and ");
+    expect(params).toContain("visible");
   });
 
   it("bounds every query with the default page size and offset 0", async () => {

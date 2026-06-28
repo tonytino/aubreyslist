@@ -89,11 +89,36 @@ export interface ClaimAggregate {
  * Counts come from a single grouped scan of the claim's `attestations` rows
  * (no hidden score is stored or computed); `lastConfirmedAt` is read from the
  * `claims` row. A claim with no attestations yields zero counts.
+ *
+ * Visibility-aware (#41, ADR-007 "the summary is a roll-up of *visible*
+ * evidence"): this is a PUBLIC, addressable read (every `createServerFn` is an
+ * RPC mounted via `app/routes/api.$.ts`). A hidden/removed (or non-existent)
+ * claim must NOT leak its trust roll-up, so we resolve the claim's
+ * `moderationStatus` + recency FIRST and, for any non-`visible` or missing claim,
+ * return the ZEROED/empty aggregate (treated as not-found) WITHOUT scanning its
+ * attestations — never exposing the counts.
  */
 export async function getClaimAggregate(input: ClaimAggregateInput): Promise<ClaimAggregate> {
   const db = getDb();
 
-  // One grouped scan: confirm/dispute counts for this claim's attestations.
+  // Resolve the claim's visibility + recency first; bail with a zeroed aggregate
+  // for a non-visible or missing claim so a moderated-away claim's counts (and
+  // its `lastConfirmedAt`) never reach the caller.
+  const claimRows = await db
+    .select({
+      moderationStatus: claims.moderationStatus,
+      lastConfirmedAt: claims.lastConfirmedAt,
+    })
+    .from(claims)
+    .where(eq(claims.id, input.claimId))
+    .limit(1);
+
+  const claimRow = claimRows[0];
+  if (!claimRow || claimRow.moderationStatus !== "visible") {
+    return { claimId: input.claimId, confirmCount: 0, disputeCount: 0, lastConfirmedAt: null };
+  }
+
+  // Visible claim: one grouped scan for the confirm/dispute counts.
   const rows = await db
     .select({ value: attestations.value, n: count() })
     .from(attestations)
@@ -107,17 +132,11 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
     else if (row.value === "dispute") disputeCount = row.n;
   }
 
-  const claimRows = await db
-    .select({ lastConfirmedAt: claims.lastConfirmedAt })
-    .from(claims)
-    .where(eq(claims.id, input.claimId))
-    .limit(1);
-
   return {
     claimId: input.claimId,
     confirmCount,
     disputeCount,
-    lastConfirmedAt: claimRows[0]?.lastConfirmedAt ?? null,
+    lastConfirmedAt: claimRow.lastConfirmedAt ?? null,
   };
 }
 
