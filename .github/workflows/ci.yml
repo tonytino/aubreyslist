@@ -121,6 +121,26 @@ jobs:
           echo "Stylesheet: $CSS"
           curl -fsS "http://localhost:3000$CSS" -o /dev/null || { echo "::error::Stylesheet asset $CSS did not resolve (production asset path broken)"; exit 1; }
           echo "✓ Production build serves the homepage (200) and the stylesheet resolves"
+          # Guard app hydration: the served HTML MUST reference the built client
+          # entry — a `<script type="module">` that import()s a hashed client
+          # bundle under /_build/assets/. Without it, app/client.tsx's hydrateRoot
+          # never runs and the app ships as a no-JS site (no voting, forms, filter,
+          # sort, or SPA nav). This regresses silently if getRouterManifest stops
+          # being wired into createStartHandler (app/ssr.tsx) — the SSR'd HTML and
+          # CSS still look fine, which is exactly why the stylesheet check above
+          # missed it. We assert the module entry tag AND that the bundle resolves.
+          if ! printf '%s' "$HTML" | grep -qE '<script[^>]*type="module"'; then
+            echo "::error::No <script type=\"module\"> client entry in served HTML — the app will not hydrate (no-JS site). Check that getRouterManifest is passed to createStartHandler in app/ssr.tsx."
+            exit 1
+          fi
+          CLIENT_JS=$(printf '%s' "$HTML" | grep -oE '/_build/assets/client-[A-Za-z0-9_-]+\.js' | head -1)
+          if [ -z "$CLIENT_JS" ]; then
+            echo "::error::Served HTML has a module script but no /_build/assets/client-*.js bundle reference — the client entry asset was not surfaced from the router manifest."
+            exit 1
+          fi
+          echo "Client entry: $CLIENT_JS"
+          curl -fsS "http://localhost:3000$CLIENT_JS" -o /dev/null || { echo "::error::Client bundle $CLIENT_JS did not resolve (production asset path broken)"; exit 1; }
+          echo "✓ Client entry module is injected and the client bundle resolves (app will hydrate)"
           # Guard the API router: /api/* must be served by the Hono handoff in the
           # production build. It silently 404s (falling through to the SSR router)
           # if app/api.ts is missing or API-route generation is off — which is
