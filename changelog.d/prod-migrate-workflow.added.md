@@ -1,0 +1,1 @@
+- `[manual]` Added a "Migrate production database" GitHub Actions workflow (`.github/workflows/migrate.yml`) that applies `pnpm db:migrate` to production on merge to `main` (when `db/schema.ts`/`db/migrations/**` change) and via manual `workflow_dispatch`, gated on a `PROD_DATABASE_URL` secret (skips with a warning if unset). Documented the flow in `docs/agents/database.md`.
