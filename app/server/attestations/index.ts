@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb } from "~/db/client";
 import { attestationValues, attestations, claims } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
+import { enforceWriteLimit } from "~/server/rate-limit";
 
 /**
  * Claim confirm/dispute attestations — the WRITE + aggregate-signal layer
@@ -34,12 +35,11 @@ import { requireCurrentUser } from "~/server/auth/guards";
  * client code. Each public server function is login-gated via
  * {@link requireCurrentUser} (throws 401 for anonymous callers).
  *
- * RATE-LIMIT SEAM (issue #18): these writes are user-driven mutations and must
- * be rate-limited, but the limiter from #18 is being built in parallel and is
- * NOT importable on this branch. The seam is marked at every write entry point
- * with a `RATE LIMIT (#18)` TODO. Once #18 lands, wrap each write once at that
- * seam — e.g. `await rateLimit(user.id, "attestation"); …` — rather than
- * threading a limiter through this module. Do not invent a limiter here.
+ * Rate limiting (issue #18): these writes are user-driven mutations, so each
+ * write entry point applies {@link enforceWriteLimit} once — immediately after
+ * the {@link requireCurrentUser} auth gate and before any DB work — to cap an
+ * abusive burst (throws 429). Reads ({@link getClaimAggregate}) are open and
+ * unmetered.
  */
 
 // ---------------------------------------------------------------------------
@@ -136,12 +136,12 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
  * A `confirm` also bumps the claim's `lastConfirmedAt` to now so the
  * recency-driven staleness signal stays current; `dispute` leaves it untouched.
  *
- * Login-gated: throws 401 for anonymous callers. RATE LIMIT (#18) seam — wrap
- * this entry point with the limiter once #18 lands (see module JSDoc).
+ * Login-gated: throws 401 for anonymous callers, then rate-limited per user via
+ * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst).
  */
 export async function castVote(input: VoteInput): Promise<void> {
   const user = await requireCurrentUser();
-  // RATE LIMIT (#18): `await rateLimit(user.id, "attestation")` belongs here.
+  await enforceWriteLimit(user.id);
 
   const db = getDb();
   const now = new Date();
@@ -168,12 +168,12 @@ export async function castVote(input: VoteInput): Promise<void> {
  * row, leaving the claim's `lastConfirmedAt` as-is (an old confirmation is
  * still the last time the claim was affirmed). A no-op if no vote exists.
  *
- * Login-gated: throws 401 for anonymous callers. RATE LIMIT (#18) seam — wrap
- * this entry point with the limiter once #18 lands (see module JSDoc).
+ * Login-gated: throws 401 for anonymous callers, then rate-limited per user via
+ * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst).
  */
 export async function retractVote(input: RetractInput): Promise<void> {
   const user = await requireCurrentUser();
-  // RATE LIMIT (#18): `await rateLimit(user.id, "attestation")` belongs here.
+  await enforceWriteLimit(user.id);
 
   await getDb()
     .delete(attestations)

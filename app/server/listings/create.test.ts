@@ -1,3 +1,4 @@
+import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Listing } from "~/db/schema";
 import type { PlaceDetails, PlacesResult } from "~/server/places";
@@ -7,9 +8,12 @@ import type { PlaceDetails, PlacesResult } from "~/server/places";
  *
  * We exercise the pure logic against mocked collaborators (no live DB, no real
  * Places call): the active intake-mode read (`getSetting`), the Places details
- * provider (`runPlaceDetails`), and the drizzle handle. The auth gate lives on
- * the `createListing` server-fn wrapper, not on `runCreateListing`, so it is out
- * of scope here (guards have their own coverage in `auth/guards.test.ts`).
+ * provider (`runPlaceDetails`), and the drizzle handle.
+ *
+ * The auth gate and per-user write rate limit (#18) live on the `createListing`
+ * server-fn wrapper, not on `runCreateListing`; their own logic is covered in
+ * `auth/guards.test.ts` and `rate-limit/index.test.ts`. Here we only assert the
+ * wrapper wires them in the right order (auth, then limit, then the write).
  */
 
 // --- Mocks -----------------------------------------------------------------
@@ -47,7 +51,19 @@ vi.mock("~/db/client", () => ({
   }),
 }));
 
-import { runCreateListing } from "./create";
+// The `createListing` server-fn wrapper layers auth + rate limiting over the
+// pure `runCreateListing` logic. We mock both so we can assert the wrapper's
+// order of operations (auth gate, then per-user write limit) without cookie/DB
+// plumbing; the limiter's own window logic is covered in `rate-limit/index.test.ts`.
+const requireCurrentUserMock = vi.fn(() => Promise.resolve({ id: "user-1" }));
+vi.mock("~/server/auth/guards", () => ({ requireCurrentUser: () => requireCurrentUserMock() }));
+
+const enforceWriteLimitMock = vi.fn((_userId?: string) => Promise.resolve());
+vi.mock("~/server/rate-limit", () => ({
+  enforceWriteLimit: (userId?: string) => enforceWriteLimitMock(userId),
+}));
+
+import { createListing, runCreateListing } from "./create";
 
 // --- Fixtures --------------------------------------------------------------
 
@@ -221,5 +237,32 @@ describe("runCreateListing — manual mode", () => {
         lng: -104.99,
       })
     ).rejects.toThrow(/places/i);
+  });
+});
+
+// --- createListing server-fn wrapper (auth + rate limit) -------------------
+
+describe("createListing — write rate limiting (#18)", () => {
+  it("enforces the per-user write limit before the write, on the authed user", async () => {
+    returningResult = [listingRow()];
+
+    await createListing({ data: { mode: "places", placeId: "place-123" } });
+
+    // Metered on the authenticated user's id, after the auth gate resolved them,
+    // and before any DB write (the insert ran, so the limiter let it through).
+    expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
+    expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
+    expect(insertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not write when the rate limit is exceeded (429)", async () => {
+    const tooFast = new HTTPException(429, { message: "too fast" });
+    enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
+
+    await expect(createListing({ data: { mode: "places", placeId: "place-123" } })).rejects.toBe(
+      tooFast
+    );
+    // The limiter short-circuits before any DB work.
+    expect(insertMock).not.toHaveBeenCalled();
   });
 });

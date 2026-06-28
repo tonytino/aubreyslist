@@ -1,0 +1,1 @@
+- `[manual]` Enforced per-user write rate limiting on add-listing and attestation endpoints (wires #18 into the #26/#28 write paths).
