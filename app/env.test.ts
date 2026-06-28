@@ -38,17 +38,18 @@ describe("parseEnv", () => {
   });
 
   it("passes through the optional secrets when present", () => {
+    // SESSION_SECRET must be >= 32 chars (the string below is exactly 32).
     const env = parseEnv({
       DATABASE_URL: "postgres://user:pass@host/db",
       GOOGLE_CLIENT_ID: "client-id",
       GOOGLE_CLIENT_SECRET: "client-secret",
       GOOGLE_PLACES_API_KEY: "places-key",
-      SESSION_SECRET: "a-long-random-session-secret",
+      SESSION_SECRET: "a-32-char-long-session-secret-key",
     });
     expect(env.GOOGLE_CLIENT_ID).toBe("client-id");
     expect(env.GOOGLE_CLIENT_SECRET).toBe("client-secret");
     expect(env.GOOGLE_PLACES_API_KEY).toBe("places-key");
-    expect(env.SESSION_SECRET).toBe("a-long-random-session-secret");
+    expect(env.SESSION_SECRET).toBe("a-32-char-long-session-secret-key");
   });
 
   it("rejects an empty string for an optional secret", () => {
@@ -59,5 +60,26 @@ describe("parseEnv", () => {
         SESSION_SECRET: "",
       })
     ).toThrowError(/SESSION_SECRET/);
+  });
+
+  it("rejects a SESSION_SECRET shorter than 32 characters", () => {
+    // The session signing key protects every cookie; a short value is weak.
+    expect("short-secret".length).toBeLessThan(32);
+    expect(() =>
+      parseEnv({
+        DATABASE_URL: "postgres://user:pass@host/db",
+        SESSION_SECRET: "short-secret",
+      })
+    ).toThrowError(/SESSION_SECRET/);
+  });
+
+  it("accepts a SESSION_SECRET of at least 32 characters", () => {
+    const secret = "a-32-char-long-session-secret-key";
+    expect(secret.length).toBeGreaterThanOrEqual(32);
+    const env = parseEnv({
+      DATABASE_URL: "postgres://user:pass@host/db",
+      SESSION_SECRET: secret,
+    });
+    expect(env.SESSION_SECRET).toBe(secret);
   });
 });

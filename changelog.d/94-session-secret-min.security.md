@@ -1,0 +1,1 @@
+- `[manual]` Tightened the `SESSION_SECRET` env validation in `app/env.ts` from `.min(1)` to `.min(32)` so the key signing every session cookie can no longer be a trivially weak short value; updated `.env.example` and provisioning docs to require a 32+ char secret (`openssl rand -base64 32`) (#94).

@@ -11,7 +11,7 @@ All environment variables are validated with Zod in `app/env.ts`. Validation run
 | `GOOGLE_CLIENT_ID`      | Optional* | human (#14)    | Google OAuth client ID (ADR-006). Promoted to required by #15. |
 | `GOOGLE_CLIENT_SECRET`  | Optional* | human (#14)    | Google OAuth client secret. Promoted to required by #15. |
 | `GOOGLE_PLACES_API_KEY` | Optional* | human (#21)    | Server-side Places key (ADR-008). Promoted to required by #22. |
-| `SESSION_SECRET`        | Optional* | human (#14)    | Long random string for session signing. Promoted to required by #15. |
+| `SESSION_SECRET`        | Optional* | human (#14)    | Random string for session signing, **min 32 chars** (`openssl rand -base64 32`). Promoted to required by #15. |
 
 \* The human-provisioned secrets are declared `optional()` for now so
 `pnpm preflight` / CI stay green while they're unprovisioned. The auth (#15) and

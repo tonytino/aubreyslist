@@ -27,9 +27,15 @@ export const envSchema = z.object({
   GOOGLE_PLACES_API_KEY: z.string().min(1).optional(),
 
   // Human-provisioned secret (safe:human, Bucket 1). Long random string for
-  // session signing (`openssl rand -hex 32`). Optional until the auth issue
-  // (#15) wires sessions and promotes it to required. See ADR-006.
-  SESSION_SECRET: z.string().min(1).optional(),
+  // session signing (`openssl rand -base64 32`). Minimum 32 chars: this key
+  // protects every session cookie, so a trivially short value would be weak
+  // enough to brute-force. Optional until the auth issue (#15) wires sessions
+  // and promotes it to required. See ADR-006.
+  SESSION_SECRET: z
+    .string()
+    .min(32, "SESSION_SECRET must be at least 32 characters")
+    .optional()
+    .describe("Session signing secret; at least 32 chars (openssl rand -base64 32)."),
 });
 
 /** Validated environment shape. */
