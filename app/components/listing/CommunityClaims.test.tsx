@@ -120,4 +120,36 @@ describe("CommunityClaims", () => {
     expect(screen.getByRole("button", { name: "Confirm" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Retract" })).toBeInTheDocument();
   });
+
+  it("derives each row's recency + staleness from the injected `now`, not a live clock (#115)", () => {
+    // Pin the real system clock FAR in the future. If a row read a fresh
+    // `new Date()` instead of the passed-in instant, this confirmation would
+    // age out and read "stale" / "years ago" — proving the regression.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
+    try {
+      renderWithQuery(
+        <CommunityClaims
+          listingId="listing-1"
+          viewerId={null}
+          now={NOW}
+          claims={[
+            claim({
+              claimId: "c1",
+              attribute: "dedicated_fryer",
+              confirmCount: 8,
+              disputeCount: 1,
+              lastConfirmedAt: ago(3 * WEEK),
+            }),
+          ]}
+        />
+      );
+      // Recency phrasing is relative to the injected `now`, not the live clock.
+      expect(screen.getByText("last confirmed 3 weeks ago")).toBeInTheDocument();
+      // 3 weeks < 6-month window relative to `now`, so it is NOT flagged stale.
+      expect(screen.queryByText("May be stale")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
