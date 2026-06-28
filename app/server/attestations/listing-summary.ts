@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
-import { type ClaimAttribute, attestations, claims } from "~/db/schema";
+import { type AttestationValue, type ClaimAttribute, attestations, claims } from "~/db/schema";
 import type { ClaimAggregate } from "~/server/attestations";
+import { getCurrentUser } from "~/server/auth/current-user";
 
 /**
  * Listing-level trust roll-up loader (issue #29, ADR-007).
@@ -25,6 +26,13 @@ import type { ClaimAggregate } from "~/server/attestations";
 /** A claim plus its aggregate — one entry per existing claim row on the listing. */
 export interface ListingClaimAggregate extends ClaimAggregate {
   attribute: ClaimAttribute;
+  /**
+   * The CURRENT viewer's own vote on this claim, or `null` when they have not
+   * voted (or are anonymous). Drives the per-claim "your vote" affordance and
+   * the change/retract controls (#32) — a user editing/retracting their OWN
+   * attestation. This is the viewer's own visible evidence, never a hidden score.
+   */
+  viewerVote: AttestationValue | null;
 }
 
 /** Reading a listing's claim aggregates needs only the listing id. */
@@ -45,7 +53,9 @@ export type ListingClaimsInput = z.infer<typeof listingClaimsInputSchema>;
 export async function getListingClaimAggregates(
   input: ListingClaimsInput
 ): Promise<ListingClaimAggregate[]> {
-  const rows = await getDb()
+  const db = getDb();
+
+  const rows = await db
     .select({
       claimId: claims.id,
       attribute: claims.attribute,
@@ -60,6 +70,22 @@ export async function getListingClaimAggregates(
     .where(eq(claims.listingId, input.listingId))
     .groupBy(claims.id, claims.attribute, claims.lastConfirmedAt);
 
+  // Resolve the viewer's OWN vote per claim so the UI can show + change/retract
+  // it (#32). Reads stay open — anonymous viewers simply have no votes, so we
+  // skip the query entirely and every `viewerVote` is null.
+  const viewer = await getCurrentUser();
+  const viewerVotes = new Map<string, AttestationValue>();
+  if (viewer) {
+    const ownRows = await db
+      .select({ claimId: attestations.claimId, value: attestations.value })
+      .from(attestations)
+      .innerJoin(claims, eq(claims.id, attestations.claimId))
+      .where(and(eq(claims.listingId, input.listingId), eq(attestations.userId, viewer.id)));
+    for (const own of ownRows) {
+      viewerVotes.set(own.claimId, own.value);
+    }
+  }
+
   // `count(...)` arrives as a string/number depending on the driver; coerce to
   // a plain number so the typed surface is honest for downstream derivation.
   return rows.map((row) => ({
@@ -68,6 +94,7 @@ export async function getListingClaimAggregates(
     lastConfirmedAt: row.lastConfirmedAt,
     confirmCount: Number(row.confirmCount),
     disputeCount: Number(row.disputeCount),
+    viewerVote: viewerVotes.get(row.claimId) ?? null,
   }));
 }
 
