@@ -57,6 +57,10 @@ console.log(env.YOUR_NEW_VAR);
     client-safe via `getEnv()`; a public build flag is neither. **Secrets must
     still never be read outside `app/env.ts`** — do not use this exception for
     `DATABASE_URL`, session, or API keys.
+  - **Narrow exception — CLI tooling config:** `drizzle.config.ts` reads
+    `process.env.DATABASE_URL` directly because Drizzle Kit runs as a CLI
+    outside the app module graph and cannot import `getEnv()`. This is an
+    accepted build-time tooling exception, not a runtime path.
 - Never commit `.env`. It is gitignored.
 - Always keep `.env.example` in sync with `app/env.ts`.
 - In CI, secrets are injected via GitHub Actions secrets — see `.github/workflows/ci.yml`.

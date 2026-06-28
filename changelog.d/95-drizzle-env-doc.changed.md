@@ -1,0 +1,1 @@
+- `[manual]` Documented the accepted build-time tooling exception that lets `drizzle.config.ts` read `process.env.DATABASE_URL` directly — Drizzle Kit runs as a CLI outside the app module graph and cannot import `getEnv()`. Added an inline comment in the config and a carve-out note in `docs/agents/environment.md`; no behavior change.
