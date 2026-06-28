@@ -80,6 +80,21 @@ describe("typed read parsing", () => {
     expect(await getSetting("staleness_months")).toBe(6); // non-integer rejected
   });
 
+  it("guards staleness_months to a positive integer (clamps bad values to the default)", async () => {
+    // A non-positive window is meaningless and could break staleness (0 → cutoff
+    // of "now" flags everything stale; negative → cutoff in the future flags
+    // nothing). Such stored values fall back to the 6-month default.
+    selectRows = [{ value: "0" }];
+    expect(await getSetting("staleness_months")).toBe(6);
+
+    selectRows = [{ value: "-3" }];
+    expect(await getSetting("staleness_months")).toBe(6);
+
+    // A valid positive integer is still honoured.
+    selectRows = [{ value: "9" }];
+    expect(await getSetting("staleness_months")).toBe(9);
+  });
+
   it("filters the read by the requested key", async () => {
     selectRows = [{ value: "manual" }];
     await getSetting("intake_mode");

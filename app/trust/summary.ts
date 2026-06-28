@@ -150,10 +150,34 @@ export function formatLastConfirmed(lastConfirmedAt: Date | null, now: Date = ne
 export const DEFAULT_STALENESS_MONTHS = 6;
 
 /**
+ * The instant marking the staleness boundary: a confirmation AT OR AFTER this
+ * instant is "fresh", one strictly BEFORE it is "stale". Single source of truth
+ * for the boundary so the SQL sort/filter in `app/server/listings/browse.ts`
+ * (`buildOrderBy`) can derive its cutoff the SAME way the displayed glance does
+ * — no drift between the card and the DB ordering (ADR-007).
+ *
+ * Boundary rule (chosen so SQL and JS agree at the exact-equality instant): a
+ * confirmation EXACTLY `stalenessMonths` old sits on the edge and is classified
+ * FRESH (inclusive lower bound). Equivalent to `age > window` ⟺ stale, i.e. a
+ * claim is stale only once its age STRICTLY exceeds the window. The SQL builder
+ * mirrors this as `lastConfirmedAt >= cutoff` for "fresh".
+ */
+export function stalenessCutoff(
+  now: Date = new Date(),
+  stalenessMonths: number = DEFAULT_STALENESS_MONTHS
+): Date {
+  return new Date(now.getTime() - stalenessMonths * MS_PER_MONTH);
+}
+
+/**
  * Whether a claim's last confirmation is older than the staleness window. A
  * never-confirmed claim is NOT "stale" — it simply has no recency to age out
- * (it shows "not yet confirmed" instead). Window in months, defaulting to the
- * ADR-007 value; the caller can pass the admin-tuned setting.
+ * (it shows "not yet confirmed" instead; ADR-007). Window in months, defaulting
+ * to the ADR-007 value; the caller can pass the admin-tuned setting.
+ *
+ * Derives the boundary from {@link stalenessCutoff} so it stays in lockstep with
+ * the SQL `fresh` predicate: stale ⟺ the confirmation is strictly BEFORE the
+ * cutoff (a confirmation exactly on the edge counts as fresh).
  */
 export function isStale(
   lastConfirmedAt: Date | null,
@@ -163,8 +187,7 @@ export function isStale(
   if (lastConfirmedAt === null) {
     return false;
   }
-  const ageMs = now.getTime() - lastConfirmedAt.getTime();
-  return ageMs > stalenessMonths * MS_PER_MONTH;
+  return lastConfirmedAt.getTime() < stalenessCutoff(now, stalenessMonths).getTime();
 }
 
 // ---------------------------------------------------------------------------

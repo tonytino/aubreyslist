@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "~/db/client";
 import { appSettings } from "~/db/schema";
+import { DEFAULT_STALENESS_MONTHS } from "~/trust/summary";
 
 /**
  * App-settings / feature-flag system (issue #13, ADR-007 + ADR-008).
@@ -55,6 +56,23 @@ const intCodec: Codec<number> = {
 };
 
 /**
+ * Codec for a POSITIVE integer setting (e.g. the staleness window in months). A
+ * window must be a positive whole number of months: a zero/negative/fractional
+ * value is meaningless and could break staleness (e.g. `0` would make a cutoff of
+ * "now", flagging every confirmation stale; a negative would push the cutoff into
+ * the future, flagging NONE). Any such stored value parses to `undefined` so the
+ * read falls back to the in-code default (`DEFAULT_STALENESS_MONTHS`) — a bad
+ * admin value can never break staleness.
+ */
+const positiveIntCodec: Codec<number> = {
+  serialize: intCodec.serialize,
+  parse: (raw) => {
+    const n = intCodec.parse(raw);
+    return n !== undefined && n > 0 ? n : undefined;
+  },
+};
+
+/**
  * Codec factory for a string-union ("enum") setting. Serializes like a plain
  * string; parses back to the union type only when the stored value is a member,
  * else `undefined` (default wins).
@@ -99,10 +117,15 @@ export const SETTINGS = {
     default: "places",
     codec: enumCodec(INTAKE_MODES),
   }),
-  /** Staleness window in months — claims unconfirmed past this are flagged stale (ADR-007). */
+  /**
+   * Staleness window in months — claims unconfirmed past this are flagged stale
+   * (ADR-007). Guarded to a POSITIVE integer: a non-positive/invalid stored value
+   * falls back to the 6-month default (`DEFAULT_STALENESS_MONTHS`) so a bad admin
+   * value can never break staleness.
+   */
   staleness_months: define<number>({
-    default: 6,
-    codec: intCodec,
+    default: DEFAULT_STALENESS_MONTHS,
+    codec: positiveIntCodec,
   }),
 } as const;
 
