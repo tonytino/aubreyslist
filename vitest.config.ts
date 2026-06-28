@@ -8,7 +8,13 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./tests/setup.ts"],
-    include: ["app/**/*.test.{ts,tsx}", "tests/unit/**/*.test.{ts,tsx}"],
+    include: [
+      "app/**/*.test.{ts,tsx}",
+      "tests/unit/**/*.test.{ts,tsx}",
+      // Integration tests hit a real Postgres; they self-skip (describe.skipIf)
+      // unless TEST_DATABASE_URL is set, so they stay green with no database.
+      "tests/integration/**/*.test.{ts,tsx}",
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
