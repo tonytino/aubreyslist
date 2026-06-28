@@ -1,0 +1,1 @@
+- `[manual]` Added reusable server-side auth guards (requireUser / requireRole, plus async requireCurrentUser / requireCurrentRole) enforcing gated-write — anonymous and under-privileged callers are rejected (401/403) — across server functions and Hono routes.
