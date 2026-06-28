@@ -1,0 +1,1 @@
+- `[manual]` Added the per-listing detail page (`/listings/$id`) — name/address, a prominent "Open in Google Maps" deep-link, an optional menu link, an accessible celiac-safe/gluten-friendly safety signal, and clearly-labelled trust placeholders (claims/incidents) wired for EPIC 4.
