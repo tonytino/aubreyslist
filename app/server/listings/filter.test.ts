@@ -66,6 +66,35 @@ describe("buildTaxonomyFilterPredicate", () => {
     const { sql } = renderSql(predicate as SQL);
     expect(sql.toLowerCase().match(/exists/g)?.length).toBe(1);
   });
+
+  // --- Consensus DIRECTION lock (strict `>`, not `>=`) -----------------------
+  // The single trust-critical rule the SQL encodes: a claim qualifies ONLY when
+  // confirms STRICTLY outnumber disputes (`hasPositiveConsensus`). A `>=` drift
+  // would let a tie (or even a dispute-majority at equality) read as affirmed —
+  // overstating safety, which can hurt a celiac. These assert the rendered SQL
+  // keeps the strict `>` so a `>=` regression fails here, mirroring the pure-JS
+  // `hasPositiveConsensus` cases in `app/trust/summary.test.ts`.
+
+  it("encodes the STRICT confirms-greater-than-disputes consensus (HAVING confirms > disputes)", () => {
+    const predicate = buildTaxonomyFilterPredicate(["dedicated_fryer"]);
+    const lower = renderSql(predicate as SQL).sql.toLowerCase();
+
+    // The HAVING compares the two conditional tallies with a STRICT `>`.
+    expect(lower).toContain("having");
+    // Strict greater-than, NOT `>=` — a tie must NOT qualify (contested ≠ affirmed).
+    expect(lower).toContain(">");
+    expect(lower).not.toContain(">=");
+    // Both sides of the comparison are present: confirms vs disputes.
+    expect(lower).toContain("'confirm'");
+    expect(lower).toContain("'dispute'");
+    // The comparison is the `filter (where … = 'confirm')` tally on the LEFT of
+    // `>` and the `'dispute'` tally on the RIGHT — i.e. confirms > disputes, not
+    // the inverse. We assert ordering by where each literal falls around the `>`.
+    const gtIndex = lower.indexOf(" > ");
+    expect(gtIndex).toBeGreaterThan(-1);
+    expect(lower.indexOf("'confirm'")).toBeLessThan(gtIndex);
+    expect(lower.lastIndexOf("'dispute'")).toBeGreaterThan(gtIndex);
+  });
 });
 
 describe("buildBrowseWhere — search + taxonomy composition", () => {
