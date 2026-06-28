@@ -5,6 +5,7 @@ import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { buildMapsUrl, runPlaceDetails } from "~/server/places";
+import { enforceWriteLimit } from "~/server/rate-limit";
 import { getSetting } from "~/server/settings";
 
 /**
@@ -216,21 +217,15 @@ export async function runCreateListing(input: CreateListingInput): Promise<Creat
  *
  * Order of operations:
  * 1. {@link requireCurrentUser} — server-side auth gate (throws 401 if anonymous).
- * 2. RATE-LIMIT SEAM (issue #18): the per-user/IP write limiter is being built
- *    in parallel and is NOT importable on this branch. When it lands, wrap the
- *    write here — e.g. `await requireWithinRateLimit({ userId: user.id, action:
- *    "create_listing" });` — immediately AFTER the auth gate and BEFORE
- *    `runCreateListing`. Do not invent a limiter in the meantime.
+ * 2. {@link enforceWriteLimit} — per-user write rate limit (issue #18), applied
+ *    immediately AFTER the auth gate and BEFORE the write so an abusive burst is
+ *    capped (throws 429) while an anonymous caller still gets a 401, not a 429.
  * 3. {@link runCreateListing} — resolve for the active intake mode + insert/dedup.
  */
 export const createListing = createServerFn({ method: "POST" })
   .validator(createListingInputSchema)
   .handler(async ({ data }): Promise<CreateListingResult> => {
-    await requireCurrentUser();
-
-    // TODO(#18): rate-limit seam — wrap the write with the per-user/IP limiter
-    // here once issue #18 lands (see JSDoc above). Anonymous callers are already
-    // rejected by requireCurrentUser() above.
-
+    const user = await requireCurrentUser();
+    await enforceWriteLimit(user.id);
     return runCreateListing(data);
   });

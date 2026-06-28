@@ -1,3 +1,4 @@
+import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -68,6 +69,11 @@ const h = vi.hoisted(() => {
     return Promise.resolve({ id: "user-1" });
   });
 
+  // `enforceWriteLimit` is the per-user write rate limit (#18). We spy on it to
+  // assert each write entry point meters the authenticated user; the limiter's
+  // own window logic has dedicated coverage in `rate-limit/index.test.ts`.
+  const enforceWriteLimitMock = vi.fn((_userId?: string) => Promise.resolve());
+
   return {
     state,
     groupByMock,
@@ -80,6 +86,7 @@ const h = vi.hoisted(() => {
     deleteWhereMock,
     selectMock,
     requireCurrentUserMock,
+    enforceWriteLimitMock,
   };
 });
 
@@ -96,6 +103,10 @@ vi.mock("~/server/auth/guards", () => ({
   requireCurrentUser: h.requireCurrentUserMock,
 }));
 
+vi.mock("~/server/rate-limit", () => ({
+  enforceWriteLimit: h.enforceWriteLimitMock,
+}));
+
 import { castVote, getClaimAggregate, retractVote } from "./index";
 
 // Convenience aliases so the assertions below stay readable.
@@ -108,6 +119,7 @@ const {
   deleteMock,
   deleteWhereMock,
   requireCurrentUserMock,
+  enforceWriteLimitMock,
 } = h;
 
 beforeEach(() => {
@@ -169,6 +181,24 @@ describe("castVote — one vote per user per claim (upsert)", () => {
     // No write happens when the gate rejects.
     expect(insertMock).not.toHaveBeenCalled();
   });
+
+  it("rate-limits the authenticated user before writing (#18)", async () => {
+    await castVote({ claimId: "claim-1", value: "confirm" });
+
+    // The write is metered on the authenticated user's id, not the claim.
+    expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
+    expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does not write when the rate limit is exceeded (429)", async () => {
+    const tooFast = new HTTPException(429, { message: "too fast" });
+    enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
+
+    await expect(castVote({ claimId: "claim-1", value: "confirm" })).rejects.toBe(tooFast);
+    // The limiter short-circuits before any DB work.
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("castVote — lastConfirmedAt maintenance", () => {
@@ -205,6 +235,21 @@ describe("retractVote — deletes the user's row", () => {
   it("requires a signed-in user (401 gate)", async () => {
     state.signedIn = false;
     await expect(retractVote({ claimId: "claim-1" })).rejects.toThrow("Authentication required.");
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits the authenticated user before deleting (#18)", async () => {
+    await retractVote({ claimId: "claim-1" });
+
+    expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
+    expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does not delete when the rate limit is exceeded (429)", async () => {
+    const tooFast = new HTTPException(429, { message: "too fast" });
+    enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
+
+    await expect(retractVote({ claimId: "claim-1" })).rejects.toBe(tooFast);
     expect(deleteMock).not.toHaveBeenCalled();
   });
 });
