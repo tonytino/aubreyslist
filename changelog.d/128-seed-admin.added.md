@@ -1,0 +1,1 @@
+- `[manual]` Added a `pnpm db:seed-admin <email>` helper (and per-env runbook) to promote an existing, signed-in user to `admin` — the out-of-band bootstrap for the first admin, which `setRole` deliberately cannot mint (ADR-010).

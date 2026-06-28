@@ -10,6 +10,7 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     include: [
       "app/**/*.test.{ts,tsx}",
+      "scripts/**/*.test.{ts,tsx}",
       "tests/unit/**/*.test.{ts,tsx}",
       // Integration tests hit a real Postgres; they self-skip (describe.skipIf)
       // unless TEST_DATABASE_URL is set, so they stay green with no database.
