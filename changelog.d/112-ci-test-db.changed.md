@@ -1,0 +1,1 @@
+- `[manual]` Wired `TEST_DATABASE_URL` into CI via a dedicated, secret-gated `Integration tests` step so the #92 schema-constraint suite actually runs when `CI_E2E_DATABASE_URL` is set (and safely skips when it isn't); the fast unit step stays DB-free.

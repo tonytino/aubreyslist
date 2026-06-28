@@ -45,11 +45,17 @@ jobs:
       - name: Unused dependency check
         run: pnpm knip
 
+      # Fast, DB-free unit/component pass. Exclude the integration suite: it
+      # self-skips without TEST_DATABASE_URL, but we run it in its own gated
+      # step below (see "Integration tests") so excluding it here avoids
+      # double-discovering the suite on the fast path.
       - name: Unit tests
-        run: pnpm exec vitest run
+        run: pnpm exec vitest run --exclude 'tests/integration/**'
 
       # The `secrets` context is not allowed in step-level `if` conditions, so we
       # detect the optional E2E secret here and gate later steps on this output.
+      # The same secret feeds both the integration suite (TEST_DATABASE_URL) and
+      # the E2E steps (DATABASE_URL).
       - name: Check for E2E database secret
         id: e2e
         env:
@@ -58,6 +64,18 @@ jobs:
           if [ -n "$E2E_DATABASE_URL" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # DB-level schema-constraint integration suite (issue #92, wired in #112).
+      # Gated on the same secret as E2E so a missing secret skips this step
+      # rather than failing CI (safe default). When the secret is present the
+      # suite runs against the persistent CI Neon branch; it applies migrations
+      # itself and cleans up its own per-run fixtures (see the suite header and
+      # docs/agents/testing.md).
+      - name: Integration tests
+        if: steps.e2e.outputs.enabled == 'true'
+        run: pnpm exec vitest run tests/integration
+        env:
+          TEST_DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
 
       - name: Install Playwright browsers
         if: steps.e2e.outputs.enabled == 'true'
