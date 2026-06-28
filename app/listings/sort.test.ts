@@ -19,7 +19,7 @@ describe("browse sort registry", () => {
   });
 
   it("exposes the expected v1 options in display order", () => {
-    expect(BROWSE_SORT_VALUES).toEqual(["alpha", "trust", "recency"]);
+    expect(BROWSE_SORT_VALUES).toEqual(["alpha", "trust", "recency", "distance"]);
   });
 
   it("gives every option a label and a help description", () => {
@@ -35,10 +35,11 @@ describe("isBrowseSort", () => {
     expect(isBrowseSort("alpha")).toBe(true);
     expect(isBrowseSort("trust")).toBe(true);
     expect(isBrowseSort("recency")).toBe(true);
+    expect(isBrowseSort("distance")).toBe(true); // added in #37 ("near me")
   });
 
   it("rejects unknown / non-string values", () => {
-    expect(isBrowseSort("distance")).toBe(false); // not added until #37
+    expect(isBrowseSort("nearby")).toBe(false);
     expect(isBrowseSort("")).toBe(false);
     expect(isBrowseSort(undefined)).toBe(false);
     expect(isBrowseSort(42)).toBe(false);
