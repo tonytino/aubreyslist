@@ -1,0 +1,1 @@
+- `[manual]` Added unit coverage for the `fetchAdminView` server-side access gate (ADR-010), asserting all four branches: anonymous, forbidden (`user`), moderator (granted with no settings read), and admin (granted with both settings keys read).
