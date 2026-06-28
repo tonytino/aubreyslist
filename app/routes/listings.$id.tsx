@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
+import { FlagControl } from "~/components/listing/FlagControl";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
@@ -137,6 +138,15 @@ function ListingDetail() {
       <header className="flex flex-col gap-2">
         <h1 className="text-headline font-bold tracking-tight">{listing.name}</h1>
         <p className="text-body text-muted-foreground">{listing.address}</p>
+        {/* Flag this listing as inappropriate/spam/wrong (#39). Login-gated; the
+            control renders nothing for anonymous viewers and the server
+            re-gates regardless. */}
+        <FlagControl
+          target="listing"
+          listingId={listing.id}
+          isSignedIn={viewerId !== null}
+          label="Flag listing"
+        />
       </header>
 
       {/* Recent harm is surfaced first and never buried by older confirmations
