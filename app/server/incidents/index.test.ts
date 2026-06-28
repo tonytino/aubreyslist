@@ -140,6 +140,37 @@ describe("reportIncidentInputSchema — validation", () => {
       expect(result.data.note).toBeUndefined();
     }
   });
+
+  it("rejects a future-dated incident (cannot pin the banner forever)", () => {
+    // Far enough out to be future regardless of when the suite runs.
+    const result = reportIncidentInputSchema.safeParse({
+      listingId: "listing-1",
+      occurredOn: "2099-01-01",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => /future/i.test(i.message))).toBe(true);
+    }
+  });
+
+  it("rejects an invalid calendar date that matches the format (e.g. 2026-02-31)", () => {
+    for (const bad of ["2026-02-31", "2026-13-45", "2026-00-00"]) {
+      const result = reportIncidentInputSchema.safeParse({
+        listingId: "listing-1",
+        occurredOn: bad,
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it("accepts today's date (boundary of the no-future rule)", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const result = reportIncidentInputSchema.safeParse({
+      listingId: "listing-1",
+      occurredOn: today,
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("reportIncident — login-gated, rate-limited write", () => {
@@ -216,12 +247,16 @@ describe("isRecentIncident — window boundary", () => {
     expect(isRecentIncident(pastIso, now)).toBe(false);
   });
 
-  it("counts a future-dated incident as recent", () => {
-    expect(isRecentIncident("2026-12-31", now)).toBe(true);
+  it("does NOT count a future-dated incident as recent (defense in depth)", () => {
+    expect(isRecentIncident("2026-12-31", now)).toBe(false);
   });
 
   it("returns false for an unparseable date", () => {
     expect(isRecentIncident("not-a-date", now)).toBe(false);
+  });
+
+  it("returns false for an invalid calendar date that matches the format", () => {
+    expect(isRecentIncident("2026-02-31", now)).toBe(false);
   });
 });
 

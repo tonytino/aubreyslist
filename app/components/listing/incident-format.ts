@@ -30,10 +30,22 @@ export function formatIncidentDate(occurredOn: string): string {
   });
 }
 
+/** Floor a `Date` to its UTC-midnight epoch ms (calendar-day granularity). */
+function utcMidnightMs(date: Date): number {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
 /**
  * Coarse relative phrasing for the warning banner, e.g. `today`, `3 days ago`,
  * `2 weeks ago`, `4 months ago`. Coarse on purpose — the exact date is shown
  * alongside it, so this only needs to convey freshness at a glance.
+ *
+ * Recency is **UTC-calendar-based** — both the incident date and `now` are
+ * floored to UTC midnight before measuring the gap, matching `isRecentIncident`
+ * so SSR and client render the same phrase (no hydration flicker) and so a
+ * Denver (UTC-7) report near midnight doesn't read off-by-one. Pass `now` once
+ * (resolved server-side and threaded down) rather than relying on the default,
+ * which would differ between server and browser.
  */
 export function relativeIncidentDate(occurredOn: string, now: Date = new Date()): string {
   const date = parseCalendarDate(occurredOn);
@@ -41,7 +53,7 @@ export function relativeIncidentDate(occurredOn: string, now: Date = new Date())
     return occurredOn;
   }
   const dayMs = 24 * 60 * 60 * 1000;
-  const days = Math.floor((now.getTime() - date.getTime()) / dayMs);
+  const days = Math.floor((utcMidnightMs(now) - utcMidnightMs(date)) / dayMs);
 
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";

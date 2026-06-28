@@ -57,17 +57,21 @@ export const Route = createFileRoute("/listings/$id")({
     if (!listing) {
       throw notFound();
     }
-    return { listing, isSignedIn };
+    // Resolve "now" ONCE on the server and pass it down as epoch ms, so the
+    // recency window + relative phrasing use the same instant on SSR and after
+    // hydration — no banner flicker or off-by-one at day/window edges.
+    return { listing, isSignedIn, nowMs: Date.now() };
   },
   component: ListingDetail,
   notFoundComponent: ListingNotFound,
 });
 
 function ListingDetail() {
-  const { listing, isSignedIn } = Route.useLoaderData();
+  const { listing, isSignedIn, nowMs } = Route.useLoaderData();
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
+  const now = new Date(nowMs);
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
-  const recentIncident = findRecentIncident(incidents);
+  const recentIncident = findRecentIncident(incidents, now);
 
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-section bg-background px-4 py-10 text-foreground sm:px-6">
@@ -78,7 +82,9 @@ function ListingDetail() {
 
       {/* Recent harm is surfaced first and never buried by older confirmations
           (ADR-007, domain.md → Trust Model). Reusable for the #33 list-card signal. */}
-      {recentIncident ? <RecentIncidentBanner occurredOn={recentIncident.occurredOn} /> : null}
+      {recentIncident ? (
+        <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
+      ) : null}
 
       {/* Headline celiac-safe vs gluten-friendly cue (placeholder until EPIC 4). */}
       <SafetySummary state={null} />

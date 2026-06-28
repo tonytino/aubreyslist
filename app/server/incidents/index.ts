@@ -45,6 +45,44 @@ export const RECENT_INCIDENT_WINDOW_DAYS = 90;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
+// Calendar-date parsing — the single source of truth for incident dates
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a `YYYY-MM-DD` string to its UTC-midnight epoch ms, or `null` if it is
+ * not a *real* calendar date. A bare format check is not enough: `2026-02-31`,
+ * `2026-13-45`, and `2026-00-00` all match `\d{4}-\d{2}-\d{2}` but are not
+ * dates. We round-trip through `Date.UTC` and require the components to survive
+ * unchanged, which rejects month/day overflow that JS would otherwise roll
+ * forward (e.g. Feb 31 -> Mar 3).
+ */
+function parseCalendarDay(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const ms = Date.UTC(year, month - 1, day);
+  const round = new Date(ms);
+  // Reject overflow: a valid date round-trips to the same components.
+  if (
+    round.getUTCFullYear() !== year ||
+    round.getUTCMonth() !== month - 1 ||
+    round.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return ms;
+}
+
+/** Today's date floored to UTC midnight (epoch ms) — the "no future" ceiling. */
+function todayUtcMidnight(now: Date = new Date()): number {
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+}
+
+// ---------------------------------------------------------------------------
 // Input validation
 // ---------------------------------------------------------------------------
 
@@ -52,10 +90,28 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * A reported incident. `occurredOn` is required and stored as a calendar date
  * (`YYYY-MM-DD`, matching the `date` column); severity/note are optional. An
  * empty note string is normalised to `undefined` so we never persist a blank.
+ *
+ * `occurredOn` is validated as a *real* calendar date (rejecting `2026-02-31`
+ * et al. before they reach the Postgres `date` column) AND constrained to not be
+ * in the future — a "got glutened" report describes something that has already
+ * happened. The no-future rule is enforced server-side here (through
+ * `submitIncident`), not just in the UI, so a future date can never pin the
+ * recent-incident banner forever.
  */
 export const reportIncidentInputSchema = z.object({
   listingId: z.string().min(1, "listingId is required"),
-  occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "occurredOn must be a YYYY-MM-DD date"),
+  occurredOn: z
+    .string()
+    .refine((value) => parseCalendarDay(value) !== null, {
+      message: "occurredOn must be a real YYYY-MM-DD date",
+    })
+    .refine(
+      (value) => {
+        const day = parseCalendarDay(value);
+        return day !== null && day <= todayUtcMidnight();
+      },
+      { message: "occurredOn cannot be in the future" }
+    ),
   severity: z.enum(incidentSeverities).optional(),
   note: z
     .string()
@@ -83,32 +139,31 @@ export type ListIncidentsInput = z.infer<typeof listIncidentsInputSchema>;
  * one definition of "recent".
  *
  * Boundary rule: an incident exactly `RECENT_INCIDENT_WINDOW_DAYS` old still
- * counts as recent (inclusive); strictly older does not. Future-dated incidents
- * are treated as recent (they are by definition not stale).
+ * counts as recent (inclusive); strictly older does not. A future-dated incident
+ * is NOT recent — the report schema already rejects future dates, but this is
+ * defense in depth so a bad row can never pin the banner forever.
  *
- * Comparison is on **calendar-day** granularity: incidents are stored as dates
- * (no time-of-day), so both `occurredOn` and `now` are floored to their UTC
- * midnight before measuring the gap. This keeps the window a clean "N days" and
- * makes the boundary independent of the time of day the check runs.
+ * Recency is **UTC-calendar-based**: incidents are stored as dates (no
+ * time-of-day), so both `occurredOn` and `now` are floored to their UTC midnight
+ * before measuring the gap. This keeps the window a clean "N days", makes the
+ * boundary independent of the time of day the check runs, and matches the basis
+ * `relativeIncidentDate` uses, so server (SSR) and client agree.
  *
  * @param occurredOn The incident's calendar date (`YYYY-MM-DD`) or a `Date`.
  * @param now The reference instant; defaults to now (injectable for tests).
  */
 export function isRecentIncident(occurredOn: string | Date, now: Date = new Date()): boolean {
-  const occurred = occurredOn instanceof Date ? occurredOn : new Date(`${occurredOn}T00:00:00Z`);
-  if (Number.isNaN(occurred.getTime())) {
+  const occurredDay =
+    occurredOn instanceof Date
+      ? Date.UTC(occurredOn.getUTCFullYear(), occurredOn.getUTCMonth(), occurredOn.getUTCDate())
+      : parseCalendarDay(occurredOn);
+  if (occurredDay === null || Number.isNaN(occurredDay)) {
     return false;
   }
-  const occurredDay = utcMidnight(occurred);
-  const nowDay = utcMidnight(now);
+  const nowDay = todayUtcMidnight(now);
   const ageMs = nowDay - occurredDay;
-  // Future-dated -> recent; otherwise within the inclusive window.
-  return ageMs <= RECENT_INCIDENT_WINDOW_DAYS * MS_PER_DAY;
-}
-
-/** Floor a `Date` to its UTC-midnight epoch ms (calendar-day granularity). */
-function utcMidnight(date: Date): number {
-  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  // Future-dated (ageMs < 0) is not recent; otherwise within the inclusive window.
+  return ageMs >= 0 && ageMs <= RECENT_INCIDENT_WINDOW_DAYS * MS_PER_DAY;
 }
 
 /**
