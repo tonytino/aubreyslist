@@ -5,6 +5,12 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   tsr: {
     appDirectory: "app",
+    // Generate the file-based API routes (e.g. app/routes/api.$.ts) so the API
+    // router's handler has routes to dispatch to. Paired with app/api.ts, which
+    // is what makes the config register the Vinxi "api" router that serves
+    // /api/* in the production build. Both are required: without this flag the
+    // route is never generated; without app/api.ts the router is never built.
+    __enableAPIRoutesGeneration: true,
   },
   // Target Vercel via the Nitro/Vinxi deployment preset ONLY when building on
   // Vercel (which injects `VERCEL=1`). There the build emits the Vercel Build

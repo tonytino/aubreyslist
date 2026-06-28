@@ -3,8 +3,10 @@
   "entry": [
     "app/client.tsx",
     "app/ssr.tsx",
+    "app/api.ts",
     "app/router.tsx",
     "app/routes/**/*.tsx",
+    "app/routes/api.$.ts",
     "app/server/index.ts",
     "app/server/places.ts",
     "app.config.ts",
