@@ -121,6 +121,17 @@ jobs:
           echo "Stylesheet: $CSS"
           curl -fsS "http://localhost:3000$CSS" -o /dev/null || { echo "::error::Stylesheet asset $CSS did not resolve (production asset path broken)"; exit 1; }
           echo "✓ Production build serves the homepage (200) and the stylesheet resolves"
+          # Guard the API router: /api/* must be served by the Hono handoff in the
+          # production build. It silently 404s (falling through to the SSR router)
+          # if app/api.ts is missing or API-route generation is off — which is
+          # exactly the regression this asserts against. /api/health needs no DB.
+          API_CODE=$(curl -s -o /tmp/health.json -w '%{http_code}' http://localhost:3000/api/health)
+          if [ "$API_CODE" != "200" ]; then
+            echo "::error::/api/health returned $API_CODE (expected 200) — the API router is not served in the production build"
+            cat /tmp/health.json 2>/dev/null
+            exit 1
+          fi
+          echo "✓ API router serves /api/health ($(cat /tmp/health.json))"
 
   changelog-fragment:
     name: Changelog fragment present
