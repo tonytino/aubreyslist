@@ -26,9 +26,17 @@ export function PlacesIntakeForm({
   // Autocomplete runs as a query keyed on the (debounce-free, manually
   // triggered) submitted term. We trigger it on the search form submit rather
   // than per-keystroke to keep paid Places calls deliberate.
+  //
+  // `searchNonce` increments on every submit and is part of the query key so a
+  // deliberate Search always re-fetches — even when the term is unchanged. The
+  // app sets a 60s `staleTime` (app/router.tsx); without the nonce, re-submitting
+  // the same term (e.g. retrying after a transient "Please try again" failure, or
+  // re-running an empty result) would serve the cached result and never hit the
+  // API, leaving the user stuck with no new results (issue #98).
   const [submittedQuery, setSubmittedQuery] = useState("");
+  const [searchNonce, setSearchNonce] = useState(0);
   const suggestions = useQuery({
-    queryKey: ["places-autocomplete", submittedQuery],
+    queryKey: ["places-autocomplete", searchNonce, submittedQuery],
     queryFn: () => autocompletePlaces({ data: { query: submittedQuery } }),
     enabled: submittedQuery.trim().length > 0,
   });
@@ -40,8 +48,18 @@ export function PlacesIntakeForm({
   });
 
   const predictions = suggestions.data?.ok ? suggestions.data.data : [];
+  // Two failure shapes: the server function *returns* a typed `ok:false` result
+  // (key missing, upstream/network error it caught), or it *throws* before
+  // returning one (transport failure, an uncaught server-side error). The latter
+  // surfaces as `suggestions.isError` with no `data`; without handling it the UI
+  // would fall through to the "No matches found" branch and show a silent empty
+  // state instead of an error — the first-search "no results come back" of #98.
   const searchError =
-    suggestions.data && !suggestions.data.ok ? suggestions.data.message : undefined;
+    suggestions.data && !suggestions.data.ok
+      ? suggestions.data.message
+      : suggestions.isError
+        ? "Place search is temporarily unavailable. Please try again."
+        : undefined;
 
   return (
     <div className="flex flex-col gap-section">
@@ -51,6 +69,7 @@ export function PlacesIntakeForm({
           event.preventDefault();
           setSelected(null);
           setSubmittedQuery(query);
+          setSearchNonce((nonce) => nonce + 1);
         }}
       >
         <label className="flex flex-1 flex-col gap-1">
