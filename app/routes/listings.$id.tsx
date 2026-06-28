@@ -1,7 +1,6 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
 import { FlagControl } from "~/components/listing/FlagControl";
@@ -9,30 +8,14 @@ import { IncidentReports, incidentsQueryKey } from "~/components/listing/Inciden
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { TrustPlaceholder } from "~/components/listing/TrustPlaceholder";
-import { getDb } from "~/db/client";
-import { type Listing, listings } from "~/db/schema";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
+import { fetchListing } from "~/server/listings/get-listing.fn";
 import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
 import { findRecentIncident } from "~/trust/incident-recency";
 import { deriveHeadlineSafetyState } from "~/trust/summary";
-
-/**
- * Server-only loader for a single listing by id. Validated input (the dynamic
- * `$id` segment), so a malformed id is rejected before it reaches the DB.
- * Returns `null` for a non-existent id; the route loader turns that into a
- * `notFound()` so the not-found UI renders (rather than crashing or 500-ing).
- */
-const getListing = createServerFn({ method: "GET" })
-  .validator(z.object({ id: z.string().min(1) }))
-  .handler(async ({ data: { id } }): Promise<Listing | null> => {
-    const listing = await getDb().query.listings.findFirst({
-      where: eq(listings.id, id),
-    });
-    return listing ?? null;
-  });
 
 /**
  * Server-only loader for a listing's claims WITH their aggregates (confirm/
@@ -87,7 +70,7 @@ function claimsQueryOptions(listingId: string) {
 export const Route = createFileRoute("/listings/$id")({
   loader: async ({ params: { id }, context }) => {
     const [listing, viewerId] = await Promise.all([
-      getListing({ data: { id } }),
+      fetchListing({ data: { id } }),
       getViewerId(),
       // Prefetch incidents so the list + banner render on first paint, then are
       // refetchable client-side via TanStack Query after a new report.
