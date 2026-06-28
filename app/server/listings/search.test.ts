@@ -3,17 +3,26 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // --- Mocks -----------------------------------------------------------------
-// `runListingSearch` runs `getDb().select().from(listings).where(predicate)`.
+// `runListingSearch` runs
+//   getDb().select().from(listings).where(predicate).orderBy(asc(name)).limit(n).offset(m)
 // We model that exact chain so we can assert the predicate handed to `.where()`
-// without a live database. Everything else (the predicate-building logic) is
-// pure and tested directly.
+// AND the bound `.limit()`/`.offset()` (issue #97) without a live database.
+// Everything else (the predicate-building logic) is pure and tested directly.
 let returnedRows: unknown[] = [];
-const whereMock = vi.fn((_predicate?: SQL) => Promise.resolve(returnedRows));
+const offsetMock = vi.fn((_offset: number) => Promise.resolve(returnedRows));
+const limitMock = vi.fn((_limit: number) => ({ offset: offsetMock }));
+const orderByMock = vi.fn(() => ({ limit: limitMock }));
+const whereMock = vi.fn((_predicate?: SQL) => ({ orderBy: orderByMock }));
 const fromMock = vi.fn(() => ({ where: whereMock }));
 const selectMock = vi.fn(() => ({ from: fromMock }));
 vi.mock("~/db/client", () => ({ getDb: () => ({ select: selectMock }) }));
 
-import { buildSearchPredicate, runListingSearch } from "./search";
+import {
+  SEARCH_PAGE_SIZE,
+  buildSearchPredicate,
+  listingSearchInputSchema,
+  runListingSearch,
+} from "./search";
 
 // Render a drizzle SQL node to a parameterized string so we can assert on the
 // generated WHERE clause (table/columns + ILIKE + bound `%term%` params).
@@ -59,12 +68,19 @@ describe("buildSearchPredicate", () => {
   });
 });
 
+// Build a fully-defaulted, validated input the way the server function does, so
+// `page`/`pageSize` are always present (the schema defaults apply) without each
+// test repeating them. Pass overrides to exercise pagination/clamping.
+function search(input: { query: string; page?: number; pageSize?: number }) {
+  return runListingSearch(listingSearchInputSchema.parse(input));
+}
+
 describe("runListingSearch", () => {
   it("applies the search predicate and returns matching rows", async () => {
     const match = { id: "1", name: "Taco House", address: "1 Main St" };
     returnedRows = [match];
 
-    const result = await runListingSearch({ query: "taco" });
+    const result = await search({ query: "taco" });
 
     expect(result).toEqual([match]);
     // The predicate passed to `.where()` is a real SQL node (not undefined).
@@ -75,7 +91,7 @@ describe("runListingSearch", () => {
 
   it("returns an empty array when nothing matches", async () => {
     returnedRows = [];
-    const result = await runListingSearch({ query: "nope-no-match" });
+    const result = await search({ query: "nope-no-match" });
     expect(result).toEqual([]);
   });
 
@@ -91,10 +107,34 @@ describe("runListingSearch", () => {
   it("passes no WHERE filter for an empty query (returns all listings)", async () => {
     returnedRows = [{ id: "1" }, { id: "2" }];
 
-    const result = await runListingSearch({ query: "  " });
+    const result = await search({ query: "  " });
 
     expect(result).toHaveLength(2);
     // `undefined` predicate -> drizzle applies no WHERE -> all rows.
     expect(whereMock.mock.calls[0]?.[0]).toBeUndefined();
+  });
+
+  it("bounds every query with the default page size and offset 0", async () => {
+    await search({ query: "taco" });
+
+    expect(limitMock).toHaveBeenCalledWith(SEARCH_PAGE_SIZE);
+    expect(offsetMock).toHaveBeenCalledWith(0);
+  });
+
+  it("offsets to the requested page (page 2 starts after one full page)", async () => {
+    await search({ query: "taco", page: 2, pageSize: 10 });
+
+    expect(limitMock).toHaveBeenCalledWith(10);
+    // page 2 with size 10 -> skip the first 10 rows.
+    expect(offsetMock).toHaveBeenCalledWith(10);
+  });
+
+  it("clamps a too-large page size to the upper bound (rejected by the validator)", () => {
+    // The validator caps `pageSize`, so a caller can never request a huge page.
+    expect(() => listingSearchInputSchema.parse({ query: "taco", pageSize: 10_000 })).toThrow();
+    // The largest accepted page size is the default cap.
+    expect(
+      listingSearchInputSchema.parse({ query: "taco", pageSize: SEARCH_PAGE_SIZE }).pageSize
+    ).toBe(SEARCH_PAGE_SIZE);
   });
 });
