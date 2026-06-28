@@ -8,6 +8,7 @@ import {
   createRootRouteWithContext,
 } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
+import { Analytics } from "@vercel/analytics/react";
 import { fetchCurrentUser } from "~/server/auth/current-user.fn";
 // Import the stylesheet as a bundled URL so the bundler emits a hashed asset
 // and rewrites the href. Referencing the source path ("/app/styles/app.css")
@@ -66,6 +67,7 @@ function RootComponent() {
           <Outlet />
         </AppShell>
         <Scripts />
+        <Analytics />
       </body>
     </html>
   );
