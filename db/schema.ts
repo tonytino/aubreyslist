@@ -259,3 +259,14 @@ export const claimAttributes = claimAttribute.enumValues;
 export const attestationValues = attestationValue.enumValues;
 export const incidentSeverities = incidentSeverity.enumValues;
 export const flagStatuses = flagStatus.enumValues;
+
+// ---------------------------------------------------------------------------
+// Enum value types (string-union of each enum's members, for typed app-side
+// use — e.g. exhaustive label maps — without re-importing the pgEnum).
+// ---------------------------------------------------------------------------
+
+export type UserRole = (typeof userRoles)[number];
+export type ClaimAttribute = (typeof claimAttributes)[number];
+export type AttestationValue = (typeof attestationValues)[number];
+export type IncidentSeverity = (typeof incidentSeverities)[number];
+export type FlagStatus = (typeof flagStatuses)[number];

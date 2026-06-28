@@ -2,10 +2,13 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { CommunityClaims } from "~/components/listing/CommunityClaims";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { TrustPlaceholder } from "~/components/listing/TrustPlaceholder";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
+import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
+import { deriveHeadlineSafetyState } from "~/trust/summary";
 
 /**
  * Server-only loader for a single listing by id. Validated input (the dynamic
@@ -22,6 +25,15 @@ const getListing = createServerFn({ method: "GET" })
     return listing ?? null;
   });
 
+/**
+ * Server-only loader for a listing's claims WITH their aggregates (confirm/
+ * dispute counts + recency) in one batched query — the transparent trust
+ * roll-up the detail page renders (#29, ADR-007). Reads are open/anonymous.
+ */
+const getListingClaims = createServerFn({ method: "GET" })
+  .validator(z.object({ id: z.string().min(1) }))
+  .handler(({ data: { id } }) => getListingClaimAggregates({ listingId: id }));
+
 export const Route = createFileRoute("/listings/$id")({
   loader: async ({ params: { id } }) => {
     const listing = await getListing({ data: { id } });
@@ -30,14 +42,24 @@ export const Route = createFileRoute("/listings/$id")({
     if (!listing) {
       throw notFound();
     }
-    return { listing };
+    const claims = await getListingClaims({ data: { id } });
+    return { listing, claims };
   },
   component: ListingDetail,
   notFoundComponent: ListingNotFound,
 });
 
 function ListingDetail() {
-  const { listing } = Route.useLoaderData();
+  const { listing, claims } = Route.useLoaderData();
+
+  // Headline celiac-safe vs gluten-friendly cue, derived from the
+  // `celiac_safe_vs_gluten_friendly` claim's VISIBLE aggregate (#29, ADR-007).
+  // No such claim / no attestation evidence → `null`, so SafetySummary keeps
+  // its honest "Not yet attested" empty state (never a fabricated rating).
+  const headlineClaim = claims.find(
+    (claim) => claim.attribute === "celiac_safe_vs_gluten_friendly"
+  );
+  const safetyState = headlineClaim ? deriveHeadlineSafetyState(headlineClaim) : null;
 
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-section bg-background px-4 py-10 text-foreground sm:px-6">
@@ -46,8 +68,8 @@ function ListingDetail() {
         <p className="text-body text-muted-foreground">{listing.address}</p>
       </header>
 
-      {/* Headline celiac-safe vs gluten-friendly cue (placeholder until EPIC 4). */}
-      <SafetySummary state={null} />
+      {/* Headline celiac-safe vs gluten-friendly cue, derived from visible evidence (#29). */}
+      <SafetySummary state={safetyState} />
 
       {/* Primary action: deep-link to Google Maps (ADR-009 — no embedded map). */}
       <section aria-label="Links" className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -73,11 +95,26 @@ function ListingDetail() {
         ) : null}
       </section>
 
-      {/* EPIC 4 (#28/#29) slots — honest empty states, never fake data. */}
-      <TrustPlaceholder
-        title="Community claims"
-        description="Confirmed and disputed claims about this restaurant — dedicated fryer, cross-contamination protocol, GF menu, and more — will appear here once the community starts attesting."
-      />
+      {/* EPIC 4 slots — honest empty states, never fake data. */}
+      {claims.length > 0 ? (
+        // Real, transparent trust roll-up — confirm/dispute counts + recency,
+        // all derived from visible evidence (#29, ADR-007).
+        <section aria-labelledby="community-claims-heading" className="flex flex-col gap-3">
+          <h2 id="community-claims-heading" className="text-title">
+            Community claims
+          </h2>
+          <p className="text-body-sm text-muted-foreground">
+            What the community has confirmed or disputed about this restaurant. Each summary is a
+            roll-up of the visible attestations below it — never a hidden score.
+          </p>
+          <CommunityClaims claims={claims} />
+        </section>
+      ) : (
+        <TrustPlaceholder
+          title="Community claims"
+          description="Confirmed and disputed claims about this restaurant — dedicated fryer, cross-contamination protocol, GF menu, and more — will appear here once the community starts attesting."
+        />
+      )}
 
       <TrustPlaceholder
         title="Incident reports"
