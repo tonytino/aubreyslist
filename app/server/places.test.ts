@@ -1,3 +1,4 @@
+import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // --- Mocks -----------------------------------------------------------------
@@ -17,7 +18,27 @@ const fromMock = vi.fn(() => ({ where: whereMock }));
 const selectMock = vi.fn(() => ({ from: fromMock }));
 vi.mock("~/db/client", () => ({ getDb: () => ({ select: selectMock }) }));
 
-import { buildMapsUrl, runAutocomplete, runPlaceDetails } from "./places";
+// The `autocompletePlaces` / `getPlaceDetails` server-fn wrappers gate the paid
+// Places API behind auth + a per-user rate limit (issue #86), mirroring the
+// `createListing` write path. We mock both guards so we can assert the wrappers
+// wire them in the right order (auth gate, then per-user limit) without cookie/DB
+// plumbing; the guards' own logic is covered in `auth/guards.test.ts` and
+// `rate-limit/index.test.ts`.
+const requireCurrentUserMock = vi.fn(() => Promise.resolve({ id: "user-1" }));
+vi.mock("~/server/auth/guards", () => ({ requireCurrentUser: () => requireCurrentUserMock() }));
+
+const enforceWriteLimitMock = vi.fn((_userId?: string) => Promise.resolve());
+vi.mock("~/server/rate-limit", () => ({
+  enforceWriteLimit: (userId?: string) => enforceWriteLimitMock(userId),
+}));
+
+import {
+  autocompletePlaces,
+  buildMapsUrl,
+  getPlaceDetails,
+  runAutocomplete,
+  runPlaceDetails,
+} from "./places";
 
 function mockFetchOnce(body: unknown, ok = true, status = 200) {
   return vi.fn().mockResolvedValue({
@@ -31,11 +52,15 @@ function mockFetchOnce(body: unknown, ok = true, status = 200) {
 beforeEach(() => {
   intakeRows = []; // default: no row -> defaults to "places"
   getEnvMock.mockReturnValue({ GOOGLE_PLACES_API_KEY: "test-key" });
+  requireCurrentUserMock.mockResolvedValue({ id: "user-1" });
+  enforceWriteLimitMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  requireCurrentUserMock.mockReset();
+  enforceWriteLimitMock.mockReset();
 });
 
 describe("buildMapsUrl", () => {
@@ -175,5 +200,89 @@ describe("runPlaceDetails", () => {
     const result = await runPlaceDetails({ placeId: "ChIJ_target" });
 
     expect(result).toMatchObject({ ok: false, reason: "upstream_error" });
+  });
+});
+
+// --- Server-fn wrappers (auth + rate limit, #86) ---------------------------
+//
+// Both wrappers proxy the *paid* Places API, so they must reject anonymous
+// callers and meter authed ones BEFORE any upstream call (mirrors `createListing`).
+// We assert the order of operations (auth gate, then per-user limit) and that an
+// anonymous caller / over-limit burst never reaches `fetch`.
+
+describe("autocompletePlaces — auth + rate limit (#86)", () => {
+  it("requires auth and meters the authed user before the upstream call", async () => {
+    const fetchSpy = mockFetchOnce({ suggestions: [] });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await autocompletePlaces({ data: { query: "cafe" } });
+
+    expect(requireCurrentUserMock).toHaveBeenCalledTimes(1);
+    // Metered on the authenticated user id, after the auth gate resolved them.
+    expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
+    expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an anonymous caller (401) before any upstream call", async () => {
+    const unauthorized = new HTTPException(401, { message: "Authentication required." });
+    requireCurrentUserMock.mockRejectedValueOnce(unauthorized);
+    const fetchSpy = mockFetchOnce({ suggestions: [] });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(autocompletePlaces({ data: { query: "cafe" } })).rejects.toBe(unauthorized);
+    // Anonymous callers are short-circuited before the limiter and the paid call.
+    expect(enforceWriteLimitMock).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not call the upstream Places API when the rate limit is exceeded (429)", async () => {
+    const tooFast = new HTTPException(429, { message: "too fast" });
+    enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
+    const fetchSpy = mockFetchOnce({ suggestions: [] });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(autocompletePlaces({ data: { query: "cafe" } })).rejects.toBe(tooFast);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("getPlaceDetails — auth + rate limit (#86)", () => {
+  it("requires auth and meters the authed user before the upstream call", async () => {
+    const fetchSpy = mockFetchOnce({
+      id: "ChIJ_target",
+      displayName: { text: "Aubrey's Cafe" },
+      formattedAddress: "123 Main St, Denver, CO",
+      location: { latitude: 39.7392, longitude: -104.9903 },
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await getPlaceDetails({ data: { placeId: "ChIJ_target" } });
+
+    expect(requireCurrentUserMock).toHaveBeenCalledTimes(1);
+    expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
+    expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an anonymous caller (401) before any upstream call", async () => {
+    const unauthorized = new HTTPException(401, { message: "Authentication required." });
+    requireCurrentUserMock.mockRejectedValueOnce(unauthorized);
+    const fetchSpy = mockFetchOnce({});
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(getPlaceDetails({ data: { placeId: "ChIJ_target" } })).rejects.toBe(unauthorized);
+    expect(enforceWriteLimitMock).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not call the upstream Places API when the rate limit is exceeded (429)", async () => {
+    const tooFast = new HTTPException(429, { message: "too fast" });
+    enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
+    const fetchSpy = mockFetchOnce({});
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(getPlaceDetails({ data: { placeId: "ChIJ_target" } })).rejects.toBe(tooFast);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
