@@ -129,7 +129,7 @@ function ListingDetail() {
     (claim) => claim.attribute === "celiac_safe_vs_gluten_friendly"
   );
   const safetyState = headlineClaim
-    ? deriveHeadlineSafetyState(headlineClaim, new Date(), stalenessMonths)
+    ? deriveHeadlineSafetyState(headlineClaim, now, stalenessMonths)
     : null;
 
   return (
@@ -193,6 +193,7 @@ function ListingDetail() {
             listingId={listing.id}
             claims={claims}
             viewerId={viewerId}
+            now={now}
             stalenessMonths={stalenessMonths}
           />
         </section>
