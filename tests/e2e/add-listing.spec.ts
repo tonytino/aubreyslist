@@ -10,6 +10,12 @@ test("add-listing page prompts anonymous visitors to sign in", async ({ page }) 
   await page.goto("/listings/new");
 
   await expect(page.getByRole("heading", { name: "Add a restaurant" })).toBeVisible();
-  await expect(page.getByText("Please sign in to add a restaurant.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Continue with Google" })).toBeVisible();
+
+  // Scope to the page's sign-in prompt region: the app-shell header also renders
+  // a "Continue with Google" link, so an unscoped page locator matches 2 elements
+  // and trips Playwright strict mode. The labeled region (a <section aria-label>
+  // in the route component) disambiguates to the link this route renders.
+  const prompt = page.getByRole("region", { name: "Sign in to add a restaurant" });
+  await expect(prompt.getByText("Please sign in to add a restaurant.")).toBeVisible();
+  await expect(prompt.getByRole("link", { name: "Continue with Google" })).toBeVisible();
 });

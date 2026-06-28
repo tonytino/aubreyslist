@@ -77,7 +77,12 @@ function AddListing() {
  */
 function SignInPrompt() {
   return (
-    <div className="flex flex-col items-start gap-4 rounded-card border border-border p-gutter">
+    // Labeled region so the "Continue with Google" link here is addressable
+    // independently of the identical app-shell header link (E2E strict-mode).
+    <section
+      aria-label="Sign in to add a restaurant"
+      className="flex flex-col items-start gap-4 rounded-card border border-border p-gutter"
+    >
       <p className="text-body text-foreground">Please sign in to add a restaurant.</p>
       <a
         href="/api/auth/google"
@@ -88,6 +93,6 @@ function SignInPrompt() {
       <Link to="/" className="text-body-sm underline underline-offset-4">
         Back to home
       </Link>
-    </div>
+    </section>
   );
 }
