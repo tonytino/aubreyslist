@@ -1,4 +1,4 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, max } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import { attestationValues, attestations, claims } from "~/db/schema";
@@ -22,9 +22,10 @@ import { enforceWriteLimit } from "~/server/rate-limit";
  * Aggregate signal (ADR-007: a roll-up of *visible* evidence, never a secret
  * score): {@link getClaimAggregate} derives per-claim confirm/dispute counts
  * straight from the `attestations` rows and surfaces `claims.lastConfirmedAt`.
- * A `confirm` bumps `lastConfirmedAt` to now so recency-driven staleness stays
- * current; dispute/retract leave it untouched (an old confirmation is still the
- * last time the claim was affirmed).
+ * After every vote write `lastConfirmedAt` is recomputed as the newest
+ * surviving `confirm` (null when none remain), so recency-driven staleness
+ * always reflects visible evidence — a withdrawn confirm (flip to dispute or
+ * retract) can never leave recency pinned to it (ADR-007).
  *
  * Scope: this module is the write + aggregate-helper layer only. The
  * transparent trust SUMMARY rendering and listing-detail wiring land in #29,
@@ -125,6 +126,36 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
 // ---------------------------------------------------------------------------
 
 /**
+ * Recompute a claim's `lastConfirmedAt` from its surviving `confirm` rows.
+ *
+ * ADR-007 requires recency to be derivable from *visible* evidence: the signal
+ * must equal the newest still-present confirmation, never a stale value left
+ * behind by a withdrawn confirm. We take `MAX(attestations.updatedAt)` over the
+ * claim's `confirm` rows (the same `updatedAt` the upsert stamps) — mirroring
+ * the grouped-scan style in {@link getClaimAggregate} — and set it to `null`
+ * when no confirm rows remain. `claims.updatedAt` is bumped so the row's own
+ * recency stays accurate. This is the single place that maintains the signal,
+ * so every transition (flip, retract, re-confirm, dispute→confirm) is correct.
+ */
+async function recomputeLastConfirmedAt(
+  db: ReturnType<typeof getDb>,
+  claimId: string
+): Promise<void> {
+  const rows = await db
+    .select({ lastConfirmedAt: max(attestations.updatedAt) })
+    .from(attestations)
+    .where(and(eq(attestations.claimId, claimId), eq(attestations.value, "confirm")));
+
+  // `max()` over zero rows yields null — exactly the "no confirms" recency.
+  const lastConfirmedAt = rows[0]?.lastConfirmedAt ?? null;
+
+  await db
+    .update(claims)
+    .set({ lastConfirmedAt, updatedAt: new Date() })
+    .where(eq(claims.id, claimId));
+}
+
+/**
  * Cast or change the current user's vote on a claim.
  *
  * Upserts against `attestations_claim_user_unique`: a first vote inserts; a
@@ -132,8 +163,11 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
  * `value` (and `updatedAt`) instead of inserting a duplicate — this is the
  * "one vote per user per claim, changeable" rule.
  *
- * A `confirm` also bumps the claim's `lastConfirmedAt` to now so the
- * recency-driven staleness signal stays current; `dispute` leaves it untouched.
+ * After the upsert the claim's `lastConfirmedAt` is recomputed from the
+ * surviving `confirm` rows (see {@link recomputeLastConfirmedAt}) so the
+ * recency signal always reflects visible evidence: a confirm refreshes it, and
+ * flipping a confirm to a dispute clears the now-withdrawn confirmation rather
+ * than pinning recency to it (ADR-007).
  *
  * Login-gated: throws 401 for anonymous callers, then rate-limited per user via
  * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst).
@@ -153,19 +187,20 @@ export async function castVote(input: VoteInput): Promise<void> {
       set: { value: input.value, updatedAt: now },
     });
 
-  // A confirm refreshes the claim's recency signal; a dispute must not.
-  if (input.value === "confirm") {
-    await db
-      .update(claims)
-      .set({ lastConfirmedAt: now, updatedAt: now })
-      .where(eq(claims.id, input.claimId));
-  }
+  // Recency always tracks the surviving confirms — a confirm refreshes it, a
+  // flip to dispute drops the withdrawn confirmation (ADR-007).
+  await recomputeLastConfirmedAt(db, input.claimId);
 }
 
 /**
  * Retract the current user's vote on a claim — deletes their `attestations`
- * row, leaving the claim's `lastConfirmedAt` as-is (an old confirmation is
- * still the last time the claim was affirmed). A no-op if no vote exists.
+ * row. A no-op delete if no vote exists.
+ *
+ * After the delete the claim's `lastConfirmedAt` is recomputed from the
+ * surviving `confirm` rows (see {@link recomputeLastConfirmedAt}): retracting
+ * the only confirm drops recency to `null`, while retracting one of several
+ * leaves it at the newest remaining confirm — recency stays derivable from
+ * visible evidence (ADR-007).
  *
  * Login-gated: throws 401 for anonymous callers, then rate-limited per user via
  * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst).
@@ -174,9 +209,13 @@ export async function retractVote(input: RetractInput): Promise<void> {
   const user = await requireCurrentUser();
   await enforceWriteLimit(user.id);
 
-  await getDb()
+  const db = getDb();
+
+  await db
     .delete(attestations)
     .where(and(eq(attestations.claimId, input.claimId), eq(attestations.userId, user.id)));
+
+  await recomputeLastConfirmedAt(db, input.claimId);
 }
 
 // The client-callable `createServerFn` wrappers (submitVote / removeVote /

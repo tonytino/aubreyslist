@@ -1,0 +1,1 @@
+- `[manual]` Recompute a claim's `lastConfirmedAt` from its surviving `confirm` attestations after every vote write, so flipping a confirm to a dispute or retracting a confirm no longer leaves recency pinned to a withdrawn confirmation (clears to null when none remain) — keeping recency derivable from visible evidence per ADR-007 (closes #87).

@@ -17,15 +17,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // hoisted block exposes the mock fns + mutable test state we assert on.
 //
 // DB chains modeled:
-//   read counts:  getDb().select().from().where().groupBy() -> grouped rows
-//   read claim:   getDb().select().from().where().limit()   -> [{ lastConfirmedAt }]
-//   upsert:       getDb().insert().values().onConflictDoUpdate()
-//   bump:         getDb().update().set().where()
-//   retract:      getDb().delete().where()
+//   read counts:   getDb().select().from().where().groupBy() -> grouped rows
+//   read claim:    getDb().select().from().where().limit()   -> [{ lastConfirmedAt }]
+//   recompute max: getDb().select().from().where()           -> [{ lastConfirmedAt }]
+//   upsert:        getDb().insert().values().onConflictDoUpdate()
+//   bump/recompute:getDb().update().set().where()
+//   retract:       getDb().delete().where()
 const h = vi.hoisted(() => {
   const state = {
     groupByRows: [] as Array<{ value: string; n: number }>,
     limitRows: [] as Array<{ lastConfirmedAt: Date | null }>,
+    // The recompute helper's `select().from().where()` resolves directly (no
+    // `.groupBy()`/`.limit()`): MAX(updatedAt) over the surviving confirms.
+    maxRows: [] as Array<{ lastConfirmedAt: Date | null }>,
     lastInsertValues: undefined as unknown,
     lastConflictArgs: undefined as unknown,
     lastUpdateSet: undefined as unknown,
@@ -34,9 +38,18 @@ const h = vi.hoisted(() => {
 
   const groupByMock = vi.fn(() => Promise.resolve(state.groupByRows));
   const limitMock = vi.fn(() => Promise.resolve(state.limitRows));
-  // `.where()` is shared by both reads; it returns the union of next-steps so
-  // either `.groupBy()` (counts) or `.limit()` (claim row) resolves.
-  const selectWhereMock = vi.fn(() => ({ groupBy: groupByMock, limit: limitMock }));
+  // `.where()` is shared by all three reads. It returns a real Promise that
+  // resolves to the recompute's MAX rows (so `await select().from().where()`
+  // works for `recomputeLastConfirmedAt`), with `.groupBy()` (counts) and
+  // `.limit()` (claim row) attached for the two aggregate reads that chain on.
+  const selectWhereMock = vi.fn(() => {
+    const result = Promise.resolve(state.maxRows) as Promise<
+      Array<{ lastConfirmedAt: Date | null }>
+    > & { groupBy: typeof groupByMock; limit: typeof limitMock };
+    result.groupBy = groupByMock;
+    result.limit = limitMock;
+    return result;
+  });
   const fromMock = vi.fn(() => ({ where: selectWhereMock }));
   const selectMock = vi.fn(() => ({ from: fromMock }));
 
@@ -125,6 +138,7 @@ const {
 beforeEach(() => {
   state.groupByRows = [];
   state.limitRows = [];
+  state.maxRows = [];
   state.lastInsertValues = undefined;
   state.lastConflictArgs = undefined;
   state.lastUpdateSet = undefined;
@@ -201,35 +215,81 @@ describe("castVote — one vote per user per claim (upsert)", () => {
   });
 });
 
-describe("castVote — lastConfirmedAt maintenance", () => {
-  it("bumps lastConfirmedAt to now on a confirm", async () => {
+describe("castVote — lastConfirmedAt maintenance (recomputed from confirms)", () => {
+  it("sets lastConfirmedAt to the newest surviving confirm on a confirm", async () => {
+    // After the upsert there is one confirm row; its updatedAt is the recency.
+    const confirmedAt = new Date("2026-06-10T00:00:00Z");
+    state.maxRows = [{ lastConfirmedAt: confirmedAt }];
+
     await castVote({ claimId: "claim-1", value: "confirm" });
 
     expect(updateMock).toHaveBeenCalledTimes(1);
-    const set = state.lastUpdateSet as { lastConfirmedAt: Date; updatedAt: Date };
-    expect(set.lastConfirmedAt).toBeInstanceOf(Date);
-    // The upsert's updatedAt and the claim bump share the same `now`.
-    const insertSet = (state.lastConflictArgs as { set: { updatedAt: Date } }).set;
-    expect(set.lastConfirmedAt).toEqual(insertSet.updatedAt);
+    const set = state.lastUpdateSet as { lastConfirmedAt: Date | null; updatedAt: Date };
+    expect(set.lastConfirmedAt).toEqual(confirmedAt);
+    expect(set.updatedAt).toBeInstanceOf(Date);
   });
 
-  it("does NOT touch lastConfirmedAt on a dispute", async () => {
+  it("clears lastConfirmedAt when a confirm is flipped to a dispute (no confirms remain)", async () => {
+    // The user's only confirm becomes a dispute, so MAX over confirms is empty:
+    // recency must drop to null rather than stay pinned to the withdrawn confirm.
+    state.maxRows = [{ lastConfirmedAt: null }];
+
     await castVote({ claimId: "claim-1", value: "dispute" });
 
-    expect(insertMock).toHaveBeenCalledTimes(1);
-    expect(updateMock).not.toHaveBeenCalled();
+    // A dispute now ALSO recomputes recency (the old behavior skipped this).
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    const set = state.lastUpdateSet as { lastConfirmedAt: Date | null; updatedAt: Date };
+    expect(set.lastConfirmedAt).toBeNull();
+    expect(set.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it("keeps recency at the newest remaining confirm when others still confirm", async () => {
+    // The actor disputes, but other users still confirm — recency holds at the
+    // newest surviving confirm rather than clearing.
+    const newest = new Date("2026-06-20T00:00:00Z");
+    state.maxRows = [{ lastConfirmedAt: newest }];
+
+    await castVote({ claimId: "claim-1", value: "dispute" });
+
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    const set = state.lastUpdateSet as { lastConfirmedAt: Date | null };
+    expect(set.lastConfirmedAt).toEqual(newest);
   });
 });
 
-describe("retractVote — deletes the user's row", () => {
+describe("retractVote — deletes the user's row + recomputes recency", () => {
   it("deletes the current user's attestation for the claim", async () => {
     await retractVote({ claimId: "claim-1" });
 
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteWhereMock).toHaveBeenCalledTimes(1);
-    // Never touches lastConfirmedAt or inserts anything.
-    expect(updateMock).not.toHaveBeenCalled();
+    // Never inserts anything (it is a delete-only path).
     expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("clears lastConfirmedAt when the retracted vote was the only confirm", async () => {
+    // No confirm rows survive the delete, so MAX over confirms is empty.
+    state.maxRows = [{ lastConfirmedAt: null }];
+
+    await retractVote({ claimId: "claim-1" });
+
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    const set = state.lastUpdateSet as { lastConfirmedAt: Date | null; updatedAt: Date };
+    expect(set.lastConfirmedAt).toBeNull();
+    expect(set.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it("leaves recency at the newest remaining confirm when others still confirm", async () => {
+    // Retracting one of several confirms: recency drops to the newest survivor.
+    const newest = new Date("2026-06-15T00:00:00Z");
+    state.maxRows = [{ lastConfirmedAt: newest }];
+
+    await retractVote({ claimId: "claim-1" });
+
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    const set = state.lastUpdateSet as { lastConfirmedAt: Date | null };
+    expect(set.lastConfirmedAt).toEqual(newest);
   });
 
   it("requires a signed-in user (401 gate)", async () => {
