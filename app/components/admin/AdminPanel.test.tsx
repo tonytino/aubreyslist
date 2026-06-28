@@ -1,5 +1,14 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The moderation-queue section (#40) fetches via TanStack Query. AdminPanel's
+// own concern is SECTION VISIBILITY, not the queue's data path, so stub the
+// queue with a marker — its data fetching is covered by `queue.test.ts` and the
+// queue's own component is exercised in `ModerationQueue.test.tsx`.
+vi.mock("./ModerationQueue", () => ({
+  ModerationQueue: () => <div data-testid="moderation-queue" />,
+}));
+
 import { AdminPanel } from "./AdminPanel";
 
 describe("AdminPanel", () => {
