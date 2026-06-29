@@ -171,31 +171,30 @@ function ListingDetail() {
       </section>
 
       {/* EPIC 4 slots — honest empty states, never fake data. */}
-      {claims.length > 0 ? (
-        // Real, transparent trust roll-up — confirm/dispute counts + recency,
-        // all derived from visible evidence (#29, ADR-007).
-        <section aria-labelledby="community-claims-heading" className="flex flex-col gap-3">
-          <h2 id="community-claims-heading" className="text-title">
-            Community claims
-          </h2>
-          <p className="text-body-sm text-muted-foreground">
-            What the community has confirmed or disputed about this restaurant. Each summary is a
-            roll-up of the visible attestations below it — never a hidden score.
-          </p>
-          <CommunityClaims
-            listingId={listing.id}
-            claims={claims}
-            viewerId={viewerId}
-            now={now}
-            stalenessMonths={stalenessMonths}
-          />
-        </section>
-      ) : (
-        <TrustPlaceholder
-          title="Community claims"
-          description="Confirmed and disputed claims about this restaurant — dedicated fryer, cross-contamination protocol, GF menu, and more — will appear here once the community starts attesting."
+      {/* Community claims ALWAYS render the full fixed taxonomy as attestable
+          (#150): each attribute shows its visible confirm/dispute counts +
+          recency (honest empty state for zero votes — never a fabricated
+          rating, ADR-007) and the viewer's confirm/dispute controls, so a
+          signed-in user can begin attesting ANY attribute even on a listing
+          with no claims yet (the claim is created lazily on first vote). No more
+          "coming soon" dead-end. */}
+      <section aria-labelledby="community-claims-heading" className="flex flex-col gap-3">
+        <h2 id="community-claims-heading" className="text-title">
+          Community claims
+        </h2>
+        <p className="text-body-sm text-muted-foreground">
+          What the community has confirmed or disputed about this restaurant. Each summary is a
+          roll-up of the visible attestations below it — never a hidden score. Sign in to confirm or
+          dispute any attribute.
+        </p>
+        <CommunityClaims
+          listingId={listing.id}
+          claims={claims}
+          viewerId={viewerId}
+          now={now}
+          stalenessMonths={stalenessMonths}
         />
-      )}
+      </section>
 
       <TrustPlaceholder
         title="Incident reports"

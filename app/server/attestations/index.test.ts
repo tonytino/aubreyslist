@@ -26,18 +26,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => {
   const state = {
     groupByRows: [] as Array<{ value: string; n: number }>,
-    // The claim-row lookup now also carries `moderationStatus` (#41): the
-    // aggregate only scans attestations for a `visible` claim.
-    limitRows: [] as Array<{
-      moderationStatus?: "visible" | "hidden" | "removed";
-      lastConfirmedAt: Date | null;
-    }>,
+    // The `.limit()` chain backs two different reads: the lazy-create claim-id
+    // read-back (`{ id }`) in the write path (#150), and the visibility + recency
+    // lookup in `getClaimAggregate` (`{ moderationStatus, lastConfirmedAt }`, #41).
+    limitRows: [] as Array<
+      | { id: string }
+      | { moderationStatus?: "visible" | "hidden" | "removed"; lastConfirmedAt: Date | null }
+    >,
     // The recompute helper's `select().from().where()` resolves directly (no
     // `.groupBy()`/`.limit()`): MAX(updatedAt) over the surviving confirms.
     maxRows: [] as Array<{ lastConfirmedAt: Date | null }>,
     lastInsertValues: undefined as unknown,
     lastConflictArgs: undefined as unknown,
+    lastDoNothingArgs: undefined as unknown,
     lastUpdateSet: undefined as unknown,
+    // Every insert's `.values(...)` payload, in call order: the lazy claim
+    // upsert (#150) lands first, the attestation upsert second.
+    insertValuesLog: [] as unknown[],
     signedIn: true,
   };
 
@@ -62,9 +67,20 @@ const h = vi.hoisted(() => {
     state.lastConflictArgs = args;
     return Promise.resolve();
   });
+  // The lazy claim creation (#150) upserts via `onConflictDoNothing` on the
+  // (listing, attribute) unique constraint — a distinct conflict resolution from
+  // the attestation upsert's `onConflictDoUpdate`.
+  const onConflictDoNothingMock = vi.fn((args: unknown) => {
+    state.lastDoNothingArgs = args;
+    return Promise.resolve();
+  });
   const valuesMock = vi.fn((vals: unknown) => {
     state.lastInsertValues = vals;
-    return { onConflictDoUpdate: onConflictDoUpdateMock };
+    state.insertValuesLog.push(vals);
+    return {
+      onConflictDoUpdate: onConflictDoUpdateMock,
+      onConflictDoNothing: onConflictDoNothingMock,
+    };
   });
   const insertMock = vi.fn(() => ({ values: valuesMock }));
 
@@ -99,6 +115,7 @@ const h = vi.hoisted(() => {
     insertMock,
     valuesMock,
     onConflictDoUpdateMock,
+    onConflictDoNothingMock,
     updateMock,
     deleteMock,
     deleteWhereMock,
@@ -133,6 +150,7 @@ const {
   insertMock,
   valuesMock,
   onConflictDoUpdateMock,
+  onConflictDoNothingMock,
   updateMock,
   deleteMock,
   deleteWhereMock,
@@ -142,11 +160,15 @@ const {
 
 beforeEach(() => {
   state.groupByRows = [];
-  state.limitRows = [];
+  // The lazy-create read-back (#150) resolves the claim id from this `.limit()`
+  // chain; default to a found claim so the write tests exercise the happy path.
+  state.limitRows = [{ id: "claim-1" }];
   state.maxRows = [];
   state.lastInsertValues = undefined;
   state.lastConflictArgs = undefined;
+  state.lastDoNothingArgs = undefined;
   state.lastUpdateSet = undefined;
+  state.insertValuesLog = [];
   state.signedIn = true;
 });
 
@@ -154,17 +176,33 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("castVote — one vote per user per claim (upsert)", () => {
-  it("upserts against the (claimId, userId) unique constraint", async () => {
-    await castVote({ claimId: "claim-1", value: "confirm" });
+describe("castVote — lazy claim creation + one vote per user (#150)", () => {
+  it("CREATES the claim for a (listing, attribute) with no claim row, then records the vote", async () => {
+    // First-ever vote on an attribute: there is no claim row yet, so the write
+    // path must materialize one before recording the attestation (#150). The
+    // read-back resolves the new claim's id.
+    state.limitRows = [{ id: "claim-new" }];
 
-    expect(insertMock).toHaveBeenCalledTimes(1);
-    expect(state.lastInsertValues).toEqual({
-      claimId: "claim-1",
+    await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "confirm" });
+
+    // Two inserts in order: the lazy claim upsert, then the attestation upsert.
+    expect(insertMock).toHaveBeenCalledTimes(2);
+    expect(state.insertValuesLog[0]).toEqual({
+      listingId: "listing-1",
+      attribute: "dedicated_fryer",
+    });
+    // The claim upsert is `onConflictDoNothing` on the (listing, attribute)
+    // unique constraint — idempotent, race-safe, never a duplicate claim.
+    expect(onConflictDoNothingMock).toHaveBeenCalledTimes(1);
+    const doNothing = state.lastDoNothingArgs as { target: unknown[] };
+    expect(doNothing.target).toHaveLength(2);
+
+    // The attestation is upserted against the resolved claim id + the current user.
+    expect(state.insertValuesLog[1]).toEqual({
+      claimId: "claim-new",
       userId: "user-1",
       value: "confirm",
     });
-    // The conflict target IS the one-vote-per-user constraint columns.
     expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(1);
     const args = state.lastConflictArgs as { target: unknown[]; set: Record<string, unknown> };
     expect(args.target).toHaveLength(2);
@@ -173,16 +211,17 @@ describe("castVote — one vote per user per claim (upsert)", () => {
   });
 
   it("changing a vote UPDATES the existing row rather than inserting a duplicate", async () => {
-    // Same user votes twice on the same claim: confirm then dispute. Both go
-    // through the single insert+onConflictDoUpdate path — never two inserts of
+    // Same user votes twice on the same attribute: confirm then dispute. The
+    // attestation always routes through insert+onConflictDoUpdate — never two
     // distinct rows. The DB's unique constraint is what makes the second an
     // update; we assert the code always routes through the upsert.
-    await castVote({ claimId: "claim-1", value: "confirm" });
-    await castVote({ claimId: "claim-1", value: "dispute" });
+    await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "confirm" });
+    await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "dispute" });
 
-    expect(valuesMock).toHaveBeenCalledTimes(2);
+    // Two casts × (claim upsert + attestation upsert) = 4 `.values()` calls.
+    expect(valuesMock).toHaveBeenCalledTimes(4);
     expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(2);
-    // Second call carries the new value in both the insert and the update set.
+    // Second cast carries the new value in both the insert and the update set.
     expect(state.lastInsertValues).toEqual({
       claimId: "claim-1",
       userId: "user-1",
@@ -192,29 +231,31 @@ describe("castVote — one vote per user per claim (upsert)", () => {
     expect(args.set.value).toBe("dispute");
   });
 
-  it("requires a signed-in user (401 gate)", async () => {
+  it("requires a signed-in user (401 gate, impl not reached)", async () => {
     state.signedIn = false;
-    await expect(castVote({ claimId: "claim-1", value: "confirm" })).rejects.toThrow(
-      "Authentication required."
-    );
-    // No write happens when the gate rejects.
+    await expect(
+      castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "confirm" })
+    ).rejects.toThrow("Authentication required.");
+    // No write happens when the gate rejects — not even the lazy claim create.
     expect(insertMock).not.toHaveBeenCalled();
   });
 
-  it("rate-limits the authenticated user before writing (#18)", async () => {
-    await castVote({ claimId: "claim-1", value: "confirm" });
+  it("rate-limits the authenticated user before any DB work (#18)", async () => {
+    await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "confirm" });
 
-    // The write is metered on the authenticated user's id, not the claim.
+    // The write is metered on the authenticated user's id, after auth, before DB.
     expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
     expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
   });
 
-  it("does not write when the rate limit is exceeded (429)", async () => {
+  it("does not write when the rate limit is exceeded (429, impl not reached)", async () => {
     const tooFast = new HTTPException(429, { message: "too fast" });
     enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
 
-    await expect(castVote({ claimId: "claim-1", value: "confirm" })).rejects.toBe(tooFast);
-    // The limiter short-circuits before any DB work.
+    await expect(
+      castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "confirm" })
+    ).rejects.toBe(tooFast);
+    // The limiter short-circuits before any DB work — no claim create, no vote.
     expect(insertMock).not.toHaveBeenCalled();
     expect(updateMock).not.toHaveBeenCalled();
   });
@@ -223,10 +264,11 @@ describe("castVote — one vote per user per claim (upsert)", () => {
 describe("castVote — lastConfirmedAt maintenance (recomputed from confirms)", () => {
   it("sets lastConfirmedAt to the newest surviving confirm on a confirm", async () => {
     // After the upsert there is one confirm row; its updatedAt is the recency.
+    // The claim-id read-back precedes the MAX-recency read in the mock chain.
     const confirmedAt = new Date("2026-06-10T00:00:00Z");
     state.maxRows = [{ lastConfirmedAt: confirmedAt }];
 
-    await castVote({ claimId: "claim-1", value: "confirm" });
+    await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "confirm" });
 
     expect(updateMock).toHaveBeenCalledTimes(1);
     const set = state.lastUpdateSet as { lastConfirmedAt: Date | null; updatedAt: Date };
@@ -239,9 +281,9 @@ describe("castVote — lastConfirmedAt maintenance (recomputed from confirms)", 
     // recency must drop to null rather than stay pinned to the withdrawn confirm.
     state.maxRows = [{ lastConfirmedAt: null }];
 
-    await castVote({ claimId: "claim-1", value: "dispute" });
+    await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "dispute" });
 
-    // A dispute now ALSO recomputes recency (the old behavior skipped this).
+    // A dispute ALSO recomputes recency — preserved from #28.
     expect(updateMock).toHaveBeenCalledTimes(1);
     const set = state.lastUpdateSet as { lastConfirmedAt: Date | null; updatedAt: Date };
     expect(set.lastConfirmedAt).toBeNull();
@@ -254,7 +296,7 @@ describe("castVote — lastConfirmedAt maintenance (recomputed from confirms)", 
     const newest = new Date("2026-06-20T00:00:00Z");
     state.maxRows = [{ lastConfirmedAt: newest }];
 
-    await castVote({ claimId: "claim-1", value: "dispute" });
+    await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "dispute" });
 
     expect(updateMock).toHaveBeenCalledTimes(1);
     const set = state.lastUpdateSet as { lastConfirmedAt: Date | null };
@@ -262,21 +304,36 @@ describe("castVote — lastConfirmedAt maintenance (recomputed from confirms)", 
   });
 });
 
-describe("retractVote — deletes the user's row + recomputes recency", () => {
-  it("deletes the current user's attestation for the claim", async () => {
-    await retractVote({ claimId: "claim-1" });
+describe("retractVote — deletes the user's row by (listing, attribute) + recomputes recency", () => {
+  it("resolves the existing claim, then deletes the current user's attestation", async () => {
+    state.limitRows = [{ id: "claim-1" }];
+
+    await retractVote({ listingId: "listing-1", attribute: "dedicated_fryer" });
 
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteWhereMock).toHaveBeenCalledTimes(1);
-    // Never inserts anything (it is a delete-only path).
+    // Never CREATES a claim on retract (it is a delete-only path).
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when no claim row exists for the slot (never creates one)", async () => {
+    // A retract on a never-attested attribute: there is no claim to resolve, so
+    // we bail without deleting or recomputing — and crucially without an insert.
+    state.limitRows = [];
+
+    await retractVote({ listingId: "listing-1", attribute: "gf_substitutes" });
+
+    expect(deleteMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
     expect(insertMock).not.toHaveBeenCalled();
   });
 
   it("clears lastConfirmedAt when the retracted vote was the only confirm", async () => {
     // No confirm rows survive the delete, so MAX over confirms is empty.
+    state.limitRows = [{ id: "claim-1" }];
     state.maxRows = [{ lastConfirmedAt: null }];
 
-    await retractVote({ claimId: "claim-1" });
+    await retractVote({ listingId: "listing-1", attribute: "dedicated_fryer" });
 
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(updateMock).toHaveBeenCalledTimes(1);
@@ -287,34 +344,39 @@ describe("retractVote — deletes the user's row + recomputes recency", () => {
 
   it("leaves recency at the newest remaining confirm when others still confirm", async () => {
     // Retracting one of several confirms: recency drops to the newest survivor.
+    state.limitRows = [{ id: "claim-1" }];
     const newest = new Date("2026-06-15T00:00:00Z");
     state.maxRows = [{ lastConfirmedAt: newest }];
 
-    await retractVote({ claimId: "claim-1" });
+    await retractVote({ listingId: "listing-1", attribute: "dedicated_fryer" });
 
     expect(updateMock).toHaveBeenCalledTimes(1);
     const set = state.lastUpdateSet as { lastConfirmedAt: Date | null };
     expect(set.lastConfirmedAt).toEqual(newest);
   });
 
-  it("requires a signed-in user (401 gate)", async () => {
+  it("requires a signed-in user (401 gate, impl not reached)", async () => {
     state.signedIn = false;
-    await expect(retractVote({ claimId: "claim-1" })).rejects.toThrow("Authentication required.");
+    await expect(
+      retractVote({ listingId: "listing-1", attribute: "dedicated_fryer" })
+    ).rejects.toThrow("Authentication required.");
     expect(deleteMock).not.toHaveBeenCalled();
   });
 
-  it("rate-limits the authenticated user before deleting (#18)", async () => {
-    await retractVote({ claimId: "claim-1" });
+  it("rate-limits the authenticated user before any DB work (#18)", async () => {
+    await retractVote({ listingId: "listing-1", attribute: "dedicated_fryer" });
 
     expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
     expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
   });
 
-  it("does not delete when the rate limit is exceeded (429)", async () => {
+  it("does not delete when the rate limit is exceeded (429, impl not reached)", async () => {
     const tooFast = new HTTPException(429, { message: "too fast" });
     enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
 
-    await expect(retractVote({ claimId: "claim-1" })).rejects.toBe(tooFast);
+    await expect(
+      retractVote({ listingId: "listing-1", attribute: "dedicated_fryer" })
+    ).rejects.toBe(tooFast);
     expect(deleteMock).not.toHaveBeenCalled();
   });
 });

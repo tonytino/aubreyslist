@@ -1,7 +1,7 @@
 import { and, count, eq, max } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
-import { attestationValues, attestations, claims } from "~/db/schema";
+import { attestationValues, attestations, claimAttributes, claims } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { enforceWriteLimit } from "~/server/rate-limit";
 
@@ -46,16 +46,29 @@ import { enforceWriteLimit } from "~/server/rate-limit";
 // Input validation
 // ---------------------------------------------------------------------------
 
-/** A `confirm` / `dispute` vote, validated against the DB enum tuple. */
+/**
+ * A `confirm` / `dispute` vote, addressed by `(listing, attribute)` rather than
+ * a pre-existing `claimId` (#150). The claim row is created lazily on the first
+ * vote for an attribute, so a user can begin attesting ANY of the 7 fixed
+ * taxonomy attributes even on a listing with no claims yet. Both the attribute
+ * (against the curated taxonomy) and the value (against the attestation enum)
+ * are validated against the DB enum tuples.
+ */
 export const voteInputSchema = z.object({
-  claimId: z.string().min(1, "claimId is required"),
+  listingId: z.string().min(1, "listingId is required"),
+  attribute: z.enum(claimAttributes),
   value: z.enum(attestationValues),
 });
 export type VoteInput = z.infer<typeof voteInputSchema>;
 
-/** Retracting a vote needs only the claim — the actor is the current user. */
+/**
+ * Retracting a vote needs the `(listing, attribute)` slot — the actor is the
+ * current user. A no-op when no claim row (and thus no vote) exists for the
+ * slot.
+ */
 export const retractInputSchema = z.object({
-  claimId: z.string().min(1, "claimId is required"),
+  listingId: z.string().min(1, "listingId is required"),
+  attribute: z.enum(claimAttributes),
 });
 export type RetractInput = z.infer<typeof retractInputSchema>;
 
@@ -175,21 +188,64 @@ async function recomputeLastConfirmedAt(
 }
 
 /**
- * Cast or change the current user's vote on a claim.
+ * Resolve the claim id for a `(listingId, attribute)` slot, CREATING the claim
+ * row lazily if it does not exist yet (#150).
  *
- * Upserts against `attestations_claim_user_unique`: a first vote inserts; a
- * later vote by the same user on the same claim UPDATES the existing row's
- * `value` (and `updatedAt`) instead of inserting a duplicate — this is the
- * "one vote per user per claim, changeable" rule.
+ * The taxonomy is curated and fixed (domain.md): conceptually every listing has
+ * all 7 attributes available, but a `claims` row is only materialized once
+ * someone first attests an attribute. This keeps the write path the single
+ * place that establishes a claim — no backfill, no empty rows for untouched
+ * attributes.
+ *
+ * The insert is `onConflictDoNothing` on `claims_listing_attribute_unique`, so
+ * a concurrent first vote on the same slot can never create a duplicate (the
+ * unique constraint guarantees one claim per attribute per listing). We then
+ * read the id back by `(listingId, attribute)` — which always resolves to the
+ * single surviving row whether we inserted it or lost the race. Idempotent.
+ */
+async function resolveClaimId(
+  db: ReturnType<typeof getDb>,
+  listingId: string,
+  attribute: VoteInput["attribute"]
+): Promise<string | null> {
+  // Upsert the claim slot atomically: insert when absent, no-op when present.
+  await db
+    .insert(claims)
+    .values({ listingId, attribute })
+    .onConflictDoNothing({ target: [claims.listingId, claims.attribute] });
+
+  const rows = await db
+    .select({ id: claims.id })
+    .from(claims)
+    .where(and(eq(claims.listingId, listingId), eq(claims.attribute, attribute)))
+    .limit(1);
+
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Cast or change the current user's vote on a listing attribute (#150).
+ *
+ * The vote is addressed by `(listingId, attribute)`. The claim row is created
+ * lazily on the first vote for an attribute via {@link resolveClaimId} (an
+ * `onConflictDoNothing` upsert on `claims_listing_attribute_unique`), so a user
+ * can begin attesting an attribute that has no claim row yet — the entry point
+ * the core confirm/dispute loop was missing.
+ *
+ * Then the attestation upserts against `attestations_claim_user_unique`: a first
+ * vote inserts; a later vote by the same user on the same claim UPDATES the
+ * existing row's `value` (and `updatedAt`) instead of inserting a duplicate —
+ * the "one vote per user per claim, changeable" rule, unchanged.
  *
  * After the upsert the claim's `lastConfirmedAt` is recomputed from the
  * surviving `confirm` rows (see {@link recomputeLastConfirmedAt}) so the
  * recency signal always reflects visible evidence: a confirm refreshes it, and
  * flipping a confirm to a dispute clears the now-withdrawn confirmation rather
- * than pinning recency to it (ADR-007).
+ * than pinning recency to it (ADR-007) — identical to the prior behavior.
  *
  * Login-gated: throws 401 for anonymous callers, then rate-limited per user via
- * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst).
+ * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst), in that
+ * order and BEFORE any DB work — the gate fires exactly once.
  */
 export async function castVote(input: VoteInput): Promise<void> {
   const user = await requireCurrentUser();
@@ -198,9 +254,16 @@ export async function castVote(input: VoteInput): Promise<void> {
   const db = getDb();
   const now = new Date();
 
+  const claimId = await resolveClaimId(db, input.listingId, input.attribute);
+  // The upsert above guarantees a row exists for the slot; narrow off the
+  // theoretical `undefined` so the downstream writes are typed honestly.
+  if (claimId === null) {
+    throw new Error("Claim upsert returned no row.");
+  }
+
   await db
     .insert(attestations)
-    .values({ claimId: input.claimId, userId: user.id, value: input.value })
+    .values({ claimId, userId: user.id, value: input.value })
     .onConflictDoUpdate({
       target: [attestations.claimId, attestations.userId],
       set: { value: input.value, updatedAt: now },
@@ -208,21 +271,24 @@ export async function castVote(input: VoteInput): Promise<void> {
 
   // Recency always tracks the surviving confirms — a confirm refreshes it, a
   // flip to dispute drops the withdrawn confirmation (ADR-007).
-  await recomputeLastConfirmedAt(db, input.claimId);
+  await recomputeLastConfirmedAt(db, claimId);
 }
 
 /**
- * Retract the current user's vote on a claim — deletes their `attestations`
- * row. A no-op delete if no vote exists.
+ * Retract the current user's vote on a listing attribute (#150) — deletes their
+ * `attestations` row for the `(listingId, attribute)` slot.
  *
- * After the delete the claim's `lastConfirmedAt` is recomputed from the
- * surviving `confirm` rows (see {@link recomputeLastConfirmedAt}): retracting
- * the only confirm drops recency to `null`, while retracting one of several
- * leaves it at the newest remaining confirm — recency stays derivable from
- * visible evidence (ADR-007).
+ * A no-op when no claim row exists for the slot (nothing was ever attested, so
+ * there is nothing to retract) — we never create a claim on a retract. When a
+ * claim exists the delete is scoped to the current user's row, then the claim's
+ * `lastConfirmedAt` is recomputed from the surviving `confirm` rows (see
+ * {@link recomputeLastConfirmedAt}): retracting the only confirm drops recency
+ * to `null`, while retracting one of several leaves it at the newest remaining
+ * confirm — recency stays derivable from visible evidence (ADR-007).
  *
  * Login-gated: throws 401 for anonymous callers, then rate-limited per user via
- * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst).
+ * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst), in that
+ * order and BEFORE any DB work.
  */
 export async function retractVote(input: RetractInput): Promise<void> {
   const user = await requireCurrentUser();
@@ -230,11 +296,23 @@ export async function retractVote(input: RetractInput): Promise<void> {
 
   const db = getDb();
 
+  // Resolve the existing claim WITHOUT creating one — a retract on a never-
+  // attested slot is a no-op (no row to delete, no recency to recompute).
+  const existing = await db
+    .select({ id: claims.id })
+    .from(claims)
+    .where(and(eq(claims.listingId, input.listingId), eq(claims.attribute, input.attribute)))
+    .limit(1);
+  const claimId = existing[0]?.id;
+  if (claimId === undefined) {
+    return;
+  }
+
   await db
     .delete(attestations)
-    .where(and(eq(attestations.claimId, input.claimId), eq(attestations.userId, user.id)));
+    .where(and(eq(attestations.claimId, claimId), eq(attestations.userId, user.id)));
 
-  await recomputeLastConfirmedAt(db, input.claimId);
+  await recomputeLastConfirmedAt(db, claimId);
 }
 
 // The client-callable `createServerFn` wrappers (submitVote / removeVote /

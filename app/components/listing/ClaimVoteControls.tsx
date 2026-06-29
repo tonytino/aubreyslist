@@ -1,21 +1,35 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { AttestationValue } from "~/db/schema";
+import type { AttestationValue, ClaimAttribute } from "~/db/schema";
 import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
 import { claimsQueryKey } from "./CommunityClaims";
 import { FlagControl } from "./FlagControl";
 
 interface ClaimVoteControlsProps {
   listingId: string;
-  claimId: string;
-  /** The viewer's current vote on this claim, or `null` if they haven't voted. */
+  /**
+   * The taxonomy attribute this row attests (#150). Votes are addressed by
+   * `(listingId, attribute)` — the claim row is created lazily server-side on
+   * the first vote — so the controls work even when no claim exists yet.
+   */
+  attribute: ClaimAttribute;
+  /**
+   * The materialized claim's id, or `null` when no one has attested this
+   * attribute yet. Only used to gate the "Flag claim" control (#39): there is
+   * nothing to flag until a claim row exists.
+   */
+  claimId: string | null;
+  /** The viewer's current vote on this attribute, or `null` if they haven't voted. */
   viewerVote: AttestationValue | null;
   /** Whether the viewer is signed in — gates the controls (UX only). */
   isSignedIn: boolean;
 }
 
 /**
- * Per-claim confirm/dispute/retract controls (#28 server logic, wired here for
- * #32 — a user casting, CHANGING, or RETRACTING their OWN attestation).
+ * Per-attribute confirm/dispute/retract controls (#28 server logic, wired here
+ * for #32 — a user casting, CHANGING, or RETRACTING their OWN attestation —
+ * extended in #150 to attest by `(listingId, attribute)` with lazy claim
+ * creation so EVERY taxonomy attribute is attestable, not just ones with an
+ * existing claim row).
  *
  * One vote per user per claim (domain.md): the upsert in `castVote` changes the
  * existing vote, and `retractVote` deletes it. The "retract" affordance shows
@@ -28,6 +42,7 @@ interface ClaimVoteControlsProps {
  */
 export function ClaimVoteControls({
   listingId,
+  attribute,
   claimId,
   viewerVote,
   isSignedIn,
@@ -39,12 +54,12 @@ export function ClaimVoteControls({
   };
 
   const vote = useMutation({
-    mutationFn: (value: AttestationValue) => submitVote({ data: { claimId, value } }),
+    mutationFn: (value: AttestationValue) => submitVote({ data: { listingId, attribute, value } }),
     onSuccess: invalidate,
   });
 
   const retract = useMutation({
-    mutationFn: () => removeVote({ data: { claimId } }),
+    mutationFn: () => removeVote({ data: { listingId, attribute } }),
     onSuccess: invalidate,
   });
 
@@ -102,8 +117,17 @@ export function ClaimVoteControls({
           </button>
         ) : null}
         {/* Flag this claim as inappropriate/spam/wrong (#39). Login-gated; the
-            server re-gates regardless, so the control is UX only. */}
-        <FlagControl target="claim" claimId={claimId} isSignedIn={isSignedIn} label="Flag claim" />
+            server re-gates regardless, so the control is UX only. There is
+            nothing to flag until a claim row exists (#150), so it's gated on a
+            materialized claim id. */}
+        {claimId !== null ? (
+          <FlagControl
+            target="claim"
+            claimId={claimId}
+            isSignedIn={isSignedIn}
+            label="Flag claim"
+          />
+        ) : null}
       </div>
 
       {error ? (
