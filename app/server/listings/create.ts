@@ -1,14 +1,25 @@
 import { createServerFn } from "@tanstack/react-start";
 import { and, eq, isNull } from "drizzle-orm";
-import { z } from "zod";
 import { getDb } from "~/db/client";
-import { type Listing, listings } from "~/db/schema";
+import { listings } from "~/db/schema";
+import {
+  type CreateListingInput,
+  type CreateListingResult,
+  createListingInputSchema,
+} from "~/listings/create-input";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { DuplicateListingError, findDuplicateListing } from "~/server/listings/dedup";
-import { isHttpUrl } from "~/server/listings/url";
 import { buildMapsUrl, runPlaceDetails } from "~/server/places";
 import { enforceWriteLimit } from "~/server/rate-limit";
 import { getSetting } from "~/server/settings";
+
+// Re-exported so server code and the existing create tests keep one import
+// surface; the client-safe definitions live in `~/listings/create-input` (#141).
+export {
+  type CreateListingInput,
+  type CreateListingResult,
+  createListingInputSchema,
+} from "~/listings/create-input";
 
 /**
  * Server-side "add a listing" write (issue #26, ADR-008).
@@ -42,57 +53,12 @@ import { getSetting } from "~/server/settings";
  *   ({@link findDuplicateListing}) and BLOCK a strong match with a structured
  *   {@link DuplicateListingError} (carrying the existing listing's id/name so the
  *   UI can link to it) instead of silently creating a duplicate.
+ *
+ * The validated input schema (`createListingInputSchema`) and the
+ * `CreateListingInput` / `CreateListingResult` types are the client-safe contract
+ * and live in `~/listings/create-input` (#141); they are imported + re-exported
+ * above so this module — and its callers — keep one import surface.
  */
-
-/** Result of an add-listing write: the listing plus whether it was newly created. */
-export interface CreateListingResult {
-  listing: Listing;
-  /** `false` when a places-mode submission resolved to an already-existing listing. */
-  created: boolean;
-}
-
-/**
- * Validated input for the add-listing write. A discriminated union on `mode`:
- *
- * - `places`: the client sends only the chosen `placeId`; canonical fields are
- *   resolved server-side, so the client cannot spoof name/address/coords.
- * - `manual`: the client sends the canonical fields directly.
- *
- * `menuUrl` is optional in both modes; an empty string is normalised to
- * `undefined` so a blank field stores `null` rather than `""`.
- *
- * The scheme is restricted to http(s) ({@link isHttpUrl}): `z.string().url()`
- * alone accepts `javascript:`/`data:` URLs, which — rendered into the detail
- * page's anchor `href` — is a stored-XSS / untrusted-navigation vector (#90).
- */
-const optionalMenuUrl = z
-  .union([
-    z
-      .string()
-      .url("Enter a valid URL (including https://).")
-      .max(2048)
-      .refine(isHttpUrl, "Menu URL must start with http:// or https://."),
-    z.literal(""),
-  ])
-  .optional()
-  .transform((value) => (value ? value : undefined));
-
-export const createListingInputSchema = z.discriminatedUnion("mode", [
-  z.object({
-    mode: z.literal("places"),
-    placeId: z.string().min(1, "placeId is required"),
-    menuUrl: optionalMenuUrl,
-  }),
-  z.object({
-    mode: z.literal("manual"),
-    name: z.string().min(1, "Name is required").max(256),
-    address: z.string().min(1, "Address is required").max(512),
-    lat: z.number().min(-90).max(90),
-    lng: z.number().min(-180).max(180),
-    menuUrl: optionalMenuUrl,
-  }),
-]);
-export type CreateListingInput = z.infer<typeof createListingInputSchema>;
 
 /** The canonical, ready-to-insert shape, independent of which intake mode produced it. */
 interface ResolvedListing {
