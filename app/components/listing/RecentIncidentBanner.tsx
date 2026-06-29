@@ -17,12 +17,18 @@ interface RecentIncidentBannerProps {
  * confirmations (ADR-007, domain.md → Trust Model: "Recent incidents flag the
  * summary").
  *
- * Accessibility: a labelled `role="region"` carrying the `incident` safety
- * signal (warning-triangle icon + the "Recent incident" text label + colour) —
- * meaning never rests on colour alone (docs/agents/styling.md, NON-NEGOTIABLE).
- * It is a region rather than `role="alert"` because it is server-rendered on
- * load (a static fact, not a live update); `alert` is reserved for the
- * post-submit error message in the report form.
+ * Accessibility: a labelled `<output>` polite live region (implicit
+ * `role="status"`, `aria-live="polite"`) carrying the `incident` safety signal
+ * (warning-triangle icon + the "Recent incident" text label + colour) — meaning
+ * never rests on colour alone (docs/agents/styling.md, NON-NEGOTIABLE). This is a
+ * SAFETY-CRITICAL "recent harm" warning, so it is an ARIA live region (not a
+ * passive `role="region"` landmark) — assistive tech announces it when it
+ * appears, including when it materialises post-navigation/filter on the client.
+ * We use a polite `status` rather than an assertive `alert` because it is also
+ * SSR'd on load (present, not an interruptive live update); `alert` stays
+ * reserved for the post-submit error message in the report form. `<output>` is
+ * the project's semantic role=status element (see listings.index.tsx,
+ * FlagControl.tsx), so no explicit `role` is needed.
  *
  * Kept as its own small, prop-only component so the same recent-incident cue can
  * be reused by the browse list-card signal that lands with issue #33 (the browse
@@ -34,7 +40,11 @@ export function RecentIncidentBanner({ occurredOn, nowMs }: RecentIncidentBanner
     nowMs !== undefined ? new Date(nowMs) : undefined
   );
   return (
-    <section
+    // `<output>` is the project's semantic polite-live-region element (implicit
+    // role="status"); used here so the warning is announced when it appears. We
+    // keep aria-live explicit and add an accessible name for the announcement.
+    <output
+      aria-live="polite"
       aria-label="Recent incident warning"
       className="flex flex-col gap-2 rounded-card border border-incident/30 bg-incident-soft p-gutter sm:flex-row sm:items-center sm:gap-3"
     >
@@ -49,6 +59,6 @@ export function RecentIncidentBanner({ occurredOn, nowMs }: RecentIncidentBanner
         are shown regardless of older confirmations — check the incident reports below before you
         decide.
       </p>
-    </section>
+    </output>
   );
 }
