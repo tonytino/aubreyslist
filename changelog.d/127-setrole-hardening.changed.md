@@ -1,0 +1,1 @@
+- `[manual]` Hardened `setRole` (ADR-010): block demoting the last remaining `admin` with a `409` (self-demotion is allowed except when you are that last admin), and trim `userId` so whitespace-only input is rejected instead of harmlessly 404ing.

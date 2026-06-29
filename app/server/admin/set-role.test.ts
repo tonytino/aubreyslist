@@ -4,7 +4,7 @@ import type { User } from "~/db/schema";
 import type { Role } from "~/server/auth/guards";
 
 /**
- * Tests for the admin-only role-management logic (`setRole`, #16).
+ * Tests for the admin-only role-management logic (`setRole`, #16, #127).
  *
  * `setRole` is the ADR-010 security boundary for promoting/demoting moderators:
  * the gate is enforced server-side off the authoritative `users` row, never the
@@ -15,6 +15,13 @@ import type { Role } from "~/server/auth/guards";
  * one). The DB is mocked, so no live connection is needed; we assert the correct
  * `UPDATE users SET role = ... WHERE id = userId` is issued and the 404 / Zod
  * rejection paths behave, per `docs/agents/testing.md` (minimal mocking).
+ *
+ * The last-admin guard (#127) reads two `SELECT`s before any write: the target's
+ * current role, then a count of the OTHER admins. We mock `db.select()` as a
+ * chain whose terminal `.where()` drains a queue of staged results — one per
+ * call (target lookup, then admin count) — so a test stages exactly what each
+ * SELECT returns. By default the target is a plain `moderator`, so the guard is
+ * a no-op and the existing #16 expectations are unaffected.
  */
 
 // --- Mocks -----------------------------------------------------------------
@@ -22,6 +29,11 @@ import type { Role } from "~/server/auth/guards";
 // via `getCurrentUser`; mock only that accessor so the genuine role policy runs.
 const h = vi.hoisted(() => ({
   getCurrentUserMock: vi.fn(),
+  // db.select(...).from(...).where()  — drains `selectResults` FIFO.
+  selectResults: [] as unknown[][],
+  selectWhereMock: vi.fn(),
+  selectFromMock: vi.fn(),
+  selectMock: vi.fn(),
   // db.update(...).set(...).where(...).returning()
   returningMock: vi.fn<() => Promise<User[]>>(),
   whereMock: vi.fn(),
@@ -34,12 +46,22 @@ vi.mock("~/server/auth/current-user", () => ({
 }));
 
 vi.mock("~/db/client", () => ({
-  getDb: () => ({ update: h.updateMock }),
+  getDb: () => ({ select: h.selectMock, update: h.updateMock }),
 }));
 
 import { setRole } from "./set-role";
 
-const { getCurrentUserMock, returningMock, whereMock, setMock, updateMock } = h;
+const {
+  getCurrentUserMock,
+  selectResults,
+  selectWhereMock,
+  selectFromMock,
+  selectMock,
+  returningMock,
+  whereMock,
+  setMock,
+  updateMock,
+} = h;
 
 // --- Fixtures --------------------------------------------------------------
 
@@ -57,8 +79,21 @@ function userRow(role: User["role"], overrides: Partial<User> = {}): User {
   } as User;
 }
 
+/** Stage the FIFO results each `db.select().from().where()` should resolve to. */
+function stageSelects(...results: unknown[][]) {
+  selectResults.length = 0;
+  selectResults.push(...results);
+}
+
 beforeEach(() => {
-  // Wire the drizzle update chain; `returningResult` is set per-test.
+  // Wire the drizzle SELECT chain; `.where()` shifts the next staged result.
+  selectWhereMock.mockImplementation(() => Promise.resolve(selectResults.shift() ?? []));
+  selectFromMock.mockImplementation(() => ({ where: selectWhereMock }));
+  selectMock.mockImplementation(() => ({ from: selectFromMock }));
+  // Default: target is a plain moderator, so the last-admin guard is a no-op.
+  stageSelects([{ role: "moderator" }]);
+
+  // Wire the drizzle UPDATE chain; `returningResult` is set per-test.
   whereMock.mockImplementation(() => ({ returning: returningMock }));
   setMock.mockImplementation(() => ({ where: whereMock }));
   updateMock.mockImplementation(() => ({ set: setMock }));
@@ -128,10 +163,53 @@ describe("setRole — admin-only role management (ADR-010)", () => {
     expect((setMock.mock.calls[0]?.[0] as { role: Role }).role).toBe("user");
   });
 
+  // --- Last-admin guard (#127) ---------------------------------------------
+
+  it("rejects demoting the LAST admin with 409 (no DB write)", async () => {
+    getCurrentUserMock.mockResolvedValue(userRow("admin"));
+    // Target is an admin; zero OTHER admins remain ⇒ this is the last one.
+    stageSelects([{ role: "admin" }], [{ value: 0 }]);
+
+    await expect(setRole({ userId: "last-admin", role: "moderator" })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("allows demoting a NON-last admin (another admin remains), issuing the update", async () => {
+    getCurrentUserMock.mockResolvedValue(userRow("admin"));
+    // Target is an admin; one OTHER admin remains ⇒ safe to demote.
+    stageSelects([{ role: "admin" }], [{ value: 1 }]);
+    const target = userRow("moderator", { id: "demote-me" });
+    returningMock.mockResolvedValue([target]);
+
+    const result = await setRole({ userId: "demote-me", role: "moderator" });
+
+    expect(result).toEqual({ user: target });
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect((setMock.mock.calls[0]?.[0] as { role: Role }).role).toBe("moderator");
+  });
+
+  it("allows an admin to self-demote when NOT the last admin", async () => {
+    const me = userRow("admin", { id: "me" });
+    getCurrentUserMock.mockResolvedValue(me);
+    // Target (me) is an admin; another admin remains ⇒ stepping down is allowed.
+    stageSelects([{ role: "admin" }], [{ value: 1 }]);
+    const target = userRow("user", { id: "me" });
+    returningMock.mockResolvedValue([target]);
+
+    const result = await setRole({ userId: "me", role: "user" });
+
+    expect(result).toEqual({ user: target });
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect((setMock.mock.calls[0]?.[0] as { role: Role }).role).toBe("user");
+  });
+
   // --- Not found -----------------------------------------------------------
 
   it("throws 404 when the target user does not exist", async () => {
     getCurrentUserMock.mockResolvedValue(userRow("admin"));
+    stageSelects([]); // target lookup finds no row ⇒ guard is a no-op
     returningMock.mockResolvedValue([]); // empty returning ⇒ no row matched
 
     await expect(setRole({ userId: "missing", role: "moderator" })).rejects.toMatchObject({
@@ -156,6 +234,13 @@ describe("setRole — admin-only role management (ADR-010)", () => {
     getCurrentUserMock.mockResolvedValue(userRow("admin"));
 
     await expect(setRole({ userId: "", role: "moderator" })).rejects.toThrow();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a whitespace-only userId (trimmed to empty)", async () => {
+    getCurrentUserMock.mockResolvedValue(userRow("admin"));
+
+    await expect(setRole({ userId: "   ", role: "moderator" })).rejects.toThrow();
     expect(updateMock).not.toHaveBeenCalled();
   });
 });
