@@ -1,12 +1,15 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useId } from "react";
 import type { AdminSettingsView } from "~/server/admin/admin-view.fn";
+import type { AdminUserSummary } from "~/server/admin/list-users.fn";
 import { setIntakeMode } from "~/server/admin/set-intake-mode.fn";
+import { setUserRole } from "~/server/admin/set-role.fn";
 import type { Role } from "~/server/auth/guards";
 import type { IntakeMode } from "~/server/settings";
 import { AdminSection } from "./AdminSection";
 import { ModerationQueue } from "./ModerationQueue";
+import { adminUsersQueryKey, adminUsersQueryOptions } from "./admin-users-query";
 import { type AdminSectionId, visibleSections } from "./sections";
 
 interface AdminPanelProps {
@@ -25,15 +28,16 @@ interface AdminPanelProps {
  *
  * Renders exactly the sections {@link visibleSections} grants the viewer's role
  * — admins get role management, app settings, and the moderation queue; a
- * moderator gets only the moderation queue. App settings (#24) now lets an admin
- * toggle the active listing-intake mode; role management (#16) is still a
- * "coming soon" placeholder and the moderation queue (#40) renders its real UI.
+ * moderator gets only the moderation queue. App settings (#24) lets an admin
+ * toggle the active listing-intake mode; role management (#142) lists accounts
+ * and lets an admin grant/revoke the moderator role; the moderation queue (#40,
+ * #41) renders its real UI.
  *
- * The intake-mode toggle is convenience UI only: the `setIntakeMode` server fn
- * re-gates to admin (ADR-010) and validates the value server-side, so the
- * section being admin-only here (via {@link visibleSections}) is never the
- * access control — a moderator never reaches it, and even if they did the server
- * would 403.
+ * The intake-mode toggle and the role controls are convenience UI only: the
+ * `setIntakeMode` / `setUserRole` server fns re-gate to admin (ADR-010) and
+ * validate server-side, so the sections being admin-only here (via
+ * {@link visibleSections}) is never the access control — a moderator never
+ * reaches them, and even if they did the server would 403.
  */
 export function AdminPanel({ viewerRole, settings }: AdminPanelProps) {
   const sections = visibleSections(viewerRole);
@@ -61,15 +65,16 @@ function SectionFor({
       return (
         <AdminSection
           title="Role management"
-          description="Promote or demote moderators here. Admins will be able to grant moderator status to any signed-in account."
-          badge="Coming soon"
-        />
+          description="Grant or revoke the moderator role for any signed-in account. Admins are seeded out-of-band and cannot be granted here."
+        >
+          <RoleManagement />
+        </AdminSection>
       );
     case "moderation-queue":
       return (
         <AdminSection
           title="Moderation queue"
-          description="Open flags on listings, claims, and incident reports awaiting review. Moderation actions land with issue #41."
+          description="Open flags on listings, claims, and incident reports awaiting review. Each flagged item has Dismiss, Hide, and Remove actions for triage."
         >
           <ModerationQueue />
         </AdminSection>
@@ -163,6 +168,143 @@ function IntakeModeControl({ current }: { current: string }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** The role an admin may assign via the UI (mirrors `setRoleInputSchema`'s `role`). */
+type AssignableRole = "moderator" | "user";
+
+/** Human-readable label for each role shown in the directory. */
+const ROLE_LABEL: Record<Role, string> = {
+  admin: "Admin",
+  moderator: "Moderator",
+  user: "User",
+};
+
+/**
+ * Admin-only role-management section (#142).
+ *
+ * Lists every account (via the admin-only `listUsers` server fn, read through
+ * TanStack Query) with its current role, and — for non-admin accounts — a
+ * control to grant or revoke the `moderator` role through the existing
+ * `setUserRole` server fn (`useMutation`). On success the directory query is
+ * invalidated so the row's displayed role refetches from the authoritative
+ * `users` table.
+ *
+ * This UI is convenience only: `listUsers` and `setUserRole` both re-run
+ * `requireCurrentRole("admin")` server-side (ADR-010), so a moderator never
+ * reaching this section is not the access control — the server is.
+ *
+ * Admins themselves expose NO role control: this fn cannot mint admins, and the
+ * one demotion the server forbids — stripping the last admin — surfaces as an
+ * inline 409 alert ("Cannot demote the last remaining admin.") rather than
+ * crashing.
+ */
+function RoleManagement() {
+  const usersQuery = useQuery(adminUsersQueryOptions());
+
+  if (usersQuery.isPending) {
+    return <p className="mt-2 text-body-sm text-muted-foreground">Loading accounts…</p>;
+  }
+
+  if (usersQuery.isError) {
+    return (
+      <p role="alert" className="mt-2 text-body-sm text-incident">
+        {usersQuery.error instanceof Error
+          ? usersQuery.error.message
+          : "Could not load the user directory. Please try again."}
+      </p>
+    );
+  }
+
+  const accounts = usersQuery.data;
+
+  if (accounts.length === 0) {
+    return <p className="mt-2 text-body-sm text-muted-foreground">No accounts yet.</p>;
+  }
+
+  return (
+    <ul className="mt-2 flex flex-col gap-3">
+      {accounts.map((account) => (
+        <li key={account.id}>
+          <RoleRow account={account} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * One directory row: the account's name/email, its current role (shown as TEXT,
+ * never colour alone), and — for non-admin accounts — a grant/revoke control.
+ */
+function RoleRow({ account }: { account: AdminUserSummary }) {
+  const queryClient = useQueryClient();
+  const selectId = useId();
+  const errorId = useId();
+
+  const mutation = useMutation({
+    mutationFn: (role: AssignableRole) => setUserRole({ data: { userId: account.id, role } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminUsersQueryKey }),
+  });
+
+  return (
+    <article className="flex flex-col gap-2 rounded-card border border-border bg-background p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col">
+          <span className="text-body font-semibold text-foreground">{account.name}</span>
+          <span className="text-caption text-muted-foreground">{account.email}</span>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-chip bg-brand-soft px-2.5 py-1 text-caption font-medium text-brand">
+          {ROLE_LABEL[account.role]}
+        </span>
+      </div>
+
+      {account.role === "admin" ? (
+        // An admin's role can't be changed here: this fn can't mint admins, and
+        // admins are seeded out-of-band (see set-role.fn.ts).
+        <p className="text-caption text-muted-foreground">
+          Admins are seeded out-of-band and can't be changed here.
+        </p>
+      ) : (
+        // A labelled grant/revoke control. Meaning is in the label + option text,
+        // never colour. Only non-admin accounts reach here, so the current value
+        // is always one of the two assignable roles.
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor={selectId}
+            className="text-caption font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            Set role for {account.name}
+          </label>
+          <select
+            id={selectId}
+            value={account.role as AssignableRole}
+            disabled={mutation.isPending}
+            aria-describedby={mutation.isError ? errorId : undefined}
+            onChange={(event) => mutation.mutate(event.target.value as AssignableRole)}
+            className="mt-1 w-fit rounded-card border border-border bg-background px-3 py-2 text-body font-semibold text-foreground disabled:opacity-50"
+          >
+            <option value="user">User</option>
+            <option value="moderator">Moderator</option>
+          </select>
+          {mutation.isPending ? (
+            <p className="text-caption text-muted-foreground">Saving…</p>
+          ) : null}
+        </div>
+      )}
+
+      {mutation.isSuccess ? (
+        <output className="text-caption text-foreground">Role updated for {account.name}.</output>
+      ) : null}
+      {mutation.isError ? (
+        <p id={errorId} role="alert" className="text-caption text-incident">
+          {mutation.error instanceof Error
+            ? mutation.error.message
+            : "Could not update the role. Please try again."}
+        </p>
+      ) : null}
+    </article>
   );
 }
 
