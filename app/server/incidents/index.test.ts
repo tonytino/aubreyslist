@@ -34,8 +34,10 @@ const h = vi.hoisted(() => {
     // The WHERE predicate handed to the read list — captured to assert the #41
     // public-read visibility filter (`moderation_status = 'visible'`).
     lastListWhere: undefined as unknown,
-    // Rows the UPDATE ... RETURNING resolves to: non-empty ⇒ owner match.
-    updatedRows: [{ id: "incident-1" }] as Array<Record<string, unknown>>,
+    // Rows the UPDATE ... RETURNING resolves to: non-empty ⇒ owner match. A real
+    // row always carries `occurredOn`; include it so the read-boundary date
+    // normalization (#45) is exercised.
+    updatedRows: [{ id: "incident-1", occurredOn: "2026-06-15" }] as Array<Record<string, unknown>>,
     // Rows the DELETE ... RETURNING resolves to: non-empty ⇒ owner match.
     deletedRows: [{ id: "incident-1" }] as Array<Record<string, unknown>>,
     signedIn: true,
@@ -148,7 +150,7 @@ beforeEach(() => {
   state.lastUpdateWhere = undefined;
   state.lastDeleteWhere = undefined;
   state.lastListWhere = undefined;
-  state.updatedRows = [{ id: "incident-1" }];
+  state.updatedRows = [{ id: "incident-1", occurredOn: "2026-06-15" }];
   state.deletedRows = [{ id: "incident-1" }];
   state.signedIn = true;
 });
@@ -213,7 +215,8 @@ describe("editIncident — owner-only, server-enforced", () => {
     expect(set.severity).toBe("moderate");
     expect(set.note).toBe("updated");
     expect(set.updatedAt).toBeInstanceOf(Date);
-    expect(row).toEqual({ id: "incident-1" });
+    // The returned row is normalized to the canonical YYYY-MM-DD contract (#45).
+    expect(row).toEqual({ id: "incident-1", occurredOn: "2026-06-15" });
   });
 
   it("rejects a non-owner: zero rows updated ⇒ 403, surfaced as a throw", async () => {
@@ -340,6 +343,19 @@ describe("listIncidents — most-recent first", () => {
     expect(state.lastOrderByArgs).toHaveLength(2);
     // Passes the DB ordering straight through.
     expect(rows.map((r) => r.id)).toEqual(["b", "a"]);
+  });
+
+  it("normalizes a driver-returned Date occurredOn to a canonical YYYY-MM-DD string (#45)", async () => {
+    // The Neon HTTP driver returns a Postgres `date` as a JS Date (Drizzle's
+    // `PgDateString` passes it through verbatim). The recent-incident banner's
+    // recency logic requires a strict `YYYY-MM-DD` string, so `listIncidents`
+    // normalizes at the read boundary. Model the driver handing back a Date.
+    state.listRows = [{ id: "d", occurredOn: new Date("2026-06-28T00:00:00.000Z") }];
+
+    const rows = await listIncidents({ listingId: "listing-1" });
+
+    expect(typeof rows[0]?.occurredOn).toBe("string");
+    expect(rows[0]?.occurredOn).toBe("2026-06-28");
   });
 
   it("excludes hidden/removed incidents from this PUBLIC read (#41)", async () => {

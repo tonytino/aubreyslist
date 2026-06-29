@@ -4,6 +4,7 @@ import {
   findRecentIncident,
   isRecentIncident,
   reportIncidentInputSchema,
+  toCalendarDayString,
 } from "./incident-recency";
 
 /**
@@ -135,5 +136,38 @@ describe("findRecentIncident — picks the most recent within the window", () =>
 
   it("returns null for an empty list", () => {
     expect(findRecentIncident([], now)).toBeNull();
+  });
+});
+
+describe("toCalendarDayString — driver date normalization (issue #45)", () => {
+  it("returns an already-canonical YYYY-MM-DD string unchanged", () => {
+    expect(toCalendarDayString("2026-06-28")).toBe("2026-06-28");
+  });
+
+  it("converts a Date (what the Neon HTTP driver returns for a `date`) to its UTC YYYY-MM-DD", () => {
+    // The driver hands back a Date at UTC midnight for a `date` column.
+    expect(toCalendarDayString(new Date("2026-06-28T00:00:00.000Z"))).toBe("2026-06-28");
+  });
+
+  it("converts an ISO timestamp string to its UTC calendar day", () => {
+    expect(toCalendarDayString("2026-06-28T00:00:00.000Z")).toBe("2026-06-28");
+  });
+
+  it("pads single-digit month/day to two digits", () => {
+    expect(toCalendarDayString(new Date("2026-01-05T00:00:00.000Z"))).toBe("2026-01-05");
+  });
+
+  it("uses the UTC day even for an instant late in the UTC day", () => {
+    expect(toCalendarDayString(new Date("2026-06-28T23:59:59.000Z"))).toBe("2026-06-28");
+  });
+
+  it("its output round-trips back through the recency check as recent", () => {
+    const now = new Date("2026-06-28T12:00:00Z");
+    const normalized = toCalendarDayString(new Date("2026-06-28T00:00:00.000Z"));
+    expect(isRecentIncident(normalized, now)).toBe(true);
+  });
+
+  it("returns a genuinely unparseable value coerced to string rather than fabricating a date", () => {
+    expect(toCalendarDayString("not-a-date")).toBe("not-a-date");
   });
 });

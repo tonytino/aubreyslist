@@ -4,11 +4,12 @@ import { getDb } from "~/db/client";
 import { type Incident, incidents } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { enforceWriteLimit } from "~/server/rate-limit";
-import type {
-  EditIncidentInput,
-  ListIncidentsInput,
-  ReportIncidentInput,
-  RetractIncidentInput,
+import {
+  type EditIncidentInput,
+  type ListIncidentsInput,
+  type ReportIncidentInput,
+  type RetractIncidentInput,
+  toCalendarDayString,
 } from "~/trust/incident-recency";
 
 /**
@@ -51,6 +52,23 @@ import type {
  * is a separate concern (EPIC 6), out of scope here.
  */
 
+/**
+ * Normalize a freshly-read incident row's `occurredOn` to the canonical
+ * `YYYY-MM-DD` calendar-date string the app contracts on.
+ *
+ * `incidents.occurred_on` is a Postgres `date` (Drizzle `PgDateString`, which
+ * passes the driver value through verbatim). The Neon HTTP driver's `pg-types`
+ * parser returns a `date` as a JS `Date`, NOT the `YYYY-MM-DD` text — and the
+ * recency logic (`parseCalendarDay` → the recent-incident banner) + the date
+ * formatting both require the string. We normalize once here, at the read
+ * boundary, so every consumer (server + client) gets the contract regardless of
+ * the driver. See `toCalendarDayString` and issue #45. The column type already
+ * declares `occurredOn: string`, so this only fixes the runtime value to match.
+ */
+function normalizeIncident(row: Incident): Incident {
+  return { ...row, occurredOn: toCalendarDayString(row.occurredOn) };
+}
+
 // ---------------------------------------------------------------------------
 // Read — a listing's incidents, most-recent first
 // ---------------------------------------------------------------------------
@@ -68,11 +86,14 @@ import type {
  * — only an incident a moderator has hidden/removed drops out.
  */
 export async function listIncidents(input: ListIncidentsInput): Promise<Incident[]> {
-  return getDb()
+  const rows = await getDb()
     .select()
     .from(incidents)
     .where(and(eq(incidents.listingId, input.listingId), eq(incidents.moderationStatus, "visible")))
     .orderBy(desc(incidents.occurredOn), desc(incidents.createdAt));
+  // Normalize each row's `occurredOn` to the canonical YYYY-MM-DD string the
+  // recency banner + date formatting depend on (the driver returns a Date).
+  return rows.map(normalizeIncident);
 }
 
 // ---------------------------------------------------------------------------
@@ -106,7 +127,7 @@ export async function reportIncident(input: ReportIncidentInput): Promise<Incide
   if (!row) {
     throw new Error("Incident insert returned no row.");
   }
-  return row;
+  return normalizeIncident(row);
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +171,7 @@ export async function editIncident(input: EditIncidentInput): Promise<Incident> 
       message: "You can only edit your own incident reports.",
     });
   }
-  return row;
+  return normalizeIncident(row);
 }
 
 // ---------------------------------------------------------------------------
