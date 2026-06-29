@@ -17,11 +17,18 @@ import type { Role } from "~/server/auth/guards";
  * rejection paths behave, per `docs/agents/testing.md` (minimal mocking).
  *
  * The last-admin guard (#127) reads two `SELECT`s before any write: the target's
- * current role, then a count of the OTHER admins. We mock `db.select()` as a
- * chain whose terminal `.where()` drains a queue of staged results — one per
- * call (target lookup, then admin count) — so a test stages exactly what each
- * SELECT returns. By default the target is a plain `moderator`, so the guard is
- * a no-op and the existing #16 expectations are unaffected.
+ * current role (SELECT #1), then a count of the OTHER admins (SELECT #2). The
+ * first is staged FIFO via {@link stageSelects}. The second is NOT a hardcoded
+ * scalar — that would let a mutation dropping `ne(users.id, userId)` from the
+ * source slip through, the exact regression #127 prevents. Instead the count
+ * mock reads the bound parameter values out of the REAL drizzle predicate the
+ * source built ({@link boundParamValues}) and counts a staged "admin universe"
+ * of rows, EXCLUDING any whose `id` is bound in the predicate. So if the source
+ * keeps `ne(users.id, userId)`, the target's own id is bound and excluded; if a
+ * mutant drops it, the id is no longer bound, the target counts itself, and the
+ * sole-admin self-demotion test below flips from blocked to allowed and FAILS.
+ * By default the target is a plain `moderator`, so the guard is a no-op and the
+ * existing #16 expectations are unaffected.
  */
 
 // --- Mocks -----------------------------------------------------------------
@@ -29,8 +36,13 @@ import type { Role } from "~/server/auth/guards";
 // via `getCurrentUser`; mock only that accessor so the genuine role policy runs.
 const h = vi.hoisted(() => ({
   getCurrentUserMock: vi.fn(),
-  // db.select(...).from(...).where()  — drains `selectResults` FIFO.
+  // db.select(...).from(...).where(predicate)
+  //   SELECT #1 (target lookup): drains `selectResults` FIFO.
+  //   SELECT #2 (admin count): derived from `adminUniverse` filtered by the
+  //   predicate's bound param ids — see the module doc.
   selectResults: [] as unknown[][],
+  adminUniverse: [] as { id: string }[],
+  selectCallCount: { n: 0 },
   selectWhereMock: vi.fn(),
   selectFromMock: vi.fn(),
   selectMock: vi.fn(),
@@ -54,6 +66,8 @@ import { setRole } from "./set-role";
 const {
   getCurrentUserMock,
   selectResults,
+  adminUniverse,
+  selectCallCount,
   selectWhereMock,
   selectFromMock,
   selectMock,
@@ -62,6 +76,26 @@ const {
   setMock,
   updateMock,
 } = h;
+
+/**
+ * Walk a drizzle predicate (the `SQL` object returned by `and(eq(...), ne(...))`)
+ * and collect every BOUND parameter value (the values live in `Param` chunks
+ * nested under `queryChunks`). This lets the count mock see exactly which values
+ * the source bound — so if `ne(users.id, userId)` is dropped, `userId` no longer
+ * appears here and the self-exclusion stops taking effect.
+ */
+function boundParamValues(node: unknown, out: unknown[] = []): unknown[] {
+  if (!node || typeof node !== "object") return out;
+  const rec = node as Record<string, unknown>;
+  // A `Param` chunk carries the literal bound value.
+  if (rec.constructor?.name === "Param" && "value" in rec) {
+    out.push(rec.value);
+  }
+  if (Array.isArray(rec.queryChunks)) {
+    for (const chunk of rec.queryChunks) boundParamValues(chunk, out);
+  }
+  return out;
+}
 
 // --- Fixtures --------------------------------------------------------------
 
@@ -79,19 +113,46 @@ function userRow(role: User["role"], overrides: Partial<User> = {}): User {
   } as User;
 }
 
-/** Stage the FIFO results each `db.select().from().where()` should resolve to. */
+/**
+ * Stage the target-lookup SELECT (#1). Each entry feeds one `db.select()...
+ * .where()`; in practice the guard issues at most one target lookup per call.
+ */
 function stageSelects(...results: unknown[][]) {
   selectResults.length = 0;
   selectResults.push(...results);
 }
 
+/**
+ * Stage the "admin universe" the count SELECT (#2) draws from: the full set of
+ * admin rows that exist. The count mock applies the source's own predicate
+ * (excluding ids it bound) to derive the scalar, so the `ne(users.id, userId)`
+ * self-exclusion is genuinely exercised rather than hardcoded.
+ */
+function stageAdminUniverse(...ids: string[]) {
+  adminUniverse.length = 0;
+  adminUniverse.push(...ids.map((id) => ({ id })));
+}
+
 beforeEach(() => {
-  // Wire the drizzle SELECT chain; `.where()` shifts the next staged result.
-  selectWhereMock.mockImplementation(() => Promise.resolve(selectResults.shift() ?? []));
+  selectCallCount.n = 0;
+  // Wire the drizzle SELECT chain. The FIRST `.where()` is the target lookup
+  // (FIFO-staged). The SECOND is the admin count: derive the scalar from the
+  // staged admin universe minus any ids the source bound into the predicate
+  // (i.e. honoring `ne(users.id, userId)`), so dropping that clause is caught.
+  selectWhereMock.mockImplementation((predicate: unknown) => {
+    selectCallCount.n += 1;
+    if (selectCallCount.n === 1) {
+      return Promise.resolve(selectResults.shift() ?? []);
+    }
+    const excluded = new Set(boundParamValues(predicate).filter((v) => typeof v === "string"));
+    const value = adminUniverse.filter((a) => !excluded.has(a.id)).length;
+    return Promise.resolve([{ value }]);
+  });
   selectFromMock.mockImplementation(() => ({ where: selectWhereMock }));
   selectMock.mockImplementation(() => ({ from: selectFromMock }));
   // Default: target is a plain moderator, so the last-admin guard is a no-op.
   stageSelects([{ role: "moderator" }]);
+  stageAdminUniverse();
 
   // Wire the drizzle UPDATE chain; `returningResult` is set per-test.
   whereMock.mockImplementation(() => ({ returning: returningMock }));
@@ -167,19 +228,25 @@ describe("setRole — admin-only role management (ADR-010)", () => {
 
   it("rejects demoting the LAST admin with 409 (no DB write)", async () => {
     getCurrentUserMock.mockResolvedValue(userRow("admin"));
-    // Target is an admin; zero OTHER admins remain ⇒ this is the last one.
-    stageSelects([{ role: "admin" }], [{ value: 0 }]);
+    // Target is an admin; the only admin in existence is the target itself, so
+    // the `ne(users.id, userId)` self-exclusion leaves ZERO others.
+    stageSelects([{ role: "admin" }]);
+    stageAdminUniverse("last-admin");
 
     await expect(setRole({ userId: "last-admin", role: "moderator" })).rejects.toMatchObject({
       status: 409,
     });
     expect(updateMock).not.toHaveBeenCalled();
+    // The count query actually ran on the admin-demote path (guards the guard).
+    expect(selectWhereMock).toHaveBeenCalledTimes(2);
   });
 
   it("allows demoting a NON-last admin (another admin remains), issuing the update", async () => {
     getCurrentUserMock.mockResolvedValue(userRow("admin"));
-    // Target is an admin; one OTHER admin remains ⇒ safe to demote.
-    stageSelects([{ role: "admin" }], [{ value: 1 }]);
+    // Target is an admin; a SECOND admin exists ⇒ one OTHER remains after the
+    // self-exclusion ⇒ safe to demote.
+    stageSelects([{ role: "admin" }]);
+    stageAdminUniverse("demote-me", "other-admin");
     const target = userRow("moderator", { id: "demote-me" });
     returningMock.mockResolvedValue([target]);
 
@@ -188,13 +255,15 @@ describe("setRole — admin-only role management (ADR-010)", () => {
     expect(result).toEqual({ user: target });
     expect(updateMock).toHaveBeenCalledTimes(1);
     expect((setMock.mock.calls[0]?.[0] as { role: Role }).role).toBe("moderator");
+    expect(selectWhereMock).toHaveBeenCalledTimes(2);
   });
 
   it("allows an admin to self-demote when NOT the last admin", async () => {
     const me = userRow("admin", { id: "me" });
     getCurrentUserMock.mockResolvedValue(me);
-    // Target (me) is an admin; another admin remains ⇒ stepping down is allowed.
-    stageSelects([{ role: "admin" }], [{ value: 1 }]);
+    // Target (me) is an admin; another admin exists ⇒ stepping down is allowed.
+    stageSelects([{ role: "admin" }]);
+    stageAdminUniverse("me", "other-admin");
     const target = userRow("user", { id: "me" });
     returningMock.mockResolvedValue([target]);
 
@@ -203,6 +272,25 @@ describe("setRole — admin-only role management (ADR-010)", () => {
     expect(result).toEqual({ user: target });
     expect(updateMock).toHaveBeenCalledTimes(1);
     expect((setMock.mock.calls[0]?.[0] as { role: Role }).role).toBe("user");
+  });
+
+  it("BLOCKS a sole admin from self-demoting — fails if `ne(users.id, userId)` is dropped", async () => {
+    // The mutation #127 must catch: if the source stops excluding the target
+    // from the OTHER-admin count, a sole admin counts themselves (1 ≥ 1), the
+    // guard never fires, the self-demote write goes through, and the app locks
+    // itself out of administration. Here the ONLY admin is the caller demoting
+    // themselves: with the self-exclusion the count is 0 ⇒ 409 (no write); drop
+    // it and the count becomes 1 ⇒ this expectation fails.
+    const me = userRow("admin", { id: "me" });
+    getCurrentUserMock.mockResolvedValue(me);
+    stageSelects([{ role: "admin" }]);
+    stageAdminUniverse("me"); // the target is the one and only admin
+
+    await expect(setRole({ userId: "me", role: "user" })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(selectWhereMock).toHaveBeenCalledTimes(2);
   });
 
   // --- Not found -----------------------------------------------------------
