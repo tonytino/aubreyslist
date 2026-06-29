@@ -1,0 +1,1 @@
+- `[manual]` Added the `/about` route — a mission, trust model, GF taxonomy, and how-to-contribute page — so the header "About" nav link resolves instead of 404ing.

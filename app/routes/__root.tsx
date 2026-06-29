@@ -48,12 +48,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 // Primary navigation. Each item targets its real, existing route so the active
-// state is accurate. "About" has no dedicated route yet, so it stays at "/" as a
-// deliberate placeholder until that page lands.
+// state is accurate.
 const NAV_ITEMS = [
   { to: "/listings", label: "Browse" },
   { to: "/listings/new", label: "Add a listing" },
-  { to: "/", label: "About" },
+  { to: "/about", label: "About" },
 ] as const;
 
 function RootComponent() {
