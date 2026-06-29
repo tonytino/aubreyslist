@@ -4,9 +4,14 @@ import { findRecentIncident } from "~/trust/incident-recency";
 import { RecentIncidentBanner } from "./RecentIncidentBanner";
 
 describe("RecentIncidentBanner", () => {
-  it("renders a labelled region carrying the incident text label (not colour alone)", () => {
+  it("announces via a polite live region carrying the incident text label (not colour alone)", () => {
     render(<RecentIncidentBanner occurredOn="2026-06-01" />);
-    expect(screen.getByRole("region", { name: "Recent incident warning" })).toBeInTheDocument();
+    // A SAFETY-CRITICAL "recent harm" warning is an ARIA live region (role=status,
+    // aria-live=polite) so assistive tech announces it when it appears — not a
+    // passive landmark region.
+    const banner = screen.getByRole("status", { name: "Recent incident warning" });
+    expect(banner).toBeInTheDocument();
+    expect(banner).toHaveAttribute("aria-live", "polite");
     // Meaning is in text + icon, never colour alone.
     expect(screen.getByText(/Recent incident/)).toBeInTheDocument();
   });
@@ -32,13 +37,13 @@ describe("recent-incident banner visibility (route composition)", () => {
 
   it("renders the banner when a recent incident exists", () => {
     render(<BannerForIncidents incidents={[{ occurredOn: "2026-06-20" }]} />);
-    expect(screen.getByRole("region", { name: "Recent incident warning" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Recent incident warning" })).toBeInTheDocument();
   });
 
   it("does NOT render the banner when only old incidents exist", () => {
     render(<BannerForIncidents incidents={[{ occurredOn: "2025-01-01" }]} />);
     expect(
-      screen.queryByRole("region", { name: "Recent incident warning" })
+      screen.queryByRole("status", { name: "Recent incident warning" })
     ).not.toBeInTheDocument();
   });
 });

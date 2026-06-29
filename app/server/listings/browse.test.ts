@@ -643,6 +643,11 @@ describe("browse visibility filtering (#41)", () => {
  * literal so it can't drift: a coalesce-sum evidence check, a strict
  * confirms-coalesce `>` disputes-coalesce lead, and a `lastConfirmedAt IS NULL
  * OR >= cutoff` freshness test (inclusive edge, NULL = fresh).
+ *
+ * HONESTY NOTE: this mirror is only trustworthy because the sibling
+ * "pins the rendered SQL CASE structure" test (below) asserts the real rendered
+ * SQL matches this arithmetic. If that structural-pin test is ever deleted, the
+ * equivalence test turns into a tautology (mirror vs mirror) — keep them paired.
  */
 function sqlTierFor(
   confirms: number,
