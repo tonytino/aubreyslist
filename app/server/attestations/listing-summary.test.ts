@@ -66,10 +66,22 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("getListingClaimAggregates", () => {
-  it("coerces string counts to numbers and passes through attribute + recency", async () => {
+// The fixed GF taxonomy (db/schema.ts `claim_attribute`). The loader always
+// returns ONE ENTRY PER attribute (#150), in this canonical order.
+const TAXONOMY = [
+  "celiac_safe_vs_gluten_friendly",
+  "dedicated_fryer",
+  "cross_contamination_protocol",
+  "dedicated_gf_menu",
+  "off_menu_gf_on_request",
+  "staff_knowledge",
+  "gf_substitutes",
+] as const;
+
+describe("getListingClaimAggregates — full taxonomy, attestable (#150)", () => {
+  it("returns ONE ENTRY PER taxonomy attribute, merging the existing claim row", async () => {
     const when = new Date("2026-06-01T00:00:00Z");
-    // Postgres `count(...) filter` arrives as a string over the wire.
+    // Only one attribute has a claim row; `count(...) filter` arrives as a string.
     state.rows = [
       {
         claimId: "c1",
@@ -82,48 +94,40 @@ describe("getListingClaimAggregates", () => {
 
     const result = await getListingClaimAggregates({ listingId: "listing-1" });
 
+    // All 7 attributes, in canonical taxonomy order.
+    expect(result.map((r) => r.attribute)).toEqual([...TAXONOMY]);
     // Anonymous viewer ⇒ only the aggregate query runs (no viewer-vote query).
     expect(selectMock).toHaveBeenCalledTimes(1);
-    expect(result).toEqual([
-      {
-        claimId: "c1",
-        attribute: "dedicated_fryer",
-        lastConfirmedAt: when,
-        confirmCount: 8,
-        disputeCount: 1,
-        viewerVote: null,
-      },
-    ]);
+
+    // The attribute with a claim merges in its counts/recency (coerced to number).
+    const fryer = result.find((r) => r.attribute === "dedicated_fryer");
+    expect(fryer).toEqual({
+      claimId: "c1",
+      attribute: "dedicated_fryer",
+      lastConfirmedAt: when,
+      confirmCount: 8,
+      disputeCount: 1,
+      viewerVote: null,
+    });
   });
 
-  it("returns zero counts for a claim with no attestations (left join, no rows)", async () => {
-    state.rows = [
-      {
-        claimId: "c2",
-        attribute: "dedicated_gf_menu",
-        lastConfirmedAt: null,
-        confirmCount: "0",
-        disputeCount: "0",
-      },
-    ];
-
-    const result = await getListingClaimAggregates({ listingId: "listing-1" });
-    const agg = result[0];
-
-    expect(agg).toBeDefined();
-    expect(agg?.confirmCount).toBe(0);
-    expect(agg?.disputeCount).toBe(0);
-    expect(agg?.lastConfirmedAt).toBeNull();
-    expect(agg?.viewerVote).toBeNull();
-  });
-
-  it("returns [] for a listing with no claims", async () => {
+  it("emits an honest EMPTY entry (claimId null, zero counts) for un-attested attributes", async () => {
+    // No claim rows at all: every attribute is attestable from a zero state.
     state.rows = [];
+
     const result = await getListingClaimAggregates({ listingId: "listing-empty" });
-    expect(result).toEqual([]);
+
+    expect(result).toHaveLength(TAXONOMY.length);
+    for (const entry of result) {
+      expect(entry.claimId).toBeNull();
+      expect(entry.confirmCount).toBe(0);
+      expect(entry.disputeCount).toBe(0);
+      expect(entry.lastConfirmedAt).toBeNull();
+      expect(entry.viewerVote).toBeNull();
+    }
   });
 
-  it("attaches the signed-in viewer's own vote per claim (#32)", async () => {
+  it("attaches the signed-in viewer's own vote per attribute (#32)", async () => {
     state.rows = [
       {
         claimId: "c1",
@@ -152,8 +156,10 @@ describe("getListingClaimAggregates", () => {
     expect(getCurrentUserMock).toHaveBeenCalledTimes(1);
     // Two queries: aggregates + the viewer's own votes.
     expect(selectMock).toHaveBeenCalledTimes(2);
-    expect(result.find((c) => c.claimId === "c1")?.viewerVote).toBe("confirm");
-    expect(result.find((c) => c.claimId === "c2")?.viewerVote).toBe("dispute");
+    expect(result.find((c) => c.attribute === "dedicated_fryer")?.viewerVote).toBe("confirm");
+    expect(result.find((c) => c.attribute === "dedicated_gf_menu")?.viewerVote).toBe("dispute");
+    // An un-attested attribute still has no viewer vote.
+    expect(result.find((c) => c.attribute === "staff_knowledge")?.viewerVote).toBeNull();
   });
 
   it("excludes hidden/removed claims from the PUBLIC aggregate (#41)", async () => {
@@ -171,13 +177,14 @@ describe("getListingClaimAggregates", () => {
 
     // The aggregate WHERE constrains to `moderation_status = 'visible'`, so a
     // hidden/removed claim drops off the surface AND out of the headline cue,
-    // whose counts then recompute from the surviving visible claims.
+    // whose counts then recompute from the surviving visible claims. A moderated
+    // attribute simply falls back to its honest empty entry.
     const lower = dialect.sqlToQuery(state.aggWhere as SQL).sql.toLowerCase();
     expect(lower).toContain("moderation_status");
     expect(dialect.sqlToQuery(state.aggWhere as SQL).params).toContain("visible");
   });
 
-  it("leaves viewerVote null for claims the signed-in viewer has not voted on", async () => {
+  it("leaves viewerVote null for attributes the signed-in viewer has not voted on", async () => {
     state.rows = [
       {
         claimId: "c1",
@@ -191,6 +198,6 @@ describe("getListingClaimAggregates", () => {
     state.viewerVoteRows = []; // no votes by this user on this listing
 
     const result = await getListingClaimAggregates({ listingId: "listing-1" });
-    expect(result[0]?.viewerVote).toBeNull();
+    expect(result.find((c) => c.attribute === "dedicated_fryer")?.viewerVote).toBeNull();
   });
 });

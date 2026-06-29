@@ -14,11 +14,16 @@ export function claimsQueryKey(listingId: string): readonly [string, string] {
 interface CommunityClaimsProps {
   /** The listing these claims belong to — used to invalidate the roll-up query. */
   listingId: string;
-  /** Every claim on the listing with its aggregate (counts + recency + own vote). */
+  /**
+   * The FULL fixed taxonomy as attestable entries — one per attribute (#150),
+   * each with its aggregate (counts + recency + own vote). Attributes nobody has
+   * attested yet arrive with `claimId: null` and zero counts (honest empty
+   * state); the vote path creates the claim lazily on the first vote.
+   */
   claims: ListingClaimAggregate[];
   /**
    * The signed-in viewer's user id, or `null` when anonymous. When signed in,
-   * each claim shows confirm/dispute/retract controls so the viewer can cast,
+   * each attribute shows confirm/dispute/retract controls so the viewer can cast,
    * change, or retract their OWN attestation (#32). Anonymous viewers see the
    * read-only roll-up with a sign-in prompt.
    */
@@ -30,14 +35,18 @@ interface CommunityClaimsProps {
 }
 
 /**
- * The "Community claims" surface on listing detail (issue #29): the transparent
- * per-claim trust roll-up — each claim's confirm/dispute distribution + recency
- * — derived entirely from visible evidence (ADR-007).
+ * The "Community claims" surface on listing detail (issue #29, extended for
+ * #150): the transparent per-attribute trust roll-up — each attribute's
+ * confirm/dispute distribution + recency — derived entirely from visible
+ * evidence (ADR-007), with the WHOLE fixed taxonomy ALWAYS rendered as
+ * attestable.
  *
- * Renders one {@link ClaimTrustSummaryRow} per claim, with {@link ClaimVoteControls}
+ * Renders one {@link ClaimTrustSummaryRow} per taxonomy attribute (honest empty
+ * state for zero votes — never a fabricated rating), with {@link ClaimVoteControls}
  * below it so a signed-in viewer can confirm/dispute and change or retract their
- * OWN vote (#32). When the listing has no claims at all, it renders nothing here
- * and the caller keeps the honest "coming soon" placeholder copy.
+ * OWN vote (#32) — even on an attribute with no claim row yet, where the claim is
+ * created lazily on the first vote (#150). Anonymous viewers see the evidence + a
+ * sign-in affordance. There is no longer a "coming soon" dead-end.
  */
 export function CommunityClaims({
   listingId,
@@ -46,14 +55,10 @@ export function CommunityClaims({
   now,
   stalenessMonths,
 }: CommunityClaimsProps) {
-  if (claims.length === 0) {
-    return null;
-  }
-
   return (
     <ul className="flex flex-col divide-y divide-border">
       {claims.map((claim) => (
-        <li key={claim.claimId} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
+        <li key={claim.attribute} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
           <ClaimTrustSummaryRow
             attribute={claim.attribute}
             aggregate={claim}
@@ -62,6 +67,7 @@ export function CommunityClaims({
           />
           <ClaimVoteControls
             listingId={listingId}
+            attribute={claim.attribute}
             claimId={claim.claimId}
             viewerVote={claim.viewerVote}
             isSignedIn={viewerId !== null}

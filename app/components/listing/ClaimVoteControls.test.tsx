@@ -34,6 +34,7 @@ describe("ClaimVoteControls", () => {
     renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
+        attribute="dedicated_fryer"
         claimId="claim-1"
         viewerVote={null}
         isSignedIn={false}
@@ -43,11 +44,14 @@ describe("ClaimVoteControls", () => {
     expect(screen.queryByRole("button", { name: "Confirm" })).not.toBeInTheDocument();
   });
 
-  it("casts a vote and invalidates the claim roll-up", async () => {
+  it("casts a vote by (listingId, attribute) and invalidates the roll-up — even with no claim yet (#150)", async () => {
+    // The lazy-create path: the attribute has no claim row (claimId null), yet
+    // the viewer can still confirm it — the server creates the claim on first vote.
     const queryClient = renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
-        claimId="claim-1"
+        attribute="dedicated_fryer"
+        claimId={null}
         viewerVote={null}
         isSignedIn={true}
       />
@@ -59,7 +63,9 @@ describe("ClaimVoteControls", () => {
     await waitFor(() => {
       expect(submitVoteMock).toHaveBeenCalledTimes(1);
     });
-    expect(submitVoteMock).toHaveBeenCalledWith({ data: { claimId: "claim-1", value: "confirm" } });
+    expect(submitVoteMock).toHaveBeenCalledWith({
+      data: { listingId: "listing-1", attribute: "dedicated_fryer", value: "confirm" },
+    });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: claimsQueryKey("listing-1") });
   });
 
@@ -67,6 +73,7 @@ describe("ClaimVoteControls", () => {
     renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
+        attribute="dedicated_fryer"
         claimId="claim-1"
         viewerVote="confirm"
         isSignedIn={true}
@@ -78,13 +85,16 @@ describe("ClaimVoteControls", () => {
     await waitFor(() => {
       expect(submitVoteMock).toHaveBeenCalledTimes(1);
     });
-    expect(submitVoteMock).toHaveBeenCalledWith({ data: { claimId: "claim-1", value: "dispute" } });
+    expect(submitVoteMock).toHaveBeenCalledWith({
+      data: { listingId: "listing-1", attribute: "dedicated_fryer", value: "dispute" },
+    });
   });
 
-  it("retracts the viewer's own vote and invalidates the roll-up", async () => {
+  it("retracts the viewer's own vote by (listingId, attribute) and invalidates the roll-up", async () => {
     const queryClient = renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
+        attribute="dedicated_fryer"
         claimId="claim-1"
         viewerVote="confirm"
         isSignedIn={true}
@@ -97,7 +107,9 @@ describe("ClaimVoteControls", () => {
     await waitFor(() => {
       expect(removeVoteMock).toHaveBeenCalledTimes(1);
     });
-    expect(removeVoteMock).toHaveBeenCalledWith({ data: { claimId: "claim-1" } });
+    expect(removeVoteMock).toHaveBeenCalledWith({
+      data: { listingId: "listing-1", attribute: "dedicated_fryer" },
+    });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: claimsQueryKey("listing-1") });
   });
 });

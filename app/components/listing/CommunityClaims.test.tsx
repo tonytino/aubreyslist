@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ListingClaimAggregate } from "~/server/attestations/listing-summary";
@@ -31,6 +31,21 @@ const claim = (overrides: Partial<ListingClaimAggregate>): ListingClaimAggregate
   viewerVote: null,
   ...overrides,
 });
+
+// The full fixed taxonomy as the loader returns it (#150): one entry per
+// attribute, all empty (claimId null, zero votes) unless overridden.
+const TAXONOMY = [
+  "celiac_safe_vs_gluten_friendly",
+  "dedicated_fryer",
+  "cross_contamination_protocol",
+  "dedicated_gf_menu",
+  "off_menu_gf_on_request",
+  "staff_knowledge",
+  "gf_substitutes",
+] as const;
+
+const fullTaxonomy = (): ListingClaimAggregate[] =>
+  TAXONOMY.map((attribute) => claim({ claimId: null, attribute }));
 
 function renderWithQuery(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -73,11 +88,44 @@ describe("CommunityClaims", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("renders nothing when there are no claims (caller keeps its placeholder)", () => {
-    const { container } = renderWithQuery(
-      <CommunityClaims listingId="listing-1" viewerId={null} now={NOW} claims={[]} />
+  it("ALWAYS renders the full taxonomy as attestable, incl. zero-vote attributes (#150)", () => {
+    renderWithQuery(
+      <CommunityClaims listingId="listing-1" viewerId="user-1" now={NOW} claims={fullTaxonomy()} />
     );
-    expect(container).toBeEmptyDOMElement();
+
+    // One row per taxonomy attribute — no "coming soon" dead-end.
+    expect(screen.getAllByRole("listitem")).toHaveLength(TAXONOMY.length);
+    // A zero-vote attribute shows its honest empty state, never a fabricated rating.
+    expect(screen.getAllByText("No confirmations or disputes yet").length).toBe(TAXONOMY.length);
+    // Every attribute is attestable: confirm/dispute controls on each row.
+    expect(screen.getAllByRole("button", { name: "Confirm" })).toHaveLength(TAXONOMY.length);
+    expect(screen.getAllByRole("button", { name: "Dispute" })).toHaveLength(TAXONOMY.length);
+    // No claim row exists yet, so no "Flag claim" control is offered.
+    expect(screen.queryByRole("button", { name: "Flag claim" })).not.toBeInTheDocument();
+  });
+
+  it("calls the vote mutation with {listingId, attribute, value} on a zero-vote attribute (#150)", async () => {
+    renderWithQuery(
+      <CommunityClaims
+        listingId="listing-1"
+        viewerId="user-1"
+        now={NOW}
+        claims={[claim({ claimId: null, attribute: "cross_contamination_protocol" })]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => {
+      expect(submitVoteMock).toHaveBeenCalledTimes(1);
+    });
+    expect(submitVoteMock).toHaveBeenCalledWith({
+      data: {
+        listingId: "listing-1",
+        attribute: "cross_contamination_protocol",
+        value: "confirm",
+      },
+    });
   });
 
   it("hides the vote controls and shows a sign-in prompt for anonymous viewers", () => {
