@@ -18,9 +18,9 @@ import type { AdminView } from "./admin-view.fn";
  *
  * The guard decision happens here on the server (reading the authoritative
  * `users` row via {@link getCurrentUser}); the client never decides access for
- * itself. Settings are read-only here — the write/toggle UI lands with #24 —
- * and only fetched for admins, who are the only role that sees the settings
- * section.
+ * itself. The settings snapshot is read here and only fetched for admins, who
+ * are the only role that sees the settings section (and its #24 intake-mode
+ * toggle); the toggle's WRITE is gated separately in `set-intake-mode`.
  *
  * This lives in its own module (NOT the route-imported `admin-view.fn.ts`) so
  * its server-only imports (`getCurrentUser`/`getSetting` → `db`) never leak

@@ -1,0 +1,1 @@
+- `[manual]` Admins can now flip the active listing-intake mode (Places ↔ manual) from the admin panel's app-settings section, backed by an admin-only `setIntakeMode` server function (ADR-008).
