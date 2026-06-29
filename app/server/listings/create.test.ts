@@ -30,13 +30,16 @@ vi.mock("~/server/places", async (importOriginal) => {
   };
 });
 
-// Model the two DB shapes `insertListing` uses:
-//   db.query.listings.findFirst({ where })  — dedup lookup
+// Model the DB shapes `insertListing` uses:
+//   db.query.listings.findFirst({ where })  — places dedup lookup
+//   db.query.listings.findMany({ where })   — manual dedup candidate fetch (#25)
 //   db.insert(...).values(...).onConflictDoNothing(...).returning()  — the write
 let findFirstResult: Listing | undefined;
+let findManyResult: Listing[] = [];
 let returningResult: Listing[] = [];
 
 const findFirstMock = vi.fn(() => Promise.resolve(findFirstResult));
+const findManyMock = vi.fn(() => Promise.resolve(findManyResult));
 const returningMock = vi.fn(() => Promise.resolve(returningResult));
 const onConflictDoNothingMock = vi.fn((_args?: unknown) => ({ returning: returningMock }));
 const valuesMock = vi.fn((_values?: Record<string, unknown>) => ({
@@ -46,7 +49,7 @@ const insertMock = vi.fn(() => ({ values: valuesMock }));
 
 vi.mock("~/db/client", () => ({
   getDb: () => ({
-    query: { listings: { findFirst: findFirstMock } },
+    query: { listings: { findFirst: findFirstMock, findMany: findManyMock } },
     insert: insertMock,
   }),
 }));
@@ -99,6 +102,7 @@ function placeDetailsOk(): PlacesResult<PlaceDetails> {
 
 beforeEach(() => {
   findFirstResult = undefined;
+  findManyResult = [];
   returningResult = [];
   getSettingMock.mockResolvedValue("places");
   runPlaceDetailsMock.mockResolvedValue(placeDetailsOk());
@@ -211,7 +215,7 @@ describe("runCreateListing — manual mode", () => {
     expect(String(inserted?.mapsUrl)).toContain("https://www.google.com/maps/search/");
   });
 
-  it("does not dedup-lookup for a manual entry (placeId is null)", async () => {
+  it("does not use the Place-ID dedup lookup for a manual entry (placeId is null)", async () => {
     returningResult = [listingRow({ placeId: null })];
 
     await runCreateListing({
@@ -222,7 +226,57 @@ describe("runCreateListing — manual mode", () => {
       lng: -104.99,
     });
 
+    // Manual entries never carry a Place ID, so they never hit the Place-ID
+    // `findFirst` dedup lookup; they use the name+address `findMany` candidate
+    // fetch instead (#25).
     expect(findFirstMock).not.toHaveBeenCalled();
+    expect(findManyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks a normalized name+address duplicate with a structured error (#25)", async () => {
+    const existing = listingRow({
+      id: "existing-7",
+      placeId: null,
+      // Differs only by case / punctuation / accent / spacing.
+      name: "  CÓRNER  café ",
+      address: "1 main st., denver co",
+    });
+    findManyResult = [existing];
+
+    const promise = runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St Denver CO",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    await expect(promise).rejects.toMatchObject({
+      name: "DuplicateListingError",
+      existingListingId: "existing-7",
+      existingListingName: "  CÓRNER  café ",
+    });
+    // A blocked duplicate never inserts.
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("inserts when an existing manual listing has a different address (chain branch)", async () => {
+    findManyResult = [
+      listingRow({ id: "branch-1", placeId: null, address: "999 Other Ave, Boulder, CO" }),
+    ];
+    const created = listingRow({ id: "new-1", placeId: null });
+    returningResult = [created];
+
+    const result = await runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St, Denver, CO",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    expect(result).toEqual({ listing: created, created: true });
+    expect(insertMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a manual submission while intake is in places mode", async () => {
