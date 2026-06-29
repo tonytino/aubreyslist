@@ -1,0 +1,1 @@
+- `[manual]` Added the admin-only Role management panel (#142): an admin user directory (new `listUsers` server fn) plus per-account controls to grant/revoke the moderator role via the existing `setUserRole` fn, with the last-admin 409 surfaced inline; also fixed the stale moderation-queue copy that still referenced issue #41 (#143).
