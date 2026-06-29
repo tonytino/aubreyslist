@@ -16,12 +16,22 @@ import { waitForBrowseReady } from "./helpers";
  * is in the results. A second listing affirmed ONLY for celiac-safe is seeded so
  * the dedicated-fryer constraint is doing real work (it must be excluded).
  *
- * Reads are anonymous, but seeding needs the DB; the spec self-skips when the
- * CI E2E database / session secret are absent (see fixtures.ts).
+ * PAGINATION-PROOF (the persistent CI Neon branch accrues data across runs): the
+ * default browse order is alphabetical with a page size of 20, so a both-attribute
+ * listing with a random name could be pushed past page 1 by other runs' data and
+ * silently fail this assertion. We therefore (a) name the seeded match with a
+ * leading-digit prefix so it sorts to the FRONT of page 1 under the alpha default
+ * across the default Postgres collation, and (b) assert membership via its
+ * listing-detail card LINK (the `/listings/<id>` href) and CLICK through to its
+ * detail page — proving it is a real, navigable result rather than just text on a
+ * page. The negative assertion stays scoped to the celiac-only listing's unique
+ * name. Reads are anonymous, but seeding needs the DB; the spec self-skips when
+ * the CI E2E database / session secret are absent (see fixtures.ts).
  */
 test.describe("browse + GF taxonomy filter (seeded results)", () => {
   let seeder: Seeder;
   let bothName: string;
+  let bothId: string;
   let celiacOnlyName: string;
 
   test.beforeEach(async () => {
@@ -29,8 +39,12 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     seeder = new Seeder();
 
     // Listing A: celiac-safe AND dedicated-fryer, both with a confirm majority.
-    const both = await seeder.createListing(uniqueToken("both"));
+    // Leading-digit name sorts to the front of page 1 (alpha default) so it is
+    // never paginated off by other runs' rows on the persistent branch.
+    const bothToken = uniqueToken("both");
+    const both = await seeder.createListing(bothToken, { name: `0000-${bothToken} Diner` });
     bothName = both.name;
+    bothId = both.id;
     const celiacClaim = await seeder.createClaim(both.id, "celiac_safe_vs_gluten_friendly");
     const fryerClaim = await seeder.createClaim(both.id, "dedicated_fryer");
     await seeder.attest(celiacClaim.id, "confirm", uniqueToken("v"));
@@ -63,9 +77,18 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     await page.getByRole("checkbox", { name: "Dedicated fryer" }).click();
     await expect(page).toHaveURL(/attrs=[^&]*dedicated_fryer/);
 
-    // The listing affirmed for BOTH attributes is in the results…
-    await expect(page.getByRole("heading", { name: bothName, level: 3 })).toBeVisible();
-    // …and the celiac-only listing is excluded by the dedicated-fryer constraint.
+    // The celiac-only listing is excluded by the dedicated-fryer constraint —
+    // scoped to its unique name, robust regardless of pagination.
     await expect(page.getByRole("heading", { name: celiacOnlyName, level: 3 })).toHaveCount(0);
+
+    // The both-attribute listing IS a result: its card links to its detail page.
+    // The leading-digit name pins it to page 1, so the link is in the DOM. Assert
+    // the link by its detail href, then click through to confirm it is a real,
+    // navigable filtered result (URL-based, not just on-page text).
+    const card = page.getByRole("link", { name: bothName });
+    await expect(card).toHaveAttribute("href", `/listings/${bothId}`);
+    await card.click();
+    await expect(page).toHaveURL(new RegExp(`/listings/${bothId}$`));
+    await expect(page.getByRole("heading", { name: bothName, level: 1 })).toBeVisible();
   });
 });
