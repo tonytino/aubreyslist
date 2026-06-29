@@ -30,13 +30,42 @@ vi.mock("~/server/places", async (importOriginal) => {
   };
 });
 
-// Model the two DB shapes `insertListing` uses:
-//   db.query.listings.findFirst({ where })  — dedup lookup
+// Model the DB shapes `insertListing` uses:
+//   db.query.listings.findFirst({ where })  — places dedup lookup
+//   db.query.listings.findMany({ where })   — manual dedup candidate fetch (#25)
 //   db.insert(...).values(...).onConflictDoNothing(...).returning()  — the write
 let findFirstResult: Listing | undefined;
+let findManyResult: Listing[] = [];
 let returningResult: Listing[] = [];
 
 const findFirstMock = vi.fn(() => Promise.resolve(findFirstResult));
+const findManyMock = vi.fn((_args?: { where?: unknown }) => Promise.resolve(findManyResult));
+
+/**
+ * Collect the DB column names a drizzle predicate references (recursively walking
+ * its `queryChunks`). Lets a test assert the manual-dedup candidate query is
+ * scoped to both `place_id` (manual only) AND `moderation_status` (visible only,
+ * #25 fix) without depending on the exact SQL string.
+ */
+function columnsReferenced(predicate: unknown): string[] {
+  const found: string[] = [];
+  const visit = (node: unknown): void => {
+    if (node === null || node === undefined) return;
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child);
+      return;
+    }
+    if (typeof node === "object") {
+      const record = node as Record<string, unknown>;
+      if (typeof record.name === "string" && "table" in record) {
+        found.push(record.name);
+      }
+      if ("queryChunks" in record) visit(record.queryChunks);
+    }
+  };
+  visit(predicate);
+  return found;
+}
 const returningMock = vi.fn(() => Promise.resolve(returningResult));
 const onConflictDoNothingMock = vi.fn((_args?: unknown) => ({ returning: returningMock }));
 const valuesMock = vi.fn((_values?: Record<string, unknown>) => ({
@@ -46,7 +75,7 @@ const insertMock = vi.fn(() => ({ values: valuesMock }));
 
 vi.mock("~/db/client", () => ({
   getDb: () => ({
-    query: { listings: { findFirst: findFirstMock } },
+    query: { listings: { findFirst: findFirstMock, findMany: findManyMock } },
     insert: insertMock,
   }),
 }));
@@ -99,6 +128,7 @@ function placeDetailsOk(): PlacesResult<PlaceDetails> {
 
 beforeEach(() => {
   findFirstResult = undefined;
+  findManyResult = [];
   returningResult = [];
   getSettingMock.mockResolvedValue("places");
   runPlaceDetailsMock.mockResolvedValue(placeDetailsOk());
@@ -211,7 +241,7 @@ describe("runCreateListing — manual mode", () => {
     expect(String(inserted?.mapsUrl)).toContain("https://www.google.com/maps/search/");
   });
 
-  it("does not dedup-lookup for a manual entry (placeId is null)", async () => {
+  it("does not use the Place-ID dedup lookup for a manual entry (placeId is null)", async () => {
     returningResult = [listingRow({ placeId: null })];
 
     await runCreateListing({
@@ -222,7 +252,99 @@ describe("runCreateListing — manual mode", () => {
       lng: -104.99,
     });
 
+    // Manual entries never carry a Place ID, so they never hit the Place-ID
+    // `findFirst` dedup lookup; they use the name+address `findMany` candidate
+    // fetch instead (#25).
     expect(findFirstMock).not.toHaveBeenCalled();
+    expect(findManyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("scopes the dedup candidate query to visible manual rows only (#25)", async () => {
+    returningResult = [listingRow({ placeId: null })];
+
+    await runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St, Denver",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    // The candidate `where` must AND `place_id IS NULL` with
+    // `moderation_status = 'visible'` — a hidden/removed listing must never be a
+    // dedup candidate (it would wrongly block a re-add and point at a row the
+    // user can't see → 404). We assert both columns are referenced rather than
+    // pin the exact SQL string.
+    const where = findManyMock.mock.calls[0]?.[0]?.where;
+    const cols = columnsReferenced(where);
+    expect(cols).toContain("place_id");
+    expect(cols).toContain("moderation_status");
+  });
+
+  it("does NOT block a re-add when the only match is a hidden/removed listing (#25)", async () => {
+    // In production the `moderation_status = 'visible'` filter excludes the
+    // hidden/removed row at the DB, so the candidate set comes back empty and the
+    // new manual add proceeds. We model that filtered result here.
+    findManyResult = [];
+    const created = listingRow({ id: "readd-1", placeId: null });
+    returningResult = [created];
+
+    const result = await runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St, Denver, CO",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    expect(result).toEqual({ listing: created, created: true });
+    expect(insertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks a normalized name+address duplicate with a structured error (#25)", async () => {
+    const existing = listingRow({
+      id: "existing-7",
+      placeId: null,
+      // Differs only by case / punctuation / accent / spacing.
+      name: "  CÓRNER  café ",
+      address: "1 main st., denver co",
+    });
+    findManyResult = [existing];
+
+    const promise = runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St Denver CO",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    await expect(promise).rejects.toMatchObject({
+      name: "DuplicateListingError",
+      existingListingId: "existing-7",
+      existingListingName: "  CÓRNER  café ",
+    });
+    // A blocked duplicate never inserts.
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("inserts when an existing manual listing has a different address (chain branch)", async () => {
+    findManyResult = [
+      listingRow({ id: "branch-1", placeId: null, address: "999 Other Ave, Boulder, CO" }),
+    ];
+    const created = listingRow({ id: "new-1", placeId: null });
+    returningResult = [created];
+
+    const result = await runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St, Denver, CO",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    expect(result).toEqual({ listing: created, created: true });
+    expect(insertMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a manual submission while intake is in places mode", async () => {

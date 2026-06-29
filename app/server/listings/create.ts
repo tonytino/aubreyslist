@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
+import { DuplicateListingError, findDuplicateListing } from "~/server/listings/dedup";
 import { isHttpUrl } from "~/server/listings/url";
 import { buildMapsUrl, runPlaceDetails } from "~/server/places";
 import { enforceWriteLimit } from "~/server/rate-limit";
@@ -30,14 +31,17 @@ import { getSetting } from "~/server/settings";
  * Auth: the write is gated server-side by {@link requireCurrentUser} — a UI-only
  * check is not trusted. An anonymous caller throws `401` before any DB work.
  *
- * Dedup: `listings.place_id` is UNIQUE. Rather than surface a constraint error,
- * a places-mode submission for an already-listed Place ID resolves to the
- * existing row and returns it with `created: false`, so the UI can route the
- * user to the listing that already exists (ADR-008; issue #25 hardens this
- * further — a graceful path is enough here). Manual entries store `placeId:
- * null`; Postgres treats NULLs as distinct, so the unique constraint never
- * collides them (manual-entry name+address dedup is a later concern, not done
- * here).
+ * Dedup (issue #25):
+ * - **Places mode** — `listings.place_id` is UNIQUE. Rather than surface a
+ *   constraint error, a submission for an already-listed Place ID resolves to the
+ *   existing row and returns it with `created: false`, so the UI can route the
+ *   user to the listing that already exists (ADR-008).
+ * - **Manual mode** — entries store `placeId: null`; Postgres treats NULLs as
+ *   distinct, so the unique index never collides them. Before inserting we run a
+ *   deterministic normalized name+address match against existing manual listings
+ *   ({@link findDuplicateListing}) and BLOCK a strong match with a structured
+ *   {@link DuplicateListingError} (carrying the existing listing's id/name so the
+ *   UI can link to it) instead of silently creating a duplicate.
  */
 
 /** Result of an add-listing write: the listing plus whether it was newly created. */
@@ -154,11 +158,54 @@ async function resolveListing(input: CreateListingInput): Promise<ResolvedListin
 }
 
 /**
- * Insert the resolved listing, handling the `place_id` UNIQUE constraint
- * gracefully. For a places-mode entry we first look up any existing row for the
- * Place ID and return it (`created: false`) instead of erroring — and we also
- * guard the race where a concurrent insert wins by treating the resulting
- * conflict as "already listed" and re-reading the existing row.
+ * Block a manual entry that duplicates an existing manual listing on a
+ * normalized name+address match (issue #25).
+ *
+ * The query loads the **visible manual** candidate subset — `place_id IS NULL`
+ * (manual only; Places rows dedup on Place ID and must never block/merge a manual
+ * entry) AND `moderation_status = 'visible'`. The visibility filter matters: a
+ * moderator-`hidden`/`removed` listing must NOT block a legitimate re-add and must
+ * never be surfaced to / linked for a user who can't even see it (public reads are
+ * visible-only → they'd 404, #41). This is a full scan of that subset, NOT a true
+ * SQL prefilter on the normalized key — the authoritative name AND address match
+ * runs in JS ({@link findDuplicateListing}), because `normalizeForDedup`'s NFKD
+ * diacritic fold can't be replicated in SQL without `unaccent` (a DB extension we
+ * deliberately don't add). Manual entry is the low-volume ADR-008 fallback, so the
+ * scan is bounded by the manual-listing count and cheap in practice.
+ *
+ * Residual TOCTOU: there is no DB unique on normalized name+address (by design —
+ * addresses are free-form), so this read-then-write check is racier than the
+ * Places path; two concurrent identical manual submissions can both pass. Such
+ * slipped-through dups are moderatable after the fact (#41). See `dedup.ts`.
+ *
+ * On a match we throw a {@link DuplicateListingError} (carrying the existing
+ * id/name) instead of inserting.
+ */
+async function assertNoManualDuplicate(resolved: ResolvedListing): Promise<void> {
+  const db = getDb();
+
+  const candidates = await db.query.listings.findMany({
+    where: and(isNull(listings.placeId), eq(listings.moderationStatus, "visible")),
+  });
+
+  const duplicate = findDuplicateListing(
+    { name: resolved.name, address: resolved.address },
+    candidates
+  );
+  if (duplicate) {
+    throw new DuplicateListingError(duplicate);
+  }
+}
+
+/**
+ * Insert the resolved listing, handling dedup for both intake modes (issue #25):
+ *
+ * - **Places** — first look up any existing row for the Place ID and return it
+ *   (`created: false`) instead of erroring, and guard the race where a concurrent
+ *   insert wins by treating the resulting conflict as "already listed" and
+ *   re-reading the existing row.
+ * - **Manual** — run a normalized name+address duplicate check and BLOCK a strong
+ *   match with a {@link DuplicateListingError} before inserting.
  */
 async function insertListing(resolved: ResolvedListing): Promise<CreateListingResult> {
   const db = getDb();
@@ -171,6 +218,9 @@ async function insertListing(resolved: ResolvedListing): Promise<CreateListingRe
     if (existing) {
       return { listing: existing, created: false };
     }
+  } else {
+    // Manual-mode dedup: no Place ID, so guard on normalized name+address.
+    await assertNoManualDuplicate(resolved);
   }
 
   // `onConflictDoNothing` on the unique place_id index makes a concurrent
