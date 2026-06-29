@@ -3,7 +3,6 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { ListingCard } from "~/components/listing/ListingCard";
 import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
-import type { ClaimAttribute } from "~/db/schema";
 import {
   BROWSE_PAGE_SIZE,
   type UserCoords,
@@ -17,6 +16,7 @@ import {
   type BrowseSort,
   DEFAULT_BROWSE_SORT,
 } from "~/listings/sort";
+import type { ClaimAttribute } from "~/listings/taxonomy";
 import { useGeolocation } from "~/listings/use-geolocation";
 import type { BrowseListingsPage } from "~/server/listings/browse";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";

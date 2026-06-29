@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { claimAttributes } from "~/db/schema";
+import { CLAIM_ATTRIBUTES } from "~/listings/taxonomy";
 import { claimAttributeLabel } from "~/trust/summary";
 import { TaxonomyFilter } from "./TaxonomyFilter";
 
@@ -29,7 +29,7 @@ describe("TaxonomyFilter", () => {
   it("renders a labeled checkbox for every taxonomy attribute", () => {
     render(<TaxonomyFilter selected={[]} onToggle={() => {}} onClear={() => {}} />);
 
-    for (const attribute of claimAttributes) {
+    for (const attribute of CLAIM_ATTRIBUTES) {
       const checkbox = screen.getByRole("checkbox", { name: claimAttributeLabel(attribute) });
       expect(checkbox).toBeInTheDocument();
       expect(checkbox).not.toBeChecked();

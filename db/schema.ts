@@ -10,6 +10,7 @@ import {
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
+import { CLAIM_ATTRIBUTES } from "~/listings/taxonomy";
 
 // Single source of truth for the Aubrey's List domain schema.
 // Run `pnpm db:generate` after changes, then `pnpm db:migrate` to apply.
@@ -43,15 +44,7 @@ export const userRole = pgEnum("user_role", ["admin", "moderator", "user"]);
  * v1. Each value maps 1:1 to a taxonomy item; keep this in lockstep with the
  * taxonomy list, the filter UI, and any seed data when it changes.
  */
-export const claimAttribute = pgEnum("claim_attribute", [
-  "celiac_safe_vs_gluten_friendly",
-  "dedicated_fryer",
-  "cross_contamination_protocol",
-  "dedicated_gf_menu",
-  "off_menu_gf_on_request",
-  "staff_knowledge",
-  "gf_substitutes",
-]);
+export const claimAttribute = pgEnum("claim_attribute", CLAIM_ATTRIBUTES);
 
 /** A single user's vote on a claim — confirm or dispute. */
 export const attestationValue = pgEnum("attestation_value", ["confirm", "dispute"]);
@@ -357,7 +350,9 @@ export const moderationActionTypes = moderationAction.enumValues;
 // ---------------------------------------------------------------------------
 
 export type UserRole = (typeof userRoles)[number];
-export type ClaimAttribute = (typeof claimAttributes)[number];
+// Re-exported from the client-safe taxonomy module (single source of truth,
+// issue #126) so existing `~/db/schema` type consumers keep working unchanged.
+export type { ClaimAttribute } from "~/listings/taxonomy";
 export type AttestationValue = (typeof attestationValues)[number];
 export type IncidentSeverity = (typeof incidentSeverities)[number];
 export type FlagStatus = (typeof flagStatuses)[number];

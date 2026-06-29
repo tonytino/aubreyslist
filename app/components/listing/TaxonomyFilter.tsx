@@ -1,4 +1,4 @@
-import { type ClaimAttribute, claimAttributes } from "~/db/schema";
+import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
 import { claimAttributeLabel } from "~/trust/summary";
 
 /**
@@ -21,7 +21,8 @@ import { claimAttributeLabel } from "~/trust/summary";
  * by the native checkbox (checkmark + `aria-checked`), never colour alone, so it
  * survives colour-blindness and greyscale.
  *
- * CLIENT-SAFE: imports only the client-safe `claimAttributes` value + the pure
+ * CLIENT-SAFE: imports only the client-safe `CLAIM_ATTRIBUTES` taxonomy tuple
+ * (from `app/listings/taxonomy.ts`, no drizzle — issue #126) + the pure
  * `claimAttributeLabel` from `app/trust/summary.ts` — no `getDb`/server import.
  */
 
@@ -63,7 +64,7 @@ export function TaxonomyFilter({ selected, onToggle, onClear }: TaxonomyFilterPr
       </p>
 
       <div className="mt-3 flex flex-col gap-2 sm:grid sm:grid-cols-2">
-        {claimAttributes.map((attribute) => {
+        {CLAIM_ATTRIBUTES.map((attribute) => {
           const checked = selectedSet.has(attribute);
           return (
             <label
