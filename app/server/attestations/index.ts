@@ -270,7 +270,11 @@ export async function castVote(input: VoteInput): Promise<void> {
     });
 
   // Recency always tracks the surviving confirms — a confirm refreshes it, a
-  // flip to dispute drops the withdrawn confirmation (ADR-007).
+  // flip to dispute drops the withdrawn confirmation (ADR-007). Note: neon-http
+  // has no interactive transaction, so these statements are not atomic; a crash
+  // between the attestation upsert and this recompute would leave recency briefly
+  // stale, but it is self-healing — the next vote/retract on the claim re-settles
+  // it from the visible confirms, and the counts are always derived live.
   await recomputeLastConfirmedAt(db, claimId);
 }
 
