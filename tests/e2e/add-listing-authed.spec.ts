@@ -44,6 +44,13 @@ test.describe("add a listing (authenticated, manual intake)", () => {
     createdName = name;
 
     await page.goto("/listings/new");
+    // Hydration must finish before interacting: the form's onChange handlers and
+    // the controlled-state `disabled` gate on the submit button aren't wired
+    // until the client bundle runs (see waitForHydration). The submit button is
+    // `disabled` until React's `canSubmit` is true, so we additionally gate on it
+    // being ENABLED below — proof every field's onChange registered — before the
+    // click, so we never fire a no-op click into a not-yet-interactive form (the
+    // earlier flake) and never rely on a retry.
     await waitForHydration(page);
 
     await expect(page.getByRole("heading", { name: "Add a restaurant" })).toBeVisible();
@@ -53,9 +60,16 @@ test.describe("add a listing (authenticated, manual intake)", () => {
     await page.getByLabel("Latitude").fill("39.7392");
     await page.getByLabel("Longitude").fill("-104.9903");
 
-    await page.getByRole("button", { name: "Add listing" }).click();
+    // Only enabled once all four controlled fields have registered (canSubmit) —
+    // deterministic readiness gate for the submit, replacing reliance on retries.
+    const submit = page.getByRole("button", { name: "Add listing" });
+    await expect(submit).toBeEnabled();
+    await submit.click();
 
-    // On success the route navigates to the listing-detail page for the new row.
+    // On success the route navigates to the listing-detail page for the new row
+    // (a real id, not back on /listings/new), and the detail page shows what we
+    // entered — the unique name proves it routed to OUR newly-created listing.
+    await expect(page).not.toHaveURL(/\/listings\/new$/);
     await expect(page).toHaveURL(/\/listings\/[^/]+$/);
     await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
     await expect(page.getByText("42 Gluten-Free Ave, Denver, CO")).toBeVisible();
