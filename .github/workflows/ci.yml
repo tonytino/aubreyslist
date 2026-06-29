@@ -92,11 +92,21 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
 
+      # The E2E suite includes authenticated + DB-seeded flows (issue #45). Those
+      # specs seed via Drizzle and mint a sealed session cookie with the repo's
+      # own `sealSessionPayload`, so BOTH the spec process AND the Playwright dev
+      # server (`pnpm dev`) need the SAME `SESSION_SECRET` (to seal vs. unseal the
+      # cookie) plus `DATABASE_URL`. The auth/DB specs self-skip when either is
+      # absent (see tests/e2e/fixtures.ts → E2E_DB_READY), so this stays green if
+      # only the DB secret is configured. `SESSION_SECRET` falls back to a fixed
+      # CI-only test value (it protects nothing real on the throwaway CI branch)
+      # when the optional `CI_E2E_SESSION_SECRET` secret is unset.
       - name: E2E tests
         if: steps.e2e.outputs.enabled == 'true'
         run: pnpm test:e2e
         env:
           DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.CI_E2E_SESSION_SECRET || 'e2e-ci-only-session-secret-not-a-real-key' }}
 
   build-smoke:
     name: Production build smoke
