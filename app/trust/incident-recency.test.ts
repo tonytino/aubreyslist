@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   RECENT_INCIDENT_WINDOW_DAYS,
   findRecentIncident,
@@ -144,30 +144,56 @@ describe("toCalendarDayString — driver date normalization (issue #45)", () => 
     expect(toCalendarDayString("2026-06-28")).toBe("2026-06-28");
   });
 
-  it("converts a Date (what the Neon HTTP driver returns for a `date`) to its UTC YYYY-MM-DD", () => {
-    // The driver hands back a Date at UTC midnight for a `date` column.
-    expect(toCalendarDayString(new Date("2026-06-28T00:00:00.000Z"))).toBe("2026-06-28");
-  });
-
-  it("converts an ISO timestamp string to its UTC calendar day", () => {
-    expect(toCalendarDayString("2026-06-28T00:00:00.000Z")).toBe("2026-06-28");
+  it("converts the driver's local-midnight Date for a `date` column to its YYYY-MM-DD", () => {
+    // The Neon HTTP driver (pg-types, OID 1082) builds a `date` as a Date at
+    // LOCAL midnight — `new Date(y, m-1, d)`, month 0-based → June 28. Reading
+    // it back with LOCAL getters recovers the stored calendar day (#144).
+    expect(toCalendarDayString(new Date(2026, 5, 28))).toBe("2026-06-28");
   });
 
   it("pads single-digit month/day to two digits", () => {
-    expect(toCalendarDayString(new Date("2026-01-05T00:00:00.000Z"))).toBe("2026-01-05");
-  });
-
-  it("uses the UTC day even for an instant late in the UTC day", () => {
-    expect(toCalendarDayString(new Date("2026-06-28T23:59:59.000Z"))).toBe("2026-06-28");
+    expect(toCalendarDayString(new Date(2026, 0, 5))).toBe("2026-01-05");
   });
 
   it("its output round-trips back through the recency check as recent", () => {
     const now = new Date("2026-06-28T12:00:00Z");
-    const normalized = toCalendarDayString(new Date("2026-06-28T00:00:00.000Z"));
+    const normalized = toCalendarDayString(new Date(2026, 5, 28));
     expect(isRecentIncident(normalized, now)).toBe(true);
   });
 
   it("returns a genuinely unparseable value coerced to string rather than fabricating a date", () => {
     expect(toCalendarDayString("not-a-date")).toBe("not-a-date");
+  });
+});
+
+describe("toCalendarDayString — positive-offset TZ regression (issue #144)", () => {
+  // Force a positive-offset runtime so a UTC-getter regression (which would
+  // yield the day BEFORE the stored one) is caught WITHOUT the DB-gated
+  // integration test. Setting `process.env.TZ` is test tooling (the one allowed
+  // exception to the no-`process.env` rule); newly constructed Dates pick it up.
+  // Default to UTC (the prod/CI invariant) when TZ is unset so we always restore
+  // to a sane, non-positive offset rather than reintroducing a stray "undefined".
+  const originalTz = process.env.TZ ?? "UTC";
+  beforeAll(() => {
+    process.env.TZ = "Asia/Tokyo";
+  });
+  afterAll(() => {
+    // Restore so no other suite inherits the forced TZ.
+    process.env.TZ = originalTz;
+  });
+
+  it("recovers the stored calendar day from the driver's local-midnight Date under Asia/Tokyo", () => {
+    // Sanity-check the harness actually applied the positive offset: under
+    // Asia/Tokyo the UTC getters of this local-midnight Date land on the prior
+    // day, which is exactly the bug local getters fix.
+    const localMidnight = new Date(2026, 5, 28);
+    expect(localMidnight.getUTCDate()).toBe(27);
+
+    // Local getters must still return the STORED day, not the UTC-shifted one.
+    expect(toCalendarDayString(localMidnight)).toBe("2026-06-28");
+  });
+
+  it("keeps a January date correct (year/month boundary) under Asia/Tokyo", () => {
+    expect(toCalendarDayString(new Date(2026, 0, 1))).toBe("2026-01-01");
   });
 });
