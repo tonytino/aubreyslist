@@ -113,6 +113,26 @@ describe("listUsers — admin-only user directory (ADR-010)", () => {
     expect(selectMock).toHaveBeenCalledTimes(1);
   });
 
+  it("selects EXACTLY the minimal projection — no sensitive columns leak (id/email/name/role)", async () => {
+    // This directory exists precisely to avoid exposing sensitive columns, so
+    // the projection is part of its contract. Pin it: widening the `.select(...)`
+    // — especially to `googleSub` (an auth identity anchor) or `avatarUrl` — must
+    // FAIL here. The select arg is the column-projection object passed to drizzle.
+    getCurrentUserMock.mockResolvedValue(userRow("admin"));
+    h.rows = [{ id: "u1", email: "a@example.com", name: "Ada", role: "admin" }];
+
+    await listUsers();
+
+    const projection = selectMock.mock.calls[0]?.[0];
+    expect(projection).toBeDefined();
+    const columns = Object.keys(projection as Record<string, unknown>);
+    // Exactly these four, in this order — nothing more, nothing less.
+    expect(columns).toEqual(["id", "email", "name", "role"]);
+    // Belt-and-braces: the sensitive columns are explicitly absent.
+    expect(columns).not.toContain("googleSub");
+    expect(columns).not.toContain("avatarUrl");
+  });
+
   it("surfaces the guard's HTTPException type for forbidden callers", async () => {
     getCurrentUserMock.mockResolvedValue(userRow("user"));
     await expect(listUsers()).rejects.toBeInstanceOf(HTTPException);
