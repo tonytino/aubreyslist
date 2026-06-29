@@ -65,17 +65,26 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # DB-level schema-constraint integration suite (issue #92, wired in #112).
+      # DB-level integration suite (issue #92, wired in #112; extended in #45).
       # Gated on the same secret as E2E so a missing secret skips this step
       # rather than failing CI (safe default). When the secret is present the
       # suite runs against the persistent CI Neon branch; it applies migrations
       # itself and cleans up its own per-run fixtures (see the suite header and
       # docs/agents/testing.md).
+      #
+      # Two env vars, both the same CI Neon branch (STEP-level only — the fast
+      # unit step stays DB-free):
+      #  - TEST_DATABASE_URL: read directly by suites that build their own pg
+      #    client (e.g. schema-constraints.test.ts).
+      #  - DATABASE_URL: required by suites that exercise the REAL app server fns,
+      #    which go through `getDb()` → `getEnv()` (e.g. the #45 incident-date
+      #    round-trip test calling `listIncidents`).
       - name: Integration tests
         if: steps.e2e.outputs.enabled == 'true'
         run: pnpm exec vitest run tests/integration
         env:
           TEST_DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
 
       - name: Install Playwright browsers
         if: steps.e2e.outputs.enabled == 'true'
@@ -92,11 +101,21 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
 
+      # The E2E suite includes authenticated + DB-seeded flows (issue #45). Those
+      # specs seed via Drizzle and mint a sealed session cookie with the repo's
+      # own `sealSessionPayload`, so BOTH the spec process AND the Playwright dev
+      # server (`pnpm dev`) need the SAME `SESSION_SECRET` (to seal vs. unseal the
+      # cookie) plus `DATABASE_URL`. The auth/DB specs self-skip when either is
+      # absent (see tests/e2e/fixtures.ts → E2E_DB_READY), so this stays green if
+      # only the DB secret is configured. `SESSION_SECRET` falls back to a fixed
+      # CI-only test value (it protects nothing real on the throwaway CI branch)
+      # when the optional `CI_E2E_SESSION_SECRET` secret is unset.
       - name: E2E tests
         if: steps.e2e.outputs.enabled == 'true'
         run: pnpm test:e2e
         env:
           DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.CI_E2E_SESSION_SECRET || 'e2e-ci-only-session-secret-not-a-real-key' }}
 
   build-smoke:
     name: Production build smoke

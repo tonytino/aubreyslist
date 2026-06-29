@@ -91,6 +91,32 @@ writes to the database must manage its own data:
   orphaned fixtures.
 - Never assume an empty database or a fixed row count.
 
+### Authenticated + DB-seeded E2E (the shared fixtures)
+
+`tests/e2e/fixtures.ts` is the one place to seed data and establish an
+authenticated session in an E2E spec. Reuse it — do not invent a new mechanism.
+
+- **Auth ("mocked sign-in").** The session is a sealed, server-signed cookie
+  (ADR-006) — there is **no `sessions` table** — so a spec signs a user in by
+  minting that cookie with the repo's own `sealSessionPayload` and adding it to
+  the browser context (`Seeder.signIn`). This is the SAME seal the Google OAuth
+  callback writes, so the dev server unseals + re-reads the live `users` row via
+  `getCurrentUser` exactly as in production. No real OAuth round-trip, no new
+  bypass endpoint.
+- **Seeding.** `Seeder` inserts users/listings/claims/attestations/incidents and
+  the `intake_mode` setting via Drizzle (Neon HTTP), each keyed on a unique
+  per-run token, and tracks every row so `Seeder.cleanup()` removes them (a
+  listing cascades to its children). Force `intake_mode = manual` for the
+  deterministic, Places-key-free add-listing form.
+- **Gating.** Both minting the cookie and seeding need `DATABASE_URL` **and**
+  `SESSION_SECRET`. When either is absent (local `preflight`/`build`, or a CI run
+  without `CI_E2E_DATABASE_URL`), gate the spec on `E2E_DB_READY` with
+  `test.skip(!E2E_DB_READY, …)` so it skips rather than fails. CI supplies
+  `SESSION_SECRET` to the E2E step alongside `DATABASE_URL`.
+
+These specs CANNOT run without a backend + seeded Postgres; validate them with
+`pnpm preflight` (typechecks the specs) and `pnpm build`, then let CI run them.
+
 ## Coverage Requirements
 
 | What you add              | What you must test                        |

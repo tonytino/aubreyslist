@@ -14,7 +14,7 @@ import type { Coords } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
-import { findRecentIncident } from "~/trust/incident-recency";
+import { findRecentIncident, toCalendarDayString } from "~/trust/incident-recency";
 import { DEFAULT_STALENESS_MONTHS, stalenessCutoff } from "~/trust/summary";
 import { buildBrowseWhere } from "./filter";
 import { buildSearchPredicate } from "./search";
@@ -414,11 +414,16 @@ async function getRecentIncidentListingIds(listingIds: string[], now: Date): Pro
   // window definition stays single-sourced (#30).
   const byListing = new Map<string, { occurredOn: string }[]>();
   for (const row of rows) {
+    // Normalize the driver's `date` value to the canonical YYYY-MM-DD string the
+    // recency helpers contract on (Neon HTTP returns a `date` as a Date — see
+    // toCalendarDayString / issue #45), so the card's recent-incident flag and
+    // the most-recent tiebreak are correct.
+    const occurredOn = toCalendarDayString(row.occurredOn);
     const list = byListing.get(row.listingId);
     if (list) {
-      list.push({ occurredOn: row.occurredOn });
+      list.push({ occurredOn });
     } else {
-      byListing.set(row.listingId, [{ occurredOn: row.occurredOn }]);
+      byListing.set(row.listingId, [{ occurredOn }]);
     }
   }
 

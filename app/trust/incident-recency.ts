@@ -91,6 +91,44 @@ export function parseCalendarDay(value: string): number | null {
   return ms;
 }
 
+/**
+ * Normalize whatever the DB driver hands back for a `date` column into the
+ * canonical `YYYY-MM-DD` calendar-date string the rest of the app contracts on.
+ *
+ * WHY THIS EXISTS (a real boundary bug, issue #45): `incidents.occurred_on` is a
+ * Postgres `date` declared as Drizzle `date("occurred_on")` (`PgDateString`,
+ * which passes the driver value through verbatim — no `mapFromDriverValue`). The
+ * Neon HTTP driver applies a `pg-types` parser to the `date` OID that returns a
+ * JS **`Date`**, not the `YYYY-MM-DD` text. Every downstream consumer —
+ * `parseCalendarDay` (recency + the no-future validator), `formatIncidentDate` /
+ * `relativeIncidentDate` (banner + list display) — assumes a clean string, so a
+ * raw `Date` silently breaks the recent-incident banner (it never renders) and
+ * the list date formatting. Normalizing once at the read boundary keeps the
+ * calendar-date contract instead of teaching every consumer to also accept a
+ * `Date`/ISO timestamp.
+ *
+ * Accepts the already-correct `YYYY-MM-DD` string (returned unchanged), a `Date`,
+ * or an ISO-ish string (`2026-06-28T00:00:00.000Z`) — anything whose UTC calendar
+ * day is well-defined — and returns the `YYYY-MM-DD` for that UTC day. A value
+ * that has no resolvable calendar day is returned coerced to a string unchanged
+ * (so a genuinely malformed value still surfaces downstream rather than being
+ * masked as a fabricated date).
+ */
+export function toCalendarDayString(value: string | Date): string {
+  // Fast path: already the canonical contract.
+  if (typeof value === "string" && parseCalendarDay(value) !== null) {
+    return value;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  const year = String(date.getUTCFullYear()).padStart(4, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /** Today's date floored to UTC midnight (epoch ms) — the "no future" ceiling. */
 export function todayUtcMidnight(now: Date = new Date()): number {
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
