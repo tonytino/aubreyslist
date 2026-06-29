@@ -4,8 +4,31 @@ import { z } from "zod";
 import { getDb } from "~/db/client";
 import { appSettings } from "~/db/schema";
 import { getEnv } from "~/env";
+import {
+  type AutocompleteInput,
+  type PlaceDetails,
+  type PlaceDetailsInput,
+  type PlacePrediction,
+  type PlacesResult,
+  autocompleteInputSchema,
+  placeDetailsInputSchema,
+} from "~/listings/places-input";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { enforceWriteLimit } from "~/server/rate-limit";
+
+// Re-exported so server code and the existing places tests keep one import
+// surface; the client-safe definitions (validators + result/prediction types)
+// live in `~/listings/places-input` (#141).
+export {
+  type AutocompleteInput,
+  type PlaceDetails,
+  type PlaceDetailsInput,
+  type PlacePrediction,
+  type PlacesErrorReason,
+  type PlacesResult,
+  autocompleteInputSchema,
+  placeDetailsInputSchema,
+} from "~/listings/places-input";
 
 /**
  * Server-side Google Places provider for the add-listing intake flow (ADR-008).
@@ -45,39 +68,6 @@ const INTAKE_MODE_KEY = "intake_mode";
 // ---------------------------------------------------------------------------
 // Result types — typed, friendly, and never leaking the key or raw upstream errors
 // ---------------------------------------------------------------------------
-
-/** A single autocomplete prediction surfaced to the add-listing UI. */
-export interface PlacePrediction {
-  placeId: string;
-  description: string;
-}
-
-/** Structured, canonical place data resolved from a Place ID. */
-export interface PlaceDetails {
-  /** Canonical Google Place ID — the dedup key for a listing (ADR-008). */
-  placeId: string;
-  name: string;
-  formattedAddress: string;
-  lat: number;
-  lng: number;
-  /** Google Maps deep-link for the place. */
-  mapsUrl: string;
-}
-
-/**
- * Discriminated result for both operations. `ok: true` carries data; `ok: false`
- * carries a friendly, typed reason. We never surface raw upstream errors or the
- * API key — callers get a stable shape they can render.
- */
-export type PlacesResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; reason: PlacesErrorReason; message: string };
-
-export type PlacesErrorReason =
-  | "intake_disabled" // admin flipped intake to manual (ADR-008 graceful degradation)
-  | "missing_key" // GOOGLE_PLACES_API_KEY absent (optional env var; guard at use)
-  | "upstream_error" // Places API returned a non-OK response
-  | "network_error"; // fetch threw / response could not be parsed
 
 /** Build the canonical Google Maps deep-link for a Place ID. */
 export function buildMapsUrl(placeId: string): string {
@@ -156,18 +146,6 @@ const detailsResponseSchema = z.object({
 // ---------------------------------------------------------------------------
 // Core operations (plain functions — directly unit-testable with a mocked fetch)
 // ---------------------------------------------------------------------------
-
-/** Validated input for an autocomplete query. */
-export const autocompleteInputSchema = z.object({
-  query: z.string().min(1, "query is required").max(256),
-});
-export type AutocompleteInput = z.infer<typeof autocompleteInputSchema>;
-
-/** Validated input for a place-details lookup. */
-export const placeDetailsInputSchema = z.object({
-  placeId: z.string().min(1, "placeId is required"),
-});
-export type PlaceDetailsInput = z.infer<typeof placeDetailsInputSchema>;
 
 /**
  * Autocomplete: query string -> list of predictions (placeId + description).

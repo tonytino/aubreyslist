@@ -2,8 +2,8 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { ManualIntakeForm } from "~/components/add-listing/ManualIntakeForm";
 import { PlacesIntakeForm } from "~/components/add-listing/PlacesIntakeForm";
+import type { CreateListingResult } from "~/listings/create-input";
 import { getCurrentUser } from "~/server/auth/current-user";
-import type { CreateListingResult } from "~/server/listings/create";
 import { type IntakeMode, getSetting } from "~/server/settings";
 
 /**

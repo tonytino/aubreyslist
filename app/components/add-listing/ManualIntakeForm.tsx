@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import type { CreateListingResult } from "~/server/listings/create";
-import { createListing } from "~/server/listings/create";
-import { parseDuplicateListingError } from "~/server/listings/dedup";
+import type { CreateListingResult } from "~/listings/create-input";
+import { parseDuplicateListingError } from "~/listings/dedup-error";
+import { submitCreateListing } from "~/server/listings/create.fn";
 import { MenuUrlField } from "./MenuUrlField";
 
 /**
@@ -27,7 +27,7 @@ export function ManualIntakeForm({
 
   const create = useMutation({
     mutationFn: () =>
-      createListing({
+      submitCreateListing({
         data: {
           mode: "manual",
           name,

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PlacePrediction, PlacesResult } from "~/server/places";
+import type { PlacePrediction, PlacesResult } from "~/listings/places-input";
 
 /**
  * Component tests for the places intake form (issue #98). The Places server
@@ -16,11 +16,11 @@ const autocompleteMock = vi.fn(
     Promise.resolve({ ok: true, data: [] })
 );
 const createListingMock = vi.fn((_args: unknown) => Promise.resolve({} as never));
-vi.mock("~/server/places", () => ({
+vi.mock("~/server/places.fn", () => ({
   autocompletePlaces: (args: unknown) => autocompleteMock(args),
 }));
-vi.mock("~/server/listings/create", () => ({
-  createListing: (args: unknown) => createListingMock(args),
+vi.mock("~/server/listings/create.fn", () => ({
+  submitCreateListing: (args: unknown) => createListingMock(args),
 }));
 
 import { PlacesIntakeForm } from "./PlacesIntakeForm";
