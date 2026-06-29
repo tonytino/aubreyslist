@@ -3,15 +3,15 @@
  * for the `/listings` browse route (issues #33–#37).
  *
  * CLIENT-SAFE: pure data + tiny parsers/serializers. Imports NO database client
- * and NO server-only code (only the `claimAttributes` enum from the schema, a
- * plain readonly tuple), mirroring `app/listings/sort.ts` and
- * `app/listings/distance.ts`. So the browse route's search-param handling (client
- * bundle) and the browse server validator (server) share ONE definition of how
- * `?attrs=`/`?lat=`/`?lng=` are parsed and how the page is sized. Keep it free of
- * any `db` client / server-only imports.
+ * and NO server-only code (only the `CLAIM_ATTRIBUTES` taxonomy tuple, a plain
+ * `as const` array with no drizzle import — issue #126), mirroring
+ * `app/listings/sort.ts` and `app/listings/distance.ts`. So the browse route's
+ * search-param handling (client bundle) and the browse server validator (server)
+ * share ONE definition of how `?attrs=`/`?lat=`/`?lng=` are parsed and how the
+ * page is sized. Keep it free of any `db` client / server-only imports.
  */
 
-import { type ClaimAttribute, claimAttributes } from "~/db/schema";
+import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
 
 /** Default page size for the browse list. */
 export const BROWSE_PAGE_SIZE = 20;
@@ -32,7 +32,7 @@ export function parseAttrs(value: string): ClaimAttribute[] {
   const valid = new Set<ClaimAttribute>();
   for (const part of value.split(",")) {
     const token = part.trim();
-    if ((claimAttributes as readonly string[]).includes(token)) {
+    if ((CLAIM_ATTRIBUTES as readonly string[]).includes(token)) {
       valid.add(token as ClaimAttribute);
     }
   }
