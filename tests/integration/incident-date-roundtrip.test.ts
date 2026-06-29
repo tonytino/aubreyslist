@@ -113,4 +113,49 @@ describe.skipIf(!hasDb)("incident occurredOn round-trip (real Postgres)", () => 
     // driver had handed back a Date or timestamp).
     expect(parseCalendarDay(value)).not.toBeNull();
   });
+
+  it("the live report→read→flag path: a yesterday-dated incident flags the recent-incident banner", async () => {
+    // Mirror the E2E report-incident flow's data path against real Postgres,
+    // independent of the browser: write a YESTERDAY-dated incident (the same
+    // YYYY-MM-DD the form submits — strictly past, well inside the 90-day window),
+    // read it back through the REAL `listIncidents`, then assert the SAME
+    // `findRecentIncident(incidents, now)` the client banner uses — evaluated at
+    // the REAL current time — flags it. This proves the recent-incident banner's
+    // trust-critical signal end-to-end at the data layer, not just in the E2E.
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    // A dedicated listing so this assertion is scoped to exactly one incident.
+    const [listing] = await db
+      .insert(schema.listings)
+      .values({
+        placeId: null,
+        name: `${run} Live Diner`,
+        address: "2 Test St",
+        lat: 0,
+        lng: 0,
+        mapsUrl: "https://maps.example.test/y",
+      })
+      .returning({ id: schema.listings.id });
+    // biome-ignore lint/style/noNonNullAssertion: a single-row insert returns one row.
+    const liveListingId = listing!.id;
+
+    await db.insert(schema.incidents).values({
+      listingId: liveListingId,
+      userId,
+      occurredOn: yesterday,
+    });
+
+    const incidents = await listIncidents({ listingId: liveListingId });
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0]?.occurredOn).toBe(yesterday);
+
+    // The exact derivation the client banner runs, at the real current time.
+    const recent = findRecentIncident(incidents, now);
+    expect(recent).not.toBeNull();
+    expect(recent?.occurredOn).toBe(yesterday);
+
+    // Scoped cleanup (cascades the incident); the shared user is removed in afterAll.
+    await db.delete(schema.listings).where(sql`${schema.listings.id} = ${liveListingId}`);
+  });
 });

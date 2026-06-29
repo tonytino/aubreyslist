@@ -13,13 +13,18 @@ import { waitForHydration } from "./helpers";
  * of the page (recent harm is never buried beneath older confirmations).
  *
  * The banner is `RecentIncidentBanner` — a `<section aria-label="Recent incident
- * warning">` (role `region`) whose presence is derived by the route loader from
- * the listing's incidents against a `now` it resolves ONCE, server-side, at load
- * (`listings.$id.tsx`). We therefore RELOAD after submitting so the loader
- * re-derives the banner from a fresh server read with a server-consistent `now`,
- * rather than depending on the client query's post-submit invalidation timing —
- * which is exactly how this trust-critical signal surfaces in production (it is
- * server-rendered on load, deliberately a `region`, not a live `alert`).
+ * warning">` (role `region`). It is derived CLIENT-SIDE: `ListingDetail` in
+ * `listings.$id.tsx` reads `incidents` via `useSuspenseQuery` and computes
+ * `recentIncident = findRecentIncident(incidents, now)` from that SAME query that
+ * renders the incident note. When the report form invalidates the incidents
+ * query after submit, the component re-renders and the banner appears LIVE — no
+ * reload needed. We assert it directly with a generous timeout to absorb the
+ * post-invalidation refetch.
+ *
+ * (The data-layer guarantee that `occurredOn` round-trips as a `YYYY-MM-DD`
+ * string so `findRecentIncident` actually flags it — the real bug behind an
+ * earlier failure — is fixed in `app/server/incidents/index.ts` and proven
+ * independently by `tests/integration/incident-date-roundtrip.test.ts`.)
  *
  * `occurredOn` is dated YESTERDAY (UTC) so it is unambiguously inside the 90-day
  * recency window AND strictly in the past — the schema rejects future dates, and
@@ -71,12 +76,8 @@ test.describe("report an incident", () => {
     await expect(page.getByText("No “got glutened here” reports yet.")).toHaveCount(0);
     await expect(page.getByText("Cross-contamination reaction.")).toBeVisible();
 
-    // Reload so the loader re-derives the banner server-side from a fresh read
-    // (its `now` is resolved once on the server at load) — the production path
-    // for this trust-critical signal. The report must now flag the summary.
-    await page.reload();
-    await waitForHydration(page);
-    await expect(page.getByText("Cross-contamination reaction.")).toBeVisible();
-    await expect(banner).toBeVisible();
+    // The same invalidated query drives the recent-incident banner, so it
+    // appears LIVE (no reload). Generous timeout to absorb the refetch.
+    await expect(banner).toBeVisible({ timeout: 10000 });
   });
 });
