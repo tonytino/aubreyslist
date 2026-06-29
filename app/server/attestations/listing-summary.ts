@@ -77,11 +77,15 @@ export type ListingClaimsInput = z.infer<typeof listingClaimsInputSchema>;
  * attestations. `lastConfirmedAt` comes straight off the `claims` row. Every
  * value is a roll-up of visible evidence — never a fabricated score (ADR-007).
  *
- * Moderation visibility (#41): a hidden/removed claim must not contribute. The
- * write path is the only thing that materializes a claim row, and removed
- * content is deleted (cascading its attestations), so an attribute whose claim
- * has been removed falls back to the zero/empty entry here — exactly "treat as
- * no visible claim".
+ * Moderation visibility (#41): a hidden/removed claim must not contribute.
+ * Moderation is SOFT — `hide`/`remove` flip the claim's `moderationStatus`
+ * enum, never deleting the row (`app/server/moderation/actions.ts`, `db/schema.ts`).
+ * So the fallback to the zero/empty entry is LOAD-BEARING on the
+ * `moderation_status = 'visible'` predicate on the aggregate query below (NOT on
+ * any deletion): a hidden/removed claim is filtered out of `byAttribute`, so its
+ * attribute reads as "no visible claim". Do not remove that predicate thinking
+ * it is redundant — it is the only thing keeping moderated evidence off this
+ * public surface and out of the headline cue.
  */
 export async function getListingClaimAggregates(
   input: ListingClaimsInput
@@ -126,6 +130,13 @@ export async function getListingClaimAggregates(
   // Resolve the viewer's OWN vote per claim so the UI can show + change/retract
   // it (#32). Reads stay open — anonymous viewers simply have no votes, so we
   // skip the query entirely and every `viewerVote` is null.
+  //
+  // Visibility (#41), defense-in-depth: scope this to `visible` claims too. The
+  // result is already gated downstream — a vote is only attached when its claim
+  // survived into the visible-only `byAttribute` map — so this changes no
+  // observable behavior, but it avoids fetching the viewer's votes on hidden
+  // claims and keeps the predicate aligned with the aggregate query so neither
+  // can drift to leak moderated evidence.
   const viewer = await getCurrentUser();
   const viewerVotes = new Map<string, AttestationValue>();
   if (viewer) {
@@ -133,7 +144,13 @@ export async function getListingClaimAggregates(
       .select({ claimId: attestations.claimId, value: attestations.value })
       .from(attestations)
       .innerJoin(claims, eq(claims.id, attestations.claimId))
-      .where(and(eq(claims.listingId, input.listingId), eq(attestations.userId, viewer.id)));
+      .where(
+        and(
+          eq(claims.listingId, input.listingId),
+          eq(claims.moderationStatus, "visible"),
+          eq(attestations.userId, viewer.id)
+        )
+      );
     for (const own of ownRows) {
       viewerVotes.set(own.claimId, own.value);
     }
