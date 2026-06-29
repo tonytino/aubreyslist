@@ -107,12 +107,21 @@ export function parseCalendarDay(value: string): number | null {
  * calendar-date contract instead of teaching every consumer to also accept a
  * `Date`/ISO timestamp.
  *
- * Accepts the already-correct `YYYY-MM-DD` string (returned unchanged), a `Date`,
- * or an ISO-ish string (`2026-06-28T00:00:00.000Z`) — anything whose UTC calendar
- * day is well-defined — and returns the `YYYY-MM-DD` for that UTC day. A value
- * that has no resolvable calendar day is returned coerced to a string unchanged
- * (so a genuinely malformed value still surfaces downstream rather than being
- * masked as a fabricated date).
+ * TZ-CORRECTNESS (issue #144): `pg-types` builds the `Date` for a bare `date`
+ * (OID 1082) at **LOCAL midnight** of the runtime TZ — `new Date(y, m-1, d)` —
+ * NOT UTC midnight. So to recover the *stored calendar day* we must read the
+ * `Date` back on the **same basis the driver wrote it**: with the LOCAL getters
+ * (`getFullYear`/`getMonth`/`getDate`). Reading it with UTC getters is correct
+ * only on non-positive UTC offsets (the Americas, incl. the Denver pilot, and
+ * the Vercel `TZ=UTC` runtime), but is off-by-one on a positive-offset runtime
+ * (e.g. `Asia/Tokyo`: stored `2026-06-28` → local-midnight `Date` → UTC getters
+ * → `2026-06-27`). Local getters return the stored day in ANY runtime TZ.
+ *
+ * Accepts the already-correct `YYYY-MM-DD` string (returned unchanged) or a
+ * `Date` (the driver's local-midnight value) and returns its `YYYY-MM-DD`
+ * calendar day. A value that has no resolvable calendar day is returned coerced
+ * to a string unchanged (so a genuinely malformed value still surfaces
+ * downstream rather than being masked as a fabricated date).
  */
 export function toCalendarDayString(value: string | Date): string {
   // Fast path: already the canonical contract.
@@ -123,9 +132,13 @@ export function toCalendarDayString(value: string | Date): string {
   if (Number.isNaN(date.getTime())) {
     return String(value);
   }
-  const year = String(date.getUTCFullYear()).padStart(4, "0");
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
+  // LOCAL getters: the driver built this Date at local midnight (see above), so
+  // reading it on the same (local) basis recovers the stored calendar day in any
+  // runtime TZ. Do NOT switch these to the UTC getters — that reintroduces the
+  // positive-offset off-by-one (#144).
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
