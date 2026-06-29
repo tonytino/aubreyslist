@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Listing } from "~/db/schema";
-import { DuplicateListingError, findDuplicateListing, normalizeForDedup } from "./dedup";
+import {
+  DuplicateListingError,
+  findDuplicateListing,
+  normalizeForDedup,
+  parseDuplicateListingError,
+} from "./dedup";
 
 /**
  * Unit tests for the manual-entry duplicate safeguard (issue #25). These exercise
@@ -116,5 +121,32 @@ describe("DuplicateListingError", () => {
     expect(err.existingListingName).toBe("Corner Cafe");
     expect(err.message).toContain("Corner Cafe");
     expect(err.message).toContain("already listed");
+  });
+});
+
+describe("parseDuplicateListingError", () => {
+  it("recovers the existing id and a marker-free message from a thrown error", () => {
+    // Models the client side: across the server-fn RPC boundary the error arrives
+    // as a plain Error with just the (marker-bearing) message, not the subclass.
+    const thrown = new DuplicateListingError({ id: "existing-9", name: "Corner Cafe" });
+    const plain = new Error(thrown.message);
+
+    const parsed = parseDuplicateListingError(plain);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.existingListingId).toBe("existing-9");
+    // The machine-readable marker is stripped from what the UI displays.
+    expect(parsed?.message).toContain("Corner Cafe");
+    expect(parsed?.message).not.toContain("existing-listing:");
+    expect(parsed?.message).not.toContain("[[");
+  });
+
+  it("returns null for an unrelated error (no marker)", () => {
+    expect(parseDuplicateListingError(new Error("Something else went wrong"))).toBeNull();
+  });
+
+  it("returns null for non-error / non-string inputs", () => {
+    expect(parseDuplicateListingError(undefined)).toBeNull();
+    expect(parseDuplicateListingError(null)).toBeNull();
+    expect(parseDuplicateListingError({ message: "[[existing-listing:x]]" })).toBeNull();
   });
 });

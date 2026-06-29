@@ -39,7 +39,33 @@ let findManyResult: Listing[] = [];
 let returningResult: Listing[] = [];
 
 const findFirstMock = vi.fn(() => Promise.resolve(findFirstResult));
-const findManyMock = vi.fn(() => Promise.resolve(findManyResult));
+const findManyMock = vi.fn((_args?: { where?: unknown }) => Promise.resolve(findManyResult));
+
+/**
+ * Collect the DB column names a drizzle predicate references (recursively walking
+ * its `queryChunks`). Lets a test assert the manual-dedup candidate query is
+ * scoped to both `place_id` (manual only) AND `moderation_status` (visible only,
+ * #25 fix) without depending on the exact SQL string.
+ */
+function columnsReferenced(predicate: unknown): string[] {
+  const found: string[] = [];
+  const visit = (node: unknown): void => {
+    if (node === null || node === undefined) return;
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child);
+      return;
+    }
+    if (typeof node === "object") {
+      const record = node as Record<string, unknown>;
+      if (typeof record.name === "string" && "table" in record) {
+        found.push(record.name);
+      }
+      if ("queryChunks" in record) visit(record.queryChunks);
+    }
+  };
+  visit(predicate);
+  return found;
+}
 const returningMock = vi.fn(() => Promise.resolve(returningResult));
 const onConflictDoNothingMock = vi.fn((_args?: unknown) => ({ returning: returningMock }));
 const valuesMock = vi.fn((_values?: Record<string, unknown>) => ({
@@ -231,6 +257,48 @@ describe("runCreateListing — manual mode", () => {
     // fetch instead (#25).
     expect(findFirstMock).not.toHaveBeenCalled();
     expect(findManyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("scopes the dedup candidate query to visible manual rows only (#25)", async () => {
+    returningResult = [listingRow({ placeId: null })];
+
+    await runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St, Denver",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    // The candidate `where` must AND `place_id IS NULL` with
+    // `moderation_status = 'visible'` — a hidden/removed listing must never be a
+    // dedup candidate (it would wrongly block a re-add and point at a row the
+    // user can't see → 404). We assert both columns are referenced rather than
+    // pin the exact SQL string.
+    const where = findManyMock.mock.calls[0]?.[0]?.where;
+    const cols = columnsReferenced(where);
+    expect(cols).toContain("place_id");
+    expect(cols).toContain("moderation_status");
+  });
+
+  it("does NOT block a re-add when the only match is a hidden/removed listing (#25)", async () => {
+    // In production the `moderation_status = 'visible'` filter excludes the
+    // hidden/removed row at the DB, so the candidate set comes back empty and the
+    // new manual add proceeds. We model that filtered result here.
+    findManyResult = [];
+    const created = listingRow({ id: "readd-1", placeId: null });
+    returningResult = [created];
+
+    const result = await runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St, Denver, CO",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    expect(result).toEqual({ listing: created, created: true });
+    expect(insertMock).toHaveBeenCalledTimes(1);
   });
 
   it("blocks a normalized name+address duplicate with a structured error (#25)", async () => {

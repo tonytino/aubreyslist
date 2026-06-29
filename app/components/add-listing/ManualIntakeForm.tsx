@@ -1,7 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import type { CreateListingResult } from "~/server/listings/create";
 import { createListing } from "~/server/listings/create";
+import { parseDuplicateListingError } from "~/server/listings/dedup";
 import { MenuUrlField } from "./MenuUrlField";
 
 /**
@@ -116,13 +118,7 @@ export function ManualIntakeForm({
 
       <MenuUrlField value={menuUrl} onChange={setMenuUrl} />
 
-      {create.isError ? (
-        <p role="alert" className="text-body-sm text-incident">
-          {create.error instanceof Error
-            ? create.error.message
-            : "Could not add the listing. Please try again."}
-        </p>
-      ) : null}
+      {create.isError ? <SubmitError error={create.error} /> : null}
 
       <button
         type="submit"
@@ -132,5 +128,38 @@ export function ManualIntakeForm({
         {create.isPending ? "Adding…" : "Add listing"}
       </button>
     </form>
+  );
+}
+
+/**
+ * Renders the post-submit error. A blocked-duplicate error (issue #25) is
+ * special-cased: {@link parseDuplicateListingError} recovers the existing
+ * listing's id from the error message (custom error fields don't survive the
+ * server-fn RPC boundary, so the id rides in the message), letting us render a
+ * link so the user can jump straight to the listing that already exists instead
+ * of just reading that it does. Any other error falls back to plain text.
+ */
+function SubmitError({ error }: { error: unknown }) {
+  const duplicate = parseDuplicateListingError(error);
+
+  if (duplicate?.existingListingId) {
+    return (
+      <p role="alert" className="text-body-sm text-incident">
+        {duplicate.message}{" "}
+        <Link
+          to="/listings/$id"
+          params={{ id: duplicate.existingListingId }}
+          className="underline underline-offset-4"
+        >
+          View the existing listing
+        </Link>
+      </p>
+    );
+  }
+
+  return (
+    <p role="alert" className="text-body-sm text-incident">
+      {error instanceof Error ? error.message : "Could not add the listing. Please try again."}
+    </p>
   );
 }

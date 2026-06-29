@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";
@@ -161,25 +161,31 @@ async function resolveListing(input: CreateListingInput): Promise<ResolvedListin
  * Block a manual entry that duplicates an existing manual listing on a
  * normalized name+address match (issue #25).
  *
- * We narrow in SQL to **manual rows only** (`place_id IS NULL`) and let the
- * deterministic JS rule ({@link findDuplicateListing}) make the authoritative
- * name AND address decision. The match logic lives entirely in `normalizeForDedup`
- * (NFKD diacritic folding, punctuation collapse, lowercase) — replicating that
- * exactly in SQL is brittle (Postgres `lower()` doesn't fold diacritics without
- * `unaccent`, a DB extension we deliberately don't add), so the query just selects
- * the manual subset and JS owns the rule. Manual entry is the low-volume fallback
- * path (ADR-008), so scanning that subset is cheap. On a match we throw a
- * {@link DuplicateListingError} (carrying the existing id/name) instead of
- * inserting.
+ * The query loads the **visible manual** candidate subset — `place_id IS NULL`
+ * (manual only; Places rows dedup on Place ID and must never block/merge a manual
+ * entry) AND `moderation_status = 'visible'`. The visibility filter matters: a
+ * moderator-`hidden`/`removed` listing must NOT block a legitimate re-add and must
+ * never be surfaced to / linked for a user who can't even see it (public reads are
+ * visible-only → they'd 404, #41). This is a full scan of that subset, NOT a true
+ * SQL prefilter on the normalized key — the authoritative name AND address match
+ * runs in JS ({@link findDuplicateListing}), because `normalizeForDedup`'s NFKD
+ * diacritic fold can't be replicated in SQL without `unaccent` (a DB extension we
+ * deliberately don't add). Manual entry is the low-volume ADR-008 fallback, so the
+ * scan is bounded by the manual-listing count and cheap in practice.
  *
- * Places-sourced rows are excluded: they dedup on Place ID, and a manual entry
- * should never be blocked by — or merged into — a Places listing.
+ * Residual TOCTOU: there is no DB unique on normalized name+address (by design —
+ * addresses are free-form), so this read-then-write check is racier than the
+ * Places path; two concurrent identical manual submissions can both pass. Such
+ * slipped-through dups are moderatable after the fact (#41). See `dedup.ts`.
+ *
+ * On a match we throw a {@link DuplicateListingError} (carrying the existing
+ * id/name) instead of inserting.
  */
 async function assertNoManualDuplicate(resolved: ResolvedListing): Promise<void> {
   const db = getDb();
 
   const candidates = await db.query.listings.findMany({
-    where: isNull(listings.placeId),
+    where: and(isNull(listings.placeId), eq(listings.moderationStatus, "visible")),
   });
 
   const duplicate = findDuplicateListing(
