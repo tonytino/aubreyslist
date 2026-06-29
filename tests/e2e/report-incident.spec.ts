@@ -66,7 +66,16 @@ test.describe("report an incident", () => {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     const form = page.getByRole("form", { name: "Report an incident" });
-    await form.getByLabel(/Date it happened/).fill(yesterday);
+    const dateInput = form.getByLabel(/Date it happened/);
+    // DIAGNOSTIC (#45): confirm the date control is a native date input and that
+    // `.fill(yesterday)` set the value we expect (CI-log ground truth).
+    const dateInputType = await dateInput.getAttribute("type");
+    await dateInput.fill(yesterday);
+    const dateInputValue = await dateInput.inputValue();
+    console.log("DIAG yesterday (filled):", yesterday);
+    console.log("DIAG date input type:", dateInputType);
+    console.log("DIAG date input value after fill:", dateInputValue);
+
     await form.getByLabel("Severity (optional)").selectOption("moderate");
     await form.getByLabel("What happened (optional)").fill("Cross-contamination reaction.");
     await form.getByRole("button", { name: "Submit report" }).click();
@@ -75,6 +84,24 @@ test.describe("report an incident", () => {
     // invalidates the incidents query, so the list reflects the write.
     await expect(page.getByText("No “got glutened here” reports yet.")).toHaveCount(0);
     await expect(page.getByText("Cross-contamination reaction.")).toBeVisible();
+
+    // DIAGNOSTIC (#45): capture the real rendered region tree + the incident's
+    // displayed date into the CI job log, right before the failing assertion, so
+    // we can distinguish a UI render bug from a wrong-date submission without CI
+    // artifact access. These print to stdout; the assertion below is KEPT.
+    const sectionLabels = await page
+      .locator("section[aria-label]")
+      .evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+    console.log("DIAG sections:", JSON.stringify(sectionLabels));
+    console.log("DIAG region count:", await page.getByRole("region").count());
+    console.log(
+      "DIAG banner-text present:",
+      await page.getByText("A diner reported getting glutened").count()
+    );
+    console.log(
+      "DIAG article text:",
+      (await page.locator("article").first().innerText()).slice(0, 1200)
+    );
 
     // The same invalidated query drives the recent-incident banner, so it
     // appears LIVE (no reload). Generous timeout to absorb the refetch.
