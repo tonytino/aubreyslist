@@ -55,7 +55,9 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
     // Before voting: the full taxonomy renders (no "Coming soon" dead-end) and
     // the headline cue is the honest empty state.
     const claimsSection = page.getByRole("region", { name: "Community claims" });
-    await expect(claimsSection.getByText("Celiac-safe vs. gluten-friendly")).toBeVisible();
+    // Exact match: the row label is "Celiac-safe" (issue #175); the row's
+    // confirm/dispute clarifier copy also contains "celiac-safe" lower-cased.
+    await expect(claimsSection.getByText("Celiac-safe", { exact: true })).toBeVisible();
     const safety = page.getByRole("region", { name: "Gluten-free safety" });
     await expect(safety.getByText("Not yet attested")).toBeVisible();
 

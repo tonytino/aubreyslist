@@ -69,7 +69,7 @@ test("filter and sort compose in the URL", async ({ page }) => {
 
   // Toggle the headline celiac-safe taxonomy filter (a labeled checkbox from #35).
   const celiacFilter = page.getByRole("checkbox", {
-    name: "Celiac-safe vs. gluten-friendly",
+    name: "Celiac-safe",
   });
   await expect(celiacFilter).toBeVisible();
 

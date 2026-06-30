@@ -1,0 +1,1 @@
+- `[manual]` Reframed the headline community claim from "Celiac-safe vs. gluten-friendly" to simply **"Celiac-safe"**, with confirm/dispute clarifier copy, so a vote is unambiguous (every listing is assumed gluten-free-friendly). The enum key is unchanged; the headline safety badge and "Most trusted" sort are unaffected.

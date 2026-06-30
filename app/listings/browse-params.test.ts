@@ -52,7 +52,7 @@ describe("serializeAttrs", () => {
   });
 
   it("round-trips through parseAttrs", () => {
-    const attrs = ["dedicated_fryer", "dedicated_gf_menu", "staff_knowledge"] as const;
+    const attrs = ["dedicated_fryer", "dedicated_gf_menu", "gf_substitutes"] as const;
     expect(parseAttrs(serializeAttrs(attrs))).toEqual([...attrs]);
   });
 });

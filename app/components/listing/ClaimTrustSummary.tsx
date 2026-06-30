@@ -1,6 +1,6 @@
 import type { ClaimAttribute } from "~/db/schema";
 import type { ClaimAggregate } from "~/server/attestations";
-import { type ClaimTrustSummary, summarizeClaim } from "~/trust/summary";
+import { type ClaimTrustSummary, claimAttributeDescription, summarizeClaim } from "~/trust/summary";
 
 interface ClaimTrustSummaryProps {
   /** The claim's attribute (its taxonomy slot — drives the label). */
@@ -41,10 +41,15 @@ export function ClaimTrustSummaryRow({
   className,
 }: ClaimTrustSummaryProps) {
   const summary: ClaimTrustSummary = summarizeClaim(attribute, aggregate, now, stalenessMonths);
+  const description = claimAttributeDescription(attribute);
 
   return (
     <div className={`flex flex-col gap-1${className ? ` ${className}` : ""}`}>
       <p className="text-body font-semibold text-foreground">{summary.label}</p>
+
+      {/* Clarify confirm/dispute meaning for attributes that aren't self-evident
+          (e.g. "Celiac-safe"), so a vote is never ambiguous (issue #175). */}
+      {description ? <p className="text-caption text-muted-foreground">{description}</p> : null}
 
       {summary.hasEvidence ? (
         <p className="text-body-sm text-muted-foreground">

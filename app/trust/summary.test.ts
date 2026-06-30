@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLAIM_ATTRIBUTE_LABELS,
   DEFAULT_STALENESS_MONTHS,
+  claimAttributeDescription,
   claimAttributeLabel,
   deriveHeadlineSafetyState,
   formatLastConfirmed,
@@ -38,15 +39,28 @@ const YEAR = 365 * DAY;
 describe("claimAttributeLabel", () => {
   it("maps each taxonomy attribute to a human label", () => {
     expect(claimAttributeLabel("dedicated_fryer")).toBe("Dedicated fryer");
-    expect(claimAttributeLabel("celiac_safe_vs_gluten_friendly")).toBe(
-      "Celiac-safe vs. gluten-friendly"
-    );
+    // The `celiac_safe_vs_gluten_friendly` enum key surfaces simply as
+    // "Celiac-safe" (issue #175) — key and label deliberately differ.
+    expect(claimAttributeLabel("celiac_safe_vs_gluten_friendly")).toBe("Celiac-safe");
   });
 
   it("has a label for every attribute (exhaustive)", () => {
     for (const label of Object.values(CLAIM_ATTRIBUTE_LABELS)) {
       expect(label.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("claimAttributeDescription", () => {
+  it("returns the confirm/dispute clarifier for an ambiguous attribute (Celiac-safe, #175)", () => {
+    const description = claimAttributeDescription("celiac_safe_vs_gluten_friendly");
+    expect(description).toMatch(/celiac-safe/i);
+    expect(description).toMatch(/dispute/i);
+  });
+
+  it("returns null for self-evident attributes (no fabricated gloss)", () => {
+    expect(claimAttributeDescription("dedicated_fryer")).toBeNull();
+    expect(claimAttributeDescription("gf_substitutes")).toBeNull();
   });
 });
 

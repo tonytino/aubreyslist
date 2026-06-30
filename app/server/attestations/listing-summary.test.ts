@@ -81,10 +81,8 @@ afterEach(() => {
 const TAXONOMY = [
   "celiac_safe_vs_gluten_friendly",
   "dedicated_fryer",
-  "cross_contamination_protocol",
   "dedicated_gf_menu",
   "off_menu_gf_on_request",
-  "staff_knowledge",
   "gf_substitutes",
 ] as const;
 
@@ -104,7 +102,7 @@ describe("getListingClaimAggregates — full taxonomy, attestable (#150)", () =>
 
     const result = await getListingClaimAggregates({ listingId: "listing-1" });
 
-    // All 7 attributes, in canonical taxonomy order.
+    // All taxonomy attributes, in canonical order.
     expect(result.map((r) => r.attribute)).toEqual([...TAXONOMY]);
     // Anonymous viewer ⇒ only the aggregate query runs (no viewer-vote query).
     expect(selectMock).toHaveBeenCalledTimes(1);
@@ -169,7 +167,7 @@ describe("getListingClaimAggregates — full taxonomy, attestable (#150)", () =>
     expect(result.find((c) => c.attribute === "dedicated_fryer")?.viewerVote).toBe("confirm");
     expect(result.find((c) => c.attribute === "dedicated_gf_menu")?.viewerVote).toBe("dispute");
     // An un-attested attribute still has no viewer vote.
-    expect(result.find((c) => c.attribute === "staff_knowledge")?.viewerVote).toBeNull();
+    expect(result.find((c) => c.attribute === "gf_substitutes")?.viewerVote).toBeNull();
   });
 
   it("excludes hidden/removed claims from the PUBLIC aggregate (#41)", async () => {

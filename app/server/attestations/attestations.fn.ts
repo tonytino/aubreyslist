@@ -49,10 +49,8 @@ export type AttestationValuesInSyncWithDb = _AssertValuesMatch;
 const CLAIM_ATTRIBUTES = [
   "celiac_safe_vs_gluten_friendly",
   "dedicated_fryer",
-  "cross_contamination_protocol",
   "dedicated_gf_menu",
   "off_menu_gf_on_request",
-  "staff_knowledge",
   "gf_substitutes",
 ] as const;
 

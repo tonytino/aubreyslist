@@ -26,20 +26,43 @@ import type { ClaimAggregate } from "~/server/attestations";
  * docs/agents/domain.md). Keyed by the `claim_attribute` enum so the mapping
  * is exhaustive at compile time — add a taxonomy value and TypeScript forces a
  * label here too.
+ *
+ * NOTE: the `celiac_safe_vs_gluten_friendly` enum key is surfaced simply as
+ * "Celiac-safe" (issue #175). Every listing is assumed gluten-free-friendly, so
+ * the useful community question is just "is it celiac-safe?" — confirm ⇒
+ * celiac-safe, dispute ⇒ gluten-friendly only. Renaming the key to `celiac_safe`
+ * is a deferred follow-up (it would force an enum type-recreate migration for no
+ * user-visible gain); until then the key and label deliberately differ.
  */
 export const CLAIM_ATTRIBUTE_LABELS: Record<ClaimAttribute, string> = {
-  celiac_safe_vs_gluten_friendly: "Celiac-safe vs. gluten-friendly",
+  celiac_safe_vs_gluten_friendly: "Celiac-safe",
   dedicated_fryer: "Dedicated fryer",
-  cross_contamination_protocol: "Cross-contamination protocol",
   dedicated_gf_menu: "Dedicated GF menu",
   off_menu_gf_on_request: "Off-menu GF on request",
-  staff_knowledge: "Staff knowledge",
   gf_substitutes: "GF substitutes",
 };
 
 /** The display label for a claim attribute. */
 export function claimAttributeLabel(attribute: ClaimAttribute): string {
   return CLAIM_ATTRIBUTE_LABELS[attribute];
+}
+
+/**
+ * Optional one-line clarifier for what *confirm* vs *dispute* MEANS on an
+ * attribute, shown under its label on the Community-claims surface. Only
+ * attributes whose vote semantics aren't self-evident carry one — e.g.
+ * "Celiac-safe", where a bare confirm/dispute is otherwise ambiguous ("confirm
+ * what?", issue #175). Partial by design: most boolean attributes ("Dedicated
+ * fryer", "GF substitutes") read for themselves and need no gloss.
+ */
+export const CLAIM_ATTRIBUTE_DESCRIPTIONS: Partial<Record<ClaimAttribute, string>> = {
+  celiac_safe_vs_gluten_friendly:
+    "Confirm if the community vouches this place is celiac-safe — it takes cross-contamination seriously. Dispute if it's only gluten-friendly.",
+};
+
+/** The confirm/dispute clarifier for an attribute, or `null` when none is needed. */
+export function claimAttributeDescription(attribute: ClaimAttribute): string | null {
+  return CLAIM_ATTRIBUTE_DESCRIPTIONS[attribute] ?? null;
 }
 
 // ---------------------------------------------------------------------------
