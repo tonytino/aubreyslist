@@ -23,6 +23,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Understanding what/why we're building         | `docs/product/overview.md`    |
 | Domain: listings, GF taxonomy, trust, roles   | `docs/agents/domain.md`       |
 | Finding and claiming work                     | `docs/agents/tasks.md`        |
+| Orchestrating agents, reviewing agent output  | `docs/agents/orchestration.md` |
 | Routes, pages, navigation                     | `docs/agents/routing.md`      |
 | API endpoints, server logic                   | `docs/agents/api.md`          |
 | Database, schema, migrations                  | `docs/agents/database.md`     |
