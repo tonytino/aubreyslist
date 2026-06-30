@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
+import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import {
@@ -120,6 +121,47 @@ function resolveTargetColumns(input: ModerationActionInput): TargetColumns {
   }
 }
 
+/**
+ * Verify the prompting flag actually targets the content being acted on (#157).
+ *
+ * Without this check a moderator (or a crafted call) could pass a `flagId` whose
+ * exclusive-arc target (`listingId`/`claimId`/`incidentId`) differs from the
+ * action's resolved target — closing an unrelated flag AND writing an internally
+ * inconsistent audit row. We SELECT the flag's target columns and assert they
+ * match the action's single target BEFORE any write, so a mismatch (or a missing
+ * flag) is rejected and the atomic batch never runs.
+ *
+ * Throws `422 Unprocessable Entity` (an HTTPException, like the auth guards) on
+ * mismatch or not-found, with a non-leaky message.
+ */
+async function assertFlagTargetsContent(
+  db: ReturnType<typeof getDb>,
+  flagId: string,
+  target: TargetColumns
+): Promise<void> {
+  const [flag] = await db
+    .select({
+      listingId: flags.listingId,
+      claimId: flags.claimId,
+      incidentId: flags.incidentId,
+    })
+    .from(flags)
+    .where(eq(flags.id, flagId))
+    .limit(1);
+
+  const matches =
+    flag !== undefined &&
+    (flag.listingId ?? null) === ("listingId" in target ? target.listingId : null) &&
+    (flag.claimId ?? null) === ("claimId" in target ? target.claimId : null) &&
+    (flag.incidentId ?? null) === ("incidentId" in target ? target.incidentId : null);
+
+  if (!matches) {
+    throw new HTTPException(422, {
+      message: "The flag does not target the content being acted on.",
+    });
+  }
+}
+
 /** Build the `UPDATE <content> SET moderation_status = status` statement for the target. */
 function buildContentStatusUpdate(
   db: ReturnType<typeof getDb>,
@@ -174,6 +216,13 @@ async function applyModerationAction(
 
   const db = getDb();
   const target = resolveTargetColumns(input);
+
+  // 2b. When a prompting flag is supplied, verify it actually targets the
+  //     content being acted on (#157) BEFORE any write — a mismatch closes an
+  //     unrelated flag and writes an inconsistent audit row, so reject it.
+  if (input.flagId) {
+    await assertFlagTargetsContent(db, input.flagId, target);
+  }
 
   // 3. Assemble the atomic batch: audit row first (always), then the content
   //    state change (when applicable), then the prompting flag's status (when a

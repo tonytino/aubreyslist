@@ -26,6 +26,9 @@ const h = vi.hoisted(() => ({
   // Capture the values passed to each builder so we can assert intent.
   insertValuesMock: vi.fn((v: unknown) => ({ __op: "insert", values: v })),
   updateSetMock: vi.fn(),
+  // The flag-target verification SELECT (#157) — resolves to the flag's
+  // exclusive-arc target columns (or [] for not-found).
+  selectLimitMock: vi.fn<() => Promise<unknown[]>>(),
 }));
 
 vi.mock("~/server/auth/current-user", () => ({
@@ -46,6 +49,13 @@ vi.mock("~/db/client", () => ({
         where: (w: unknown) => h.updateSetMock({ table, set: s, where: w }),
       }),
     }),
+    // The flag-target check (#157): select(...).from(...).where(...).limit(1)
+    // resolves to the matched flag's exclusive-arc target columns.
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: () => h.selectLimitMock() }),
+      }),
+    }),
   }),
 }));
 
@@ -57,7 +67,7 @@ import {
   restoreContent,
 } from "./actions";
 
-const { getCurrentUserMock, batchMock, insertValuesMock, updateSetMock } = h;
+const { getCurrentUserMock, batchMock, insertValuesMock, updateSetMock, selectLimitMock } = h;
 
 function userRow(role: User["role"], overrides: Partial<User> = {}): User {
   return {
@@ -76,6 +86,10 @@ function userRow(role: User["role"], overrides: Partial<User> = {}): User {
 beforeEach(() => {
   updateSetMock.mockImplementation((arg: unknown) => ({ __op: "update", ...(arg as object) }));
   batchMock.mockResolvedValue([]);
+  // By default the prompting flag (`flag-1`) targets `listing-1` — i.e. it
+  // matches the `listingPayload` target, so the #157 check passes. Mismatch
+  // cases override this per-test.
+  selectLimitMock.mockResolvedValue([{ listingId: "listing-1", claimId: null, incidentId: null }]);
 });
 
 afterEach(() => {
@@ -193,6 +207,50 @@ describe("moderation actions — atomic batch contents", () => {
     // No flagId → no flag-status update; just audit + content update.
     const stmts = batchMock.mock.calls[0]?.[0] as unknown[];
     expect(stmts).toHaveLength(2);
+  });
+});
+
+describe("moderation actions — flag must target the acted-on content (#157)", () => {
+  beforeEach(() => {
+    getCurrentUserMock.mockResolvedValue(userRow("moderator", { id: "mod-1" }));
+  });
+
+  it("rejects a flagId whose target differs from the action's target (422, no batch)", async () => {
+    // The action targets listing-1 but flag-1 is a flag on claim-X.
+    selectLimitMock.mockResolvedValue([{ listingId: null, claimId: "claim-X", incidentId: null }]);
+    await expect(hideContent(listingPayload)).rejects.toMatchObject({ status: 422 });
+    expect(batchMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an HTTPException for a mismatched flag", async () => {
+    selectLimitMock.mockResolvedValue([{ listingId: null, claimId: "claim-X", incidentId: null }]);
+    await expect(hideContent(listingPayload)).rejects.toBeInstanceOf(HTTPException);
+  });
+
+  it("rejects a flagId pointing at a different listing of the same target type (422, no batch)", async () => {
+    selectLimitMock.mockResolvedValue([
+      { listingId: "listing-OTHER", claimId: null, incidentId: null },
+    ]);
+    await expect(hideContent(listingPayload)).rejects.toMatchObject({ status: 422 });
+    expect(batchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing (not-found) flag (422, no batch)", async () => {
+    selectLimitMock.mockResolvedValue([]);
+    await expect(hideContent(listingPayload)).rejects.toMatchObject({ status: 422 });
+    expect(batchMock).not.toHaveBeenCalled();
+  });
+
+  it("allows the action when the flag targets the acted-on content", async () => {
+    // Default mock: flag-1 targets listing-1, matching the payload.
+    await expect(hideContent(listingPayload)).resolves.toBeUndefined();
+    expect(batchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the flag-target check entirely when no flagId is supplied", async () => {
+    await hideContent({ target: "claim", claimId: "claim-9" });
+    expect(selectLimitMock).not.toHaveBeenCalled();
+    expect(batchMock).toHaveBeenCalledTimes(1);
   });
 });
 
