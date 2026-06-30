@@ -33,6 +33,29 @@ describe("createListingInputSchema — discriminated union", () => {
   it("rejects out-of-range manual coordinates", () => {
     expect(createListingInputSchema.safeParse({ ...manualBase, lat: 200 }).success).toBe(false);
   });
+
+  it("rejects a whitespace-only manual name (#158)", () => {
+    expect(createListingInputSchema.safeParse({ ...manualBase, name: "   " }).success).toBe(false);
+  });
+
+  it("rejects a whitespace-only manual address (#158)", () => {
+    expect(createListingInputSchema.safeParse({ ...manualBase, address: "   " }).success).toBe(
+      false
+    );
+  });
+
+  it("trims surrounding whitespace from a valid manual name/address (#158)", () => {
+    const result = createListingInputSchema.safeParse({
+      ...manualBase,
+      name: " Joe's ",
+      address: "  1 Main St, Denver, CO  ",
+    });
+    expect(result.success).toBe(true);
+    if (result.success && result.data.mode === "manual") {
+      expect(result.data.name).toBe("Joe's");
+      expect(result.data.address).toBe("1 Main St, Denver, CO");
+    }
+  });
 });
 
 describe("createListingInputSchema — menuUrl scheme allowlist (#90)", () => {
