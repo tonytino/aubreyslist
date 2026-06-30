@@ -319,17 +319,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The `secrets` context is not allowed in step-level `if` conditions, so we
-      # detect the optional E2E secret here and gate the coverage run on it. This
-      # gate (issue #183) measures coverage of the PR's CHANGED lines only.
-      #
-      # WHY GATE ON THE SAME SECRET AS integration-e2e: app/server/** is largely
-      # exercised only by the DB-gated integration suite. If we computed coverage
-      # from the DB-free unit run alone, changed server lines would read as
-      # uncovered and FALSE-FAIL the PR. So we run the FULL suite (unit +
-      # integration) with coverage here, under the same secret. When the secret is
-      # ABSENT we self-skip with a warning (exactly like integration-e2e), rather
-      # than gating on a partial coverage picture.
+      # This gate (issue #183) ALWAYS runs and hard-fails under 80% changed-line
+      # coverage — it is never skipped. It has two modes depending on the optional
+      # DB secret (the `secrets` context is not allowed in step-level `if`, so we
+      # detect it here and expose `enabled`):
+      #   - FULL (secret present): run the full suite (unit + integration) with
+      #     coverage, so EVERY changed line is gated, app/server/** included.
+      #   - DB-FREE (secret absent): run the DB-free unit/component suite (the
+      #     integration suite self-skips without TEST_DATABASE_URL). The pure
+      #     modules (app/trust/**, app/components/**, app/listings/**, db/schema.ts)
+      #     ARE covered there and are gated on every PR; the script excludes
+      #     app/server/** (needs the DB to be covered) and LOGS that exclusion.
       - name: Check for E2E database secret
         id: e2e
         env:
@@ -338,28 +338,36 @@ jobs:
           if [ -n "$E2E_DATABASE_URL" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::Diff-coverage gate skipped: CI_E2E_DATABASE_URL is not set, so the integration suite cannot run and coverage would miss DB-only app/server/** lines. Configure the secret to enable the gate (mirrors the integration-e2e self-skip)."
+            echo "::warning::Diff-coverage running in DB-free mode: CI_E2E_DATABASE_URL is not set, so app/server/** changes are not gated (they need the integration DB to be covered). Pure modules are still gated. Configure the secret to gate everything."
           fi
 
-      # Full suite with coverage → coverage/coverage-final.json. Both env vars are
-      # the same CI Neon branch (see integration-e2e for the TEST_DATABASE_URL vs
-      # DATABASE_URL distinction); the suite manages its own fixtures.
-      - name: Test with coverage (full suite)
-        if: steps.e2e.outputs.enabled == 'true'
+      # Coverage → coverage/coverage-final.json. Always runs. The DB env vars are
+      # set ONLY when the secret is present (FULL mode); when absent the integration
+      # suite self-skips and we get DB-free unit/component coverage (the floor).
+      # NOTE: this is a third full-suite run in CI (alongside `unit` and
+      # `integration-e2e`); deduplicating it is out of scope (issue #183).
+      - name: Test with coverage
         run: pnpm test:coverage
         env:
-          TEST_DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
-          DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+          TEST_DATABASE_URL: ${{ steps.e2e.outputs.enabled == 'true' && secrets.CI_E2E_DATABASE_URL || '' }}
+          DATABASE_URL: ${{ steps.e2e.outputs.enabled == 'true' && secrets.CI_E2E_DATABASE_URL || '' }}
 
-      # Gate: fail if the PR's changed executable lines are covered below 80%.
-      # Only changed lines are measured, so untested legacy code is never
-      # retroactively failed. BASE_SHA is the PR base on pull_request events; the
-      # script falls back to `git merge-base origin/main HEAD` otherwise.
+      # Gate: ALWAYS runs; fails if the PR's changed executable lines are covered
+      # below 80%. Only changed lines are measured, so untested legacy code is
+      # never retroactively failed. BASE_SHA is the PR base on pull_request events;
+      # the script falls back to `git merge-base origin/main HEAD` otherwise.
+      # DIFF_COVERAGE_DBFREE is the literal string 'true' when the secret is ABSENT
+      # (DB-free: the script excludes + logs the DB-only app/server/** paths it
+      # cannot fairly gate) and 'false' when present (full: gate everything). We
+      # render it as a direct `!=` comparison rather than `A && B || C`: that
+      # footgun returns C whenever B is falsy, and here B='' would make this ALWAYS
+      # 'true' (permanently DB-free). The script uses STRICT `=== "true"` so the
+      # string 'false' (which is truthy!) correctly means full mode.
       - name: Enforce diff coverage on changed lines
-        if: steps.e2e.outputs.enabled == 'true'
         run: node .github/scripts/check-diff-coverage.mjs
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DIFF_COVERAGE_DBFREE: ${{ steps.e2e.outputs.enabled != 'true' }}
 
   build-smoke:
     name: Production build smoke

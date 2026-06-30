@@ -15,12 +15,20 @@
 // check-changelog-tags.mjs): `::error file=…,line=…::` annotations, a legible
 // summary, exit 1 on failure / 0 when clean.
 //
-// HOW COVERAGE IS SOURCED (the load-bearing design decision): app/server/** is
-// largely exercised only by the DB-gated integration suite. So the CI job that
-// runs this script runs the FULL suite (unit + integration) under the same
-// `CI_E2E_DATABASE_URL` secret gate as `integration-e2e`, and self-skips when the
-// secret is absent (rather than false-failing changed server lines as
-// uncovered). See the `diff-coverage` job in .github/workflows/ci.yml.
+// ALWAYS-ON, TWO-MODE (the load-bearing design decision): the gate runs on EVERY
+// PR, not just when a DB secret is configured. app/server/** is largely exercised
+// only by the DB-gated integration suite, so coverage of those lines depends on
+// whether `CI_E2E_DATABASE_URL` is present:
+//   - FULL mode (secret present): the CI job runs the full suite (unit +
+//     integration) with coverage, so EVERY changed line is gated, server included.
+//   - DB-FREE mode (secret absent, DIFF_COVERAGE_DBFREE=true): coverage comes from
+//     the DB-free unit/component run only. The pure modules (app/trust/**,
+//     app/components/**, app/listings/**, db/schema.ts, …) ARE covered there and
+//     are gated on every PR. Changed lines under DB-only paths (DB_ONLY_PREFIXES,
+//     i.e. app/server/**) are EXCLUDED from the gate — they need the DB to be
+//     covered, so gating them DB-free would false-fail — and the exclusion is
+//     logged explicitly (no silent caps).
+// See the `diff-coverage` job in .github/workflows/ci.yml for how the mode is set.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -28,6 +36,13 @@ import { readFileSync } from "node:fs";
 // Changed-line coverage must be >= this percentage or the gate fails. Read from
 // the DIFF_COVERAGE_THRESHOLD env var (CI may override) with an 80% default.
 export const DEFAULT_THRESHOLD = 80;
+
+// Repo-relative path prefixes whose coverage requires the DB-gated integration
+// suite. In DB-FREE mode these are excluded from the gate (they can't be covered
+// without a database; gating them would false-fail). In FULL mode nothing is
+// excluded. Keep this list explicit + documented — it is the ONLY thing the
+// DB-free floor does not gate, and main() logs it on every DB-free run.
+export const DB_ONLY_PREFIXES = ["app/server/"];
 
 // ---------------------------------------------------------------------------
 // Pure functions (no FS, no git, no process). Unit-tested in isolation.
@@ -144,6 +159,17 @@ export function matchCoverage(relPath, coverageByFile) {
 }
 
 /**
+ * Whether a repo-relative path sits under one of the excluded prefixes.
+ *
+ * @param {string} relPath Repo-relative POSIX path.
+ * @param {string[]} excludePrefixes Prefixes to exclude (e.g. DB_ONLY_PREFIXES).
+ * @returns {boolean}
+ */
+export function isExcluded(relPath, excludePrefixes) {
+  return excludePrefixes.some((prefix) => relPath.startsWith(prefix));
+}
+
+/**
  * Intersect changed lines with coverage to compute diff coverage.
  *
  * For every changed line that is COVERABLE in a coverage-eligible file, count it
@@ -152,15 +178,34 @@ export function matchCoverage(relPath, coverageByFile) {
  * positions v8 doesn't instrument) are ignored — only executable changed lines
  * are gated.
  *
+ * `excludePrefixes` (DB-FREE mode passes DB_ONLY_PREFIXES; FULL mode passes [])
+ * drops changed files under a DB-only path from the gate entirely. Such files
+ * are reported in `excludedFiles` so the caller can log the exclusion — they are
+ * never silently dropped.
+ *
  * @param {Map<string, Set<number>>} diffByFile Output of parseDiff().
  * @param {Map<string, { coverable: Set<number>, covered: Set<number> }>} coverageByFile
- * @returns {{ total: number, covered: number, uncovered: Array<{ file: string, line: number }> }}
+ * @param {string[]} [excludePrefixes] Repo-relative path prefixes to exclude.
+ * @returns {{ total: number, covered: number, uncovered: Array<{ file: string, line: number }>, excludedFiles: string[] }}
  */
-export function computeDiffCoverage(diffByFile, coverageByFile) {
+export function computeDiffCoverage(diffByFile, coverageByFile, excludePrefixes = []) {
   let total = 0;
   let covered = 0;
   const uncovered = [];
+  const excludedFiles = [];
   for (const [relPath, lines] of diffByFile) {
+    if (isExcluded(relPath, excludePrefixes)) {
+      // Only report files that actually have coverable changed lines we'd
+      // otherwise gate — a touched-but-non-executable change isn't a "skip".
+      const key = matchCoverage(relPath, coverageByFile);
+      if (key !== null) {
+        const fileCov = coverageByFile.get(key);
+        if ([...lines].some((line) => fileCov.coverable.has(line))) {
+          excludedFiles.push(relPath);
+        }
+      }
+      continue;
+    }
     const key = matchCoverage(relPath, coverageByFile);
     if (key === null) continue; // file not coverage-eligible.
     const fileCov = coverageByFile.get(key);
@@ -171,7 +216,7 @@ export function computeDiffCoverage(diffByFile, coverageByFile) {
       else uncovered.push({ file: relPath, line });
     }
   }
-  return { total, covered, uncovered };
+  return { total, covered, uncovered, excludedFiles };
 }
 
 /**
@@ -184,6 +229,23 @@ export function computeDiffCoverage(diffByFile, coverageByFile) {
 export function coveragePercent({ total, covered }) {
   if (total === 0) return 100;
   return (covered / total) * 100;
+}
+
+/**
+ * Whether the gate runs in DB-FREE mode, from the workflow-set env.
+ *
+ * STRICT equality on the literal string `"true"` — never generic truthiness.
+ * The workflow renders `DIFF_COVERAGE_DBFREE` as the STRING `"true"` (secret
+ * absent) or `"false"` (secret present). `"false"` is a NON-empty string and is
+ * therefore TRUTHY in JS, so a `Boolean(env.X)` / regex-truthy check would read
+ * full mode as DB-free. This helper is the regression guard for that exact bug
+ * class (a GitHub Actions `A && '' || 'true'` expression that was always 'true').
+ *
+ * @param {Record<string, string | undefined>} env Environment (e.g. process.env).
+ * @returns {boolean}
+ */
+export function isDbFreeMode(env) {
+  return env.DIFF_COVERAGE_DBFREE === "true";
 }
 
 // ---------------------------------------------------------------------------
@@ -228,17 +290,37 @@ function main() {
     process.exit(2);
   }
 
+  // DB-FREE mode: coverage came from the DB-free unit/component run only, so
+  // exclude DB-only paths (they can't be covered without the integration DB).
+  // FULL mode (secret present): gate everything. Strict `=== "true"` — see
+  // isDbFreeMode (the string "false" is truthy, so generic truthiness is wrong).
+  const dbFree = isDbFreeMode(process.env);
+  const excludePrefixes = dbFree ? DB_ONLY_PREFIXES : [];
+
   const coverageByFile = parseCoverage(report);
   const diffByFile = parseDiff(diffText);
-  const result = computeDiffCoverage(diffByFile, coverageByFile);
+  const result = computeDiffCoverage(diffByFile, coverageByFile, excludePrefixes);
   const pct = coveragePercent(result);
 
   console.log(`Diff coverage (changed lines vs ${base.slice(0, 12)}):`);
+  console.log(
+    `  mode:             ${dbFree ? "DB-free (unit/component coverage)" : "full (unit + integration)"}`
+  );
   console.log(`  threshold:        ${threshold}%`);
   console.log(`  coverable changed lines: ${result.total}`);
   console.log(`  covered:          ${result.covered}`);
   console.log(`  uncovered:        ${result.uncovered.length}`);
   console.log(`  diff coverage:    ${pct.toFixed(2)}%`);
+
+  if (dbFree) {
+    console.log(
+      `DB-free mode: not gating ${DB_ONLY_PREFIXES.join(", ")} changes; set CI_E2E_DATABASE_URL to gate them — no silent caps.`
+    );
+    if (result.excludedFiles.length > 0) {
+      console.log("  Excluded changed file(s) with coverable lines (need the DB to be covered):");
+      for (const file of result.excludedFiles) console.log(`    - ${file}`);
+    }
+  }
 
   if (result.total === 0) {
     console.log("✓ No coverable changed lines to gate — passing.");

@@ -8,7 +8,10 @@ const {
   matchCoverage,
   computeDiffCoverage,
   coveragePercent,
+  isExcluded,
+  isDbFreeMode,
   DEFAULT_THRESHOLD,
+  DB_ONLY_PREFIXES,
 } = gate;
 
 // Build a minimal v8/istanbul coverage entry from a list of
@@ -202,8 +205,108 @@ describe("computeDiffCoverage + coveragePercent", () => {
   });
 });
 
-describe("DEFAULT_THRESHOLD", () => {
-  it("is 80", () => {
+describe("isExcluded", () => {
+  it("matches paths under an excluded prefix", () => {
+    expect(isExcluded("app/server/listings/browse.ts", DB_ONLY_PREFIXES)).toBe(true);
+  });
+
+  it("does not match pure-module paths", () => {
+    expect(isExcluded("app/trust/summary.ts", DB_ONLY_PREFIXES)).toBe(false);
+    expect(isExcluded("app/server/listings/browse.ts", [])).toBe(false);
+  });
+});
+
+describe("computeDiffCoverage — DB-only exclusion (DB-free vs full mode)", () => {
+  // An UNCOVERED changed line in a DB-only file (app/server/**) plus an
+  // UNCOVERED changed line in a pure module (app/trust/**).
+  const cov = parseCoverage({
+    ...covEntry("/repo/app/server/listings/browse.ts", [["0", 1, 1, 0]]), // uncovered
+    ...covEntry("/repo/app/trust/summary.ts", [["0", 1, 1, 0]]), // uncovered
+  });
+  const diff = parseDiff(
+    [
+      "--- a/app/server/listings/browse.ts",
+      "+++ b/app/server/listings/browse.ts",
+      "@@ -1,0 +1,1 @@",
+      "+uncovered server line",
+      "--- a/app/trust/summary.ts",
+      "+++ b/app/trust/summary.ts",
+      "@@ -1,0 +1,1 @@",
+      "+uncovered trust line",
+    ].join("\n")
+  );
+
+  it("DB-free mode: does NOT count the app/server/** changed line, and reports it as excluded", () => {
+    const result = computeDiffCoverage(diff, cov, DB_ONLY_PREFIXES);
+    // Only the trust line is gated (1 coverable, uncovered); server line excluded.
+    expect(result.total).toBe(1);
+    expect(result.uncovered).toEqual([{ file: "app/trust/summary.ts", line: 1 }]);
+    expect(result.excludedFiles).toEqual(["app/server/listings/browse.ts"]);
+  });
+
+  it("full mode (no exclusion): DOES count the app/server/** changed line", () => {
+    const result = computeDiffCoverage(diff, cov, []);
+    expect(result.total).toBe(2); // both server + trust lines gated
+    expect(result.uncovered).toEqual([
+      { file: "app/server/listings/browse.ts", line: 1 },
+      { file: "app/trust/summary.ts", line: 1 },
+    ]);
+    expect(result.excludedFiles).toEqual([]);
+  });
+
+  it("a pure-module uncovered changed line is counted in BOTH modes", () => {
+    const trustOnly = parseDiff(
+      [
+        "--- a/app/trust/summary.ts",
+        "+++ b/app/trust/summary.ts",
+        "@@ -1,0 +1,1 @@",
+        "+uncovered",
+      ].join("\n")
+    );
+    for (const prefixes of [DB_ONLY_PREFIXES, []]) {
+      const result = computeDiffCoverage(trustOnly, cov, prefixes);
+      expect(result.total).toBe(1);
+      expect(result.uncovered).toEqual([{ file: "app/trust/summary.ts", line: 1 }]);
+    }
+  });
+
+  it("does not report a DB-only file with no coverable changed lines as excluded", () => {
+    // Changed line 99 isn't in any statement range => nothing to gate, so the
+    // file is not a meaningful "exclusion" even in DB-free mode.
+    const noncoverable = parseDiff(
+      [
+        "--- a/app/server/listings/browse.ts",
+        "+++ b/app/server/listings/browse.ts",
+        "@@ -99,0 +99,1 @@",
+        "+// comment",
+      ].join("\n")
+    );
+    const result = computeDiffCoverage(noncoverable, cov, DB_ONLY_PREFIXES);
+    expect(result.excludedFiles).toEqual([]);
+  });
+});
+
+describe("DEFAULT_THRESHOLD / DB_ONLY_PREFIXES", () => {
+  it("threshold is 80", () => {
     expect(DEFAULT_THRESHOLD).toBe(80);
+  });
+
+  it("DB_ONLY_PREFIXES gates DB-only server code only", () => {
+    expect(DB_ONLY_PREFIXES).toContain("app/server/");
+  });
+});
+
+describe("isDbFreeMode — strict, not generic-truthiness (regression guard)", () => {
+  it("the literal string 'true' is DB-free", () => {
+    expect(isDbFreeMode({ DIFF_COVERAGE_DBFREE: "true" })).toBe(true);
+  });
+
+  it("the literal string 'false' is FULL mode (it is truthy as a JS string!)", () => {
+    expect(isDbFreeMode({ DIFF_COVERAGE_DBFREE: "false" })).toBe(false);
+  });
+
+  it("empty string and undefined are FULL mode", () => {
+    expect(isDbFreeMode({ DIFF_COVERAGE_DBFREE: "" })).toBe(false);
+    expect(isDbFreeMode({})).toBe(false);
   });
 });
