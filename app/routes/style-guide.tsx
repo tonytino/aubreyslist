@@ -1,6 +1,19 @@
+import { Plus } from "@phosphor-icons/react/dist/ssr";
 import { createFileRoute } from "@tanstack/react-router";
 import { SAFETY_STATES, SafetySignal } from "~/components/SafetySignal";
 import { Wordmark } from "~/components/Wordmark";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 
 export const Route = createFileRoute("/style-guide")({
   component: StyleGuide,
@@ -25,6 +38,34 @@ const TYPE_SCALE: { name: string; className: string }[] = [
   { name: "body-sm", className: "text-body-sm" },
   { name: "caption", className: "text-caption" },
 ];
+
+const BUTTON_VARIANTS = [
+  "default",
+  "destructive",
+  "outline",
+  "secondary",
+  "ghost",
+  "link",
+] as const;
+
+const BUTTON_SIZES = ["sm", "default", "lg"] as const;
+
+const BADGE_VARIANTS = ["default", "secondary", "destructive", "outline"] as const;
+
+function Labeled({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      {children}
+      <span className="text-caption text-muted-foreground">{label}</span>
+    </div>
+  );
+}
 
 function Section({
   title,
@@ -87,6 +128,99 @@ function StyleGuide() {
           {SAFETY_STATES.map((state) => (
             <SafetySignal key={state} state={state} variant="solid" />
           ))}
+        </div>
+      </Section>
+
+      <Section title="Buttons">
+        <div className="flex flex-col gap-card">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {BUTTON_VARIANTS.map((variant) => (
+              <Labeled key={variant} label={variant}>
+                <Button variant={variant}>Button</Button>
+              </Labeled>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            {BUTTON_SIZES.map((size) => (
+              <Labeled key={size} label={`size=${size}`}>
+                <Button size={size}>Button</Button>
+              </Labeled>
+            ))}
+            <Labeled label="size=icon">
+              <Button size="icon" aria-label="Add">
+                <Plus weight="bold" />
+              </Button>
+            </Labeled>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <Labeled label="disabled">
+              <Button disabled>Button</Button>
+            </Labeled>
+            <Labeled label="leading icon">
+              <Button>
+                <Plus weight="bold" />
+                Add listing
+              </Button>
+            </Labeled>
+            <Labeled label="asChild anchor">
+              <Button asChild>
+                <a href="#buttons">Link button</a>
+              </Button>
+            </Labeled>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Badges">
+        <div className="flex flex-wrap items-end gap-3">
+          {BADGE_VARIANTS.map((variant) => (
+            <Labeled key={variant} label={variant}>
+              <Badge variant={variant}>Badge</Badge>
+            </Labeled>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Card">
+        <Card className="max-w-sm">
+          <CardHeader>
+            <CardTitle>Sweetgreen</CardTitle>
+            <CardDescription>Dedicated gluten-free prep area on site.</CardDescription>
+          </CardHeader>
+          <CardContent className="text-body-sm text-muted-foreground">
+            A representative card composing the header, body, and footer slots from the primitive.
+          </CardContent>
+          <CardFooter>
+            <Button variant="outline">View listing</Button>
+          </CardFooter>
+        </Card>
+      </Section>
+
+      <Section title="Form controls">
+        <div className="flex max-w-sm flex-col gap-card">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="demo-email">Email</Label>
+            <Input id="demo-email" type="email" placeholder="you@example.com" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="demo-disabled">Disabled</Label>
+            <Input id="demo-disabled" type="text" placeholder="Unavailable" disabled />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="demo-invalid">Invalid</Label>
+            <Input
+              id="demo-invalid"
+              type="email"
+              placeholder="you@example.com"
+              defaultValue="not-an-email"
+              aria-invalid="true"
+            />
+            <span className="text-caption text-muted-foreground">aria-invalid state</span>
+          </div>
         </div>
       </Section>
     </main>
