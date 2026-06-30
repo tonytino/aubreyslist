@@ -103,6 +103,83 @@ jobs:
       - name: Validate changelog fragments
         run: pnpm changelog:check
 
+  hard-rules:
+    name: Hard rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Mechanical enforcement of the AGENTS.md "Hard Rules" (issue #179): a
+      # static scan that turns each prose rule into a CI gate (process.env scope,
+      # unexplained @ts-ignore/@ts-expect-error, db value-imports in client code,
+      # raw fetch to the Hono /api routes, and test honesty). Zero deps; the
+      # matchers are unit-tested in tests/unit/hard-rules-guard.test.ts.
+      - name: Check AGENTS.md hard rules
+        run: node .github/scripts/check-hard-rules.mjs
+
+  migrations-in-sync:
+    name: Migrations in sync with schema
+    runs-on: ubuntu-latest
+
+    # NOTE on scope: app/routeTree.gen.ts is deliberately NOT checked here. It is
+    # gitignored (.gitignore) and regenerated on every `pnpm install` via the
+    # postinstall `tsr generate`, so a hand-edit can't even be committed — its
+    # `.gitignore` entry is the guard, not this job. db/migrations IS tracked, so
+    # this job is the gate that keeps it in sync with db/schema.ts.
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Regenerate the Drizzle migrations from db/schema.ts. `drizzle-kit
+      # generate` reads the schema and writes nothing if there are no pending
+      # changes — it never connects to a database. drizzle.config.ts only
+      # *validates that DATABASE_URL is set*, so we pass a dummy URL (no
+      # connection is made during `generate`).
+      - name: Regenerate Drizzle migrations
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: "postgres://ci:ci@localhost:5432/ci"
+
+      # db/migrations is auto-generated from db/schema.ts and AGENTS.md forbids
+      # hand-editing it. We use `git status --porcelain` (NOT `git diff
+      # --exit-code`) so we catch BOTH failure modes: (1) a hand-edit to a tracked
+      # migration shows as modified, and (2) a brand-new UNTRACKED migration —
+      # i.e. someone changed db/schema.ts but never ran `pnpm db:generate` — which
+      # `git diff` would miss entirely.
+      - name: Assert db/migrations is in sync with db/schema.ts
+        run: |
+          PORCELAIN=$(git status --porcelain -- db/migrations)
+          if [ -n "$PORCELAIN" ]; then
+            echo "::error::db/migrations is out of sync with db/schema.ts. Either a migration was hand-edited, or db/schema.ts changed without a generated migration. Run \`pnpm db:generate\` and commit the result (AGENTS.md Hard Rules — db/migrations is auto-generated)."
+            echo "Untracked/modified migration files:"
+            echo "$PORCELAIN"
+            git diff -- db/migrations
+            exit 1
+          fi
+          echo "✓ db/migrations matches \`pnpm db:generate\` output (in sync with db/schema.ts)"
+
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -125,8 +202,12 @@ jobs:
       # self-skips without TEST_DATABASE_URL, but we run it in its own gated
       # step below (see "Integration tests") so excluding it here avoids
       # double-discovering the suite on the fast path.
+      # `--allowOnly=false` makes a focused test (`.only`) FAIL the run rather
+      # than silently passing while disabling its siblings. Vitest already does
+      # this when `CI` is set, but we assert it explicitly (test-honesty Hard
+      # Rule; the grep guard in check-hard-rules.mjs is belt-and-suspenders).
       - name: Unit tests
-        run: pnpm exec vitest run --exclude 'tests/integration/**'
+        run: pnpm exec vitest run --allowOnly=false --exclude 'tests/integration/**'
 
   integration-e2e:
     name: Integration & E2E
