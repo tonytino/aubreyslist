@@ -13,6 +13,23 @@
 //
 // Mirrors the in-repo guard style (.github/scripts/check-changelog-tags.mjs and
 // the "Assert the client bundle contains no db/neon code" ci.yml step).
+//
+// KNOWN LIMITATIONS (deliberate heuristic limits — kept simple on purpose; the
+// authoritative backstops are the #159 client-bundle build guard and Vitest's
+// CI `allowOnly=false`, not this fast static pass):
+//   - The matchers are line-text based and do NOT strip comments or string
+//     literals (intentionally — stripping is complex and risky). So a
+//     `process.env` token (rule #1) or a `.only(`/`.skip("`/`.todo(` token
+//     (rule #5) that appears inside a comment or a string literal can self-flag.
+//   - As a corollary of the above, rule #5 self-flags literal trigger tokens
+//     that appear as data in a test file (the guard's own test assembles those
+//     tokens at runtime to avoid this).
+//   - Rules #3/#4 scope "client surface" to the fast early-warning subset
+//     `app/components/` + `app/routes/` (minus server seams). The AUTHORITATIVE
+//     backstop for db/neon leaking into the browser is the #159 build-bundle
+//     grep, which asserts the real client output. Raw-fetch detection (rule #4)
+//     only matches when the `/api` URL literal sits on the SAME line as
+//     `fetch(`.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";

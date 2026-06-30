@@ -129,10 +129,15 @@ jobs:
       - name: Check AGENTS.md hard rules
         run: node .github/scripts/check-hard-rules.mjs
 
-  generated-files:
-    name: Generated files up to date
+  migrations-in-sync:
+    name: Migrations in sync with schema
     runs-on: ubuntu-latest
 
+    # NOTE on scope: app/routeTree.gen.ts is deliberately NOT checked here. It is
+    # gitignored (.gitignore) and regenerated on every `pnpm install` via the
+    # postinstall `tsr generate`, so a hand-edit can't even be committed — its
+    # `.gitignore` entry is the guard, not this job. db/migrations IS tracked, so
+    # this job is the gate that keeps it in sync with db/schema.ts.
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -144,8 +149,6 @@ jobs:
           node-version-file: .nvmrc
           cache: "pnpm"
 
-      # `pnpm install` runs `postinstall` (`tsr generate` -> app/routeTree.gen.ts),
-      # so the route tree is regenerated as part of the install below.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -159,17 +162,23 @@ jobs:
         env:
           DATABASE_URL: "postgres://ci:ci@localhost:5432/ci"
 
-      # The route tree (app/routeTree.gen.ts) and the Drizzle migrations
-      # (db/migrations) are auto-generated — AGENTS.md forbids hand-editing
-      # them. If regeneration produced a diff, either someone edited a generated
-      # file by hand or forgot to regenerate after a schema/route change.
-      - name: Assert generated files have no drift
+      # db/migrations is auto-generated from db/schema.ts and AGENTS.md forbids
+      # hand-editing it. We use `git status --porcelain` (NOT `git diff
+      # --exit-code`) so we catch BOTH failure modes: (1) a hand-edit to a tracked
+      # migration shows as modified, and (2) a brand-new UNTRACKED migration —
+      # i.e. someone changed db/schema.ts but never ran `pnpm db:generate` — which
+      # `git diff` would miss entirely.
+      - name: Assert db/migrations is in sync with db/schema.ts
         run: |
-          if ! git diff --exit-code -- app/routeTree.gen.ts db/migrations; then
-            echo "::error::Generated files are out of date or were hand-edited. app/routeTree.gen.ts is produced by \`tsr generate\` (runs on \`pnpm install\`) and db/migrations by \`pnpm db:generate\`. Do not edit them by hand — run the generators and commit the result (AGENTS.md Hard Rules)."
+          PORCELAIN=$(git status --porcelain -- db/migrations)
+          if [ -n "$PORCELAIN" ]; then
+            echo "::error::db/migrations is out of sync with db/schema.ts. Either a migration was hand-edited, or db/schema.ts changed without a generated migration. Run \`pnpm db:generate\` and commit the result (AGENTS.md Hard Rules — db/migrations is auto-generated)."
+            echo "Untracked/modified migration files:"
+            echo "$PORCELAIN"
+            git diff -- db/migrations
             exit 1
           fi
-          echo "✓ app/routeTree.gen.ts and db/migrations match their generators"
+          echo "✓ db/migrations matches \`pnpm db:generate\` output (in sync with db/schema.ts)"
 
   unit:
     name: Unit tests
