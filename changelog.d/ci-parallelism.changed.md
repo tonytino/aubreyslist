@@ -1,0 +1,1 @@
+- `[manual]` Split the single CI lint/type/test job into independent `lint`, `typecheck`, `knip`, `changelog-validate`, `unit`, and `integration-e2e` jobs that run concurrently, cutting wall-clock time from the sum of every step to the longest single job.
