@@ -2,6 +2,8 @@
 
 This doc covers how agents interact with the GitHub Issues-based task system. Read it before picking up any task.
 
+> **`gh` CLI vs GitHub MCP.** The `gh` commands below are illustrative. Agents running in **Claude Code on the web** don't have the `gh` CLI — they use the **GitHub MCP tools** (`mcp__github__*`) instead, which do the same thing (list/view/edit issues, open PRs). **Local** sessions use the `gh` CLI as shown. Either way the workflow — discover, claim, branch, hand off — is identical.
+
 ---
 
 ## Discovering Available Work
@@ -82,40 +84,29 @@ You can still run `pnpm check` manually for a full project-wide lint and format 
 
 ## Updating the Changelog
 
-Before opening a PR, add an entry to `CHANGELOG.md` under `## [Unreleased]` (create the section if it doesn't exist):
+Don't hand-edit `CHANGELOG.md`. Instead, every PR adds its own **changelog fragment** under `changelog.d/`. Because each PR ships a separate file, PRs never collide on the changelog, and CI **requires** a fragment on every PR (unless the PR carries the `skip-changelog` label).
+
+Create a file named `<slug>.<category>.md`, where `<category>` is one of the [Keep a Changelog](https://keepachangelog.com) sections: `added`, `changed`, `deprecated`, `removed`, `fixed`, `security`. The `<slug>` is anything unique — conventionally the issue number plus a few words (e.g. `42-unused-deps`).
+
+Each bullet must start with a propagation tag. In this repo (an instance, not the template), default to `[manual]`:
 
 ```markdown
-## [Unreleased]
-
-### Added / Changed / Fixed
-- `[propagate]` Brief description of what changed and why
+- `[manual]` Brief description of what changed and why.
 ```
 
-Use the appropriate propagation tag:
-- `[propagate]` — change is useful to all existing instances
-- `[template-only]` — affects scaffold or template infrastructure only
-- `[manual]` — requires human judgment before applying to instances
-
-See `CHANGELOG.md` for the format and existing entries as reference.
+Validate with `pnpm changelog:check` (also runs in CI). **`changelog.d/README.md` is the source of truth** for categories, propagation tags, and when each applies — read it before adding a fragment.
 
 ---
 
 ## Handing Off for Review
 
-When all acceptance criteria are met:
+When all acceptance criteria are met, open a PR referencing the issue:
 
 ```bash
-# Open a PR referencing the issue
-gh pr create \
-  --title "<type>: <description>" \
-  --body "Closes #<NUMBER>
-
-## Summary
-- ...
-
-## Test plan
-- [ ] ..."
+gh pr create --title "<type>: <description>"
 ```
+
+The PR body is **auto-populated** from `.github/pull_request_template.md` — fill in its sections (`## Summary`, `Resolves #<NUMBER>`, `## Test plan`, and the Propagation checklist) rather than writing a body from scratch. Web sessions opening PRs through the GitHub MCP tools should mirror the same template structure. The `Resolves #<NUMBER>` link is what auto-closes the issue on merge.
 
 Then update the issue label:
 
@@ -123,7 +114,7 @@ Then update the issue label:
 gh issue edit <NUMBER> --remove-label "status:in-progress" --add-label "status:needs-review"
 ```
 
-Do not close the issue yourself. The merged PR closes it automatically via `Closes #N`.
+Do not close the issue yourself. The merged PR closes it automatically via the `Resolves #N` link in the body.
 
 ---
 

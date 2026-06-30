@@ -96,6 +96,8 @@ These apply everywhere, always, with no exceptions.
 
 Tasks are tracked as GitHub Issues. The full workflow is in `docs/agents/tasks.md`.
 
+> Web sessions use the GitHub MCP tools (`mcp__github__*`); local sessions use the `gh` CLI shown below. The commands are illustrative — the MCP equivalents do the same thing.
+
 Quick reference:
 
 ```bash
