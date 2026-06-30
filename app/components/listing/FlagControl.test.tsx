@@ -14,6 +14,9 @@ vi.mock("~/server/flags/flags.fn", () => ({
   submitFlag: (args: unknown) => submitFlagMock(args),
 }));
 
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
+
 import { FlagControl } from "./FlagControl";
 
 function renderWithQuery(ui: ReactElement): void {
@@ -108,5 +111,24 @@ describe("FlagControl", () => {
     fireEvent.click(screen.getByRole("button", { name: /submit flag/i }));
 
     expect(await screen.findByRole("status")).toHaveTextContent(/reported/i);
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Report submitted");
+    });
+  });
+
+  it("shows an error toast when the flag submission fails", async () => {
+    submitFlagMock.mockRejectedValueOnce(new Error("boom"));
+    renderWithQuery(<FlagControl target="listing" listingId="listing-1" isSignedIn={true} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /flag/i }));
+    fireEvent.change(screen.getByLabelText(/why are you flagging this/i), {
+      target: { value: "Spam" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /submit flag/i }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import { MapPin } from "@phosphor-icons/react/dist/ssr";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
@@ -8,6 +9,8 @@ import { IncidentReports, incidentsQueryKey } from "~/components/listing/Inciden
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { TrustPlaceholder } from "~/components/listing/TrustPlaceholder";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader } from "~/components/ui/card";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
@@ -147,26 +150,20 @@ function ListingDetail() {
           mapsUrl is app-generated (lower risk) but the sink is guarded too. */}
       <section aria-label="Links" className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {isHttpUrl(listing.mapsUrl) ? (
-          <a
-            href={listing.mapsUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex items-center justify-center gap-2 rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong"
-          >
-            <MapPinIcon />
-            Open in Google Maps
-          </a>
+          <Button asChild size="lg">
+            <a href={listing.mapsUrl} target="_blank" rel="noreferrer noopener">
+              <MapPin aria-hidden weight="fill" className="h-4 w-4" />
+              Open in Google Maps
+            </a>
+          </Button>
         ) : null}
 
         {isHttpUrl(listing.menuUrl) ? (
-          <a
-            href={listing.menuUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex items-center justify-center gap-2 rounded-card border border-border px-5 py-2.5 text-body font-semibold text-foreground hover:bg-surface"
-          >
-            View menu
-          </a>
+          <Button asChild size="lg" variant="outline">
+            <a href={listing.menuUrl} target="_blank" rel="noreferrer noopener">
+              View menu
+            </a>
+          </Button>
         ) : null}
       </section>
 
@@ -178,22 +175,32 @@ function ListingDetail() {
           signed-in user can begin attesting ANY attribute even on a listing
           with no claims yet (the claim is created lazily on first vote). No more
           "coming soon" dead-end. */}
-      <section aria-labelledby="community-claims-heading" className="flex flex-col gap-3">
-        <h2 id="community-claims-heading" className="text-title">
-          Community claims
-        </h2>
-        <p className="text-body-sm text-muted-foreground">
-          What the community has confirmed or disputed about this restaurant. Each summary is a
-          roll-up of the visible attestations below it — never a hidden score. Sign in to confirm or
-          dispute any attribute.
-        </p>
-        <CommunityClaims
-          listingId={listing.id}
-          claims={claims}
-          viewerId={viewerId}
-          now={now}
-          stalenessMonths={stalenessMonths}
-        />
+      {/* Keep the landmark as a real <section> (a bare Card is a <div> and gets
+          no implicit region role from aria-labelledby alone — and Biome's
+          useSemanticElements forbids role="region"). The Card stays inside for
+          styling; the heading lives in CardHeader. Mirrors AdminSection. */}
+      <section aria-labelledby="community-claims-heading">
+        <Card>
+          <CardHeader>
+            <h2 id="community-claims-heading" className="text-title">
+              Community claims
+            </h2>
+            <CardDescription>
+              What the community has confirmed or disputed about this restaurant. Each summary is a
+              roll-up of the visible attestations below it — never a hidden score. Sign in to
+              confirm or dispute any attribute.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CommunityClaims
+              listingId={listing.id}
+              claims={claims}
+              viewerId={viewerId}
+              now={now}
+              stalenessMonths={stalenessMonths}
+            />
+          </CardContent>
+        </Card>
       </section>
 
       <TrustPlaceholder
@@ -203,26 +210,6 @@ function ListingDetail() {
         <IncidentReports listingId={listing.id} incidents={incidents} viewerId={viewerId} />
       </TrustPlaceholder>
     </article>
-  );
-}
-
-/** Inline Google-Maps-style pin glyph (decorative — the label carries meaning). */
-function MapPinIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      viewBox="0 0 24 24"
-      className="h-5 w-5 shrink-0"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z" />
-      <circle cx="12" cy="10" r="2.5" />
-    </svg>
   );
 }
 

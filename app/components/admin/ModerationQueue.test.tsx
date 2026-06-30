@@ -6,8 +6,8 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type {
   ModerationQueue as ModerationQueueData,
   QueueItem,
@@ -40,6 +40,20 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("~/server/moderation/actions.fn", () => mocks);
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
+
+// Radix Dialog (the Hide/Remove confirm) drives focus/scroll through APIs that
+// jsdom does not implement; stub them so the dialog opens on a fired click.
+beforeAll(() => {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
+});
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -167,12 +181,29 @@ describe("ModerationQueue", () => {
       ],
     });
 
+    // Hide is gated behind a confirmation dialog: opening it must NOT yet fire
+    // the mutation (the dialog gates the click; the server fn still re-gates).
     fireEvent.click(await screen.findByRole("button", { name: /Hide/i }));
+    expect(mocks.hideContentAction).not.toHaveBeenCalled();
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Hide/i }));
 
     await waitFor(() => expect(mocks.hideContentAction).toHaveBeenCalledTimes(1));
     expect(mocks.hideContentAction).toHaveBeenCalledWith({
       data: { target: "listing", listingId: "listing-9", flagId: "flag-7" },
     });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Content hidden"));
+  });
+
+  it("does not fire Hide when the moderator cancels the confirm dialog", async () => {
+    renderQueue({ access: "granted", items: [item({})] });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Hide/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+
+    expect(mocks.hideContentAction).not.toHaveBeenCalled();
   });
 
   it("Dismiss/Remove send the target type matching the flagged content (claim/incident)", async () => {
@@ -191,15 +222,21 @@ describe("ModerationQueue", () => {
     expect(mocks.dismissFlagAction).toHaveBeenCalledWith({
       data: { target: "claim", claimId: "claim-2", flagId: "flag-c" },
     });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Flag dismissed"));
   });
 
   it("shows an inline error when an action fails", async () => {
     mocks.removeContentAction.mockRejectedValueOnce(new Error("Requires moderator privileges."));
     renderQueue({ access: "granted", items: [item({})] });
 
+    // Remove (destructive) is gated behind a confirmation dialog → confirm it.
     fireEvent.click(await screen.findByRole("button", { name: /Remove/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Remove/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/moderator privileges/i);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("shows a no-access message when the verdict is not granted", async () => {

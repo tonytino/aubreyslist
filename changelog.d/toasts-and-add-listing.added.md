@@ -1,0 +1,2 @@
+- `[manual]` Added toast notifications (sonner) for action feedback — listing created, report/incident submitted, and moderation/role changes — with a token-themed toaster that follows dark mode. Toasts complement (never replace) the existing inline error messages.
+- `[manual]` Migrated the add-listing intake forms (manual + Google Places) to the `Input`/`Label`/`Button` primitives and semantic tokens, so they're consistent and dark-mode-correct; field associations, validation, and the duplicate-listing handling are unchanged.

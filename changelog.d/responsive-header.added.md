@@ -1,0 +1,1 @@
+- `[manual]` Reworked the site header to be mobile-friendly: a hamburger dropdown holds the nav below `sm`, and the signed-in user is shown as an avatar that opens a portal menu (name/email, an admin link for admins, and sign out). Added a brand favicon.

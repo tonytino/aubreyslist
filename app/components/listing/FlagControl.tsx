@@ -1,5 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "~/components/ui/button";
 import { submitFlag } from "~/server/flags/flags.fn";
 
 /**
@@ -43,6 +45,10 @@ export function FlagControl(props: FlagTarget & { isSignedIn: boolean; label?: s
     onSuccess: () => {
       setReason("");
       setIsOpen(false);
+      toast.success("Report submitted");
+    },
+    onError: () => {
+      toast.error("Could not submit the report. Please try again.");
     },
   });
 
@@ -80,7 +86,7 @@ export function FlagControl(props: FlagTarget & { isSignedIn: boolean; label?: s
   return (
     <form
       aria-label={accessibleLabel}
-      className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3"
+      className="flex flex-col gap-2 rounded-card border border-border bg-muted p-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit) {
@@ -115,24 +121,21 @@ export function FlagControl(props: FlagTarget & { isSignedIn: boolean; label?: s
       ) : null}
 
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className="inline-flex items-center justify-center rounded-card bg-brand px-4 py-2 text-body-sm font-semibold text-brand-foreground hover:bg-brand-strong disabled:opacity-50"
-        >
+        <Button type="submit" size="sm" disabled={!canSubmit}>
           {flag.isPending ? "Submitting…" : "Submit flag"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          size="sm"
+          variant="outline"
           disabled={flag.isPending}
           onClick={() => {
             setIsOpen(false);
             setReason("");
           }}
-          className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface disabled:opacity-50"
         >
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "~/components/ui/button";
 import type { AttestationValue, ClaimAttribute } from "~/db/schema";
 import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
 import { claimsQueryKey } from "./CommunityClaims";
@@ -80,41 +81,36 @@ export function ClaimVoteControls({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
           type="button"
+          size="sm"
+          variant={viewerVote === "confirm" ? "default" : "outline"}
           aria-pressed={viewerVote === "confirm"}
           disabled={busy}
           onClick={() => vote.mutate("confirm")}
-          className={`rounded-card border px-3 py-1.5 text-body-sm font-medium disabled:opacity-50 ${
-            viewerVote === "confirm"
-              ? "border-brand bg-brand text-brand-foreground"
-              : "border-border text-foreground hover:bg-surface"
-          }`}
         >
           Confirm
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          size="sm"
+          variant={viewerVote === "dispute" ? "destructive" : "outline"}
           aria-pressed={viewerVote === "dispute"}
           disabled={busy}
           onClick={() => vote.mutate("dispute")}
-          className={`rounded-card border px-3 py-1.5 text-body-sm font-medium disabled:opacity-50 ${
-            viewerVote === "dispute"
-              ? "border-incident bg-incident text-brand-foreground"
-              : "border-border text-foreground hover:bg-surface"
-          }`}
         >
           Dispute
-        </button>
+        </Button>
         {viewerVote !== null ? (
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant="link"
             disabled={busy}
             onClick={() => retract.mutate()}
-            className="text-body-sm font-medium underline underline-offset-4 hover:text-brand disabled:opacity-50"
           >
             Retract
-          </button>
+          </Button>
         ) : null}
         {/* Flag this claim as inappropriate/spam/wrong (#39). Login-gated; the
             server re-gates regardless, so the control is UX only. There is

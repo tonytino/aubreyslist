@@ -20,6 +20,9 @@ vi.mock("~/server/incidents/incidents.fn", () => ({
   removeIncident: (args: unknown) => removeIncidentMock(args),
 }));
 
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
+
 import { IncidentReports, incidentsQueryKey } from "./IncidentReports";
 
 function renderWithQuery(ui: ReactElement): QueryClient {
@@ -98,6 +101,24 @@ describe("IncidentReports", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: incidentsQueryKey("listing-1"),
     });
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Incident reported");
+    });
+  });
+
+  it("shows an error toast when the submit fails", async () => {
+    submitIncidentMock.mockRejectedValueOnce(new Error("boom"));
+    renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} viewerId="user-1" />);
+
+    fireEvent.change(screen.getByLabelText(/Date it happened/i), {
+      target: { value: "2026-06-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Submit report/i }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   describe("owner-only edit/retract controls (#32)", () => {
@@ -154,6 +175,9 @@ describe("IncidentReports", () => {
         data: { id: "own", occurredOn: "2026-06-15", severity: undefined, note: undefined },
       });
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: incidentsQueryKey("listing-1") });
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith("Report updated");
+      });
     });
 
     it("requires confirmation before retracting, then invalidates the list", async () => {
@@ -178,6 +202,9 @@ describe("IncidentReports", () => {
       });
       expect(removeIncidentMock).toHaveBeenCalledWith({ data: { id: "own" } });
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: incidentsQueryKey("listing-1") });
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith("Report retracted");
+      });
     });
   });
 });

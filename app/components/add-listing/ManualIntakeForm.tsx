@@ -1,6 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useId, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import type { CreateListingResult } from "~/listings/create-input";
 import { parseDuplicateListingError } from "~/listings/dedup-error";
 import { submitCreateListing } from "~/server/listings/create.fn";
@@ -14,11 +18,18 @@ import { MenuUrlField } from "./MenuUrlField";
  *
  * Lat/lng are required by the schema (`listings.lat` / `listings.lng` are
  * NOT NULL) and back the Maps deep-link, so they are collected here rather than
- * guessed. Mirrors the design-token conventions of `app/routes/listings.$id.tsx`.
+ * guessed. Built on the `Input`/`Label`/`Button` primitives + semantic tokens so
+ * the form reads correctly in light and dark mode.
  */
 export function ManualIntakeForm({
   onCreated,
 }: { onCreated: (result: CreateListingResult) => void }) {
+  const fieldId = useId();
+  const nameId = `${fieldId}-name`;
+  const addressId = `${fieldId}-address`;
+  const latId = `${fieldId}-lat`;
+  const lngId = `${fieldId}-lng`;
+
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState("");
@@ -37,7 +48,21 @@ export function ManualIntakeForm({
           menuUrl: menuUrl || undefined,
         },
       }),
-    onSuccess: onCreated,
+    onSuccess: (result) => {
+      toast.success("Listing added");
+      onCreated(result);
+    },
+    // A blocked duplicate still shows the inline link below (it's the graceful
+    // "already listed" path); the toast complements that inline message rather
+    // than replacing it.
+    onError: (error) => {
+      const duplicate = parseDuplicateListingError(error);
+      toast.error(
+        duplicate
+          ? "This restaurant is already listed."
+          : "Could not add the listing. Please try again."
+      );
+    },
   });
 
   const latNum = Number(lat);
@@ -63,32 +88,33 @@ export function ManualIntakeForm({
         }
       }}
     >
-      <label className="flex flex-col gap-1">
-        <span className="text-body-sm font-medium text-foreground">Restaurant name</span>
-        <input
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={nameId}>Restaurant name</Label>
+        <Input
+          id={nameId}
           type="text"
           required
           value={name}
           onChange={(event) => setName(event.target.value)}
-          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
         />
-      </label>
+      </div>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-body-sm font-medium text-foreground">Address</span>
-        <input
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={addressId}>Address</Label>
+        <Input
+          id={addressId}
           type="text"
           required
           value={address}
           onChange={(event) => setAddress(event.target.value)}
-          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
         />
-      </label>
+      </div>
 
       <div className="flex flex-col gap-4 sm:flex-row">
-        <label className="flex flex-1 flex-col gap-1">
-          <span className="text-body-sm font-medium text-foreground">Latitude</span>
-          <input
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label htmlFor={latId}>Latitude</Label>
+          <Input
+            id={latId}
             type="number"
             required
             step="any"
@@ -97,12 +123,12 @@ export function ManualIntakeForm({
             value={lat}
             onChange={(event) => setLat(event.target.value)}
             placeholder="39.7392"
-            className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
           />
-        </label>
-        <label className="flex flex-1 flex-col gap-1">
-          <span className="text-body-sm font-medium text-foreground">Longitude</span>
-          <input
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label htmlFor={lngId}>Longitude</Label>
+          <Input
+            id={lngId}
             type="number"
             required
             step="any"
@@ -111,22 +137,17 @@ export function ManualIntakeForm({
             value={lng}
             onChange={(event) => setLng(event.target.value)}
             placeholder="-104.9903"
-            className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
           />
-        </label>
+        </div>
       </div>
 
       <MenuUrlField value={menuUrl} onChange={setMenuUrl} />
 
       {create.isError ? <SubmitError error={create.error} /> : null}
 
-      <button
-        type="submit"
-        disabled={!canSubmit || create.isPending}
-        className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong disabled:opacity-50"
-      >
+      <Button type="submit" disabled={!canSubmit || create.isPending}>
         {create.isPending ? "Adding…" : "Add listing"}
-      </button>
+      </Button>
     </form>
   );
 }

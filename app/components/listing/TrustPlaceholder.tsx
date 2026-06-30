@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Badge } from "~/components/ui/badge";
 
 interface TrustPlaceholderProps {
   /** Visible section heading (e.g. "Community claims"). */
@@ -32,7 +33,7 @@ export function TrustPlaceholder({ title, description, children }: TrustPlacehol
   return (
     <section
       aria-labelledby={`${slugify(title)}-heading`}
-      className="flex flex-col gap-2 rounded-card border border-dashed border-border bg-surface p-gutter"
+      className="flex flex-col gap-2 rounded-card border border-dashed border-border bg-muted p-gutter"
     >
       <div className="flex flex-wrap items-center gap-2">
         <h2 id={`${slugify(title)}-heading`} className="text-title">
@@ -41,9 +42,9 @@ export function TrustPlaceholder({ title, description, children }: TrustPlacehol
         {/* The "coming soon" badge is only honest while the slot is empty; once
             EPIC 4 feeds real evidence in via `children`, drop it. */}
         {children === undefined ? (
-          <span className="rounded-chip bg-brand-soft px-2.5 py-1 text-caption font-medium text-brand">
+          <Badge variant="secondary" className="rounded-chip">
             Coming soon
-          </span>
+          </Badge>
         ) : null}
       </div>
       <p className="text-body-sm text-muted-foreground">{description}</p>

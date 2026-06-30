@@ -35,13 +35,19 @@ test.describe("mocked Google sign-in", () => {
     // biome-ignore lint/style/noNonNullAssertion: Playwright always provides baseURL from the config.
     await seeder.signIn(context, user.id, baseURL!);
 
-    // The header now shows the authenticated state: the visitor's name + a
-    // "Sign out" control, and NOT the anonymous "Continue with Google" entry.
+    // The header now shows the authenticated state as the avatar account menu,
+    // whose accessible name carries the visitor's name — and NOT the anonymous
+    // "Continue with Google" entry. The menu's contents (name, admin link, sign
+    // out) are covered by UserMenu's unit tests; this e2e only needs to confirm
+    // the sealed cookie produces the authenticated header for THIS user. We assert
+    // it from the server-rendered trigger, so it doesn't depend on hydration
+    // timing (opening the portal'd menu would).
     await page.goto("/");
     const header = page.getByRole("banner");
     await expect(header.getByRole("link", { name: "Continue with Google" })).toHaveCount(0);
-    await expect(header.getByText(user.name)).toBeVisible();
-    await expect(header.getByRole("button", { name: "Sign out" })).toBeVisible();
+    await expect(
+      header.getByRole("button", { name: `Account menu for ${user.name}` })
+    ).toBeVisible();
 
     // A gated surface now renders its authenticated form, not the sign-in prompt.
     await page.goto("/listings/new");

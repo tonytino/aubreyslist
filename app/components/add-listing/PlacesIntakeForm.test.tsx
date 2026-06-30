@@ -22,6 +22,10 @@ vi.mock("~/server/places.fn", () => ({
 vi.mock("~/server/listings/create.fn", () => ({
   submitCreateListing: (args: unknown) => createListingMock(args),
 }));
+// Sonner's toast host is mounted in __root; the component only fires toasts, so
+// we stub the module and assert the right toast fires on create success/error.
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
 
 import { PlacesIntakeForm } from "./PlacesIntakeForm";
 
@@ -95,5 +99,42 @@ describe("PlacesIntakeForm", () => {
 
     await waitFor(() => expect(autocompleteMock).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("Two Hands, Denver")).toBeInTheDocument();
+  });
+
+  it("fires a success toast and calls onCreated when the listing is created", async () => {
+    autocompleteMock.mockResolvedValueOnce({
+      ok: true,
+      data: [{ placeId: "p1", description: "Two Hands, Denver" }],
+    });
+    const result = { listing: { id: "l1" }, created: true };
+    createListingMock.mockResolvedValueOnce(result as never);
+    const onCreated = vi.fn();
+    renderWithQuery(<PlacesIntakeForm onCreated={onCreated} />);
+
+    search("Two Hands, Denver");
+    fireEvent.click(await screen.findByText("Two Hands, Denver"));
+    fireEvent.click(screen.getByRole("button", { name: /Add this listing/i }));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(result));
+    expect(toast.success).toHaveBeenCalledWith("Listing added");
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("fires an error toast and keeps the inline error when create fails", async () => {
+    autocompleteMock.mockResolvedValueOnce({
+      ok: true,
+      data: [{ placeId: "p1", description: "Two Hands, Denver" }],
+    });
+    createListingMock.mockRejectedValueOnce(new Error("Something went wrong"));
+    const onCreated = vi.fn();
+    renderWithQuery(<PlacesIntakeForm onCreated={onCreated} />);
+
+    search("Two Hands, Denver");
+    fireEvent.click(await screen.findByText("Two Hands, Denver"));
+    fireEvent.click(screen.getByRole("button", { name: /Add this listing/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
+    expect(toast.error).toHaveBeenCalledWith("Could not add the listing. Please try again.");
+    expect(onCreated).not.toHaveBeenCalled();
   });
 });

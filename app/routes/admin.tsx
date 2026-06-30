@@ -1,6 +1,7 @@
 import { Link, createFileRoute, redirect } from "@tanstack/react-router";
 import { AdminPanel } from "~/components/admin/AdminPanel";
 import { moderationQueueQueryOptions } from "~/components/admin/moderation-queue-query";
+import { Button } from "~/components/ui/button";
 import { fetchAdminView } from "~/server/admin/admin-view.fn";
 
 /**
@@ -72,9 +73,9 @@ function Forbidden() {
         This area is for moderators and admins. If you think you should have access, contact an
         administrator.
       </p>
-      <Link to="/" className="text-body-sm underline underline-offset-4">
-        Back to home
-      </Link>
+      <Button asChild variant="outline">
+        <Link to="/">Back to home</Link>
+      </Button>
     </main>
   );
 }
