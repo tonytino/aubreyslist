@@ -57,11 +57,13 @@ function Home() {
               ))}
               {/* An example GF taxonomy attribute (domain.md) — the concrete kitchen
                   accommodations the community tracks, distinct from the trust verdicts
-                  above. Icon + text, never colour alone (styling.md). */}
-              <Badge variant="outline" className="gap-1.5">
-                <ForkKnife aria-hidden className="h-4 w-4" />
+                  above. Matches the SafetySignal chip geometry (size, radius, icon) so
+                  it sits as a polished sibling, but in a NEUTRAL tone so it never reads
+                  as a safety verdict. Icon + text, never colour alone (styling.md). */}
+              <span className="inline-flex items-center gap-1.5 rounded-chip border border-border bg-muted px-2.5 py-1 text-body-sm font-medium text-muted-foreground">
+                <ForkKnife aria-hidden className="h-4 w-4 shrink-0" />
                 {claimAttributeLabel("dedicated_fryer")}
-              </Badge>
+              </span>
             </div>
           </CardContent>
         </Card>
