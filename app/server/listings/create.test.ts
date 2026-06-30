@@ -38,7 +38,7 @@ let findFirstResult: Listing | undefined;
 let findManyResult: Listing[] = [];
 let returningResult: Listing[] = [];
 
-const findFirstMock = vi.fn(() => Promise.resolve(findFirstResult));
+const findFirstMock = vi.fn((_args?: { where?: unknown }) => Promise.resolve(findFirstResult));
 const findManyMock = vi.fn((_args?: { where?: unknown }) => Promise.resolve(findManyResult));
 
 /**
@@ -106,6 +106,7 @@ function listingRow(overrides: Partial<Listing> = {}): Listing {
     lng: -104.9,
     mapsUrl: "https://maps.example/place-123",
     menuUrl: null,
+    moderationStatus: "visible",
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -185,6 +186,57 @@ describe("runCreateListing — places mode", () => {
     const result = await runCreateListing({ mode: "places", placeId: "place-123" });
 
     expect(result).toEqual({ listing: winner, created: false });
+    expect(onConflictDoNothingMock).toHaveBeenCalledWith({ target: expect.anything() });
+  });
+
+  it("scopes the Place-ID dedup lookup to visible rows only (no moderation leak)", async () => {
+    // The pre-insert dedup `findFirst` must AND `place_id` with
+    // `moderation_status = 'visible'` so a moderator-hidden/removed row is never
+    // returned to the client as `created: false` (metadata leak + moderation-state
+    // oracle). We assert both columns are referenced rather than pin the exact SQL.
+    const created = listingRow();
+    returningResult = [created];
+
+    await runCreateListing({ mode: "places", placeId: "place-123" });
+
+    const where = findFirstMock.mock.calls[0]?.[0]?.where;
+    const cols = columnsReferenced(where);
+    expect(cols).toContain("place_id");
+    expect(cols).toContain("moderation_status");
+  });
+
+  it("does NOT return a hidden/removed existing Place-ID row with created:false (#41 leak)", async () => {
+    // In production the `moderation_status = 'visible'` filter excludes the
+    // hidden/removed row at the DB, so the pre-insert dedup lookup misses and we
+    // proceed to insert. We model that filtered miss here (findFirst → undefined)
+    // while the row physically exists. The new add should succeed — the moderated
+    // row is NEVER surfaced.
+    findFirstResult = undefined; // visible-only filter hides the moderated row
+    const created = listingRow({ id: "readd-1" });
+    returningResult = [created];
+
+    const result = await runCreateListing({ mode: "places", placeId: "place-123" });
+
+    expect(result).toEqual({ listing: created, created: true });
+    expect(insertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("errors (not leaks) when a hidden row owns the Place ID and the insert conflicts", async () => {
+    // Re-add of a place that maps ONLY to a hidden/removed row: the visible-only
+    // pre-insert lookup misses → we attempt the insert → it conflicts on the
+    // UNIQUE place_id (`onConflictDoNothing` ⇒ empty returning) → the visible-only
+    // re-read ALSO misses (the owning row is moderated). We surface a clear,
+    // non-leaky "can't be added right now" error instead of returning the
+    // moderated row or a confusing null/success.
+    findFirstMock
+      .mockResolvedValueOnce(undefined) // pre-insert dedup miss (hidden row filtered)
+      .mockResolvedValueOnce(undefined); // post-conflict re-read also filtered
+    returningResult = []; // UNIQUE place_id conflict ⇒ no row returned
+
+    const promise = runCreateListing({ mode: "places", placeId: "place-123" });
+
+    await expect(promise).rejects.toThrow(/can.?t be added right now/i);
+    // Never returns the moderated row.
     expect(onConflictDoNothingMock).toHaveBeenCalledWith({ target: expect.anything() });
   });
 
