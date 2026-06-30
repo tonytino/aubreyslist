@@ -11,19 +11,17 @@ test("home page renders the app shell header, brand, and nav", async ({ page }) 
   await expect(homeLink).toBeVisible();
   await expect(homeLink).toHaveAttribute("href", "/");
 
-  // Primary navigation renders inside the header, and each item points at its
-  // real route (#96) so the active state is accurate.
+  // Primary navigation is a hamburger menu at every breakpoint (mobile-first).
+  // The landmark + trigger render server-side; the menu's items (covered by the
+  // SiteHeader unit test) live in a portaled dropdown, so we assert the trigger
+  // here rather than opening the menu (which would depend on hydration).
   const nav = page.getByRole("navigation", { name: "Primary" });
   await expect(nav).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Browse" })).toHaveAttribute("href", "/listings");
-  await expect(nav.getByRole("link", { name: "Add a listing" })).toHaveAttribute(
-    "href",
-    "/listings/new"
-  );
+  await expect(nav.getByRole("button", { name: "Open menu" })).toBeVisible();
 
-  // The sign-in entry point renders as the "Continue with Google" link for an
+  // The sign-in entry point renders as the compact "Log in" link for an
   // anonymous visitor (Google is the sole provider — ADR-006).
-  await expect(header.getByRole("link", { name: "Continue with Google" })).toBeVisible();
+  await expect(header.getByRole("link", { name: "Log in" })).toBeVisible();
 
   // The landing page hero renders its mission heading.
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

@@ -37,14 +37,14 @@ test.describe("mocked Google sign-in", () => {
 
     // The header now shows the authenticated state as the avatar account menu,
     // whose accessible name carries the visitor's name — and NOT the anonymous
-    // "Continue with Google" entry. The menu's contents (name, admin link, sign
-    // out) are covered by UserMenu's unit tests; this e2e only needs to confirm
-    // the sealed cookie produces the authenticated header for THIS user. We assert
-    // it from the server-rendered trigger, so it doesn't depend on hydration
-    // timing (opening the portal'd menu would).
+    // "Log in" entry. The menu's contents (name, moderation/admin link, sign out)
+    // are covered by UserMenu's unit tests; this e2e only needs to confirm the
+    // sealed cookie produces the authenticated header for THIS user. We assert it
+    // from the server-rendered trigger, so it doesn't depend on hydration timing
+    // (opening the portal'd menu would).
     await page.goto("/");
     const header = page.getByRole("banner");
-    await expect(header.getByRole("link", { name: "Continue with Google" })).toHaveCount(0);
+    await expect(header.getByRole("link", { name: "Log in" })).toHaveCount(0);
     await expect(
       header.getByRole("button", { name: `Account menu for ${user.name}` })
     ).toBeVisible();

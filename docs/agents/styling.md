@@ -34,13 +34,30 @@ exist for the class to render.
 - No component-scoped CSS files or CSS modules.
 - No `@apply` — compose utilities in JSX, not in CSS.
 
-## Responsive Design
+## Mobile-first (NON-NEGOTIABLE)
 
-Use Tailwind's mobile-first breakpoint prefixes:
+**Design and build mobile-first.** Start from the smallest screen and layer
+enhancements up with Tailwind's breakpoint prefixes — never the reverse. The
+unprefixed utility is the mobile base; `sm:`/`md:`/`lg:` add to it.
 
 ```tsx
-<div className="flex flex-col md:flex-row lg:gap-8" />
+{/* base = mobile; widen only at larger breakpoints */}
+<div className="flex flex-col gap-4 md:flex-row md:gap-8" />
 ```
+
+- **Minimum supported width: 375px (iPhone SE).** Every layout must work, with no
+  horizontal overflow or clipped content, down to 375px. Verify new UI at 375px,
+  not just at desktop.
+- **Prefer one consistent experience across breakpoints** over divergent
+  mobile/desktop designs, unless there's a clear reason to differ. Fewer
+  viewport-conditional branches means fewer places to regress.
+- **The site header is the canonical example** (`app/components/SiteHeader.tsx`):
+  a hamburger menu (left) + centred wordmark + right-aligned controls, identical
+  at every size. When a control can't fit at 375px, shrink it (smaller wordmark,
+  compact button) rather than introducing a separate desktop layout.
+- When you change a header/nav element's role, label, or visibility, re-check the
+  e2e selectors in `tests/e2e/` (and component tests) that target it — a
+  mobile-first restructure commonly moves an inline element into a menu.
 
 ## Dark Mode
 

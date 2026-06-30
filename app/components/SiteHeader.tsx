@@ -33,48 +33,27 @@ const NAV_ITEMS: readonly NavItem[] = [
  * loader) and passes the result into the presentational `UserMenu`, so the auth
  * state renders correctly on first paint with no useEffect/useState fetch.
  *
- * Layout is mobile-first: a hamburger dropdown holds the nav below `sm`, the
- * inline `<nav>` takes over at `sm` and up.
+ * Layout is MOBILE-FIRST and identical at every breakpoint (see
+ * docs/agents/styling.md → Mobile-first): a hamburger menu on the left holds the
+ * primary nav, the brand wordmark is centred, and the theme toggle + account
+ * menu sit on the right. The three-column grid (`1fr auto 1fr`) keeps the
+ * wordmark optically centred regardless of the side content. The
+ * `<nav aria-label="Primary">` wraps the hamburger trigger so the navigation
+ * landmark persists even though the items live in a portaled menu.
  */
 export function SiteHeader() {
   const { data: user } = useSuspenseQuery(currentUserQuery);
 
   return (
     <header className="border-b border-border">
-      <div className="mx-auto flex w-full max-w-6xl items-center gap-x-4 px-4 py-3 sm:gap-x-6 sm:px-6">
-        <Link to="/" aria-label="Aubrey's List home">
-          <Wordmark />
-        </Link>
-
-        {/* Desktop nav: inline links with icons + active state. */}
-        <nav aria-label="Primary" className="hidden sm:flex">
-          <ul className="flex items-center gap-x-5 text-sm font-medium text-muted-foreground">
-            {NAV_ITEMS.map((item) => (
-              <li key={item.label}>
-                <Link
-                  to={item.to}
-                  className="inline-flex items-center gap-1.5 hover:text-foreground"
-                  activeProps={{ className: "text-foreground" }}
-                >
-                  {item.Icon ? <item.Icon aria-hidden className="h-4 w-4" /> : null}
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <div className="ml-auto flex items-center gap-2">
-          {/* Mobile hamburger: same nav items inside a portal dropdown. */}
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-x-2 px-4 py-3 sm:px-6">
+        {/* Left: primary nav as a hamburger menu — the same experience at every
+            size. The nav items live in a portaled dropdown; the landmark wraps
+            the trigger so it persists. */}
+        <nav aria-label="Primary" className="justify-self-start">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Open menu"
-                className="sm:hidden"
-              >
+              <Button type="button" variant="ghost" size="icon" aria-label="Open menu">
                 <List aria-hidden className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
@@ -89,7 +68,19 @@ export function SiteHeader() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+        </nav>
 
+        {/* Centre: brand wordmark, links home. */}
+        <Link
+          to="/"
+          aria-label="Aubrey's List home"
+          className="justify-self-center whitespace-nowrap"
+        >
+          <Wordmark size="sm" />
+        </Link>
+
+        {/* Right: theme toggle + account menu / sign-in. */}
+        <div className="flex items-center justify-self-end gap-1 sm:gap-2">
           <ThemeToggle />
           <UserMenu user={user} />
         </div>

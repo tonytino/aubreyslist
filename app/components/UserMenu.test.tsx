@@ -73,21 +73,25 @@ describe("UserMenu", () => {
     expect(adminLink).toHaveAttribute("href", "/admin");
   });
 
-  it("hides the Admin link for a moderator", () => {
+  it("shows a Moderation link (not Admin) for a moderator", () => {
     const user: SessionUser = { ...baseUser, role: "moderator" };
     renderMenu(user);
     openMenu(user);
 
+    // Moderators reach /admin (their moderation queue) but the label is scoped
+    // to what they'll see — never the admin-only "Admin".
+    const modLink = screen.getByRole("menuitem", { name: "Moderation" });
+    expect(modLink).toHaveAttribute("href", "/admin");
     expect(screen.queryByRole("menuitem", { name: "Admin" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Admin")).not.toBeInTheDocument();
   });
 
-  it("hides the Admin link for a regular user", () => {
+  it("shows no admin/moderation link for a regular user", () => {
     const user: SessionUser = { ...baseUser, role: "user" };
     renderMenu(user);
     openMenu(user);
 
     expect(screen.queryByRole("menuitem", { name: "Admin" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Moderation" })).not.toBeInTheDocument();
   });
 
   it("shows Sign out for any logged-in user", () => {
@@ -107,10 +111,10 @@ describe("UserMenu", () => {
     expect(screen.getByText("ada@example.com")).toBeInTheDocument();
   });
 
-  it("shows Continue with Google and no avatar menu when logged out", () => {
+  it("shows a Log in link and no avatar menu when logged out", () => {
     renderMenu(null);
 
-    const cta = screen.getByRole("link", { name: /Continue with Google/ });
+    const cta = screen.getByRole("link", { name: "Log in" });
     expect(cta).toHaveAttribute("href", "/api/auth/google");
     expect(screen.queryByRole("button", { name: /Account menu/ })).not.toBeInTheDocument();
   });
