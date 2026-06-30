@@ -1,3 +1,5 @@
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "~/db/schema";
 
@@ -30,6 +32,9 @@ const h = vi.hoisted(() => ({
   // db.select(...).from(...).innerJoin(...).leftJoin(...x3).where(...).orderBy(...)
   orderByMock: vi.fn(),
   selectMock: vi.fn(),
+  // Captures the predicate the select chain binds at its terminal `.where()`
+  // (the open-flag filter), so we can assert it rather than passing it through.
+  state: { lastWhere: undefined as unknown },
 }));
 
 vi.mock("~/server/auth/current-user", () => ({
@@ -42,7 +47,8 @@ vi.mock("~/db/client", () => ({
 
 import { resolveModerationQueue } from "./queue";
 
-const { getCurrentUserMock, orderByMock, selectMock } = h;
+const { getCurrentUserMock, orderByMock, selectMock, state } = h;
+const dialect = new PgDialect();
 
 // --- Fixtures --------------------------------------------------------------
 
@@ -98,7 +104,10 @@ function baseRow(overrides: Partial<QueueDbRow>): QueueDbRow {
 /** Wire the select chain to resolve `rows` from the terminal `.orderBy()`. */
 function mockSelectRows(rows: QueueDbRow[]): void {
   orderByMock.mockResolvedValue(rows);
-  const where = vi.fn(() => ({ orderBy: orderByMock }));
+  const where = vi.fn((predicate: unknown) => {
+    state.lastWhere = predicate;
+    return { orderBy: orderByMock };
+  });
   const leftJoin3 = vi.fn(() => ({ where }));
   const leftJoin2 = vi.fn(() => ({ leftJoin: leftJoin3 }));
   const leftJoin1 = vi.fn(() => ({ leftJoin: leftJoin2 }));
@@ -108,6 +117,7 @@ function mockSelectRows(rows: QueueDbRow[]): void {
 }
 
 beforeEach(() => {
+  state.lastWhere = undefined;
   mockSelectRows([]);
 });
 
@@ -253,5 +263,20 @@ describe("resolveModerationQueue — queue shape", () => {
     if (result.access !== "granted") throw new Error("expected granted");
 
     expect(result.items).toEqual([]);
+  });
+
+  it("constrains the query to OPEN flags only (status = 'open')", async () => {
+    // The queue is a triage surface for OPEN flags only — resolved/dismissed/
+    // in-review flags have left it. Pin the terminal `.where()` predicate so
+    // dropping or widening `where(eq(flags.status, "open"))` fails here: the
+    // captured SQL must reference the flags.status column AND bind "open".
+    mockSelectRows([]);
+
+    await resolveModerationQueue();
+
+    expect(state.lastWhere).toBeDefined();
+    const query = dialect.sqlToQuery(state.lastWhere as SQL);
+    expect(query.sql.toLowerCase()).toContain("status");
+    expect(query.params).toContain("open");
   });
 });
