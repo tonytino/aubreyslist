@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CLAIM_ATTRIBUTE_LABELS,
   DEFAULT_STALENESS_MONTHS,
+  claimAttributeDescription,
   claimAttributeLabel,
   deriveHeadlineSafetyState,
   formatLastConfirmed,
@@ -47,6 +48,19 @@ describe("claimAttributeLabel", () => {
     for (const label of Object.values(CLAIM_ATTRIBUTE_LABELS)) {
       expect(label.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("claimAttributeDescription", () => {
+  it("returns the confirm/dispute clarifier for an ambiguous attribute (Celiac-safe, #175)", () => {
+    const description = claimAttributeDescription("celiac_safe_vs_gluten_friendly");
+    expect(description).toMatch(/celiac-safe/i);
+    expect(description).toMatch(/dispute/i);
+  });
+
+  it("returns null for self-evident attributes (no fabricated gloss)", () => {
+    expect(claimAttributeDescription("dedicated_fryer")).toBeNull();
+    expect(claimAttributeDescription("gf_substitutes")).toBeNull();
   });
 });
 

@@ -56,4 +56,30 @@ describe("ClaimTrustSummaryRow", () => {
     );
     expect(screen.queryByText("May be stale")).not.toBeInTheDocument();
   });
+
+  it("renders the confirm/dispute clarifier for an attribute that has one (Celiac-safe, #175)", () => {
+    render(
+      <ClaimTrustSummaryRow
+        attribute="celiac_safe_vs_gluten_friendly"
+        aggregate={{ confirmCount: 0, disputeCount: 0, lastConfirmedAt: null }}
+        now={NOW}
+      />
+    );
+    // The row label is the reframed "Celiac-safe" (exact — the clarifier below
+    // also contains "celiac-safe" lower-cased).
+    expect(screen.getByText("Celiac-safe", { exact: true })).toBeInTheDocument();
+    // The clarifier disambiguates what a vote means, so "confirm" is never vague.
+    expect(screen.getByText(/Confirm if the community vouches/)).toBeInTheDocument();
+  });
+
+  it("omits the clarifier for a self-evident attribute", () => {
+    render(
+      <ClaimTrustSummaryRow
+        attribute="dedicated_fryer"
+        aggregate={{ confirmCount: 0, disputeCount: 0, lastConfirmedAt: null }}
+        now={NOW}
+      />
+    );
+    expect(screen.queryByText(/Confirm if the community vouches/)).not.toBeInTheDocument();
+  });
 });
