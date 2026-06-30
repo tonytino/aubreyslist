@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useId } from "react";
+import { useId, useState } from "react";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import type { AdminSettingsView } from "~/server/admin/admin-view.fn";
 import type { AdminUserSummary } from "~/server/admin/list-users.fn";
 import { setIntakeMode } from "~/server/admin/set-intake-mode.fn";
@@ -109,7 +120,7 @@ function SettingsSection({ settings }: { settings: AdminSettingsView | null }) {
       description="Runtime configuration. Flip the listing-intake mode if the Places API nears its limit — the manual form is always a safe fallback (ADR-008)."
     >
       {settings ? (
-        <div className="mt-2 flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           <IntakeModeControl current={settings.intakeMode} />
           <SettingRow label="Staleness window" value={`${settings.stalenessMonths} months`} />
         </div>
@@ -139,7 +150,7 @@ function IntakeModeControl({ current }: { current: string }) {
   });
 
   return (
-    <div className="flex flex-col gap-1 rounded-card border border-border bg-background p-3">
+    <div className="flex flex-col gap-1 rounded-card border border-border bg-muted p-3">
       <label
         htmlFor={selectId}
         className="text-caption font-medium uppercase tracking-wide text-muted-foreground"
@@ -161,7 +172,7 @@ function IntakeModeControl({ current }: { current: string }) {
       </select>
       {mutation.isPending ? <p className="text-caption text-muted-foreground">Saving…</p> : null}
       {mutation.isError ? (
-        <p role="alert" className="text-caption text-incident">
+        <p role="alert" className="text-caption text-destructive">
           {mutation.error instanceof Error
             ? mutation.error.message
             : "Could not update the intake mode. Please try again."}
@@ -204,12 +215,12 @@ function RoleManagement() {
   const usersQuery = useQuery(adminUsersQueryOptions());
 
   if (usersQuery.isPending) {
-    return <p className="mt-2 text-body-sm text-muted-foreground">Loading accounts…</p>;
+    return <p className="text-body-sm text-muted-foreground">Loading accounts…</p>;
   }
 
   if (usersQuery.isError) {
     return (
-      <p role="alert" className="mt-2 text-body-sm text-incident">
+      <p role="alert" className="text-body-sm text-destructive">
         {usersQuery.error instanceof Error
           ? usersQuery.error.message
           : "Could not load the user directory. Please try again."}
@@ -220,11 +231,11 @@ function RoleManagement() {
   const accounts = usersQuery.data;
 
   if (accounts.length === 0) {
-    return <p className="mt-2 text-body-sm text-muted-foreground">No accounts yet.</p>;
+    return <p className="text-body-sm text-muted-foreground">No accounts yet.</p>;
   }
 
   return (
-    <ul className="mt-2 flex flex-col gap-3">
+    <ul className="flex flex-col gap-3">
       {accounts.map((account) => (
         <li key={account.id}>
           <RoleRow account={account} />
@@ -235,12 +246,12 @@ function RoleManagement() {
 }
 
 /**
- * One directory row: the account's name/email, its current role (shown as TEXT,
- * never colour alone), and — for non-admin accounts — a grant/revoke control.
+ * One directory row: the account's name/email, its current role (shown as a
+ * TEXT `Badge`, never colour alone), and — for non-admin accounts — a
+ * grant/revoke control gated behind a confirmation dialog.
  */
 function RoleRow({ account }: { account: AdminUserSummary }) {
   const queryClient = useQueryClient();
-  const selectId = useId();
   const errorId = useId();
 
   const mutation = useMutation({
@@ -249,15 +260,13 @@ function RoleRow({ account }: { account: AdminUserSummary }) {
   });
 
   return (
-    <article className="flex flex-col gap-2 rounded-card border border-border bg-background p-3">
+    <article className="flex flex-col gap-2 rounded-card border border-border bg-muted p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-col">
           <span className="text-body font-semibold text-foreground">{account.name}</span>
           <span className="text-caption text-muted-foreground">{account.email}</span>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-chip bg-brand-soft px-2.5 py-1 text-caption font-medium text-brand">
-          {ROLE_LABEL[account.role]}
-        </span>
+        <Badge variant="secondary">{ROLE_LABEL[account.role]}</Badge>
       </div>
 
       {account.role === "admin" ? (
@@ -267,38 +276,23 @@ function RoleRow({ account }: { account: AdminUserSummary }) {
           Admins are seeded out-of-band and can't be changed here.
         </p>
       ) : (
-        // A labelled grant/revoke control. Meaning is in the label + option text,
-        // never colour. Only non-admin accounts reach here, so the current value
-        // is always one of the two assignable roles.
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={selectId}
-            className="text-caption font-medium uppercase tracking-wide text-muted-foreground"
-          >
-            Set role for {account.name}
-          </label>
-          <select
-            id={selectId}
-            value={account.role as AssignableRole}
-            disabled={mutation.isPending}
-            aria-describedby={mutation.isError ? errorId : undefined}
-            onChange={(event) => mutation.mutate(event.target.value as AssignableRole)}
-            className="mt-1 w-fit rounded-card border border-border bg-background px-3 py-2 text-body font-semibold text-foreground disabled:opacity-50"
-          >
-            <option value="user">User</option>
-            <option value="moderator">Moderator</option>
-          </select>
-          {mutation.isPending ? (
-            <p className="text-caption text-muted-foreground">Saving…</p>
-          ) : null}
-        </div>
+        // A grant/revoke control gated behind a confirmation dialog (the dialog
+        // is UI-only; the server fn still re-gates to admin per ADR-010). Only
+        // non-admin accounts reach here, so the role flip is unambiguous: a
+        // `user` is promoted to `moderator`, a `moderator` is demoted to `user`.
+        <RoleChangeControl
+          account={account}
+          pending={mutation.isPending}
+          errorId={mutation.isError ? errorId : undefined}
+          onConfirm={(role) => mutation.mutate(role)}
+        />
       )}
 
       {mutation.isSuccess ? (
         <output className="text-caption text-foreground">Role updated for {account.name}.</output>
       ) : null}
       {mutation.isError ? (
-        <p id={errorId} role="alert" className="text-caption text-incident">
+        <p id={errorId} role="alert" className="text-caption text-destructive">
           {mutation.error instanceof Error
             ? mutation.error.message
             : "Could not update the role. Please try again."}
@@ -308,10 +302,89 @@ function RoleRow({ account }: { account: AdminUserSummary }) {
   );
 }
 
+/**
+ * The grant/revoke trigger + confirmation dialog for one non-admin account.
+ *
+ * Role changes are sensitive (granting moderator powers, or stripping them), so
+ * the actual `setUserRole` mutation only fires after the admin explicitly
+ * confirms in a `Dialog` that names what will happen. The dialog GATES the click
+ * — it is not the authorization: `setUserRole` re-runs `requireCurrentRole`
+ * server-side regardless (ADR-010). Revoking (demoting to `user`) uses the
+ * `destructive` confirm variant; granting moderator uses the default variant.
+ */
+function RoleChangeControl({
+  account,
+  pending,
+  errorId,
+  onConfirm,
+}: {
+  account: AdminUserSummary;
+  pending: boolean;
+  errorId: string | undefined;
+  onConfirm: (role: AssignableRole) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // Only non-admin accounts reach here, so the current role is one of the two
+  // assignable roles; the flip is its opposite.
+  const isModerator = account.role === "moderator";
+  const nextRole: AssignableRole = isModerator ? "user" : "moderator";
+  const triggerLabel = isModerator ? "Revoke moderator" : "Make moderator";
+
+  function handleConfirm() {
+    onConfirm(nextRole);
+    setOpen(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button
+        type="button"
+        size="sm"
+        variant={isModerator ? "destructive" : "outline"}
+        disabled={pending}
+        aria-describedby={errorId}
+        aria-label={`Set role for ${account.name}`}
+        onClick={() => setOpen(true)}
+      >
+        {triggerLabel}
+      </Button>
+      {pending ? <p className="text-caption text-muted-foreground">Saving…</p> : null}
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {isModerator
+              ? `Revoke moderator from ${account.name}?`
+              : `Make ${account.name} a moderator?`}
+          </DialogTitle>
+          <DialogDescription>
+            {isModerator
+              ? `${account.name} (${account.email}) will lose access to the moderation queue and all moderation actions. They will become a regular user.`
+              : `${account.name} (${account.email}) will be able to view the moderation queue and hide, remove, or dismiss any content. Only grant this to people you trust.`}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            type="button"
+            variant={isModerator ? "destructive" : "default"}
+            onClick={handleConfirm}
+          >
+            {triggerLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** One read-only setting as a labelled value pair. */
 function SettingRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-card border border-border bg-background p-3">
+    <div className="flex flex-col gap-1 rounded-card border border-border bg-muted p-3">
       <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </span>

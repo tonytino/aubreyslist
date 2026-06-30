@@ -1,8 +1,19 @@
+import { Funnel } from "@phosphor-icons/react/dist/ssr";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { ListingCard } from "~/components/listing/ListingCard";
 import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "~/components/ui/sheet";
 import {
   BROWSE_PAGE_SIZE,
   type UserCoords,
@@ -173,7 +184,18 @@ function BrowseListings() {
       </header>
 
       <div className="mt-section flex flex-col gap-4">
-        <TaxonomyFilter selected={attrs} onToggle={toggleAttribute} onClear={clearFilters} />
+        {/* Mobile (<sm): the filter lives behind a "Filters" Sheet to keep the
+            list scannable on small screens. Desktop (sm+): the same filter is
+            inline so the checkboxes are always reachable (and the browse e2e at
+            the default desktop viewport finds them directly). The URL-driven,
+            <fieldset>/<legend>/checkbox markup is identical in both placements —
+            it is the SAME TaxonomyFilter component, just differently presented. */}
+        <FilterControls
+          attrs={attrs}
+          onToggle={toggleAttribute}
+          onClear={clearFilters}
+          activeCount={attrs.length}
+        />
         <SortControl sort={sort} onChange={changeSort} prompting={geo.status === "prompting"} />
         {geo.error ? <GeolocationNotice message={geo.error} /> : null}
       </div>
@@ -184,6 +206,69 @@ function BrowseListings() {
         <BrowseResults data={data} attrs={attrs} coords={coords} />
       )}
     </div>
+  );
+}
+
+/**
+ * Responsive placement for the GF taxonomy filter (#35). Desktop (sm+) shows the
+ * `TaxonomyFilter` inline so its checkboxes are always present and reachable
+ * (the browse e2e runs at the default desktop viewport and clicks them directly).
+ * Mobile (<sm) collapses it behind a "Filters" Sheet to keep the list scannable;
+ * a count Badge surfaces how many attributes are active so the affordance is
+ * honest about hidden state. Crucially BOTH paths render the SAME component, so
+ * the URL-driven, accessible <fieldset>/<legend>/checkbox markup is preserved
+ * verbatim in either placement — the Sheet is purely a mobile presentation shell.
+ *
+ * Only one copy is in the DOM at a time at a given viewport: the inline filter is
+ * `hidden` below sm, and the Sheet's content (the mobile copy) is unmounted by
+ * Radix until the Sheet is opened. So the desktop checkboxes are never ambiguous.
+ */
+function FilterControls({
+  attrs,
+  onToggle,
+  onClear,
+  activeCount,
+}: {
+  attrs: ClaimAttribute[];
+  onToggle: (attribute: ClaimAttribute) => void;
+  onClear: () => void;
+  activeCount: number;
+}) {
+  return (
+    <>
+      {/* Desktop / sm+: inline filter. */}
+      <div className="hidden sm:block">
+        <TaxonomyFilter selected={attrs} onToggle={onToggle} onClear={onClear} />
+      </div>
+
+      {/* Mobile / <sm: filter behind a Sheet. */}
+      <div className="sm:hidden">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full justify-center">
+              <Funnel weight="bold" aria-hidden="true" />
+              Filters
+              {activeCount > 0 ? (
+                <Badge variant="secondary" className="ml-1">
+                  {activeCount}
+                </Badge>
+              ) : null}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Filter listings</SheetTitle>
+              <SheetDescription>
+                Narrow the list to places affirmed for the attributes you pick.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="px-4 pb-4">
+              <TaxonomyFilter selected={attrs} onToggle={onToggle} onClear={onClear} />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   );
 }
 
@@ -304,13 +389,14 @@ function Pagination({
   return (
     <nav aria-label="Pagination" className="mt-section flex items-center justify-between gap-3">
       {hasPrev ? (
-        <Link
-          to="/listings"
-          search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort, lat, lng }}
-          className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface"
-        >
-          ← Previous
-        </Link>
+        <Button variant="outline" size="sm" asChild>
+          <Link
+            to="/listings"
+            search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort, lat, lng }}
+          >
+            ← Previous
+          </Link>
+        </Button>
       ) : (
         <span aria-hidden="true" />
       )}
@@ -318,13 +404,14 @@ function Pagination({
       <span className="text-body-sm text-muted-foreground">Page {data.page}</span>
 
       {hasNext ? (
-        <Link
-          to="/listings"
-          search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort, lat, lng }}
-          className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface"
-        >
-          Next →
-        </Link>
+        <Button variant="outline" size="sm" asChild>
+          <Link
+            to="/listings"
+            search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort, lat, lng }}
+          >
+            Next →
+          </Link>
+        </Button>
       ) : (
         <span aria-hidden="true" />
       )}
@@ -352,13 +439,9 @@ function BrowseEmptyState({
           No restaurants meet every attribute you selected with positive community consensus yet.
           Try removing a filter to widen your search.
         </p>
-        <button
-          type="button"
-          onClick={onClear}
-          className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong"
-        >
+        <Button type="button" onClick={onClear}>
           Clear filters
-        </button>
+        </Button>
       </div>
     );
   }
@@ -370,12 +453,9 @@ function BrowseEmptyState({
         No restaurants have been added to the Denver directory yet. Be the first — add a place you
         trust (or want the community to vet) and start the trust record.
       </p>
-      <Link
-        to="/listings/new"
-        className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong"
-      >
-        Add a listing
-      </Link>
+      <Button asChild>
+        <Link to="/listings/new">Add a listing</Link>
+      </Button>
     </div>
   );
 }

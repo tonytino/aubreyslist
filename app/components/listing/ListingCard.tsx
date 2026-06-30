@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { SafetySignal } from "~/components/SafetySignal";
+import { Badge } from "~/components/ui/badge";
 import type { Listing } from "~/db/schema";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
 
@@ -36,7 +37,7 @@ export function ListingCard({ listing, glance }: ListingCardProps) {
       <Link
         to="/listings/$id"
         params={{ id: listing.id }}
-        className="flex flex-col gap-3 rounded-card border border-border bg-surface p-gutter transition-colors hover:border-brand-ring focus-visible:border-brand-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+        className="flex flex-col gap-3 rounded-card border border-border bg-card text-card-foreground p-gutter shadow-sm transition-colors hover:border-brand-ring focus-visible:border-brand-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
       >
         <div className="flex flex-col gap-1">
           <h3 className="text-title font-semibold text-foreground">{listing.name}</h3>
@@ -49,9 +50,12 @@ export function ListingCard({ listing, glance }: ListingCardProps) {
           ) : (
             // Honest empty state: no celiac claim / no attestation evidence yet.
             // Plain text label — meaning never rests on colour (styling.md).
-            <span className="inline-flex items-center rounded-chip border border-dashed border-border bg-background px-2.5 py-1 text-body-sm font-medium text-muted-foreground">
+            <Badge
+              variant="outline"
+              className="border-dashed px-2.5 py-1 text-body-sm font-medium text-muted-foreground"
+            >
               Not yet attested
-            </span>
+            </Badge>
           )}
 
           {/* Recent harm flags the card regardless of older confirmations. */}

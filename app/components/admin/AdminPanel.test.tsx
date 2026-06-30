@@ -5,9 +5,9 @@ import {
   createRootRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminSettingsView } from "~/server/admin/admin-view.fn";
 
 /**
@@ -72,6 +72,17 @@ function account(
     ...overrides,
   };
 }
+
+// Radix Dialog (the role-change confirm) drives focus/scroll through APIs that
+// jsdom does not implement; stub them so the dialog opens on a fired click.
+beforeAll(() => {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
+});
 
 beforeEach(() => {
   // Default directory: one promotable user. Role tests override per-case.
@@ -186,14 +197,20 @@ describe("AdminPanel — role management (#142)", () => {
     expect(screen.getByText(/can't be changed here/i)).toBeInTheDocument();
   });
 
-  it("calls setUserRole with the chosen role when an admin promotes a user", async () => {
+  it("calls setUserRole with the chosen role when an admin promotes a user (via confirm dialog)", async () => {
     mocks.listUsers.mockResolvedValue([
       account({ id: "u-target", name: "Sam User", email: "sam@example.com", role: "user" }),
     ]);
     renderInApp(<AdminPanel viewerRole="admin" settings={settings()} />);
 
-    const select = await screen.findByLabelText(/set role for sam user/i);
-    fireEvent.change(select, { target: { value: "moderator" } });
+    // The role control now opens a confirmation dialog; the mutation must NOT
+    // fire until the admin explicitly confirms inside it (the dialog gates the
+    // click — it is not the authorization; the server fn still re-gates).
+    fireEvent.click(await screen.findByLabelText(/set role for sam user/i));
+    expect(mocks.setUserRole).not.toHaveBeenCalled();
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /make moderator/i }));
 
     await waitFor(() => {
       expect(mocks.setUserRole).toHaveBeenCalledTimes(1);
@@ -203,6 +220,19 @@ describe("AdminPanel — role management (#142)", () => {
     });
   });
 
+  it("does NOT fire the mutation when the admin cancels the confirm dialog", async () => {
+    mocks.listUsers.mockResolvedValue([
+      account({ id: "u-target", name: "Sam User", email: "sam@example.com", role: "user" }),
+    ]);
+    renderInApp(<AdminPanel viewerRole="admin" settings={settings()} />);
+
+    fireEvent.click(await screen.findByLabelText(/set role for sam user/i));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+
+    expect(mocks.setUserRole).not.toHaveBeenCalled();
+  });
+
   it("surfaces the last-admin 409 as an inline alert rather than crashing", async () => {
     mocks.listUsers.mockResolvedValue([
       account({ id: "u-mod", name: "Mo Mod", email: "mo@example.com", role: "moderator" }),
@@ -210,9 +240,10 @@ describe("AdminPanel — role management (#142)", () => {
     mocks.setUserRole.mockRejectedValue(new Error("Cannot demote the last remaining admin."));
     renderInApp(<AdminPanel viewerRole="admin" settings={settings()} />);
 
-    fireEvent.change(await screen.findByLabelText(/set role for mo mod/i), {
-      target: { value: "user" },
-    });
+    // Demoting a moderator is a destructive role change → confirm in the dialog.
+    fireEvent.click(await screen.findByLabelText(/set role for mo mod/i));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /revoke moderator/i }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Cannot demote the last remaining admin.");

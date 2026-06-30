@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { SafetySignal } from "~/components/SafetySignal";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import type { Incident } from "~/db/schema";
 import { removeIncident, submitIncident, updateIncident } from "~/server/incidents/incidents.fn";
 import { INCIDENT_SEVERITIES } from "~/trust/incident-recency";
@@ -104,7 +106,7 @@ function IncidentItem({
   const [isEditing, setIsEditing] = useState(false);
 
   return (
-    <li className="flex flex-col gap-2 rounded-card border border-border bg-background p-gutter">
+    <li className="flex flex-col gap-2 rounded-xl border border-border bg-card p-gutter text-card-foreground shadow-sm">
       {isEditing ? (
         <IncidentEditForm
           listingId={listingId}
@@ -118,9 +120,9 @@ function IncidentItem({
               {formatIncidentDate(incident.occurredOn)}
             </span>
             {incident.severity ? (
-              <span className="rounded-chip bg-incident-soft px-2.5 py-1 text-caption font-medium text-incident">
+              <Badge className="rounded-chip border-incident/30 bg-incident-soft text-incident">
                 {formatSeverity(incident.severity)}
-              </span>
+              </Badge>
             ) : null}
           </div>
           {incident.note ? (
@@ -175,22 +177,24 @@ function IncidentOwnerControls({
           Retract this report? This cannot be undone.
         </p>
         <div className="flex gap-2">
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant="destructive"
             disabled={retract.isPending}
             onClick={() => retract.mutate()}
-            className="inline-flex items-center justify-center rounded-card bg-incident px-4 py-2 text-body-sm font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-50"
           >
             {retract.isPending ? "Retracting…" : "Yes, retract"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="sm"
+            variant="outline"
             disabled={retract.isPending}
             onClick={() => setConfirmingDelete(false)}
-            className="inline-flex items-center justify-center rounded-card border border-border px-4 py-2 text-body-sm font-semibold text-foreground hover:bg-surface disabled:opacity-50"
           >
             Cancel
-          </button>
+          </Button>
         </div>
         {retract.isError ? (
           <p role="alert" className="text-body-sm text-incident">
@@ -204,21 +208,19 @@ function IncidentOwnerControls({
   }
 
   return (
-    <div className="flex gap-3">
-      <button
-        type="button"
-        onClick={onEdit}
-        className="text-body-sm font-medium underline underline-offset-4 hover:text-brand"
-      >
+    <div className="flex gap-1">
+      <Button type="button" size="sm" variant="link" className="px-0" onClick={onEdit}>
         Edit
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        size="sm"
+        variant="link"
+        className="px-0 text-incident"
         onClick={() => setConfirmingDelete(true)}
-        className="text-body-sm font-medium text-incident underline underline-offset-4 hover:opacity-90"
       >
         Retract
-      </button>
+      </Button>
     </div>
   );
 }
@@ -319,21 +321,12 @@ function IncidentEditForm({
       ) : null}
 
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={!canSubmit || save.isPending}
-          className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong disabled:opacity-50"
-        >
+        <Button type="submit" disabled={!canSubmit || save.isPending}>
           {save.isPending ? "Saving…" : "Save changes"}
-        </button>
-        <button
-          type="button"
-          disabled={save.isPending}
-          onClick={onDone}
-          className="inline-flex items-center justify-center rounded-card border border-border px-5 py-2.5 text-body font-semibold text-foreground hover:bg-surface disabled:opacity-50"
-        >
+        </Button>
+        <Button type="button" variant="outline" disabled={save.isPending} onClick={onDone}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -370,7 +363,7 @@ function IncidentForm({ listingId }: { listingId: string }) {
   return (
     <form
       aria-label="Report an incident"
-      className="flex flex-col gap-3 rounded-card border border-border bg-surface p-gutter"
+      className="flex flex-col gap-3 rounded-card border border-border bg-muted p-gutter"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit) {
@@ -433,13 +426,9 @@ function IncidentForm({ listingId }: { listingId: string }) {
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={!canSubmit || report.isPending}
-        className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong disabled:opacity-50"
-      >
+      <Button type="submit" className="self-start" disabled={!canSubmit || report.isPending}>
         {report.isPending ? "Submitting…" : "Submit report"}
-      </button>
+      </Button>
     </form>
   );
 }

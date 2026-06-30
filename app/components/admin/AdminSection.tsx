@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Badge } from "~/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader } from "~/components/ui/card";
 
 interface AdminSectionProps {
   /** Visible section heading (e.g. "App settings"). */
@@ -18,31 +20,29 @@ interface AdminSectionProps {
 /**
  * Clearly-labelled section slot for the admin panel shell (issue #38).
  *
- * Mirrors `listing/TrustPlaceholder` so the admin shell reads consistently with
- * the rest of the app: a `<section>` with an explicit heading (navigable by
- * landmark/heading) and an optional text status chip. The future features
- * (#16 role management, #24 settings write UI, #40 moderation queue) render
- * their real UI into the `children` slot without changing this frame.
+ * Built on the shared `Card` primitive so the admin shell reads consistently
+ * with the rest of the app (home, listings) and is correct in light AND dark
+ * mode via the semantic `bg-card` / `text-card-foreground` tokens. A `<section>`
+ * landmark wraps the card and is labelled (via `aria-labelledby`) by the card's
+ * `<h2>`, so the shell stays navigable by landmark/heading. Future features
+ * render their real UI into the `children` slot without changing this frame.
  */
 export function AdminSection({ title, description, badge, children }: AdminSectionProps) {
   const headingId = `${slugify(title)}-heading`;
   return (
-    <section
-      aria-labelledby={headingId}
-      className="flex flex-col gap-2 rounded-card border border-border bg-surface p-gutter"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 id={headingId} className="text-title">
-          {title}
-        </h2>
-        {badge ? (
-          <span className="rounded-chip bg-brand-soft px-2.5 py-1 text-caption font-medium text-brand">
-            {badge}
-          </span>
-        ) : null}
-      </div>
-      <p className="text-body-sm text-muted-foreground">{description}</p>
-      {children}
+    <section aria-labelledby={headingId}>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 id={headingId} className="text-title font-semibold leading-none">
+              {title}
+            </h2>
+            {badge ? <Badge variant="secondary">{badge}</Badge> : null}
+          </div>
+          <CardDescription>{description}</CardDescription>
+        </CardHeader>
+        {children ? <CardContent>{children}</CardContent> : null}
+      </Card>
     </section>
   );
 }

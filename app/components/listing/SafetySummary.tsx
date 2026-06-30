@@ -37,7 +37,7 @@ export function SafetySummary({ state }: SafetySummaryProps) {
       {state ? (
         <SafetySignal state={state} variant="solid" className="text-body self-start px-3 py-1.5" />
       ) : (
-        <div className="flex flex-col gap-1 rounded-card border border-dashed border-border bg-surface p-gutter">
+        <div className="flex flex-col gap-1 rounded-card border border-dashed border-border bg-muted p-gutter">
           <p className="text-body font-semibold text-foreground">Not yet attested</p>
           <p className="text-body-sm text-muted-foreground">
             No one has confirmed yet whether this restaurant is celiac-safe or only gluten-friendly.

@@ -2,6 +2,17 @@ import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-q
 import { Link } from "@tanstack/react-router";
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import {
   dismissFlagAction,
   hideContentAction,
@@ -57,7 +68,7 @@ export function ModerationQueue() {
   }
 
   return (
-    <ul className="mt-2 flex flex-col gap-3">
+    <ul className="flex flex-col gap-3">
       {items.map((item) => (
         <li key={item.id}>
           <QueueRow item={item} />
@@ -71,7 +82,7 @@ export function ModerationQueue() {
 function QueueRow({ item }: { item: QueueItem }) {
   const { target } = item;
   return (
-    <article className="flex flex-col gap-2 rounded-card border border-border bg-background p-3">
+    <article className="flex flex-col gap-2 rounded-card border border-border bg-muted p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <TargetChip type={target.type} />
         <time
@@ -141,6 +152,13 @@ function buildActionPayload(target: QueueTarget, flagId: string): ActionPayload 
  * the now-resolved/dismissed flag drops out — a simple, always-correct refresh
  * (the acted-on row leaves the open-flags set). An inline alert surfaces any
  * error; controls disable while a mutation is in flight.
+ *
+ * Dismiss (which only clears the flag, leaving the content untouched) fires
+ * directly. Hide and Remove DO change what the public sees, so they are gated
+ * behind a confirmation `Dialog` that names the consequence before the existing
+ * mutation fires — Remove uses the `destructive` confirm variant. The dialog
+ * only gates the click; it is NOT the authorization (the server fn re-gates to
+ * moderator+ either way).
  */
 function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget }) {
   const queryClient = useQueryClient();
@@ -148,6 +166,7 @@ function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget 
   const [error, setError] = useState<string | null>(null);
 
   const payload = buildActionPayload(target, flagId);
+  const targetLabel = TARGET_CONFIG[target.type].label.toLowerCase();
 
   function onError(err: unknown) {
     setError(
@@ -183,30 +202,39 @@ function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget 
   return (
     <div className="mt-1 flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
-        <ActionButton
-          label="Dismiss"
-          tone="neutral"
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
           disabled={pending}
           onClick={() => dismiss.mutate()}
-          icon={<DismissIcon />}
-        />
-        <ActionButton
+        >
+          <DismissIcon />
+          <span>Dismiss</span>
+        </Button>
+        <ConfirmActionButton
           label="Hide"
-          tone="caution"
-          disabled={pending}
-          onClick={() => hide.mutate()}
           icon={<HideIcon />}
-        />
-        <ActionButton
-          label="Remove"
-          tone="danger"
           disabled={pending}
-          onClick={() => remove.mutate()}
+          variant="outline"
+          confirmVariant="default"
+          title="Hide this content?"
+          description={`This ${targetLabel} will be hidden from the public listing while it stays under review. You can restore it later. The flag will be marked resolved.`}
+          onConfirm={() => hide.mutate()}
+        />
+        <ConfirmActionButton
+          label="Remove"
           icon={<RemoveIcon />}
+          disabled={pending}
+          variant="destructive"
+          confirmVariant="destructive"
+          title="Remove this content?"
+          description={`This ${targetLabel} will be removed and will no longer appear in the listing. This is the strongest moderation action — only use it for content that clearly violates the rules.`}
+          onConfirm={() => remove.mutate()}
         />
       </div>
       {error ? (
-        <p id={errorId} role="alert" className="text-caption text-incident">
+        <p id={errorId} role="alert" className="text-caption text-destructive">
           {error}
         </p>
       ) : null}
@@ -214,37 +242,68 @@ function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget 
   );
 }
 
-/** Tailwind classes per action tone — colour is REINFORCEMENT, never the only cue. */
-const ACTION_TONE: Record<"neutral" | "caution" | "danger", string> = {
-  neutral: "border-border text-foreground hover:bg-surface",
-  caution: "border-border text-foreground hover:bg-surface",
-  danger: "border-incident text-incident hover:bg-incident/10",
-};
-
-/** A single moderation action: icon SHAPE + visible TEXT label (never colour alone). */
-function ActionButton({
+/**
+ * A moderation action whose click is gated behind a confirmation `Dialog` that
+ * names the consequence (icon SHAPE + visible TEXT label, never colour alone).
+ * The dialog only gates the click — the underlying mutation (and the server-side
+ * moderator+ gate it re-runs) is unchanged. Destructive actions pass
+ * `variant="destructive"` for both the trigger and the confirm button.
+ */
+function ConfirmActionButton({
   label,
-  tone,
-  disabled,
-  onClick,
   icon,
+  disabled,
+  variant,
+  confirmVariant,
+  title,
+  description,
+  onConfirm,
 }: {
   label: string;
-  tone: "neutral" | "caution" | "danger";
-  disabled: boolean;
-  onClick: () => void;
   icon: ReactNode;
+  disabled: boolean;
+  variant: "outline" | "destructive";
+  confirmVariant: "default" | "destructive";
+  title: string;
+  description: string;
+  onConfirm: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+
+  function handleConfirm() {
+    onConfirm();
+    setOpen(false);
+  }
+
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-chip border px-2.5 py-1 text-caption font-medium disabled:opacity-50 ${ACTION_TONE[tone]}`}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button
+        type="button"
+        variant={variant}
+        size="sm"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        {icon}
+        <span>{label}</span>
+      </Button>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button type="button" variant={confirmVariant} onClick={handleConfirm}>
+            {label}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -358,10 +417,10 @@ function ActionIcon({ children }: { children: ReactNode }) {
 function TargetChip({ type }: { type: QueueTargetType }) {
   const config = TARGET_CONFIG[type];
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-chip bg-brand-soft px-2.5 py-1 text-caption font-medium text-brand">
+    <Badge variant="secondary">
       {config.icon}
       <span>{config.label}</span>
-    </span>
+    </Badge>
   );
 }
 

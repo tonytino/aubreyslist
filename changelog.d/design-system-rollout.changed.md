@@ -1,0 +1,2 @@
+- `[manual]` Rolled the design system across the core product surfaces: the browse list + listing cards, the listing-detail page, and the admin/moderation UI now use the shadcn primitives and semantic tokens, so they're cohesive and correct in dark mode. Trust display (ADR-007/008) and RBAC (ADR-010) behavior are unchanged — presentation only.
+- `[manual]` Added a `Sheet` primitive (used for the mobile browse-filter drawer) and confirmation `Dialog`s for destructive admin/moderation actions (role changes, content hide/remove).
