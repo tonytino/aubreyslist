@@ -46,6 +46,12 @@ export const LABELS = [
     description: "Maintenance, cleanup, or tooling change",
   },
   { name: "type:docs", color: "0052cc", description: "Documentation change" },
+  {
+    name: "type:epic",
+    color: "5319e7",
+    description:
+      "A tracked epic — a parent grouping of work-item sub-issues; not directly claimable",
+  },
 
   // ── Size ────────────────────────────────────────────────────────────────────
   // Scope for a single agent working independently in one session.
