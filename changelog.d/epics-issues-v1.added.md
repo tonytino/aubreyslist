@@ -1,0 +1,1 @@
+- `[manual]` Added a `type:epic` label (so epics filter out of the claimable issue list), a `docs/agents/issues.md` guide to epic/sub-issue organization, and a `docs/product/v1-readiness.md` checklist gating the v1.0.0 cut.

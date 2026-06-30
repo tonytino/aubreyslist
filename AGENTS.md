@@ -21,8 +21,10 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Task involves...                              | Read this first               |
 | --------------------------------------------- | ----------------------------- |
 | Understanding what/why we're building         | `docs/product/overview.md`    |
+| Cutting the v1 release (readiness checklist)   | `docs/product/v1-readiness.md` |
 | Domain: listings, GF taxonomy, trust, roles   | `docs/agents/domain.md`       |
 | Finding and claiming work                     | `docs/agents/tasks.md`        |
+| Epics, sub-issues, organizing the issue list  | `docs/agents/issues.md`       |
 | Orchestrating agents, reviewing agent output  | `docs/agents/orchestration.md` |
 | Routes, pages, navigation                     | `docs/agents/routing.md`      |
 | API endpoints, server logic                   | `docs/agents/api.md`          |
