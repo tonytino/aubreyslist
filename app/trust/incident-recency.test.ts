@@ -1,3 +1,4 @@
+import workerThreads from "node:worker_threads";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   RECENT_INCIDENT_WINDOW_DAYS,
@@ -166,34 +167,48 @@ describe("toCalendarDayString — driver date normalization (issue #45)", () => 
   });
 });
 
-describe("toCalendarDayString — positive-offset TZ regression (issue #144)", () => {
-  // Force a positive-offset runtime so a UTC-getter regression (which would
-  // yield the day BEFORE the stored one) is caught WITHOUT the DB-gated
-  // integration test. Setting `process.env.TZ` is test tooling (the one allowed
-  // exception to the no-`process.env` rule); newly constructed Dates pick it up.
-  // Default to UTC (the prod/CI invariant) when TZ is unset so we always restore
-  // to a sane, non-positive offset rather than reintroducing a stray "undefined".
-  const originalTz = process.env.TZ ?? "UTC";
-  beforeAll(() => {
-    process.env.TZ = "Asia/Tokyo";
-  });
-  afterAll(() => {
-    // Restore so no other suite inherits the forced TZ.
-    process.env.TZ = originalTz;
-  });
+// Reassigning `process.env.TZ` at runtime is only honored by a fresh child
+// process — vitest's default `forks` pool (used by `pnpm test`/preflight) and
+// the real CI. Inside a worker_thread the V8 timezone cache is already warm and
+// does NOT re-read TZ, so this positive-offset block CANNOT exercise its
+// regression there (reproduces with `vitest run --pool=threads`). Stryker's
+// vitest-runner hard-codes the threads pool, so we skip ONLY this TZ block under
+// worker threads, detected via `!worker_threads.isMainThread`: it is `false` in a
+// forks child (the block runs as normal) and `true` in a threads worker (the
+// block skips). The rest of the suite still runs under Stryker, so
+// incident-recency.ts stays mutation-covered.
+const isWorkerThread = !workerThreads.isMainThread;
+describe.skipIf(isWorkerThread)(
+  "toCalendarDayString — positive-offset TZ regression (issue #144)",
+  () => {
+    // Force a positive-offset runtime so a UTC-getter regression (which would
+    // yield the day BEFORE the stored one) is caught WITHOUT the DB-gated
+    // integration test. Setting `process.env.TZ` is test tooling (the one allowed
+    // exception to the no-`process.env` rule); newly constructed Dates pick it up.
+    // Default to UTC (the prod/CI invariant) when TZ is unset so we always restore
+    // to a sane, non-positive offset rather than reintroducing a stray "undefined".
+    const originalTz = process.env.TZ ?? "UTC";
+    beforeAll(() => {
+      process.env.TZ = "Asia/Tokyo";
+    });
+    afterAll(() => {
+      // Restore so no other suite inherits the forced TZ.
+      process.env.TZ = originalTz;
+    });
 
-  it("recovers the stored calendar day from the driver's local-midnight Date under Asia/Tokyo", () => {
-    // Sanity-check the harness actually applied the positive offset: under
-    // Asia/Tokyo the UTC getters of this local-midnight Date land on the prior
-    // day, which is exactly the bug local getters fix.
-    const localMidnight = new Date(2026, 5, 28);
-    expect(localMidnight.getUTCDate()).toBe(27);
+    it("recovers the stored calendar day from the driver's local-midnight Date under Asia/Tokyo", () => {
+      // Sanity-check the harness actually applied the positive offset: under
+      // Asia/Tokyo the UTC getters of this local-midnight Date land on the prior
+      // day, which is exactly the bug local getters fix.
+      const localMidnight = new Date(2026, 5, 28);
+      expect(localMidnight.getUTCDate()).toBe(27);
 
-    // Local getters must still return the STORED day, not the UTC-shifted one.
-    expect(toCalendarDayString(localMidnight)).toBe("2026-06-28");
-  });
+      // Local getters must still return the STORED day, not the UTC-shifted one.
+      expect(toCalendarDayString(localMidnight)).toBe("2026-06-28");
+    });
 
-  it("keeps a January date correct (year/month boundary) under Asia/Tokyo", () => {
-    expect(toCalendarDayString(new Date(2026, 0, 1))).toBe("2026-01-01");
-  });
-});
+    it("keeps a January date correct (year/month boundary) under Asia/Tokyo", () => {
+      expect(toCalendarDayString(new Date(2026, 0, 1))).toBe("2026-01-01");
+    });
+  }
+);

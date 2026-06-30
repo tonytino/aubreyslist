@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing on the trust-critical modules (issue #187, part of #178). Diff-coverage proves changed lines EXECUTE; mutation testing proves the tests would CATCH a bug. Scope is deliberately limited to the highest-stakes pure logic: trust derivations (app/trust), the manual-entry dedup matcher (app/server/listings/dedup.ts), and the write rate limiter (app/server/rate-limit). MEASURED BASELINE on this branch (off main): total mutation score 76.99% across 352 mutants (browse-glance 100, summary 97.18, rate-limit 84.62, dedup 71.88, incident-recency 54.74 — the last is dragged down by the Zod error-message string literals and TZ paths that the DB-free suite can't fairly kill). thresholds.break is set to 76 (rounded DOWN from 76.99) so it PASSES today on a green main and can be ratcheted up later as tests improve — it is intentionally NOT set above the measured score, which would false-fail a green main. To raise the floor, add tests that kill surviving mutants (see reports/mutation/mutation.html) and bump break.",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "coverageAnalysis": "perTest",
+  "reporters": ["html", "clear-text", "progress"],
+  "mutate": [
+    "app/trust/**/*.ts",
+    "app/server/listings/dedup.ts",
+    "app/server/rate-limit/**/*.ts",
+    "!app/trust/**/*.test.ts",
+    "!app/trust/**/*.invariant.test.ts",
+    "!app/server/listings/**/*.test.ts",
+    "!app/server/listings/**/*.invariant.test.ts",
+    "!app/server/rate-limit/**/*.test.ts"
+  ],
+  "thresholds": {
+    "high": 90,
+    "low": 70,
+    "break": 76
+  }
+}
