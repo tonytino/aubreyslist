@@ -1,0 +1,1 @@
+- `[manual]` Added a test pinning the moderation-queue open-flag filter so dropping or widening `where(eq(flags.status, "open"))` fails CI.
