@@ -1,7 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, getTableColumns } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { getDb } from "~/db/client";
-import { type Incident, incidents } from "~/db/schema";
+import { type Incident, incidents, listings } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { enforceWriteLimit } from "~/server/rate-limit";
 import {
@@ -84,12 +84,27 @@ function normalizeIncident(row: Incident): Incident {
  * page). This directly serves the trust principle "recent harm is never buried"
  * (domain.md → Trust Model): a real, still-visible recent incident always stays
  * — only an incident a moderator has hidden/removed drops out.
+ *
+ * Parent visibility: `moderationStatus` has no parent→child propagation, so a
+ * moderator hiding/removing the LISTING leaves its incidents `visible`. To stop a
+ * moderated-away listing leaking its incidents via this addressable per-listing
+ * RPC, we INNER JOIN `listings` and additionally require the parent listing to be
+ * `visible` — both the incident AND its listing must survive moderation.
  */
 export async function listIncidents(input: ListIncidentsInput): Promise<Incident[]> {
   const rows = await getDb()
-    .select()
+    // Project only the incident columns: the join to `listings` is a visibility
+    // gate, not data we return, so the row shape stays a flat `Incident`.
+    .select(getTableColumns(incidents))
     .from(incidents)
-    .where(and(eq(incidents.listingId, input.listingId), eq(incidents.moderationStatus, "visible")))
+    .innerJoin(listings, eq(listings.id, incidents.listingId))
+    .where(
+      and(
+        eq(incidents.listingId, input.listingId),
+        eq(incidents.moderationStatus, "visible"),
+        eq(listings.moderationStatus, "visible")
+      )
+    )
     .orderBy(desc(incidents.occurredOn), desc(incidents.createdAt));
   // Normalize each row's `occurredOn` to the canonical YYYY-MM-DD string the
   // recency banner + date formatting depend on (the driver returns a Date).

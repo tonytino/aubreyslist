@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // hoisted block exposes the mock fns + mutable test state we assert on.
 //
 // DB chains modeled:
-//   read claim:    getDb().select().from().where().limit()   -> [{ moderationStatus, lastConfirmedAt }]
+//   read claim:    getDb().select().from().innerJoin().where().limit() -> [{ moderationStatus, listingModerationStatus, lastConfirmedAt }]
 //   read counts:   getDb().select().from().where().groupBy() -> grouped rows
 //   recompute max: getDb().select().from().where()           -> [{ lastConfirmedAt }]
 //   upsert:        getDb().insert().values().onConflictDoUpdate()
@@ -31,7 +31,11 @@ const h = vi.hoisted(() => {
     // lookup in `getClaimAggregate` (`{ moderationStatus, lastConfirmedAt }`, #41).
     limitRows: [] as Array<
       | { id: string }
-      | { moderationStatus?: "visible" | "hidden" | "removed"; lastConfirmedAt: Date | null }
+      | {
+          moderationStatus?: "visible" | "hidden" | "removed";
+          listingModerationStatus?: "visible" | "hidden" | "removed";
+          lastConfirmedAt: Date | null;
+        }
     >,
     // The recompute helper's `select().from().where()` resolves directly (no
     // `.groupBy()`/`.limit()`): MAX(updatedAt) over the surviving confirms.
@@ -60,7 +64,11 @@ const h = vi.hoisted(() => {
     result.limit = limitMock;
     return result;
   });
-  const fromMock = vi.fn(() => ({ where: selectWhereMock }));
+  // The claim-visibility read INNER JOINs `listings` (parent-listing gate) before
+  // its WHERE; the counts/recompute reads go straight to WHERE. So `from()`
+  // offers both `innerJoin` (→ same `where`) and `where`.
+  const innerJoinMock = vi.fn(() => ({ where: selectWhereMock }));
+  const fromMock = vi.fn(() => ({ where: selectWhereMock, innerJoin: innerJoinMock }));
   const selectMock = vi.fn(() => ({ from: fromMock }));
 
   const onConflictDoUpdateMock = vi.fn((args: unknown) => {
@@ -111,6 +119,7 @@ const h = vi.hoisted(() => {
   return {
     state,
     groupByMock,
+    innerJoinMock,
     limitMock,
     insertMock,
     valuesMock,
@@ -388,7 +397,9 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       { value: "dispute", n: 1 },
     ];
     const when = new Date("2026-06-01T00:00:00Z");
-    state.limitRows = [{ moderationStatus: "visible", lastConfirmedAt: when }];
+    state.limitRows = [
+      { moderationStatus: "visible", listingModerationStatus: "visible", lastConfirmedAt: when },
+    ];
 
     const agg = await getClaimAggregate({ claimId: "claim-1" });
 
@@ -402,7 +413,9 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
 
   it("returns zero counts and null recency for a claim with no attestations", async () => {
     state.groupByRows = [];
-    state.limitRows = [{ moderationStatus: "visible", lastConfirmedAt: null }];
+    state.limitRows = [
+      { moderationStatus: "visible", listingModerationStatus: "visible", lastConfirmedAt: null },
+    ];
 
     const agg = await getClaimAggregate({ claimId: "claim-empty" });
 
@@ -429,7 +442,9 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
   it("does not require auth (reads are open)", async () => {
     state.signedIn = false; // would block a write, but reads must stay anonymous
     state.groupByRows = [{ value: "dispute", n: 3 }];
-    state.limitRows = [{ moderationStatus: "visible", lastConfirmedAt: null }];
+    state.limitRows = [
+      { moderationStatus: "visible", listingModerationStatus: "visible", lastConfirmedAt: null },
+    ];
 
     const agg = await getClaimAggregate({ claimId: "claim-1" });
 
@@ -446,7 +461,11 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       { value: "dispute", n: 0 },
     ];
     state.limitRows = [
-      { moderationStatus: "hidden", lastConfirmedAt: new Date("2026-06-01T00:00:00Z") },
+      {
+        moderationStatus: "hidden",
+        listingModerationStatus: "visible",
+        lastConfirmedAt: new Date("2026-06-01T00:00:00Z"),
+      },
     ];
 
     const agg = await getClaimAggregate({ claimId: "claim-hidden" });
@@ -464,13 +483,70 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
   it("returns the ZEROED aggregate for a REMOVED claim", async () => {
     state.groupByRows = [{ value: "confirm", n: 4 }];
     state.limitRows = [
-      { moderationStatus: "removed", lastConfirmedAt: new Date("2026-06-01T00:00:00Z") },
+      {
+        moderationStatus: "removed",
+        listingModerationStatus: "visible",
+        lastConfirmedAt: new Date("2026-06-01T00:00:00Z"),
+      },
     ];
 
     const agg = await getClaimAggregate({ claimId: "claim-removed" });
 
     expect(agg).toEqual({
       claimId: "claim-removed",
+      confirmCount: 0,
+      disputeCount: 0,
+      lastConfirmedAt: null,
+    });
+  });
+
+  // --- Parent-listing visibility: no parent→child moderation propagation ------
+  it("returns the ZEROED aggregate when the claim is visible but its PARENT LISTING is hidden", async () => {
+    // The claim itself is `visible`, but a moderator hid the parent LISTING.
+    // Without a parent cross-check this addressable per-claim RPC would leak the
+    // claim's counts. The visibility lookup INNER JOINs `listings`, and a non-
+    // visible parent is treated exactly like a non-visible claim: zeroed, and the
+    // attestation scan is short-circuited.
+    state.groupByRows = [
+      { value: "confirm", n: 7 },
+      { value: "dispute", n: 2 },
+    ];
+    state.limitRows = [
+      {
+        moderationStatus: "visible",
+        listingModerationStatus: "hidden",
+        lastConfirmedAt: new Date("2026-06-01T00:00:00Z"),
+      },
+    ];
+
+    const agg = await getClaimAggregate({ claimId: "claim-on-hidden-listing" });
+
+    expect(agg).toEqual({
+      claimId: "claim-on-hidden-listing",
+      confirmCount: 0,
+      disputeCount: 0,
+      lastConfirmedAt: null,
+    });
+    // The parent-visibility gate short-circuited BEFORE scanning attestations.
+    expect(h.groupByMock).not.toHaveBeenCalled();
+    // The visibility lookup joined `listings` to read the parent's status.
+    expect(h.innerJoinMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the ZEROED aggregate when the parent LISTING is removed", async () => {
+    state.groupByRows = [{ value: "confirm", n: 5 }];
+    state.limitRows = [
+      {
+        moderationStatus: "visible",
+        listingModerationStatus: "removed",
+        lastConfirmedAt: new Date("2026-06-01T00:00:00Z"),
+      },
+    ];
+
+    const agg = await getClaimAggregate({ claimId: "claim-on-removed-listing" });
+
+    expect(agg).toEqual({
+      claimId: "claim-on-removed-listing",
       confirmCount: 0,
       disputeCount: 0,
       lastConfirmedAt: null,

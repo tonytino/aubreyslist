@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // --- Mocks -----------------------------------------------------------------
 // DB chains modeled:
-//   read list: getDb().select().from().where().orderBy()          -> rows
+//   read list: getDb().select().from().innerJoin().where().orderBy() -> rows
 //   insert:    getDb().insert().values().returning()              -> [row]
 //   edit:      getDb().update().set().where().returning()         -> updatedRows
 //   retract:   getDb().delete().where().returning({ id })         -> deletedRows
@@ -51,7 +51,10 @@ const h = vi.hoisted(() => {
     state.lastListWhere = predicate;
     return { orderBy: orderByMock };
   });
-  const fromMock = vi.fn(() => ({ where: selectWhereMock }));
+  // The list read INNER JOINs `listings` (parent-listing visibility gate) before
+  // the WHERE, so model `from().innerJoin().where()`.
+  const innerJoinMock = vi.fn(() => ({ where: selectWhereMock }));
+  const fromMock = vi.fn(() => ({ innerJoin: innerJoinMock }));
   const selectMock = vi.fn(() => ({ from: fromMock }));
 
   const returningMock = vi.fn(() =>
@@ -96,6 +99,7 @@ const h = vi.hoisted(() => {
     state,
     selectMock,
     orderByMock,
+    innerJoinMock,
     insertMock,
     valuesMock,
     updateMock,
@@ -129,6 +133,7 @@ const {
   state,
   insertMock,
   orderByMock,
+  innerJoinMock,
   updateMock,
   deleteMock,
   requireCurrentUserMock,
@@ -372,5 +377,29 @@ describe("listIncidents — most-recent first", () => {
     expect(sql).toContain(" and ");
     expect(params).toContain("listing-1");
     expect(params).toContain("visible");
+  });
+
+  it("ALSO requires the PARENT listing visible — hidden/removed listing leaks no incidents", async () => {
+    // `moderationStatus` has no parent→child propagation: hiding the LISTING
+    // leaves its incidents `visible`. This addressable per-listing RPC must cross-
+    // check the parent listing, so it INNER JOINs `listings` and the WHERE
+    // additionally requires the listings table's `moderation_status = 'visible'`.
+    // A real parent-hidden run returns no rows because the join + predicate
+    // exclude every incident of a non-visible listing.
+    state.listRows = [{ id: "x", occurredOn: "2026-06-10" }];
+
+    const rows = await listIncidents({ listingId: "listing-1" });
+
+    // The join to `listings` ran (the visibility gate), and the WHERE references
+    // BOTH the `listings` and `incidents` moderation columns, requiring 'visible'.
+    expect(innerJoinMock).toHaveBeenCalledTimes(1);
+    const { sql, params } = renderWhere(state.lastListWhere);
+    expect(sql).toContain('"listings"."moderation_status"');
+    expect(sql).toContain('"incidents"."moderation_status"');
+    // Two `'visible'` binds: the incident's own status AND the parent listing's.
+    expect(params.filter((p) => p === "visible")).toHaveLength(2);
+    // The mock can't enforce the join, so it still resolves rows; the real query's
+    // inner join + listings predicate is what drops a hidden listing's incidents.
+    expect(rows.map((r) => r.id)).toEqual(["x"]);
   });
 });
