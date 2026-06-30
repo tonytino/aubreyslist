@@ -1,0 +1,1 @@
+- `[manual]` Hard-enforced Conventional Commits and required PR labels: a local `commit-msg` hook (commitlint via Lefthook) plus CI jobs that validate the squash-merge PR title and require one each of `type:*`/`size:*`/`safe:*` labels on every PR.

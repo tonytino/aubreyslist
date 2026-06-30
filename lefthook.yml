@@ -2,3 +2,8 @@ pre-commit:
   commands:
     lint-format:
       run: pnpm exec biome check --staged --no-errors-on-unmatched
+
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm exec commitlint --edit {1}
