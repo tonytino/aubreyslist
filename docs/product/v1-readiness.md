@@ -44,13 +44,12 @@ Recommended for the `main` branch:
 - [ ] **Require status checks to pass before merging**, and mark the following
       checks **required**.
 
-> **Verify the exact names at config time.** GitHub keys required status checks
-> on the **job name** shown in the Actions tab / PR checks list, and those names
-> change as the workflows evolve. Confirm the live names before marking any
-> required — the list below is the target once the in-flight CI-restructuring
-> lands (the `ci` job split into parallel jobs, and a dedicated
-> `pr-conventions.yml` workflow). **Until those merge, CI is still the single
-> `Lint, Type, Test` job** — require whatever the Actions tab actually shows.
+> **These check names are live and confirmed.** The split `ci.yml` jobs and the
+> `pr-conventions.yml` workflow are merged and have run on a real PR. GitHub keys
+> required status checks on the **job name** (shown in the Actions tab / PR checks
+> list), and only offers a check in the required-checks picker once it has run at
+> least once — all of the names below have, so they're selectable. Do **not**
+> require the third-party `Vercel Preview Comments` check (not a quality gate).
 
 | Required check (job name)    | Workflow              |
 | ---------------------------- | --------------------- |

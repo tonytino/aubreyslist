@@ -1,0 +1,1 @@
+- `[manual]` Updated `docs/product/v1-readiness.md` to state the branch-protection required-check names are live and confirmed (the split CI jobs + `pr-conventions.yml` are merged and have run on a real PR), replacing the earlier "verify once the restructuring lands" hedge.
