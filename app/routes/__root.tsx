@@ -1,3 +1,4 @@
+import { GoogleLogo, MagnifyingGlass, Plus, SignOut } from "@phosphor-icons/react/dist/ssr";
 import type { QueryClient } from "@tanstack/react-query";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -10,6 +11,7 @@ import {
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { Wordmark } from "~/components/Wordmark";
+import { Button } from "~/components/ui/button";
 import { fetchCurrentUser } from "~/server/auth/current-user.fn";
 // Import the stylesheet as a bundled URL so the bundler emits a hashed asset
 // and rewrites the href. Referencing the source path ("/app/styles/app.css")
@@ -50,9 +52,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 // Primary navigation. Each item targets its real, existing route so the active
 // state is accurate.
 const NAV_ITEMS = [
-  { to: "/listings", label: "Browse" },
-  { to: "/listings/new", label: "Add a listing" },
-  { to: "/about", label: "About" },
+  { to: "/listings", label: "Browse", Icon: MagnifyingGlass },
+  { to: "/listings/new", label: "Add a listing", Icon: Plus },
+  { to: "/about", label: "About", Icon: null },
 ] as const;
 
 function RootComponent() {
@@ -61,7 +63,7 @@ function RootComponent() {
       <head>
         <HeadContent />
       </head>
-      <body className="min-h-screen bg-white text-gray-900 antialiased">
+      <body className="min-h-screen bg-background text-foreground antialiased">
         <AppShell>
           <Outlet />
         </AppShell>
@@ -83,21 +85,22 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
 function SiteHeader() {
   return (
-    <header className="border-b border-gray-200">
+    <header className="border-b border-border">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
         <Link to="/" aria-label="Aubrey's List home">
           <Wordmark />
         </Link>
 
         <nav aria-label="Primary" className="order-last w-full sm:order-none sm:w-auto">
-          <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-medium text-gray-600">
+          <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-medium text-muted-foreground">
             {NAV_ITEMS.map((item) => (
               <li key={item.label}>
                 <Link
                   to={item.to}
-                  className="hover:text-gray-900"
-                  activeProps={{ className: "text-gray-900" }}
+                  className="inline-flex items-center gap-1.5 hover:text-foreground"
+                  activeProps={{ className: "text-foreground" }}
                 >
+                  {item.Icon ? <item.Icon aria-hidden className="h-4 w-4" /> : null}
                   {item.label}
                 </Link>
               </li>
@@ -120,18 +123,18 @@ function AuthControl() {
     // Full-page navigation to the OAuth initiation route (not an RPC data
     // fetch) — a plain anchor is the correct mechanism for the redirect dance.
     return (
-      <a
-        href="/api/auth/google"
-        className="ml-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-      >
-        Continue with Google
-      </a>
+      <Button asChild variant="outline" className="ml-auto">
+        <a href="/api/auth/google">
+          <GoogleLogo aria-hidden className="h-4 w-4" />
+          Continue with Google
+        </a>
+      </Button>
     );
   }
 
   return (
     <div className="ml-auto flex items-center gap-3">
-      <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+      <span className="flex items-center gap-2 text-sm font-medium text-foreground">
         {user.avatarUrl ? (
           <img src={user.avatarUrl} alt="" className="h-6 w-6 rounded-full" />
         ) : null}
@@ -140,12 +143,10 @@ function AuthControl() {
       {/* Sign-out clears the session server-side then redirects home; a form
           POST is the right mechanism for a state-changing, full-page action. */}
       <form method="post" action="/api/auth/sign-out">
-        <button
-          type="submit"
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
+        <Button type="submit" variant="ghost" size="sm">
+          <SignOut aria-hidden className="h-4 w-4" />
           Sign out
-        </button>
+        </Button>
       </form>
     </div>
   );
@@ -153,30 +154,30 @@ function AuthControl() {
 
 function NotFound() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <h1 className="text-4xl font-bold tracking-tight">404</h1>
-      <p className="text-muted-foreground text-lg">Page not found.</p>
-      <Link to="/" className="text-sm underline underline-offset-4">
-        Go home
-      </Link>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-gutter text-center">
+      <h1 className="text-display font-bold tracking-tight">404</h1>
+      <p className="text-lead text-muted-foreground">Page not found.</p>
+      <Button asChild>
+        <Link to="/">Go home</Link>
+      </Button>
     </main>
   );
 }
 
 function RootErrorBoundary({ error, reset }: ErrorComponentProps) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4">
-      <h1 className="text-4xl font-bold tracking-tight">Something went wrong</h1>
-      <p className="text-muted-foreground text-lg">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-gutter text-center">
+      <h1 className="text-headline font-bold tracking-tight">Something went wrong</h1>
+      <p className="text-lead text-muted-foreground">
         {error instanceof Error ? error.message : "An unexpected error occurred."}
       </p>
-      <div className="flex gap-4">
-        <button type="button" onClick={reset} className="text-sm underline underline-offset-4">
+      <div className="flex gap-3">
+        <Button type="button" variant="outline" onClick={reset}>
           Try again
-        </button>
-        <Link to="/" className="text-sm underline underline-offset-4">
-          Go home
-        </Link>
+        </Button>
+        <Button asChild>
+          <Link to="/">Go home</Link>
+        </Button>
       </div>
     </main>
   );
