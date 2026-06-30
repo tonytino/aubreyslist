@@ -2,6 +2,7 @@ import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-q
 import { Link } from "@tanstack/react-router";
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -172,6 +173,7 @@ function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget 
     setError(
       err instanceof Error ? err.message : "Could not complete the action. Please try again."
     );
+    toast.error("Could not complete the action. Please try again.");
   }
 
   function onSuccess() {
@@ -183,17 +185,26 @@ function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget 
 
   const dismiss = useMutation({
     mutationFn: () => dismissFlagAction({ data: payload }),
-    onSuccess,
+    onSuccess: () => {
+      onSuccess();
+      toast.success("Flag dismissed");
+    },
     onError,
   });
   const hide = useMutation({
     mutationFn: () => hideContentAction({ data: payload }),
-    onSuccess,
+    onSuccess: () => {
+      onSuccess();
+      toast.success("Content hidden");
+    },
     onError,
   });
   const remove = useMutation({
     mutationFn: () => removeContentAction({ data: payload }),
-    onSuccess,
+    onSuccess: () => {
+      onSuccess();
+      toast.success("Content removed");
+    },
     onError,
   });
 

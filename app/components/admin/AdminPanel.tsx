@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useId, useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -256,7 +257,17 @@ function RoleRow({ account }: { account: AdminUserSummary }) {
 
   const mutation = useMutation({
     mutationFn: (role: AssignableRole) => setUserRole({ data: { userId: account.id, role } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminUsersQueryKey }),
+    onSuccess: (_data, role) => {
+      queryClient.invalidateQueries({ queryKey: adminUsersQueryKey });
+      toast.success(
+        role === "moderator"
+          ? `${account.name} is now a moderator`
+          : `${account.name} is no longer a moderator`
+      );
+    },
+    onError: () => {
+      toast.error("Could not update the role. Please try again.");
+    },
   });
 
   return (

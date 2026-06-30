@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { submitFlag } from "~/server/flags/flags.fn";
 
@@ -44,6 +45,10 @@ export function FlagControl(props: FlagTarget & { isSignedIn: boolean; label?: s
     onSuccess: () => {
       setReason("");
       setIsOpen(false);
+      toast.success("Report submitted");
+    },
+    onError: () => {
+      toast.error("Could not submit the report. Please try again.");
     },
   });
 

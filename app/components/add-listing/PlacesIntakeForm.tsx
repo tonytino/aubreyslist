@@ -1,5 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import type { CreateListingResult } from "~/listings/create-input";
 import type { PlacePrediction } from "~/listings/places-input";
 import { submitCreateListing } from "~/server/listings/create.fn";
@@ -12,13 +16,13 @@ import { MenuUrlField } from "./MenuUrlField";
  * canonical name/address/coords are resolved server-side, so the client never
  * fabricates them.
  *
- * Mirrors the design-token conventions of `app/routes/listings.$id.tsx`
- * (`text-body`, `rounded-card`, `bg-brand`, `border-border`, …) and is
- * mobile-first.
+ * Built on the `Input`/`Label`/`Button`/`Card` primitives + semantic tokens so
+ * the form reads correctly in light and dark mode, and is mobile-first.
  */
 export function PlacesIntakeForm({
   onCreated,
 }: { onCreated: (result: CreateListingResult) => void }) {
+  const searchId = useId();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<PlacePrediction | null>(null);
   const [menuUrl, setMenuUrl] = useState("");
@@ -44,7 +48,13 @@ export function PlacesIntakeForm({
   const create = useMutation({
     mutationFn: (placeId: string) =>
       submitCreateListing({ data: { mode: "places", placeId, menuUrl: menuUrl || undefined } }),
-    onSuccess: onCreated,
+    onSuccess: (result) => {
+      toast.success("Listing added");
+      onCreated(result);
+    },
+    onError: () => {
+      toast.error("Could not add the listing. Please try again.");
+    },
   });
 
   const predictions = suggestions.data?.ok ? suggestions.data.data : [];
@@ -72,23 +82,19 @@ export function PlacesIntakeForm({
           setSearchNonce((nonce) => nonce + 1);
         }}
       >
-        <label className="flex flex-1 flex-col gap-1">
-          <span className="text-body-sm font-medium text-foreground">Search for a restaurant</span>
-          <input
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label htmlFor={searchId}>Search for a restaurant</Label>
+          <Input
+            id={searchId}
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="e.g. Sweet Action, Denver"
-            className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
           />
-        </label>
-        <button
-          type="submit"
-          disabled={query.trim().length === 0 || suggestions.isFetching}
-          className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong disabled:opacity-50"
-        >
+        </div>
+        <Button type="submit" disabled={query.trim().length === 0 || suggestions.isFetching}>
           {suggestions.isFetching ? "Searching…" : "Search"}
-        </button>
+        </Button>
       </form>
 
       {searchError ? (
@@ -116,7 +122,7 @@ export function PlacesIntakeForm({
                   className={`w-full rounded-card border px-4 py-3 text-left text-body ${
                     isSelected
                       ? "border-brand bg-brand-soft text-foreground"
-                      : "border-border bg-background text-foreground hover:bg-surface"
+                      : "border-input bg-card text-foreground hover:bg-muted"
                   }`}
                 >
                   {prediction.description}
@@ -129,7 +135,7 @@ export function PlacesIntakeForm({
 
       {selected ? (
         <form
-          className="flex flex-col gap-4 rounded-card border border-border p-gutter"
+          className="flex flex-col gap-4 rounded-card border border-border bg-card p-gutter text-card-foreground"
           onSubmit={(event) => {
             event.preventDefault();
             create.mutate(selected.placeId);
@@ -150,13 +156,9 @@ export function PlacesIntakeForm({
             </p>
           ) : null}
 
-          <button
-            type="submit"
-            disabled={create.isPending}
-            className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong disabled:opacity-50"
-          >
+          <Button type="submit" disabled={create.isPending}>
             {create.isPending ? "Adding…" : "Add this listing"}
-          </button>
+          </Button>
         </form>
       ) : null}
     </div>

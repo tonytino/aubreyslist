@@ -2,6 +2,7 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { ManualIntakeForm } from "~/components/add-listing/ManualIntakeForm";
 import { PlacesIntakeForm } from "~/components/add-listing/PlacesIntakeForm";
+import { Button } from "~/components/ui/button";
 import type { CreateListingResult } from "~/listings/create-input";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { type IntakeMode, getSetting } from "~/server/settings";
@@ -81,15 +82,12 @@ function SignInPrompt() {
     // independently of the identical app-shell header link (E2E strict-mode).
     <section
       aria-label="Sign in to add a restaurant"
-      className="flex flex-col items-start gap-4 rounded-card border border-border p-gutter"
+      className="flex flex-col items-start gap-4 rounded-card border border-border bg-card p-gutter text-card-foreground"
     >
       <p className="text-body text-foreground">Please sign in to add a restaurant.</p>
-      <a
-        href="/api/auth/google"
-        className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong"
-      >
-        Continue with Google
-      </a>
+      <Button asChild>
+        <a href="/api/auth/google">Continue with Google</a>
+      </Button>
       <Link to="/" className="text-body-sm underline underline-offset-4">
         Back to home
       </Link>

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { toast } from "sonner";
 import { SafetySignal } from "~/components/SafetySignal";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -167,6 +168,10 @@ function IncidentOwnerControls({
     mutationFn: () => removeIncident({ data: { id: incident.id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: incidentsQueryKey(listingId) });
+      toast.success("Report retracted");
+    },
+    onError: () => {
+      toast.error("Could not retract the report. Please try again.");
     },
   });
 
@@ -256,6 +261,10 @@ function IncidentEditForm({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: incidentsQueryKey(listingId) });
       onDone();
+      toast.success("Report updated");
+    },
+    onError: () => {
+      toast.error("Could not save the changes. Please try again.");
     },
   });
 
@@ -355,6 +364,10 @@ function IncidentForm({ listingId }: { listingId: string }) {
       setSeverity("");
       setNote("");
       queryClient.invalidateQueries({ queryKey: incidentsQueryKey(listingId) });
+      toast.success("Incident reported");
+    },
+    onError: () => {
+      toast.error("Could not submit the report. Please try again.");
     },
   });
 

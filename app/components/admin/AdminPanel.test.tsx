@@ -58,6 +58,9 @@ vi.mock("~/server/admin/set-role.fn", () => ({
   setUserRole: (args: unknown) => mocks.setUserRole(args),
 }));
 
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
+
 import { AdminPanel } from "./AdminPanel";
 
 /** A directory row matching `AdminUserSummary` (id/email/name/role only). */
@@ -218,6 +221,9 @@ describe("AdminPanel — role management (#142)", () => {
     expect(mocks.setUserRole).toHaveBeenCalledWith({
       data: { userId: "u-target", role: "moderator" },
     });
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Sam User is now a moderator");
+    });
   });
 
   it("does NOT fire the mutation when the admin cancels the confirm dialog", async () => {
@@ -247,6 +253,10 @@ describe("AdminPanel — role management (#142)", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Cannot demote the last remaining admin.");
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("does not render the role section to a moderator (no directory fetch)", async () => {

@@ -41,6 +41,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("~/server/moderation/actions.fn", () => mocks);
 
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
+
 // Radix Dialog (the Hide/Remove confirm) drives focus/scroll through APIs that
 // jsdom does not implement; stub them so the dialog opens on a fired click.
 beforeAll(() => {
@@ -190,6 +193,7 @@ describe("ModerationQueue", () => {
     expect(mocks.hideContentAction).toHaveBeenCalledWith({
       data: { target: "listing", listingId: "listing-9", flagId: "flag-7" },
     });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Content hidden"));
   });
 
   it("does not fire Hide when the moderator cancels the confirm dialog", async () => {
@@ -218,6 +222,7 @@ describe("ModerationQueue", () => {
     expect(mocks.dismissFlagAction).toHaveBeenCalledWith({
       data: { target: "claim", claimId: "claim-2", flagId: "flag-c" },
     });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Flag dismissed"));
   });
 
   it("shows an inline error when an action fails", async () => {
@@ -230,6 +235,8 @@ describe("ModerationQueue", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Remove/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/moderator privileges/i);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("shows a no-access message when the verdict is not granted", async () => {
