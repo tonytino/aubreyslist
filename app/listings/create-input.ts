@@ -59,8 +59,8 @@ export const createListingInputSchema = z.discriminatedUnion("mode", [
   }),
   z.object({
     mode: z.literal("manual"),
-    name: z.string().min(1, "Name is required").max(256),
-    address: z.string().min(1, "Address is required").max(512),
+    name: z.string().trim().min(1, "Name is required").max(256),
+    address: z.string().trim().min(1, "Address is required").max(512),
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
     menuUrl: optionalMenuUrl,
