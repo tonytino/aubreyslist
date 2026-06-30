@@ -24,5 +24,8 @@ playwright-report/
 app/routeTree.gen.ts
 app.config.timestamp_*
 
-# Claude Code
-.claude/
+# Claude Code — ignore local/transient state (worktrees, local settings, plans),
+# but DO version-control the shareable agent tooling so every clone/session gets it.
+.claude/*
+!.claude/skills/
+!.claude/workflows/
