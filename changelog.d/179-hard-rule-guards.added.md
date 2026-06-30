@@ -1,0 +1,1 @@
+- `[manual]` Added CI guards that enforce the AGENTS.md Hard Rules (process.env scope, unexplained ts-ignore, db imports in client code, raw fetch to Hono routes, generated-file drift, test honesty).
