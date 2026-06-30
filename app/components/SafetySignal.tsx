@@ -72,7 +72,7 @@ const STATES: Record<SafetyState, SafetyStateConfig> = {
     ),
   },
   stale: {
-    label: "May be stale",
+    label: "Stale listing",
     solid: "bg-stale text-stale-foreground",
     soft: "bg-stale-soft text-stale border border-stale/30",
     // clock — freshness/recency

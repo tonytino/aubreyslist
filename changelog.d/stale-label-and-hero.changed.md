@@ -1,0 +1,1 @@
+- `[manual]` Renamed the `stale` safety label from "May be stale" to "Stale listing" (it flags an out-of-date *listing*, not stale food), and cleaned up the home hero: dropped the tinted panel so it sits on the page, and reworked the trust legend to highlight a concrete GF attribute (dedicated fryer) instead of the staleness meta-state.

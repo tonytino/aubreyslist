@@ -5,7 +5,7 @@ import { SAFETY_STATES, SafetySignal, type SafetyState, safetyLabel } from "./Sa
 const EXPECTED_LABELS: Record<SafetyState, string> = {
   "celiac-safe": "Celiac-safe",
   "gluten-friendly": "Gluten-friendly",
-  stale: "May be stale",
+  stale: "Stale listing",
   incident: "Recent incident",
 };
 

@@ -101,7 +101,7 @@ label** for all four states:
 | --- | --- | --- | --- |
 | `celiac-safe` | "Celiac-safe" | shield + check | headline trust state |
 | `gluten-friendly` | "Gluten-friendly" | info circle | GF-ish only — *not* safe |
-| `stale` | "May be stale" | clock | outside the staleness window |
+| `stale` | "Stale listing" | clock | outside the staleness window |
 | `incident` | "Recent incident" | warning triangle | recent "got glutened" harm |
 
 ```tsx

@@ -1,9 +1,10 @@
-import { MagnifyingGlass, Plus } from "@phosphor-icons/react/dist/ssr";
+import { ForkKnife, MagnifyingGlass, Plus } from "@phosphor-icons/react/dist/ssr";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { SAFETY_STATES, SafetySignal } from "~/components/SafetySignal";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { claimAttributeLabel } from "~/trust/summary";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -12,10 +13,8 @@ export const Route = createFileRoute("/")({
 function Home() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-      <section className="flex flex-col items-start gap-6 rounded-card bg-brand-soft p-gutter py-16 sm:py-24">
-        <Badge variant="outline" className="border-brand/30 bg-background text-brand">
-          Denver pilot
-        </Badge>
+      <section className="flex flex-col items-start gap-6 py-16 sm:py-24">
+        <Badge variant="secondary">Denver pilot</Badge>
 
         <h1 className="max-w-3xl text-headline font-bold tracking-tight sm:text-display">
           Find restaurants you can actually trust to be gluten-free.
@@ -44,15 +43,25 @@ function Home() {
           </Button>
         </div>
 
-        <Card className="w-full max-w-2xl bg-background">
+        <Card className="w-full max-w-2xl">
           <CardContent className="flex flex-col gap-3">
             <p className="text-body-sm text-muted-foreground">
-              From celiac-safe to merely gluten-friendly — know before you order.
+              Celiac-safe or just gluten-friendly? Dedicated fryer or shared oil? Know before you
+              order.
             </p>
-            <div className="flex flex-wrap gap-2">
-              {SAFETY_STATES.map((state) => (
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Headline trust verdicts. `stale` is a freshness meta-state, not a
+                  headline tier, so it is intentionally omitted from this intro legend. */}
+              {SAFETY_STATES.filter((state) => state !== "stale").map((state) => (
                 <SafetySignal key={state} state={state} />
               ))}
+              {/* An example GF taxonomy attribute (domain.md) — the concrete kitchen
+                  accommodations the community tracks, distinct from the trust verdicts
+                  above. Icon + text, never colour alone (styling.md). */}
+              <Badge variant="outline" className="gap-1.5">
+                <ForkKnife aria-hidden className="h-4 w-4" />
+                {claimAttributeLabel("dedicated_fryer")}
+              </Badge>
             </div>
           </CardContent>
         </Card>
