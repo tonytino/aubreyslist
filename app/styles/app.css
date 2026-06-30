@@ -107,4 +107,30 @@
   /* ----------------------------------------------------------------------- */
   --radius-chip: 9999px;
   --radius-card: 0.75rem;
+
+  /* ----------------------------------------------------------------------- */
+  /* shadcn/ui semantic layer (ADR-011 — full shadcn adoption).               */
+  /* ADDITIVE ONLY: maps shadcn's expected utilities (bg-primary, ring-ring,  */
+  /* border-input, bg-destructive, …) onto the existing brand/OKLCH palette   */
+  /* so generated components render on-brand. The brand, safety, type,        */
+  /* spacing, and radius tokens above are untouched, and the safety-signal    */
+  /* colour+icon+label contract is unaffected — these tokens only style the   */
+  /* shadcn primitives. Light mode only for now; dark mode is deferred.       */
+  /* ----------------------------------------------------------------------- */
+  --color-primary: var(--color-brand);
+  --color-primary-foreground: var(--color-brand-foreground);
+  --color-secondary: var(--color-brand-soft);
+  --color-secondary-foreground: var(--color-brand-strong);
+  --color-muted: oklch(0.96 0.005 295); /* subtle neutral fill */
+  /* --color-muted-foreground is defined in the Neutrals group above (KEEP) */
+  --color-accent: var(--color-accent-lavender);
+  --color-accent-foreground: var(--color-brand-strong);
+  --color-destructive: var(--color-incident); /* reuse the incident red */
+  --color-destructive-foreground: var(--color-incident-foreground);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-foreground);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-foreground);
+  --color-input: var(--color-border); /* input/control border */
+  --color-ring: var(--color-brand-ring); /* focus ring */
 }

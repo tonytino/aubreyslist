@@ -104,3 +104,42 @@ so the signal survives greyscale.
 `/style-guide` route, which showcases the palette, type scale, and every signal.
 
 The header wordmark is `app/components/Wordmark.tsx` (`<Wordmark size="lg" />`).
+
+## Component primitives (shadcn/ui — ADR-011)
+
+Reusable primitives live in `app/components/ui/` (shadcn New-York style,
+hand-authored — the CLI registry is network-blocked, so add new ones from the
+upstream shadcn source and adapt them). They compose through `cn()` in
+`~/lib/utils.ts` and render on the brand palette via a **shadcn semantic token
+layer** in `app/styles/app.css` (`bg-primary`, `border-input`, `bg-destructive`,
+`ring-ring`, `bg-card`, …) that maps onto the existing brand/safety/neutral
+tokens. That layer is **additive** — never replace the brand or safety tokens
+with a stock `shadcn init` `:root` set.
+
+```tsx
+import { Button } from "~/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
+
+<Button variant="default">Browse listings</Button>
+<Button variant="outline" asChild><a href="/about">About</a></Button>
+```
+
+Reach for a primitive before writing bespoke Tailwind for a button/card/field.
+Domain components (`SafetySignal`, `ListingCard`) stay where they are and may
+compose primitives. The `SafetySignal` colour+icon+label contract is **not**
+shadcn's job and must not be regressed.
+
+### Icons — Phosphor, SSR import only
+
+Use `@phosphor-icons/react`, imported from the **SSR-safe entrypoint** (this is an
+SSR app):
+
+```tsx
+import { ShieldCheck, Plus } from "@phosphor-icons/react/dist/ssr";
+
+<Plus weight="bold" className="h-4 w-4" />
+```
+
+Never import from the barrel `@phosphor-icons/react` in app code — it causes
+SSR/bundle issues. Do not swap the `SafetySignal` SVGs for Phosphor unless each
+safety state keeps a distinct greyscale-survivable shape (a reviewed change).

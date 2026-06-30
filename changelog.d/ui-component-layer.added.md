@@ -1,0 +1,1 @@
+- `[manual]` Adopted shadcn/ui as the component layer (primitives in `app/components/ui/`) on top of the existing brand tokens, added Phosphor icons, and reskinned the app shell, home hero, and style guide. See ADR-011.
