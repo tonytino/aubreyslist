@@ -108,6 +108,30 @@ ship.
 
 ---
 
+## CI enforcement (the `adversarial-review` gate)
+
+The loop is enforced as a hard PR gate by the `adversarial-review` job in
+`.github/workflows/pr-conventions.yml`. To merge, a PR must satisfy **one** of:
+
+- **`skip-review` label** — bypasses the gate for a trivial or human-only change; **or**
+- **both** the **`review:adversarial-passed` label** **and** a well-formed
+  **`## Adversarial review`** section in the PR body. That section must contain
+  either a passing verdict (`overall: SHIP`, the verdict above) or the escalation
+  block (`Unresolved review items (escalated after 2-round cap)`). An empty or
+  template-placeholder section fails. The exact rule lives in the header of
+  `.github/scripts/check-review-block.mjs` (`validateReviewBlock`). The job
+  re-evaluates on `labeled`/`unlabeled`/`edited`, so adding the label or pasting
+  the verdict re-runs it.
+
+**Honest limitation.** CI cannot prove a genuine review occurred — the body block
+could be fabricated and the `review:adversarial-passed` label hand-applied. This
+gate is a **forcing function plus an auditable record**, not cryptographic proof.
+Likewise `skip-review` is a **human judgement call**: CI cannot enforce *who*
+applied it or that the change truly warranted skipping. Treat both as social
+contracts the gate makes visible, not guarantees.
+
+---
+
 ## How to Invoke
 
 - **Skill (preferred entry point).** Run the `review-loop` skill

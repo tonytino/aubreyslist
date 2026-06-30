@@ -72,3 +72,53 @@ jobs:
             exit 1
           fi
           echo "✓ PR carries type:*, size:*, and safe:* labels"
+
+  adversarial-review:
+    name: Adversarial review gate
+    # Enforces the 2-round adversarial review loop in docs/agents/orchestration.md.
+    # This re-evaluates on `labeled`/`unlabeled` (author added the gate label) and
+    # `edited` (author pasted the verdict into the body) thanks to the triggers above.
+    #
+    # `skip-review` bypasses the gate (trivial / human-only change). Otherwise BOTH
+    # must hold: the `review:adversarial-passed` label is present AND the PR body
+    # contains a well-formed review record (validated by check-review-block.mjs).
+    runs-on: ubuntu-latest
+
+    steps:
+      # Same delimiting-comma boundary technique as pr-labels: wrap the joined
+      # label list in commas so a label that merely contains the name as a
+      # substring can't satisfy the gate.
+      - name: Short-circuit when skip-review is present
+        env:
+          HAS_SKIP: ${{ contains(format(',{0},', join(github.event.pull_request.labels.*.name, ',')), ',skip-review,') }}
+        run: |
+          if [ "$HAS_SKIP" = "true" ]; then
+            echo "✓ skip-review label present — adversarial-review gate bypassed (trivial/human-only change)."
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          else
+            echo "SKIP=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Require the review:adversarial-passed label
+        if: env.SKIP != 'true'
+        env:
+          HAS_REVIEWED: ${{ contains(format(',{0},', join(github.event.pull_request.labels.*.name, ',')), ',review:adversarial-passed,') }}
+        run: |
+          if [ "$HAS_REVIEWED" != "true" ]; then
+            echo "::error::Missing the \`review:adversarial-passed\` label. Run the 2-round adversarial review loop, then apply the label — or apply \`skip-review\` for a trivial/human-only change (see docs/agents/orchestration.md)."
+            exit 1
+          fi
+          echo "✓ review:adversarial-passed label present"
+
+      # The parser is a zero-dep ESM script; node is already on ubuntu-latest, so
+      # we only need a checkout to read the script file — no pnpm/setup-node/install.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: env.SKIP != 'true'
+
+      # Pass the body via env (not inline ${{ }}) to avoid shell injection via an
+      # attacker-controlled PR body — exactly like pr-title passes the title.
+      - name: Validate the adversarial-review block in the PR body
+        if: env.SKIP != 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node .github/scripts/check-review-block.mjs

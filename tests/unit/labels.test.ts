@@ -24,6 +24,8 @@ const EXPECTED_LABELS = [
   "safe:agent",
   "safe:human",
   "skip-changelog",
+  "review:adversarial-passed",
+  "skip-review",
 ];
 
 describe("LABELS", () => {
