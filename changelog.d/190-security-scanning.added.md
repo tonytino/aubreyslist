@@ -1,0 +1,1 @@
+- `[manual]` Added security-scanning CI gates (#190): gitleaks secret scanning and an osv-scanner dependency-vulnerability gate (both hard-fail) in a new `Security` workflow, a zero-dep license allowlist that fails on non-permissive dependency licenses, and a CodeQL SAST workflow (advisory until its check is made a required status check in branch protection).

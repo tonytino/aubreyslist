@@ -1,0 +1,62 @@
+name: CodeQL
+
+# SAST via GitHub CodeQL for JavaScript/TypeScript. Kept in its own workflow
+# (separate from security.yml) because CodeQL needs `security-events: write` and
+# a weekly schedule — isolating it keeps the other security jobs at the minimal
+# privilege each needs.
+#
+# IMPORTANT — this workflow does NOT block a PR on findings by itself. The
+# `analyze` step uploads results to GitHub code scanning, but the job exits 0
+# even when alerts are produced. To make CodeQL an actual MERGE GATE you must
+# mark the "CodeQL" code-scanning result as a REQUIRED status check in the
+# repository's branch-protection rules for `main` (Settings → Branches → branch
+# protection → "Require status checks to pass" → add the CodeQL check). That is
+# a repo-admin setting (safe:human) and cannot be done from this workflow. Until
+# it is configured, CodeQL is advisory-only.
+#
+# The three github/codeql-action sub-actions (init, autobuild-not-used, analyze)
+# are all pinned to the SAME commit SHA, per the repo's SHA-pinning convention.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  schedule:
+    # Weekly full scan (Mondays 07:17 UTC). An odd minute avoids the top-of-hour
+    # scheduling congestion on GitHub's cron runners.
+    - cron: "17 7 * * 1"
+
+# Default to no permissions; the analyze job opts into exactly what CodeQL needs.
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to upload the SARIF results to GitHub code scanning.
+      security-events: write
+      # Required by the CodeQL action to read the repo + workflow run metadata.
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Initialize the CodeQL database. `javascript-typescript` covers both JS
+      # and TS in one analysis. CodeQL extracts JS/TS without a build step, so no
+      # autobuild/manual build is needed for this repo.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@19b2f06db2b6f5108140aeb04014ef02b648f789 # v4.31.11
+        with:
+          languages: javascript-typescript
+
+      # Run the analysis and upload results. NOTE (see the file header): this
+      # uploads alerts but does NOT fail the build on findings — severity-gated
+      # blocking requires the "CodeQL" check to be a REQUIRED status check in
+      # branch protection (a repo-admin / safe:human setting).
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@19b2f06db2b6f5108140aeb04014ef02b648f789 # v4.31.11
