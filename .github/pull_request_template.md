@@ -25,3 +25,11 @@ Resolves #
 
 ## Notes for reviewer
 <!-- Optional: anything the reviewer should know — tradeoffs, open questions, areas of risk. -->
+
+## Adversarial review
+<!-- Paste the fresh Reviewer's `overall: SHIP` verdict (or the "Unresolved review
+items (escalated after 2-round cap)" block) from the loop in docs/agents/orchestration.md,
+then apply the `review:adversarial-passed` label. For a trivial or human-only change,
+apply the `skip-review` label instead and leave this empty. -->
+
+-

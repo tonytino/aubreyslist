@@ -94,6 +94,16 @@ export const LABELS = [
     color: "ededed",
     description: "PR intentionally ships without a changelog fragment",
   },
+  {
+    name: "review:adversarial-passed",
+    color: "0e8a16",
+    description: "Adversarial review loop completed (orchestration.md) — required to merge",
+  },
+  {
+    name: "skip-review",
+    color: "ededed",
+    description: "Bypasses the adversarial-review gate (trivial/human-only change)",
+  },
 ];
 
 /**
