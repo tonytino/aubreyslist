@@ -23,7 +23,10 @@ export type GetListingInput = z.infer<typeof getListingInputSchema>;
  * reachable by direct link; the content is only soft-moderated, so a moderator
  * can restore it, but the public never sees it. Hidden/removed CLAIMS and
  * INCIDENTS are filtered out in their own loaders (`listing-summary`,
- * `incidents/index`).
+ * `incidents/index`), which ALSO check the parent listing's visibility: there is
+ * no parent→child moderation propagation, so each of those addressable
+ * per-listing/per-claim RPCs joins `listings` and requires it `visible` too, so
+ * hiding/removing a listing also drops its claims/incidents from their own reads.
  *
  * Server-only: imports the DB client. The client-callable `createServerFn`
  * wrapper lives in `./get-listing.fn.ts`, whose handler body the TanStack Start

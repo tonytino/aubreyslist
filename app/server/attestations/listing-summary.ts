@@ -8,6 +8,7 @@ import {
   attestations,
   claimAttributes,
   claims,
+  listings,
 } from "~/db/schema";
 import type { ClaimAggregate } from "~/server/attestations";
 import { getCurrentUser } from "~/server/auth/current-user";
@@ -86,6 +87,13 @@ export type ListingClaimsInput = z.infer<typeof listingClaimsInputSchema>;
  * attribute reads as "no visible claim". Do not remove that predicate thinking
  * it is redundant — it is the only thing keeping moderated evidence off this
  * public surface and out of the headline cue.
+ *
+ * Parent visibility: `moderationStatus` has no parent→child propagation, so a
+ * moderator hiding/removing the LISTING leaves its claims `visible`. Both queries
+ * below INNER JOIN `listings` and additionally require the parent listing to be
+ * `visible`, so a moderated-away listing leaks NONE of its claim aggregates via
+ * this addressable per-listing RPC — every attribute falls back to its honest
+ * empty entry just as it would for a hidden claim.
  */
 export async function getListingClaimAggregates(
   input: ListingClaimsInput
@@ -104,11 +112,21 @@ export async function getListingClaimAggregates(
     })
     .from(claims)
     .leftJoin(attestations, eq(attestations.claimId, claims.id))
+    // Parent visibility: also require the parent LISTING to be visible, so a
+    // hidden/removed listing leaks none of its claim aggregates (no moderation
+    // propagation onto child claims — see the docstring).
+    .innerJoin(listings, eq(listings.id, claims.listingId))
     // Visibility (#41): this is a PUBLIC read, so a hidden/removed claim is
     // excluded entirely — it drops off the "Community claims" surface AND out of
     // the headline celiac-safe vs. gluten-friendly cue, whose counts recompute
     // from the surviving visible claims/attestations.
-    .where(and(eq(claims.listingId, input.listingId), eq(claims.moderationStatus, "visible")))
+    .where(
+      and(
+        eq(claims.listingId, input.listingId),
+        eq(claims.moderationStatus, "visible"),
+        eq(listings.moderationStatus, "visible")
+      )
+    )
     .groupBy(claims.id, claims.attribute, claims.lastConfirmedAt);
 
   // Index the existing claim rows by attribute so we can merge them onto the
@@ -144,10 +162,12 @@ export async function getListingClaimAggregates(
       .select({ claimId: attestations.claimId, value: attestations.value })
       .from(attestations)
       .innerJoin(claims, eq(claims.id, attestations.claimId))
+      .innerJoin(listings, eq(listings.id, claims.listingId))
       .where(
         and(
           eq(claims.listingId, input.listingId),
           eq(claims.moderationStatus, "visible"),
+          eq(listings.moderationStatus, "visible"),
           eq(attestations.userId, viewer.id)
         )
       );

@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *
  * The module's server-only deps are the DB client and the current-user resolver.
  * We model the two drizzle chains it uses:
- *   - aggregates: select().from().leftJoin().where().groupBy()  -> grouped rows
- *   - viewer vote: select().from().innerJoin().where()          -> own-vote rows
+ *   - aggregates: select().from().leftJoin().innerJoin().where().groupBy() -> grouped rows
+ *   - viewer vote: select().from().innerJoin().innerJoin().where()         -> own-vote rows
  * so we can assert the row-shaping and the per-claim `viewerVote` (#32) without a
- * live database, per docs/agents/testing.md.
+ * live database, per docs/agents/testing.md. Both chains INNER JOIN `listings` to
+ * gate on the parent listing's visibility (no parent→child moderation propagation).
  */
 
 const h = vi.hoisted(() => {
@@ -17,19 +18,27 @@ const h = vi.hoisted(() => {
     viewerVoteRows: [] as Array<{ claimId: string; value: string }>,
     viewer: null as { id: string } | null,
     aggWhere: undefined as unknown,
+    voteWhere: undefined as unknown,
   };
 
-  // Aggregate chain: select().from().leftJoin().where().groupBy().
+  // Aggregate chain: select().from().leftJoin(attestations).innerJoin(listings)
+  //   .where().groupBy(). The innerJoin(listings) is the parent-visibility gate.
   const groupByMock = vi.fn(() => Promise.resolve(state.rows));
   const aggWhereMock = vi.fn((predicate?: unknown) => {
     state.aggWhere = predicate;
     return { groupBy: groupByMock };
   });
-  const leftJoinMock = vi.fn(() => ({ where: aggWhereMock }));
+  const aggInnerJoinMock = vi.fn(() => ({ where: aggWhereMock }));
+  const leftJoinMock = vi.fn(() => ({ innerJoin: aggInnerJoinMock }));
 
-  // Viewer-vote chain: select().from().innerJoin().where() (terminal, awaited).
-  const voteWhereMock = vi.fn(() => Promise.resolve(state.viewerVoteRows));
-  const innerJoinMock = vi.fn(() => ({ where: voteWhereMock }));
+  // Viewer-vote chain: select().from().innerJoin(claims).innerJoin(listings)
+  //   .where() (terminal, awaited). The second innerJoin is the parent gate.
+  const voteWhereMock = vi.fn((predicate?: unknown) => {
+    state.voteWhere = predicate;
+    return Promise.resolve(state.viewerVoteRows);
+  });
+  const voteListingsJoinMock = vi.fn(() => ({ where: voteWhereMock }));
+  const innerJoinMock = vi.fn(() => ({ innerJoin: voteListingsJoinMock }));
 
   // `from()` may continue to either leftJoin (aggregates) or innerJoin (votes).
   const fromMock = vi.fn(() => ({ leftJoin: leftJoinMock, innerJoin: innerJoinMock }));
@@ -60,6 +69,7 @@ beforeEach(() => {
   state.viewerVoteRows = [];
   state.viewer = null;
   state.aggWhere = undefined;
+  state.voteWhere = undefined;
 });
 
 afterEach(() => {
@@ -182,6 +192,52 @@ describe("getListingClaimAggregates — full taxonomy, attestable (#150)", () =>
     const lower = dialect.sqlToQuery(state.aggWhere as SQL).sql.toLowerCase();
     expect(lower).toContain("moderation_status");
     expect(dialect.sqlToQuery(state.aggWhere as SQL).params).toContain("visible");
+  });
+
+  it("ALSO requires the PARENT listing visible — hidden/removed listing leaks no claim aggregates (no propagation)", async () => {
+    // `moderationStatus` has no parent→child propagation: hiding the LISTING
+    // leaves its claims `visible`. The aggregate query INNER JOINs `listings` and
+    // its WHERE additionally requires the listings table's
+    // `moderation_status = 'visible'`, so a hidden listing yields zero aggregate
+    // rows — every attribute then falls back to its honest empty entry. With a
+    // real hidden parent the rows arrive empty; here we assert the predicate.
+    state.rows = [];
+
+    const result = await getListingClaimAggregates({ listingId: "listing-hidden" });
+
+    const query = dialect.sqlToQuery(state.aggWhere as SQL);
+    const lower = query.sql.toLowerCase();
+    expect(lower).toContain('"listings"."moderation_status"');
+    expect(lower).toContain('"claims"."moderation_status"');
+    // Two `'visible'` binds: the claim's own status AND the parent listing's.
+    expect(query.params.filter((p) => p === "visible")).toHaveLength(2);
+    // A hidden parent's empty aggregate ⇒ every attribute is an honest empty entry.
+    for (const entry of result) {
+      expect(entry.claimId).toBeNull();
+      expect(entry.confirmCount).toBe(0);
+      expect(entry.disputeCount).toBe(0);
+    }
+  });
+
+  it("scopes the viewer-vote query to the visible PARENT listing too (defense-in-depth)", async () => {
+    state.rows = [
+      {
+        claimId: "c1",
+        attribute: "dedicated_fryer",
+        lastConfirmedAt: null,
+        confirmCount: "1",
+        disputeCount: "0",
+      },
+    ];
+    state.viewer = { id: "user-1" };
+    state.viewerVoteRows = [{ claimId: "c1", value: "confirm" }];
+
+    await getListingClaimAggregates({ listingId: "listing-1" });
+
+    const query = dialect.sqlToQuery(state.voteWhere as SQL);
+    const lower = query.sql.toLowerCase();
+    expect(lower).toContain('"listings"."moderation_status"');
+    expect(query.params).toContain("visible");
   });
 
   it("leaves viewerVote null for attributes the signed-in viewer has not voted on", async () => {

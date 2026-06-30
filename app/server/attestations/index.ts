@@ -1,7 +1,7 @@
 import { and, count, eq, max } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
-import { attestationValues, attestations, claimAttributes, claims } from "~/db/schema";
+import { attestationValues, attestations, claimAttributes, claims, listings } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { enforceWriteLimit } from "~/server/rate-limit";
 
@@ -110,24 +110,37 @@ export interface ClaimAggregate {
  * `moderationStatus` + recency FIRST and, for any non-`visible` or missing claim,
  * return the ZEROED/empty aggregate (treated as not-found) WITHOUT scanning its
  * attestations — never exposing the counts.
+ *
+ * Parent visibility: `moderationStatus` has no parent→child propagation, so a
+ * moderator hiding/removing the parent LISTING leaves the claim `visible`. The
+ * visibility lookup INNER JOINs `listings` and also reads the parent listing's
+ * `moderationStatus`; a non-`visible` parent listing is treated exactly like a
+ * non-`visible` claim — the ZEROED aggregate, never the counts.
  */
 export async function getClaimAggregate(input: ClaimAggregateInput): Promise<ClaimAggregate> {
   const db = getDb();
 
-  // Resolve the claim's visibility + recency first; bail with a zeroed aggregate
-  // for a non-visible or missing claim so a moderated-away claim's counts (and
-  // its `lastConfirmedAt`) never reach the caller.
+  // Resolve the claim's visibility + recency first (plus the parent listing's
+  // visibility); bail with a zeroed aggregate for a non-visible/missing claim OR
+  // a non-visible parent listing, so a moderated-away claim's counts (and its
+  // `lastConfirmedAt`) never reach the caller.
   const claimRows = await db
     .select({
       moderationStatus: claims.moderationStatus,
+      listingModerationStatus: listings.moderationStatus,
       lastConfirmedAt: claims.lastConfirmedAt,
     })
     .from(claims)
+    .innerJoin(listings, eq(listings.id, claims.listingId))
     .where(eq(claims.id, input.claimId))
     .limit(1);
 
   const claimRow = claimRows[0];
-  if (!claimRow || claimRow.moderationStatus !== "visible") {
+  if (
+    !claimRow ||
+    claimRow.moderationStatus !== "visible" ||
+    claimRow.listingModerationStatus !== "visible"
+  ) {
     return { claimId: input.claimId, confirmCount: 0, disputeCount: 0, lastConfirmedAt: null };
   }
 
