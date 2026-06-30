@@ -10,6 +10,12 @@ dist/
 # Test coverage
 coverage/
 
+# Stryker mutation testing (issue #187): the HTML/JSON reports and the sandbox
+# directory Stryker copies the project into to run mutants. Both are regenerated
+# by `pnpm test:mutation`; neither is committed.
+reports/
+.stryker-tmp/
+
 # Playwright E2E artifacts
 test-results/
 playwright-report/

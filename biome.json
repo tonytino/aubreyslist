@@ -40,7 +40,9 @@
       ".claude",
       "test-results",
       "playwright-report",
-      "coverage"
+      "coverage",
+      ".stryker-tmp",
+      "reports"
     ]
   }
 }
