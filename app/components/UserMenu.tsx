@@ -1,4 +1,4 @@
-import { GoogleLogo, ShieldCheck, SignOut, User } from "@phosphor-icons/react/dist/ssr";
+import { ShieldCheck, SignIn, SignOut, User } from "@phosphor-icons/react/dist/ssr";
 import { Link } from "@tanstack/react-router";
 import type { SessionUser } from "~/auth/current-user-query";
 import { Button } from "~/components/ui/button";
@@ -21,22 +21,21 @@ interface UserMenuProps {
  * runs the query itself) so it stays unit-testable in isolation — `SiteHeader`
  * reads the prefetched `currentUserQuery` and passes the result down.
  *
- * - Logged out: a "Continue with Google" anchor (full-page OAuth redirect).
+ * - Logged out: a compact "Log in" anchor (full-page OAuth redirect; Google is
+ *   the sole provider per ADR-006, but the header CTA stays generic).
  * - Logged in: an avatar button opening a portal dropdown with the user's
- *   identity, an admin-only link, and a POST sign-out form.
+ *   identity, a moderation/admin link for moderator+ roles, and a POST sign-out
+ *   form.
  */
 export function UserMenu({ user }: UserMenuProps) {
   if (user === null) {
     // Full-page navigation to the OAuth initiation route (not an RPC data
     // fetch) — a plain anchor is the correct mechanism for the redirect dance.
-    // Full label from `sm` up; a compact "Sign in" on narrow screens so the sole
-    // logged-out CTA never truncates while the header row stays within width.
     return (
-      <Button asChild variant="outline">
+      <Button asChild variant="outline" size="sm">
         <a href="/api/auth/google">
-          <GoogleLogo aria-hidden className="h-4 w-4" />
-          <span className="hidden sm:inline">Continue with Google</span>
-          <span className="sm:hidden">Sign in</span>
+          <SignIn aria-hidden className="h-4 w-4" />
+          Log in
         </a>
       </Button>
     );
@@ -77,11 +76,16 @@ export function UserMenu({ user }: UserMenuProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
 
-        {user.role === "admin" ? (
+        {/* Link to /admin for moderator+ — the route is RBAC-gated and shows
+            role-appropriate sections (admins: roles + settings + queue;
+            moderators: only the moderation queue), so the label reflects what
+            the viewer will actually see. Server fns re-guard regardless; this is
+            navigation only. */}
+        {user.role === "admin" || user.role === "moderator" ? (
           <DropdownMenuItem asChild>
             <Link to="/admin">
               <ShieldCheck aria-hidden className="h-4 w-4" />
-              Admin
+              {user.role === "admin" ? "Admin" : "Moderation"}
             </Link>
           </DropdownMenuItem>
         ) : null}
