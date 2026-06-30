@@ -238,6 +238,18 @@ describe("runCreateListing — places mode", () => {
     await expect(promise).rejects.toThrow(/can.?t be added right now/i);
     // Never returns the moderated row.
     expect(onConflictDoNothingMock).toHaveBeenCalledWith({ target: expect.anything() });
+
+    // Regression guard for the #41 leak on the *conflict* branch specifically:
+    // the POST-conflict re-read (the second `findFirst`) must ALSO scope to
+    // `moderation_status = 'visible'`, not just `place_id`. Without this the leak
+    // could silently return on the conflict path (the pre-insert lookup's filter
+    // alone is not enough). We inspect the second call's predicate so that
+    // stripping the visible filter from the re-read fails here.
+    expect(findFirstMock).toHaveBeenCalledTimes(2);
+    const reReadWhere = findFirstMock.mock.calls[1]?.[0]?.where;
+    const reReadCols = columnsReferenced(reReadWhere);
+    expect(reReadCols).toContain("place_id");
+    expect(reReadCols).toContain("moderation_status");
   });
 
   it("rejects a places submission while intake is in manual mode", async () => {
