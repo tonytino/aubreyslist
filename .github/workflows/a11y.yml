@@ -1,0 +1,56 @@
+name: Accessibility
+
+# Always-on, DB-free accessibility gate (issue #192, part of #178).
+#
+# Accessibility is product-critical for a safety directory, so unlike the full
+# E2E suite — which is hidden behind the optional `CI_E2E_DATABASE_URL` secret in
+# ci.yml's `integration-e2e` job — this lane runs on EVERY push/PR. It runs ONLY
+# tests/e2e/a11y.spec.ts (via the dedicated Playwright `a11y` project) against
+# `pnpm dev`, and DELIBERATELY sets NO `DATABASE_URL`/`CI_E2E_DATABASE_URL`, so it
+# stays DB-free and audits the public, static pages (/, /about, /style-guide).
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+# Least privilege: this lane only reads the repo.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref (mirrors ci.yml).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  a11y:
+    name: Accessibility (axe-core)
+    runs-on: ubuntu-latest
+
+    steps:
+      # SHAs copied verbatim from .github/workflows/ci.yml (the repo pins every
+      # action by SHA + `# vX.Y.Z`).
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The a11y spec drives a real browser, so install it (same step the gated
+      # E2E lane uses). No browser is pre-baked into the runner.
+      - name: Install Playwright browser
+        run: pnpm test:e2e:install
+
+      # Run ONLY the a11y project (tests/e2e/a11y.spec.ts). Playwright's
+      # `webServer` config boots `pnpm dev` and waits for it. NO DATABASE_URL is
+      # set: the audited pages are static and render DB-free; the DB-backed routes
+      # are excluded from this spec on purpose (see the spec header).
+      - name: Accessibility checks (axe-core, DB-free)
+        run: pnpm test:e2e --project=a11y
