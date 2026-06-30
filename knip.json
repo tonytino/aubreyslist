@@ -15,6 +15,6 @@
     "scripts/remove-example.mjs"
   ],
   "project": ["app/**/*.{ts,tsx}", "db/**/*.ts", "scripts/*.mjs"],
-  "ignoreDependencies": ["tailwindcss"],
+  "ignoreDependencies": ["tailwindcss", "tw-animate-css"],
   "drizzle": false
 }

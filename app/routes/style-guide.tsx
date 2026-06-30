@@ -1,5 +1,6 @@
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { SAFETY_STATES, SafetySignal } from "~/components/SafetySignal";
 import { Wordmark } from "~/components/Wordmark";
 import { Badge } from "~/components/ui/badge";
@@ -12,8 +13,29 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 
 export const Route = createFileRoute("/style-guide")({
   component: StyleGuide,
@@ -83,6 +105,8 @@ function Section({
 }
 
 function StyleGuide() {
+  const [notifyOnClaims, setNotifyOnClaims] = useState(true);
+
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-section bg-background p-gutter text-foreground">
       <header className="flex flex-col gap-2">
@@ -222,6 +246,90 @@ function StyleGuide() {
             <span className="text-caption text-muted-foreground">aria-invalid state</span>
           </div>
         </div>
+      </Section>
+
+      <Section title="Dialog">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button>Remove listing</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Remove this listing?</DialogTitle>
+              <DialogDescription>
+                This hides Sweetgreen from the directory. You can restore it later from the archive.
+              </DialogDescription>
+            </DialogHeader>
+            <p className="text-body-sm text-muted-foreground">
+              Community claims and incident history stay attached to the listing while it's
+              archived.
+            </p>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline">Close</Button>
+              </DialogClose>
+              <Button>Confirm</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </Section>
+
+      <Section title="Dropdown menu">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">Listing actions</Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>Sweetgreen</DropdownMenuLabel>
+            <DropdownMenuItem>View listing</DropdownMenuItem>
+            <DropdownMenuItem>Add a claim</DropdownMenuItem>
+            <DropdownMenuItem>Report an incident</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem checked={notifyOnClaims} onCheckedChange={setNotifyOnClaims}>
+              Notify me on new claims
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </Section>
+
+      <Section title="Tooltip">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost">Safety score</Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Aggregated from community claims and verified incidents.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </Section>
+
+      <Section title="Tabs">
+        <Tabs defaultValue="overview" className="max-w-md">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="claims">Community claims</TabsTrigger>
+            <TabsTrigger value="incidents">Incidents</TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview" className="text-body-sm text-muted-foreground">
+            A summary of the listing's safety signals, hours, and dedicated prep details.
+          </TabsContent>
+          <TabsContent value="claims" className="text-body-sm text-muted-foreground">
+            What the community reports about cross-contact practices and staff awareness.
+          </TabsContent>
+          <TabsContent value="incidents" className="text-body-sm text-muted-foreground">
+            A timeline of reported reactions, with severity and resolution notes.
+          </TabsContent>
+        </Tabs>
+      </Section>
+
+      <Section title="Dark mode">
+        <p className="text-body-sm text-muted-foreground">
+          The palette adapts automatically via the theme toggle in the site header. Every token and
+          component above reads from semantic CSS variables, so switching themes re-themes the
+          entire gallery without per-component changes.
+        </p>
       </Section>
     </main>
   );

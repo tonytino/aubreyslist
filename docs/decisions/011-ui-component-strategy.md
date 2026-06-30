@@ -57,5 +57,16 @@ library.
   `@radix-ui/react-slot`, `@radix-ui/react-label`, `@phosphor-icons/react`. Pull in
   additional `@radix-ui/*` primitives per-component only when a component needs
   them (dialog, popover, dropdown, etc.) — do not add them speculatively.
-- **Dark mode is deferred.** The reconciled tokens are light-mode only for now;
-  add a `.dark` layer when dark mode is actually scheduled.
+- **Dark mode is class-based, via a `.dark` runtime-override layer.** The
+  `@variant dark (&:where(.dark, .dark *))` directive in `app/styles/app.css`
+  enables the class strategy, and a `.dark { … }` block overrides the runtime
+  `--color-*` custom properties (neutrals + the shadcn semantic layer; brand
+  lightened for legibility on dark, with `--color-primary` overridden
+  independently so white button/tooltip text stays WCAG AA). The `@theme` light
+  values are never mutated. A blocking no-FOUC inline script in
+  `app/routes/__root.tsx` sets the `.dark` class from `localStorage.theme`
+  (falling back to `prefers-color-scheme`) before first paint, and
+  `app/components/ThemeToggle.tsx` flips/persists it. See `docs/agents/styling.md`
+  → Dark Mode. The safety `-soft` fills are overridden in `.dark` but kept light
+  so the `SafetySignal` strong-colour text stays AA — the colour+icon+label
+  contract holds in both themes.

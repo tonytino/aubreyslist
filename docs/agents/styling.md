@@ -44,12 +44,31 @@ Use Tailwind's mobile-first breakpoint prefixes:
 
 ## Dark Mode
 
-Tailwind v4 uses the `dark:` variant with the `@media (prefers-color-scheme)` strategy by default. To use class-based dark mode, configure it in `app/styles/app.css`:
+Dark mode is **implemented and class-based** (ADR-011). It works through three pieces:
 
-```css
-@import "tailwindcss";
-@variant dark (&:where(.dark, .dark *));
-```
+1. **The variant** — `@variant dark (&:where(.dark, .dark *));` near the top of
+   `app/styles/app.css` switches Tailwind v4 from the default
+   `@media (prefers-color-scheme)` strategy to the `.dark` class strategy.
+2. **The token layer** — a `.dark { … }` block at the end of `app/styles/app.css`
+   overrides the runtime `--color-*` custom properties for the dark palette
+   (neutrals + the shadcn semantic layer). The `@theme` light values are never
+   touched. Two rules to preserve when editing it:
+   - **Override `--color-primary` independently of `--color-brand`.** The brand is
+     lightened in `.dark` so `text-brand` reads on dark surfaces, but a *lightened*
+     primary fails WCAG AA for white button/tooltip text — so `--color-primary` is
+     pinned darker (~`oklch(0.50 0.21 295)`) where white reaches ≥ 4.5:1.
+   - **The safety `-soft` fills are overridden but kept light**, because the
+     `SafetySignal` `soft` variant draws its text in the *strong* safety colour
+     (not white). Light fills keep that text AA-legible; never make them dark.
+3. **No-FOUC + toggle** — a blocking inline script in `app/routes/__root.tsx`
+   reads `localStorage.theme` (falling back to `prefers-color-scheme`) and sets the
+   `.dark` class on `<html>` **before first paint**, so dark users see no flash.
+   `app/components/ThemeToggle.tsx` (in the site header) flips and persists the
+   choice; it initialises to `"light"` (matching SSR) and reconciles to the applied
+   theme in a post-mount effect to avoid a hydration mismatch.
+
+When adding tokens, add the light value under `@theme` **and** a matching `.dark`
+override, and re-check AA contrast for both themes.
 
 ## Brand & Design Tokens (issue #12)
 

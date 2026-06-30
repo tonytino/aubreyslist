@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
+import { ThemeToggle } from "~/components/ThemeToggle";
 import { Wordmark } from "~/components/Wordmark";
 import { Button } from "~/components/ui/button";
 import { fetchCurrentUser } from "~/server/auth/current-user.fn";
@@ -61,6 +62,20 @@ function RootComponent() {
   return (
     <html lang="en">
       <head>
+        {/* No-FOUC theme script. This is the single sanctioned use of
+            dangerouslySetInnerHTML in the app: a tiny, dependency-free,
+            render-blocking IIFE must run BEFORE first paint to set the `dark`
+            class on <html>, otherwise dark-preference users see a light flash
+            during hydration. It reads localStorage.theme, falling back to the
+            OS `prefers-color-scheme` media query, and is wrapped in try/catch
+            so a blocked storage access can never break the page. */}
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: render-blocking no-FOUC theme init must run before hydration; see comment above.
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');if(!t){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();",
+          }}
+        />
         <HeadContent />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
@@ -108,7 +123,10 @@ function SiteHeader() {
           </ul>
         </nav>
 
-        <AuthControl />
+        <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
+          <AuthControl />
+        </div>
       </div>
     </header>
   );
@@ -123,7 +141,7 @@ function AuthControl() {
     // Full-page navigation to the OAuth initiation route (not an RPC data
     // fetch) — a plain anchor is the correct mechanism for the redirect dance.
     return (
-      <Button asChild variant="outline" className="ml-auto">
+      <Button asChild variant="outline">
         <a href="/api/auth/google">
           <GoogleLogo aria-hidden className="h-4 w-4" />
           Continue with Google
@@ -133,7 +151,7 @@ function AuthControl() {
   }
 
   return (
-    <div className="ml-auto flex items-center gap-3">
+    <div className="flex items-center gap-3">
       <span className="flex items-center gap-2 text-sm font-medium text-foreground">
         {user.avatarUrl ? (
           <img src={user.avatarUrl} alt="" className="h-6 w-6 rounded-full" />
