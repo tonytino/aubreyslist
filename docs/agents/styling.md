@@ -44,12 +44,31 @@ Use Tailwind's mobile-first breakpoint prefixes:
 
 ## Dark Mode
 
-Tailwind v4 uses the `dark:` variant with the `@media (prefers-color-scheme)` strategy by default. To use class-based dark mode, configure it in `app/styles/app.css`:
+Dark mode is **implemented and class-based** (ADR-011). It works through three pieces:
 
-```css
-@import "tailwindcss";
-@variant dark (&:where(.dark, .dark *));
-```
+1. **The variant** — `@variant dark (&:where(.dark, .dark *));` near the top of
+   `app/styles/app.css` switches Tailwind v4 from the default
+   `@media (prefers-color-scheme)` strategy to the `.dark` class strategy.
+2. **The token layer** — a `.dark { … }` block at the end of `app/styles/app.css`
+   overrides the runtime `--color-*` custom properties for the dark palette
+   (neutrals + the shadcn semantic layer). The `@theme` light values are never
+   touched. Two rules to preserve when editing it:
+   - **Override `--color-primary` independently of `--color-brand`.** The brand is
+     lightened in `.dark` so `text-brand` reads on dark surfaces, but a *lightened*
+     primary fails WCAG AA for white button/tooltip text — so `--color-primary` is
+     pinned darker (~`oklch(0.50 0.21 295)`) where white reaches ≥ 4.5:1.
+   - **The safety `-soft` fills are overridden but kept light**, because the
+     `SafetySignal` `soft` variant draws its text in the *strong* safety colour
+     (not white). Light fills keep that text AA-legible; never make them dark.
+3. **No-FOUC + toggle** — a blocking inline script in `app/routes/__root.tsx`
+   reads `localStorage.theme` (falling back to `prefers-color-scheme`) and sets the
+   `.dark` class on `<html>` **before first paint**, so dark users see no flash.
+   `app/components/ThemeToggle.tsx` (in the site header) flips and persists the
+   choice; it initialises to `"light"` (matching SSR) and reconciles to the applied
+   theme in a post-mount effect to avoid a hydration mismatch.
+
+When adding tokens, add the light value under `@theme` **and** a matching `.dark`
+override, and re-check AA contrast for both themes.
 
 ## Brand & Design Tokens (issue #12)
 
@@ -82,7 +101,7 @@ label** for all four states:
 | --- | --- | --- | --- |
 | `celiac-safe` | "Celiac-safe" | shield + check | headline trust state |
 | `gluten-friendly` | "Gluten-friendly" | info circle | GF-ish only — *not* safe |
-| `stale` | "May be stale" | clock | outside the staleness window |
+| `stale` | "Stale listing" | clock | outside the staleness window |
 | `incident` | "Recent incident" | warning triangle | recent "got glutened" harm |
 
 ```tsx
@@ -104,3 +123,42 @@ so the signal survives greyscale.
 `/style-guide` route, which showcases the palette, type scale, and every signal.
 
 The header wordmark is `app/components/Wordmark.tsx` (`<Wordmark size="lg" />`).
+
+## Component primitives (shadcn/ui — ADR-011)
+
+Reusable primitives live in `app/components/ui/` (shadcn New-York style,
+hand-authored — the CLI registry is network-blocked, so add new ones from the
+upstream shadcn source and adapt them). They compose through `cn()` in
+`~/lib/utils.ts` and render on the brand palette via a **shadcn semantic token
+layer** in `app/styles/app.css` (`bg-primary`, `border-input`, `bg-destructive`,
+`ring-ring`, `bg-card`, …) that maps onto the existing brand/safety/neutral
+tokens. That layer is **additive** — never replace the brand or safety tokens
+with a stock `shadcn init` `:root` set.
+
+```tsx
+import { Button } from "~/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
+
+<Button variant="default">Browse listings</Button>
+<Button variant="outline" asChild><a href="/about">About</a></Button>
+```
+
+Reach for a primitive before writing bespoke Tailwind for a button/card/field.
+Domain components (`SafetySignal`, `ListingCard`) stay where they are and may
+compose primitives. The `SafetySignal` colour+icon+label contract is **not**
+shadcn's job and must not be regressed.
+
+### Icons — Phosphor, SSR import only
+
+Use `@phosphor-icons/react`, imported from the **SSR-safe entrypoint** (this is an
+SSR app):
+
+```tsx
+import { ShieldCheck, Plus } from "@phosphor-icons/react/dist/ssr";
+
+<Plus weight="bold" className="h-4 w-4" />
+```
+
+Never import from the barrel `@phosphor-icons/react` in app code — it causes
+SSR/bundle issues. Do not swap the `SafetySignal` SVGs for Phosphor unless each
+safety state keeps a distinct greyscale-survivable shape (a reviewed change).

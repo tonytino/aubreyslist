@@ -1,4 +1,14 @@
 @import "tailwindcss";
+/* Enter/exit keyframes (animate-in / fade-out / zoom / slide) for the shadcn
+   interactive primitives (dialog, dropdown, tooltip). Tailwind v4 replacement
+   for tailwindcss-animate. CSS-only import — see knip.json ignoreDependencies. */
+@import "tw-animate-css";
+
+/* Class-based dark mode (Tailwind v4). The `.dark` class is added to
+   <html> by the no-FOUC inline script in app/routes/__root.tsx before paint,
+   so `dark:` utilities and the `.dark { … }` override block below both key off
+   it. Must precede @theme. See docs/agents/styling.md → Dark Mode. */
+@variant dark (&:where(.dark, .dark *));
 
 /*
  * Aubrey's List — brand identity + accessible design tokens (issue #12).
@@ -107,4 +117,95 @@
   /* ----------------------------------------------------------------------- */
   --radius-chip: 9999px;
   --radius-card: 0.75rem;
+
+  /* ----------------------------------------------------------------------- */
+  /* shadcn/ui semantic layer (ADR-011 — full shadcn adoption).               */
+  /* ADDITIVE ONLY: maps shadcn's expected utilities (bg-primary, ring-ring,  */
+  /* border-input, bg-destructive, …) onto the existing brand/OKLCH palette   */
+  /* so generated components render on-brand. The brand, safety, type,        */
+  /* spacing, and radius tokens above are untouched, and the safety-signal    */
+  /* colour+icon+label contract is unaffected — these tokens only style the   */
+  /* shadcn primitives. These are the LIGHT defaults; dark mode is implemented */
+  /* via @variant dark (top of file) + the `.dark { … }` override block below. */
+  /* ----------------------------------------------------------------------- */
+  --color-primary: var(--color-brand);
+  --color-primary-foreground: var(--color-brand-foreground);
+  --color-secondary: var(--color-brand-soft);
+  --color-secondary-foreground: var(--color-brand-strong);
+  --color-muted: oklch(0.96 0.005 295); /* subtle neutral fill */
+  /* --color-muted-foreground is defined in the Neutrals group above (KEEP) */
+  --color-accent: var(--color-accent-lavender);
+  --color-accent-foreground: var(--color-brand-strong);
+  --color-destructive: var(--color-incident); /* reuse the incident red */
+  --color-destructive-foreground: var(--color-incident-foreground);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-foreground);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-foreground);
+  --color-input: var(--color-border); /* input/control border */
+  --color-ring: var(--color-brand-ring); /* focus ring */
+}
+
+/* ------------------------------------------------------------------------- */
+/* Dark theme — runtime overrides (issue: class-based dark mode).            */
+/*                                                                           */
+/* This block lives OUTSIDE @theme on purpose: @theme holds the static light */
+/* defaults that Tailwind compiles utilities from; here we only re-point the */
+/* same CSS custom properties at runtime when `.dark` is on <html>. Utility  */
+/* classes already reference these variables, so flipping the values flips   */
+/* the rendered colours with no extra classes.                              */
+/*                                                                           */
+/* Palette: dark, slightly purple-tinted neutrals (hue 295 to match brand).  */
+/* Contrast (OKLCH lightness, on the L-axis a delta of ~0.5 clears AA 4.5:1):*/
+/*   --color-foreground L0.96 on --color-background L0.18  → ~13:1 (AAA)      */
+/*   --color-muted-foreground L0.72 on background L0.18    → ~5.6:1 (AA)      */
+/*   --color-card-foreground L0.96 on --color-card L0.22   → ~11:1 (AAA)      */
+/*   secondary/accent -foreground L0.92 on their L~0.30 fills → ~7:1 (AAA)    */
+/* --color-brand is LIGHTENED so `text-brand` reads on dark; the white-on-fill */
+/* primary (Button/Tooltip) instead gets its own darker --color-primary below. */
+/* ------------------------------------------------------------------------- */
+.dark {
+  /* Brand — lightened for contrast/vibrancy on dark surfaces. */
+  --color-brand: oklch(0.62 0.19 295);
+  --color-brand-strong: oklch(0.7 0.17 295);
+  --color-brand-soft: oklch(0.28 0.06 295);
+  --color-brand-ring: oklch(0.7 0.17 295);
+
+  /* Neutrals / surfaces — purple-tinted near-blacks. */
+  --color-background: oklch(0.18 0.015 295);
+  --color-foreground: oklch(0.96 0.005 295); /* ~13:1 on background */
+  --color-surface: oklch(0.22 0.018 295);
+  --color-border: oklch(0.32 0.02 295);
+  --color-muted-foreground: oklch(0.72 0.02 295); /* ~5.6:1 on background */
+
+  /* shadcn semantic layer.
+     --color-primary is overridden INDEPENDENTLY of --color-brand: solid
+     primary surfaces (Button default variant, Tooltip) carry WHITE text, so
+     primary must stay DARK enough for white to clear AA ≥4.5:1. The lightened
+     --color-brand (L0.62, tuned so `text-brand` reads ON dark surfaces) would
+     only give ~3.8:1 under white, so we pin primary to L0.50 — the same depth
+     as the light-mode brand, which already passes AA under white (~5.0:1). */
+  --color-primary: oklch(0.5 0.21 295);
+  --color-muted: oklch(0.26 0.018 295);
+  --color-card: oklch(0.22 0.018 295);
+  --color-card-foreground: oklch(0.96 0.005 295);
+  --color-popover: oklch(0.22 0.018 295);
+  --color-popover-foreground: oklch(0.96 0.005 295);
+  --color-input: oklch(0.34 0.02 295);
+  --color-ring: oklch(0.7 0.17 295);
+  --color-secondary: oklch(0.3 0.05 295);
+  --color-secondary-foreground: oklch(0.92 0.03 295); /* ~7:1 on secondary */
+  --color-accent: oklch(0.3 0.05 295);
+  --color-accent-foreground: oklch(0.92 0.03 295); /* ~7:1 on accent */
+
+  /* Safety -soft fills — the SafetySignal `soft` variant draws its TEXT in the
+     strong colour (`text-celiac-safe` …, L0.43–0.48), not the white
+     *-foreground, so the fill must stay LIGHT for that text to clear AA. We
+     keep light, slightly more saturated pastels: the dark strong text (L≤0.48)
+     on these (L0.90) gives ~6–8:1, comfortably AA. Each hue stays distinct so
+     the chip still reads at a glance on the dark surface. */
+  --color-celiac-safe-soft: oklch(0.9 0.07 160);
+  --color-gluten-friendly-soft: oklch(0.9 0.08 80);
+  --color-stale-soft: oklch(0.9 0.03 255);
+  --color-incident-soft: oklch(0.9 0.06 25);
 }

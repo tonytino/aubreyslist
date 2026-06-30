@@ -1,0 +1,2 @@
+- `[manual]` Adopted shadcn/ui as the component layer (primitives in `app/components/ui/`) on top of the existing brand tokens, added Phosphor icons, and reskinned the app shell, home hero, and style guide. See ADR-011.
+- `[manual]` Added class-based dark mode (`.dark` token layer + no-FOUC theme toggle in the header) and interactive primitives — Dialog, DropdownMenu, Tooltip, and Tabs (Radix-backed) — all showcased in the `/style-guide` gallery.
