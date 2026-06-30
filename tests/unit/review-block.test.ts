@@ -15,23 +15,44 @@ describe("validateReviewBlock", () => {
     expect(validateReviewBlock(body)).toEqual({ ok: true });
   });
 
-  it("passes on an escalation block", () => {
+  it("passes on the VERBATIM orchestration.md JSON verdict block", () => {
+    // Exactly the fenced verdict from docs/agents/orchestration.md (quoted key
+    // and value) pasted inside the section. This is the canonical Reviewer output.
     const body = [
       "## Adversarial review",
-      "## Unresolved review items (escalated after 2-round cap)",
-      "- **[minor] docs** — wording. Worker's rebuttal: fine. Reviewer's concern: nit.",
+      "",
+      "```json",
+      "{",
+      '  "findings": [],',
+      '  "overall": "SHIP",',
+      '  "notes": "clean."',
+      "}",
+      "```",
     ].join("\n");
-    // The escalation heading is shallower-or-equal? No — both are h2, so the
-    // section under "Adversarial review" stops at the next h2. Keep the marker
-    // INSIDE the section to assert detection.
-    const inline = [
+    expect(validateReviewBlock(body)).toEqual({ ok: true });
+  });
+
+  it("passes on the VERBATIM orchestration.md escalation `##` heading after the section", () => {
+    // orchestration.md documents the escalation block as its own h2 heading. It
+    // is pasted as a SIBLING of `## Adversarial review`, so the section boundary
+    // cuts it off — but the marker is matched body-wide and must still validate.
+    const body = [
       "## Adversarial review",
-      "Unresolved review items (escalated after 2-round cap)",
-      "- **[minor] docs** — wording.",
+      "",
+      "## Unresolved review items (escalated after 2-round cap)",
+      "- **[major] correctness** — edge case. Worker's rebuttal: out of scope. Reviewer's concern: still risky.",
     ].join("\n");
-    expect(validateReviewBlock(inline)).toEqual({ ok: true });
-    // The split-heading variant correctly does NOT count the sibling h2.
-    expect(validateReviewBlock(body).ok).toBe(false);
+    expect(validateReviewBlock(body)).toEqual({ ok: true });
+  });
+
+  it("passes on bold-emphasised verdicts", () => {
+    expect(validateReviewBlock("## Adversarial review\n**overall**: SHIP").ok).toBe(true);
+    expect(validateReviewBlock("## Adversarial review\n**overall: SHIP**").ok).toBe(true);
+  });
+
+  it("fails on a SHIP-prefixed word (word boundary)", () => {
+    expect(validateReviewBlock("## Adversarial review\noverall: SHIPPED to prod").ok).toBe(false);
+    expect(validateReviewBlock("## Adversarial review\noverall: SHIP-NOT").ok).toBe(false);
   });
 
   it("is case-insensitive on the heading and the verdict", () => {

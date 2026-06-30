@@ -8,24 +8,34 @@
 // could be fabricated (see the "Honest limitation" note in orchestration.md).
 //
 // ── Validity contract ────────────────────────────────────────────────────────
-// The body is VALID when ALL of the following hold:
+// The body is VALID iff BOTH:
 //   1. It contains a Markdown heading whose text is "Adversarial review"
 //      (case-insensitive, any heading level `#`..`######`, surrounding
-//      whitespace ignored).
-//   2. The section under that heading — everything up to the next heading of the
-//      same-or-shallower level, or end of body — contains EITHER:
-//        a. a passing-verdict token: `overall: SHIP` (case-insensitive, flexible
-//           whitespace around the colon), matching orchestration.md's verdict
-//           schema; OR
-//        b. the documented escalation marker:
+//      whitespace ignored); AND
+//   2. EITHER:
+//        a. a passing-verdict token is found WITHIN that heading's section
+//           (the lines up to the next heading of same-or-shallower level, or end
+//           of body, with HTML comments stripped). The token tolerates the exact
+//           forms orchestration.md documents and the markdown people paste:
+//             - the JSON verdict   `"overall": "SHIP"`
+//             - a bare token       `overall: SHIP`
+//             - bold emphasis      `**overall**: SHIP` / `**overall: SHIP**`
+//           i.e. /["'*_]*overall["'*_]*\s*:\s*["'*_]*ship(?![\w-])/i. The
+//           trailing `(?![\w-])` stops `SHIPPED` / `SHIP-NOT`. SHIP is SECTION-scoped so a stray
+//           "overall: SHIP" in unrelated prose does NOT satisfy the gate; OR
+//        b. the documented escalation marker appears ANYWHERE in the body:
 //           "Unresolved review items (escalated after 2-round cap)"
-//           (case-insensitive), matching orchestration.md's escalation format.
-//   3. After stripping HTML comments (the template's `<!-- ... -->` instruction)
-//      the section still contains the evidence above — i.e. a section holding
-//      ONLY the template placeholder / comment / a bare `-` does not pass.
+//           (case-insensitive). orchestration.md documents this as its own `##`
+//           heading, which the section boundary in (a) would cut off — so this
+//           marker is matched body-wide. Its text is specific enough that a
+//           body-wide match won't false-positive.
+//   3. As part of (2a): after stripping HTML comments (the template's
+//      `<!-- ... -->` instruction) a section holding ONLY the template
+//      placeholder / comment / a bare `-` has no SHIP token and (absent the
+//      escalation marker) does not pass.
 //
-// It is INVALID (and main() exits 1) when the heading is missing, or the section
-// is empty/placeholder, or it has neither a SHIP token nor the escalation marker.
+// It is INVALID (and main() exits 1) when the heading is missing, or there is
+// neither an in-section SHIP token nor the escalation marker anywhere.
 //
 // The PR body is read from process.env.PR_BODY — NEVER from argv inline — so a
 // hostile body can't inject into the calling shell (mirrors how the pr-title job
@@ -73,6 +83,14 @@ export function validateReviewBlock(body) {
     return { ok: false, reason: "Missing an `## Adversarial review` heading in the PR body." };
   }
 
+  // The escalation marker is matched BODY-WIDE: orchestration.md documents it as
+  // its own `## ` heading, which the section boundary below would cut off. Its
+  // text is specific enough that a body-wide match won't false-positive.
+  const escalationRe = /unresolved review items \(escalated after 2-round cap\)/i;
+  if (escalationRe.test(stripHtmlComments(body))) {
+    return { ok: true };
+  }
+
   // Collect the section body: until the next heading of same-or-shallower level.
   const sectionLines = [];
   for (let i = headingIdx + 1; i < lines.length; i++) {
@@ -96,9 +114,12 @@ export function validateReviewBlock(body) {
     };
   }
 
-  const shipRe = /overall\s*:\s*ship/i;
-  const escalationRe = /unresolved review items \(escalated after 2-round cap\)/i;
-  if (shipRe.test(section) || escalationRe.test(section)) {
+  // Passing verdict, SECTION-scoped. Tolerates the JSON verdict (`"overall":
+  // "SHIP"`), a bare token (`overall: SHIP`), and bold emphasis (`**overall**:
+  // SHIP`). The trailing `(?![\w-])` stops `SHIPPED` and `SHIP-NOT` from passing
+  // (a bare `\b` would still match before the hyphen in `SHIP-NOT`).
+  const shipRe = /["'*_]*overall["'*_]*\s*:\s*["'*_]*ship(?![\w-])/i;
+  if (shipRe.test(section)) {
     return { ok: true };
   }
 
