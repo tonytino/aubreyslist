@@ -175,27 +175,33 @@ function ListingDetail() {
           signed-in user can begin attesting ANY attribute even on a listing
           with no claims yet (the claim is created lazily on first vote). No more
           "coming soon" dead-end. */}
-      <Card aria-labelledby="community-claims-heading">
-        <CardHeader>
-          <h2 id="community-claims-heading" className="text-title">
-            Community claims
-          </h2>
-          <CardDescription>
-            What the community has confirmed or disputed about this restaurant. Each summary is a
-            roll-up of the visible attestations below it — never a hidden score. Sign in to confirm
-            or dispute any attribute.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <CommunityClaims
-            listingId={listing.id}
-            claims={claims}
-            viewerId={viewerId}
-            now={now}
-            stalenessMonths={stalenessMonths}
-          />
-        </CardContent>
-      </Card>
+      {/* Keep the landmark as a real <section> (a bare Card is a <div> and gets
+          no implicit region role from aria-labelledby alone — and Biome's
+          useSemanticElements forbids role="region"). The Card stays inside for
+          styling; the heading lives in CardHeader. Mirrors AdminSection. */}
+      <section aria-labelledby="community-claims-heading">
+        <Card>
+          <CardHeader>
+            <h2 id="community-claims-heading" className="text-title">
+              Community claims
+            </h2>
+            <CardDescription>
+              What the community has confirmed or disputed about this restaurant. Each summary is a
+              roll-up of the visible attestations below it — never a hidden score. Sign in to
+              confirm or dispute any attribute.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CommunityClaims
+              listingId={listing.id}
+              claims={claims}
+              viewerId={viewerId}
+              now={now}
+              stalenessMonths={stalenessMonths}
+            />
+          </CardContent>
+        </Card>
+      </section>
 
       <TrustPlaceholder
         title="Incident reports"

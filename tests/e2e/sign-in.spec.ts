@@ -35,13 +35,18 @@ test.describe("mocked Google sign-in", () => {
     // biome-ignore lint/style/noNonNullAssertion: Playwright always provides baseURL from the config.
     await seeder.signIn(context, user.id, baseURL!);
 
-    // The header now shows the authenticated state: the visitor's name + a
-    // "Sign out" control, and NOT the anonymous "Continue with Google" entry.
+    // The header now shows the authenticated state as an avatar account menu
+    // (the visitor's name + a "Sign out" control live inside it), and NOT the
+    // anonymous "Continue with Google" entry.
     await page.goto("/");
     const header = page.getByRole("banner");
     await expect(header.getByRole("link", { name: "Continue with Google" })).toHaveCount(0);
-    await expect(header.getByText(user.name)).toBeVisible();
-    await expect(header.getByRole("button", { name: "Sign out" })).toBeVisible();
+    const accountMenu = header.getByRole("button", { name: `Account menu for ${user.name}` });
+    await expect(accountMenu).toBeVisible();
+    // Open the menu — its content is portaled out of the banner, so assert on the page.
+    await accountMenu.click();
+    await expect(page.getByText(user.name)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 
     // A gated surface now renders its authenticated form, not the sign-in prompt.
     await page.goto("/listings/new");
