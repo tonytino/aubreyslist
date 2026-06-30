@@ -18,7 +18,7 @@ jobs:
   # The lint/type/test work is split into independent jobs that run
   # concurrently. Each job repeats the standard setup (checkout, pnpm, node,
   # install) so it is self-contained; wall-clock is the longest single job
-  # rather than the sum of every step.
+  # rather than the sum of every job.
   lint:
     name: Lint & format
     runs-on: ubuntu-latest
@@ -236,6 +236,31 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # Mechanical client-bundle guard (issue #159). The browser bundle must
+      # NEVER contain db/neon code: the `.fn.ts` server seams are meant to be
+      # stripped from the client by the TanStack Start compiler, but a future
+      # edit or plugin regression could drag neon/drizzle into the browser
+      # (the #93/#122/#141 bug class). Rather than rely on every seam using the
+      # right import pattern, we assert the actual build output. We grep ONLY
+      # the client assets (.output/public/_build/assets/, where the hashed
+      # browser bundles land) for forbidden tokens. We deliberately do NOT scan
+      # .output/server/, which legitimately contains db code.
+      - name: Assert the client bundle contains no db/neon code
+        run: |
+          CLIENT_ASSETS=.output/public/_build/assets
+          if [ ! -d "$CLIENT_ASSETS" ]; then
+            echo "::error::Client asset dir $CLIENT_ASSETS not found — the build layout changed; update this guard (issue #159)."
+            exit 1
+          fi
+          # Forbidden tokens: any of these in the browser bundle means db/neon
+          # code leaked to the client (a #93/#122/#141-class regression).
+          if MATCHES=$(grep -rlE '@neondatabase|neonConfig|drizzle-orm/neon-http|DATABASE_URL' "$CLIENT_ASSETS" 2>/dev/null); then
+            echo "::error::db/neon code leaked into the CLIENT bundle. A .fn.ts seam dragged neon/drizzle into the browser (issue #159, #93/#122/#141 bug class). Offending client asset(s):"
+            echo "$MATCHES"
+            exit 1
+          fi
+          echo "✓ Client bundle ($CLIENT_ASSETS) contains no db/neon code"
 
       # Serve the production build and smoke-test it. `pnpm dev` can't catch
       # build-only breakage (e.g. a stylesheet referenced by source path, or a
