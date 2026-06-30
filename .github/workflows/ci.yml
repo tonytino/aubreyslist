@@ -18,7 +18,7 @@ jobs:
   # The lint/type/test work is split into independent jobs that run
   # concurrently. Each job repeats the standard setup (checkout, pnpm, node,
   # install) so it is self-contained; wall-clock is the longest single job
-  # rather than the sum of every job.
+  # rather than the sum of every step.
   lint:
     name: Lint & format
     runs-on: ubuntu-latest
