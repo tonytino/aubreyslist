@@ -150,20 +150,25 @@ describe("INVARIANT 1 — no secret scoring (summary is a pure function of visib
 // ───────────────────────────────────────────────────────────────────────────
 
 describe("INVARIANT 2 — a recent incident flags the summary regardless of confirmations", () => {
-  it("flags hasRecentIncident=true for ANY confirm count when an incident is within the window", () => {
+  it("surfaces hasRecentIncident as an orthogonal field that tracks its input for ANY confirm count", () => {
     // Property-style: a glowingly-confirmed, perfectly-fresh celiac-safe claim
     // (the strongest possible positive evidence) must STILL carry the recent-
-    // incident flag — old/large confirmations can never bury fresh harm.
+    // incident flag when one exists — old/large confirmations can never bury
+    // fresh harm. We sweep BOTH flag values so this proves the field TRACKS its
+    // input (not a hard-coded constant), not just that `true` round-trips.
     const freshConfirm = new Date(NOW.getTime() - DAY_MS); // confirmed yesterday → celiac-safe
     for (const confirmCount of COUNT_GRID) {
       const celiacSafe = aggregate(confirmCount, 0, freshConfirm);
-      const glance = deriveListingTrustGlance(celiacSafe, /* hasRecentIncident */ true, NOW);
+      for (const hasRecentIncident of [true, false]) {
+        const glance = deriveListingTrustGlance(celiacSafe, hasRecentIncident, NOW);
 
-      expect(glance.hasRecentIncident).toBe(true);
-      // The incident flag is orthogonal: it does NOT silently flip the headline
-      // state, it sits ALONGSIDE it so the card shows both (never just "safe").
-      if (confirmCount > 0) {
-        expect(glance.safetyState).toBe("celiac-safe");
+        // Surfaced verbatim, never buried by the confirm count.
+        expect(glance.hasRecentIncident).toBe(hasRecentIncident);
+        // The incident flag is orthogonal: it does NOT silently flip the headline
+        // state, it sits ALONGSIDE it so the card shows both (never just "safe").
+        if (confirmCount > 0) {
+          expect(glance.safetyState).toBe("celiac-safe");
+        }
       }
     }
   });
