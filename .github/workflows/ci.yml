@@ -297,6 +297,78 @@ jobs:
           DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
           SESSION_SECRET: ${{ secrets.CI_E2E_SESSION_SECRET || 'e2e-ci-only-session-secret-not-a-real-key' }}
 
+  diff-coverage:
+    name: Diff coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      # fetch-depth: 0 so the merge-base against origin/main resolves (the gate
+      # diffs `<base>...HEAD` to find this PR's changed lines).
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # This gate (issue #183) ALWAYS runs and hard-fails under 80% changed-line
+      # coverage — it is never skipped. It has two modes depending on the optional
+      # DB secret (the `secrets` context is not allowed in step-level `if`, so we
+      # detect it here and expose `enabled`):
+      #   - FULL (secret present): run the full suite (unit + integration) with
+      #     coverage, so EVERY changed line is gated, app/server/** included.
+      #   - DB-FREE (secret absent): run the DB-free unit/component suite (the
+      #     integration suite self-skips without TEST_DATABASE_URL). The pure
+      #     modules (app/trust/**, app/components/**, app/listings/**, db/schema.ts)
+      #     ARE covered there and are gated on every PR; the script excludes
+      #     app/server/** (needs the DB to be covered) and LOGS that exclusion.
+      - name: Check for E2E database secret
+        id: e2e
+        env:
+          E2E_DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+        run: |
+          if [ -n "$E2E_DATABASE_URL" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Diff-coverage running in DB-free mode: CI_E2E_DATABASE_URL is not set, so app/server/** changes are not gated (they need the integration DB to be covered). Pure modules are still gated. Configure the secret to gate everything."
+          fi
+
+      # Coverage → coverage/coverage-final.json. Always runs. The DB env vars are
+      # set ONLY when the secret is present (FULL mode); when absent the integration
+      # suite self-skips and we get DB-free unit/component coverage (the floor).
+      # NOTE: this is a third full-suite run in CI (alongside `unit` and
+      # `integration-e2e`); deduplicating it is out of scope (issue #183).
+      - name: Test with coverage
+        run: pnpm test:coverage
+        env:
+          TEST_DATABASE_URL: ${{ steps.e2e.outputs.enabled == 'true' && secrets.CI_E2E_DATABASE_URL || '' }}
+          DATABASE_URL: ${{ steps.e2e.outputs.enabled == 'true' && secrets.CI_E2E_DATABASE_URL || '' }}
+
+      # Gate: ALWAYS runs; fails if the PR's changed executable lines are covered
+      # below 80%. Only changed lines are measured, so untested legacy code is
+      # never retroactively failed. BASE_SHA is the PR base on pull_request events;
+      # the script falls back to `git merge-base origin/main HEAD` otherwise.
+      # DIFF_COVERAGE_DBFREE is the literal string 'true' when the secret is ABSENT
+      # (DB-free: the script excludes + logs the DB-only app/server/** paths it
+      # cannot fairly gate) and 'false' when present (full: gate everything). We
+      # render it as a direct `!=` comparison rather than `A && B || C`: that
+      # footgun returns C whenever B is falsy, and here B='' would make this ALWAYS
+      # 'true' (permanently DB-free). The script uses STRICT `=== "true"` so the
+      # string 'false' (which is truthy!) correctly means full mode.
+      - name: Enforce diff coverage on changed lines
+        run: node .github/scripts/check-diff-coverage.mjs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DIFF_COVERAGE_DBFREE: ${{ steps.e2e.outputs.enabled != 'true' }}
+
   build-smoke:
     name: Production build smoke
     runs-on: ubuntu-latest
