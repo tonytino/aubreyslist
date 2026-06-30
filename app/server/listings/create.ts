@@ -176,10 +176,17 @@ async function assertNoManualDuplicate(resolved: ResolvedListing): Promise<void>
 async function insertListing(resolved: ResolvedListing): Promise<CreateListingResult> {
   const db = getDb();
 
-  // Places-mode dedup: a Place ID is canonical, so an existing row IS the listing.
+  // Places-mode dedup: a Place ID is canonical, so an existing *visible* row IS
+  // the listing. The `moderation_status = 'visible'` filter mirrors the manual
+  // path (`assertNoManualDuplicate`): a moderator-`hidden`/`removed` row must
+  // never be surfaced to / linked for a user who can't even see it, and must not
+  // leak its full metadata or act as a `created: false` moderation-state oracle
+  // (#41). A Place ID that maps ONLY to a hidden/removed row is therefore treated
+  // as ABSENT here, so we fall through to the insert — where the `place_id`
+  // UNIQUE index + `onConflictDoNothing` still prevent a real duplicate row.
   if (resolved.placeId !== null) {
     const existing = await db.query.listings.findFirst({
-      where: eq(listings.placeId, resolved.placeId),
+      where: and(eq(listings.placeId, resolved.placeId), eq(listings.moderationStatus, "visible")),
     });
     if (existing) {
       return { listing: existing, created: false };
@@ -210,15 +217,27 @@ async function insertListing(resolved: ResolvedListing): Promise<CreateListingRe
     return { listing: row, created: true };
   }
 
-  // Empty `returning` ⇒ a concurrent insert already took this Place ID. Re-read
-  // it so the caller still routes the user to the (now-existing) listing.
+  // Empty `returning` ⇒ the `place_id` UNIQUE conflicted, so a row already holds
+  // this Place ID. Re-read the *visible* row so the caller can still route the
+  // user to the (now-existing) listing.
+  //
+  // Edge: the conflicting row may be moderator-`hidden`/`removed`. That happens
+  // either when a concurrent insert lost the race to a moderated row, OR (the
+  // common case) when the pre-insert visible-only lookup above correctly skipped
+  // an existing hidden/removed row and we fell through to the insert, which then
+  // conflicted on the UNIQUE `place_id`. In both cases this visible-only re-read
+  // finds nothing — by design: we must never return the moderated row. We surface
+  // a clear, non-leaky error instead of a confusing success/null so the UX reads
+  // as "this place can't be added right now" rather than a silent failure. The
+  // message is deliberately generic (it does not reveal the moderation state).
   if (resolved.placeId !== null) {
     const existing = await db.query.listings.findFirst({
-      where: eq(listings.placeId, resolved.placeId),
+      where: and(eq(listings.placeId, resolved.placeId), eq(listings.moderationStatus, "visible")),
     });
     if (existing) {
       return { listing: existing, created: false };
     }
+    throw new Error("This place can’t be added right now. Please try again later.");
   }
 
   // Manual entries can't conflict (place_id is null/distinct), so an empty
