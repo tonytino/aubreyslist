@@ -66,7 +66,7 @@ git worktree add -b issue-<NUMBER>-<short-slug> .claude/worktrees/issue-<NUMBER>
 1. Read the issue fully — goal, acceptance criteria, context files.
 2. Read `AGENTS.md` and the relevant sub-doc(s) in `docs/agents/` before touching code.
 3. Work in the branch created above.
-4. Commit early and often. Commit message format: `type: brief description` (e.g., `feat: add avatar upload endpoint`).
+4. Commit early and often. **Commit messages MUST follow [Conventional Commits](https://www.conventionalcommits.org): `type: brief description`** (e.g., `feat: add avatar upload endpoint`). Allowed types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`, `style`, `revert`. This is **enforced** by a local `commit-msg` hook (commitlint, via Lefthook) — a non-conforming message blocks the commit. Config lives in `commitlint.config.mjs`.
 5. Run `pnpm check` before every commit.
 6. Run `pnpm preflight` before declaring work complete — it runs lint, typecheck, and tests in one command.
 
@@ -107,6 +107,21 @@ gh pr create --title "<type>: <description>"
 ```
 
 The PR body is **auto-populated** from `.github/pull_request_template.md` — fill in its sections (`## Summary`, `Resolves #<NUMBER>`, `## Test plan`, and the Propagation checklist) rather than writing a body from scratch. Web sessions opening PRs through the GitHub MCP tools should mirror the same template structure. The `Resolves #<NUMBER>` link is what auto-closes the issue on merge.
+
+**PRs are squash-merged**, which promotes the PR *title* to the final commit
+message on `main`. Because of that, the PR title MUST be a valid Conventional
+Commit (`<type>: <description>`, same allowed types as commits above). CI's
+`pr-title` job runs commitlint against the title and fails the PR if it doesn't
+conform.
+
+**Every PR must carry one each of the following labels** (CI's `pr-labels` job
+enforces this and names any missing dimension):
+
+- a `type:*` label (`type:bug`, `type:feature`, `type:chore`, `type:docs`)
+- a `size:*` label (`size:xs`, `size:s`, `size:m`, `size:l`)
+- a `safe:*` label (`safe:agent` or `safe:human`)
+
+These usually carry over from the issue; add any that are missing to the PR.
 
 Then update the issue label:
 

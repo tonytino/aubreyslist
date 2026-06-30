@@ -96,6 +96,16 @@ Before adding a package:
 
 The hard rule from `AGENTS.md` applies: **no new dependencies without checking if the existing stack already covers the need.**
 
+### commitlint (devDeps, no-new-deps rule waived)
+
+`@commitlint/cli` and `@commitlint/config-conventional` (both `devDependencies`)
+hard-gate Conventional Commits — via a local `commit-msg` hook (Lefthook) and a
+CI `pr-title` check against the squash-merge PR title. The "no new dependencies"
+Hard Rule was **explicitly waived by the maintainer** for this; nothing in the
+existing stack (Biome, Lefthook) parses or validates commit-message structure.
+Config is in `commitlint.config.mjs`. knip's commitlint plugin auto-detects that
+config, so these are not flagged as unused (no `ignoreDependencies` entry needed).
+
 ## Unused Dependency Check
 
 CI runs [`knip`](https://knip.dev) via `pnpm knip` to fail the build when a
