@@ -27,21 +27,36 @@ The set is **curated, not user-extensible** in v1 — consistent, comparable,
 filterable data. New attributes are added by us over time, never by contributors
 at runtime.
 
-1. **Celiac-safe vs. gluten-friendly** — the headline distinction. Do they take
-   cross-contamination seriously (celiac-safe), or just offer GF-ish options
-   (gluten-friendly)? Surface this most prominently.
+1. **Celiac-safe** — the headline distinction, surfaced most prominently. Does
+   the restaurant take cross-contamination seriously (confirm ⇒ celiac-safe), or
+   merely offer GF-ish options (dispute ⇒ gluten-friendly)? Every listing is
+   assumed gluten-free-friendly already, so the useful community question is just
+   "is it celiac-safe?" The enum key is still `celiac_safe_vs_gluten_friendly`
+   (rename deferred — see below); only its label is "Celiac-safe".
 2. **Dedicated / separate fryer** — yes / no / shared.
-3. **Cross-contamination protocol** — separate prep area, clean surfaces, glove
-   changes.
-4. **Dedicated GF menu** — labeled GF items exist.
-5. **Off-menu GF on request** — will make non-GF-labeled dishes GF when asked.
-6. **Staff knowledge & attitude** — do they "get it," ask about severity, no
-   pushback.
-7. **GF substitutes available** — bread/buns, pizza crust, pasta, etc.
+3. **Dedicated GF menu** — labeled GF items exist.
+4. **Off-menu GF on request** — will make non-GF-labeled dishes GF when asked.
+5. **GF substitutes available** — bread/buns, pizza crust, pasta, etc.
 
 > When adding or renaming attributes, update this list **and** the filter UI
 > **and** any seed data in the same change. The taxonomy is referenced in many
-> places; keep it singular and authoritative.
+> places; keep it singular and authoritative. The client-safe source of truth is
+> `app/listings/taxonomy.ts` (`CLAIM_ATTRIBUTES`); the `claim_attribute` pgEnum
+> derives from it.
+
+### Deferred (post-v1)
+
+Two attributes were **purged before v1** (issue #175) because they were ambiguous
+as a community confirm/dispute and need a clearer design before they earn a vote:
+
+- **Cross-contamination protocol** — "confirm what, exactly?" Too vague as a
+  yes/no; needs a structured shape (e.g. specific practices) rather than one vote.
+- **Staff knowledge & attitude** — close, but not crisp enough to attest reliably.
+
+They are tracked for re-introduction in [issue #175](https://github.com/tonytino/aubreyslist/issues/175).
+Also deferred: renaming the headline enum key `celiac_safe_vs_gluten_friendly →
+celiac_safe` (a cosmetic cleanup that would force an enum type-recreate
+migration).
 
 ---
 

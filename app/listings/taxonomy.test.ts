@@ -9,18 +9,17 @@ import { CLAIM_ATTRIBUTES } from "./taxonomy";
  */
 
 describe("GF taxonomy constant", () => {
-  it("declares the FIXED 7-item taxonomy in order", () => {
+  it("declares the FIXED v1 taxonomy in order", () => {
     expect(CLAIM_ATTRIBUTES).toEqual([
       "celiac_safe_vs_gluten_friendly",
       "dedicated_fryer",
-      "cross_contamination_protocol",
       "dedicated_gf_menu",
       "off_menu_gf_on_request",
-      "staff_knowledge",
       "gf_substitutes",
     ]);
-    // Guard against accidental drift in the taxonomy size.
-    expect(CLAIM_ATTRIBUTES).toHaveLength(7);
+    // Guard against accidental drift in the taxonomy size. `cross_contamination_protocol`
+    // and `staff_knowledge` were purged before v1 (issue #175).
+    expect(CLAIM_ATTRIBUTES).toHaveLength(5);
   });
 
   it("is the single source of truth for the claim_attribute pgEnum", () => {

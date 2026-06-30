@@ -37,10 +37,8 @@ const claim = (overrides: Partial<ListingClaimAggregate>): ListingClaimAggregate
 const TAXONOMY = [
   "celiac_safe_vs_gluten_friendly",
   "dedicated_fryer",
-  "cross_contamination_protocol",
   "dedicated_gf_menu",
   "off_menu_gf_on_request",
-  "staff_knowledge",
   "gf_substitutes",
 ] as const;
 
@@ -110,7 +108,7 @@ describe("CommunityClaims", () => {
         listingId="listing-1"
         viewerId="user-1"
         now={NOW}
-        claims={[claim({ claimId: null, attribute: "cross_contamination_protocol" })]}
+        claims={[claim({ claimId: null, attribute: "gf_substitutes" })]}
       />
     );
 
@@ -122,7 +120,7 @@ describe("CommunityClaims", () => {
     expect(submitVoteMock).toHaveBeenCalledWith({
       data: {
         listingId: "listing-1",
-        attribute: "cross_contamination_protocol",
+        attribute: "gf_substitutes",
         value: "confirm",
       },
     });

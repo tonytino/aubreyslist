@@ -118,10 +118,8 @@ function AboutPage() {
         </p>
         <ul className="flex list-disc flex-col gap-1.5 pl-5 text-body text-muted-foreground">
           <li>Dedicated or separate fryer — yes, no, or shared oil.</li>
-          <li>Cross-contamination protocol — separate prep area, clean surfaces, glove changes.</li>
           <li>A dedicated, labeled gluten-free menu.</li>
           <li>Off-menu gluten-free on request — will adapt non-labeled dishes when asked.</li>
-          <li>Staff knowledge and attitude — do they "get it," ask about severity, no pushback.</li>
           <li>Gluten-free substitutes available — bread, buns, pizza crust, pasta, and more.</li>
         </ul>
       </section>

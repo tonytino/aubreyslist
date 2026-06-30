@@ -16,14 +16,21 @@
  *
  * Order is meaningful: it is the order the attributes appear in the filter UI
  * and the persisted enum. Do not reorder without intent.
+ *
+ * v1 set (issue #175): the curated five-attribute taxonomy. Two attributes that
+ * were ambiguous as a community confirm/dispute — `cross_contamination_protocol`
+ * and `staff_knowledge` — were purged before v1 and are tracked for re-introduction
+ * with clearer semantics. The headline attribute's enum key is still
+ * `celiac_safe_vs_gluten_friendly` for historical reasons, but it is now surfaced
+ * simply as "Celiac-safe" (every listing is assumed gluten-free-friendly, so the
+ * useful question is just "is it celiac-safe?"). Renaming the key to `celiac_safe`
+ * is a deferred follow-up — see `app/trust/summary.ts`.
  */
 export const CLAIM_ATTRIBUTES = [
   "celiac_safe_vs_gluten_friendly",
   "dedicated_fryer",
-  "cross_contamination_protocol",
   "dedicated_gf_menu",
   "off_menu_gf_on_request",
-  "staff_knowledge",
   "gf_substitutes",
 ] as const;
 

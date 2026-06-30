@@ -1,0 +1,1 @@
+- `[manual]` Purged the **Cross-contamination protocol** and **Staff knowledge** community-claim attributes before v1 — both were too ambiguous as a confirm/dispute. Tracked for re-introduction with clearer semantics in #175.

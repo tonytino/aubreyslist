@@ -71,7 +71,7 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     // Apply both taxonomy checkboxes (labels come from CLAIM_ATTRIBUTE_LABELS).
     // click() (not check()) — the checkbox is URL-controlled and re-renders on
     // navigation, so the URL is the source of truth (matches browse.spec.ts).
-    await page.getByRole("checkbox", { name: "Celiac-safe vs. gluten-friendly" }).click();
+    await page.getByRole("checkbox", { name: "Celiac-safe", exact: true }).click();
     await expect(page).toHaveURL(/attrs=celiac_safe_vs_gluten_friendly/);
 
     await page.getByRole("checkbox", { name: "Dedicated fryer" }).click();
