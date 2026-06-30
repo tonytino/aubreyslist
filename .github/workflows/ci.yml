@@ -297,6 +297,70 @@ jobs:
           DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
           SESSION_SECRET: ${{ secrets.CI_E2E_SESSION_SECRET || 'e2e-ci-only-session-secret-not-a-real-key' }}
 
+  diff-coverage:
+    name: Diff coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      # fetch-depth: 0 so the merge-base against origin/main resolves (the gate
+      # diffs `<base>...HEAD` to find this PR's changed lines).
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The `secrets` context is not allowed in step-level `if` conditions, so we
+      # detect the optional E2E secret here and gate the coverage run on it. This
+      # gate (issue #183) measures coverage of the PR's CHANGED lines only.
+      #
+      # WHY GATE ON THE SAME SECRET AS integration-e2e: app/server/** is largely
+      # exercised only by the DB-gated integration suite. If we computed coverage
+      # from the DB-free unit run alone, changed server lines would read as
+      # uncovered and FALSE-FAIL the PR. So we run the FULL suite (unit +
+      # integration) with coverage here, under the same secret. When the secret is
+      # ABSENT we self-skip with a warning (exactly like integration-e2e), rather
+      # than gating on a partial coverage picture.
+      - name: Check for E2E database secret
+        id: e2e
+        env:
+          E2E_DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+        run: |
+          if [ -n "$E2E_DATABASE_URL" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Diff-coverage gate skipped: CI_E2E_DATABASE_URL is not set, so the integration suite cannot run and coverage would miss DB-only app/server/** lines. Configure the secret to enable the gate (mirrors the integration-e2e self-skip)."
+          fi
+
+      # Full suite with coverage → coverage/coverage-final.json. Both env vars are
+      # the same CI Neon branch (see integration-e2e for the TEST_DATABASE_URL vs
+      # DATABASE_URL distinction); the suite manages its own fixtures.
+      - name: Test with coverage (full suite)
+        if: steps.e2e.outputs.enabled == 'true'
+        run: pnpm test:coverage
+        env:
+          TEST_DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+
+      # Gate: fail if the PR's changed executable lines are covered below 80%.
+      # Only changed lines are measured, so untested legacy code is never
+      # retroactively failed. BASE_SHA is the PR base on pull_request events; the
+      # script falls back to `git merge-base origin/main HEAD` otherwise.
+      - name: Enforce diff coverage on changed lines
+        if: steps.e2e.outputs.enabled == 'true'
+        run: node .github/scripts/check-diff-coverage.mjs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
   build-smoke:
     name: Production build smoke
     runs-on: ubuntu-latest

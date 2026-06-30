@@ -18,7 +18,10 @@ export default defineConfig({
     ],
     coverage: {
       provider: "v8",
-      reporter: ["text", "html"],
+      // `text`/`html` are for humans; `json` emits coverage/coverage-final.json,
+      // the machine-readable Istanbul-shaped report consumed by the diff-coverage
+      // gate (.github/scripts/check-diff-coverage.mjs, issue #183).
+      reporter: ["text", "html", "json"],
       // Cover application/server/db source; exclude generated, config, and
       // entry/boilerplate files that aren't meaningfully unit-testable.
       include: ["app/**/*.{ts,tsx}", "db/**/*.ts"],
