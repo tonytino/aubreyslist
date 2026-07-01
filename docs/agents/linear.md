@@ -135,12 +135,20 @@ taxonomy, **create these labels once** (setup step, not per-task):
 
 ## Rollout status
 
-Staged migration (ADR-012), not a big bang:
+Migration complete (ADR-012):
 
 - [x] Create the `aubreyslist` team (`AUB`).
-- [ ] Create labels: `Chore`, `Docs`, `safe:agent`, `safe:human`.
-- [ ] Port seed GitHub epics `#8`, `#9` (and children) into Projects/Issues.
+- [x] Create labels: `Chore`, `Docs`, `safe:agent`, `safe:human`.
+- [x] Port GitHub epics + issues into Projects/Issues. All 11 epics became
+      Projects — the open `#8`/`#9`/`#178`/`#203` plus the closed `#1`–`#7`; the
+      15 open work items became `AUB-*` Issues in **Backlog**; the ~85 historical
+      completed issues were imported as **Done** (grouped under their epic
+      Project, or a `v1 hardening & audits (historical)` bucket for issues with
+      no epic). Every migrated GitHub issue/epic was closed with a pointer to its
+      Linear counterpart, so GitHub now has **0 open issues**.
 - [ ] Confirm Linear ↔ GitHub integration links PRs and transitions state.
 
-Until ported, the GitHub Issues list (`docs/agents/issues.md`) stays
-authoritative for in-flight work; **new** epics start in Linear.
+Linear (`AUB`) is now authoritative for all tracked work; the GitHub Issues list
+(`docs/agents/issues.md`) is historical. Archive the imported `Done` issues in
+the Linear UI to keep them off the 250-issue budget (see *Issue hygiene*) — the
+API can't archive, so it's a manual/auto-archive step.
