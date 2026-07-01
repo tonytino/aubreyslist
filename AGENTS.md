@@ -120,6 +120,8 @@ Branch naming: `issue-<NUMBER>-<short-slug>`
 
 After work is done, open a PR with `Closes #<NUMBER>` and relabel to `status:needs-review`.
 
+**The repo owner's default expectation is that completed code changes ship as a PR.** A pushed branch on its own isn't a finished hand-off — the normal last step is opening its PR against the default branch, with the body filled from `.github/pull_request_template.md`. If you're unsure whether to open one, the answer here is yes. Skip it only when the user says "just push / no PR" for that change, or there's no committable diff. (Some environments still prompt for approval before a PR is created; that approval gate stays in force — this note is about the repo's preferred default, not a way around any prompt.)
+
 ---
 
 ## Template Version Tracking

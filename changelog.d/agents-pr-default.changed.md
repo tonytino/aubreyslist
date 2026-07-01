@@ -1,0 +1,1 @@
+- `[manual]` Clarified in `AGENTS.md` that the repo owner's default expectation is for completed code changes to ship as a PR (not just a pushed branch), so agents open the PR as the normal last step instead of stopping at the push.
