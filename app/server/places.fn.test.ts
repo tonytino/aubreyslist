@@ -40,9 +40,11 @@ vi.mock("~/server/rate-limit", () => ({
   enforceWriteLimit: (userId?: string) => enforceWriteLimitMock(userId),
 }));
 
+import { callServerFn } from "../../tests/server-fn";
 import { autocompletePlaces } from "./places.fn";
 
 const input = { data: { query: "cafe" } };
+const call = () => callServerFn(() => autocompletePlaces(input));
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -50,7 +52,7 @@ afterEach(() => {
 
 describe("autocompletePlaces — auth + rate limit seam (#141)", () => {
   it("gates auth then the write limit then the impl, in that order", async () => {
-    await autocompletePlaces(input);
+    await call();
 
     expect(requireCurrentUserMock).toHaveBeenCalledTimes(1);
     expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
@@ -73,7 +75,7 @@ describe("autocompletePlaces — auth + rate limit seam (#141)", () => {
     const unauthorized = new HTTPException(401, { message: "Authentication required." });
     requireCurrentUserMock.mockRejectedValueOnce(unauthorized);
 
-    await expect(autocompletePlaces(input)).rejects.toBe(unauthorized);
+    await expect(call()).rejects.toBe(unauthorized);
     expect(enforceWriteLimitMock).not.toHaveBeenCalled();
     expect(runAutocompleteMock).not.toHaveBeenCalled();
   });
@@ -82,7 +84,7 @@ describe("autocompletePlaces — auth + rate limit seam (#141)", () => {
     const tooFast = new HTTPException(429, { message: "too fast" });
     enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
 
-    await expect(autocompletePlaces(input)).rejects.toBe(tooFast);
+    await expect(call()).rejects.toBe(tooFast);
     expect(requireCurrentUserMock).toHaveBeenCalledTimes(1);
     expect(runAutocompleteMock).not.toHaveBeenCalled();
   });

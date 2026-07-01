@@ -2,15 +2,13 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "app/client.tsx",
-    "app/ssr.tsx",
-    "app/api.ts",
     "app/router.tsx",
     "app/routes/**/*.tsx",
     "app/routes/api.$.ts",
     "app/server/index.ts",
     "app/server/places.ts",
     "app/server/listings/search.ts",
-    "app.config.ts",
+    "tests/server-fn.ts",
     "scripts/labels.mjs",
     "scripts/remove-example.mjs"
   ],

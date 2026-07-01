@@ -36,9 +36,11 @@ vi.mock("~/server/rate-limit", () => ({
   enforceWriteLimit: (userId?: string) => enforceWriteLimitMock(userId),
 }));
 
+import { callServerFn } from "../../../tests/server-fn";
 import { submitCreateListing } from "./create.fn";
 
 const placesInput = { data: { mode: "places" as const, placeId: "place-123" } };
+const call = () => callServerFn(() => submitCreateListing(placesInput));
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -46,7 +48,7 @@ afterEach(() => {
 
 describe("submitCreateListing — auth + rate limit seam (#141)", () => {
   it("gates auth then the write limit then the impl, in that order", async () => {
-    await submitCreateListing(placesInput);
+    await call();
 
     expect(requireCurrentUserMock).toHaveBeenCalledTimes(1);
     expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
@@ -69,7 +71,7 @@ describe("submitCreateListing — auth + rate limit seam (#141)", () => {
     const unauthorized = new HTTPException(401, { message: "Authentication required." });
     requireCurrentUserMock.mockRejectedValueOnce(unauthorized);
 
-    await expect(submitCreateListing(placesInput)).rejects.toBe(unauthorized);
+    await expect(call()).rejects.toBe(unauthorized);
     expect(enforceWriteLimitMock).not.toHaveBeenCalled();
     expect(runCreateListingMock).not.toHaveBeenCalled();
   });
@@ -78,7 +80,7 @@ describe("submitCreateListing — auth + rate limit seam (#141)", () => {
     const tooFast = new HTTPException(429, { message: "too fast" });
     enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
 
-    await expect(submitCreateListing(placesInput)).rejects.toBe(tooFast);
+    await expect(call()).rejects.toBe(tooFast);
     expect(requireCurrentUserMock).toHaveBeenCalledTimes(1);
     expect(runCreateListingMock).not.toHaveBeenCalled();
   });

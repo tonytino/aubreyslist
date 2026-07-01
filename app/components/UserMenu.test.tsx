@@ -47,8 +47,11 @@ function renderMenu(user: SessionUser | null) {
   render(<RouterProvider router={router as unknown as never} />);
 }
 
-function openMenu(user: SessionUser) {
-  const trigger = screen.getByRole("button", { name: `Account menu for ${user.name}` });
+async function openMenu(user: SessionUser) {
+  // RouterProvider mounts asynchronously in TanStack Router v1.1x (it renders
+  // once the initial match resolves), so wait for the trigger with findByRole
+  // rather than a synchronous getByRole that would run before the first paint.
+  const trigger = await screen.findByRole("button", { name: `Account menu for ${user.name}` });
   // Radix's pointer-open path relies on real PointerEvents jsdom can't fully
   // synthesize, so open via the keyboard path (focus + Enter).
   trigger.focus();
@@ -63,20 +66,20 @@ const baseUser: Omit<SessionUser, "role"> = {
 };
 
 describe("UserMenu", () => {
-  it("shows the Admin link for an admin user", () => {
+  it("shows the Admin link for an admin user", async () => {
     const user: SessionUser = { ...baseUser, role: "admin" };
     renderMenu(user);
-    openMenu(user);
+    await openMenu(user);
 
     const adminLink = screen.getByRole("menuitem", { name: "Admin" });
     expect(adminLink).toBeInTheDocument();
     expect(adminLink).toHaveAttribute("href", "/admin");
   });
 
-  it("shows a Moderation link (not Admin) for a moderator", () => {
+  it("shows a Moderation link (not Admin) for a moderator", async () => {
     const user: SessionUser = { ...baseUser, role: "moderator" };
     renderMenu(user);
-    openMenu(user);
+    await openMenu(user);
 
     // Moderators reach /admin (their moderation queue) but the label is scoped
     // to what they'll see — never the admin-only "Admin".
@@ -85,36 +88,37 @@ describe("UserMenu", () => {
     expect(screen.queryByRole("menuitem", { name: "Admin" })).not.toBeInTheDocument();
   });
 
-  it("shows no admin/moderation link for a regular user", () => {
+  it("shows no admin/moderation link for a regular user", async () => {
     const user: SessionUser = { ...baseUser, role: "user" };
     renderMenu(user);
-    openMenu(user);
+    await openMenu(user);
 
     expect(screen.queryByRole("menuitem", { name: "Admin" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Moderation" })).not.toBeInTheDocument();
   });
 
-  it("shows Sign out for any logged-in user", () => {
+  it("shows Sign out for any logged-in user", async () => {
     const user: SessionUser = { ...baseUser, role: "user" };
     renderMenu(user);
-    openMenu(user);
+    await openMenu(user);
 
     expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
   });
 
-  it("shows the user's name and email in the menu label", () => {
+  it("shows the user's name and email in the menu label", async () => {
     const user: SessionUser = { ...baseUser, role: "user" };
     renderMenu(user);
-    openMenu(user);
+    await openMenu(user);
 
     expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
     expect(screen.getByText("ada@example.com")).toBeInTheDocument();
   });
 
-  it("shows a Log in link and no avatar menu when logged out", () => {
+  it("shows a Log in link and no avatar menu when logged out", async () => {
     renderMenu(null);
 
-    const cta = screen.getByRole("link", { name: "Log in" });
+    // RouterProvider mounts asynchronously; wait for the first paint.
+    const cta = await screen.findByRole("link", { name: "Log in" });
     expect(cta).toHaveAttribute("href", "/api/auth/google");
     expect(screen.queryByRole("button", { name: /Account menu/ })).not.toBeInTheDocument();
   });

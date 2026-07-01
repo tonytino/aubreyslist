@@ -64,8 +64,13 @@ function renderInApp(ui: ReactElement) {
   );
 }
 
-function fill() {
-  fireEvent.change(screen.getByLabelText("Restaurant name"), { target: { value: "Two Hands" } });
+async function fill() {
+  // RouterProvider mounts asynchronously in TanStack Router v1.1x, so wait for
+  // the form's first field before typing rather than a synchronous getByLabelText
+  // that would run before the initial route match paints.
+  fireEvent.change(await screen.findByLabelText("Restaurant name"), {
+    target: { value: "Two Hands" },
+  });
   fireEvent.change(screen.getByLabelText("Address"), { target: { value: "123 Main St" } });
   fireEvent.change(screen.getByLabelText("Latitude"), { target: { value: "39.7392" } });
   fireEvent.change(screen.getByLabelText("Longitude"), { target: { value: "-104.9903" } });
@@ -76,10 +81,12 @@ afterEach(() => {
 });
 
 describe("ManualIntakeForm", () => {
-  it("associates each label with its input and marks fields required", () => {
+  it("associates each label with its input and marks fields required", async () => {
     renderInApp(<ManualIntakeForm onCreated={vi.fn()} />);
 
-    for (const name of ["Restaurant name", "Address", "Latitude", "Longitude"]) {
+    // RouterProvider mounts asynchronously; wait for the form's first field.
+    expect(await screen.findByLabelText("Restaurant name")).toBeRequired();
+    for (const name of ["Address", "Latitude", "Longitude"]) {
       expect(screen.getByLabelText(name)).toBeRequired();
     }
     // The optional menu link is reachable by its label and is not required.
@@ -92,7 +99,7 @@ describe("ManualIntakeForm", () => {
     const onCreated = vi.fn();
     renderInApp(<ManualIntakeForm onCreated={onCreated} />);
 
-    fill();
+    await fill();
     fireEvent.click(screen.getByRole("button", { name: /Add listing/i }));
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(result));
@@ -108,7 +115,7 @@ describe("ManualIntakeForm", () => {
     );
     renderInApp(<ManualIntakeForm onCreated={vi.fn()} />);
 
-    fill();
+    await fill();
     fireEvent.click(screen.getByRole("button", { name: /Add listing/i }));
 
     const alert = await screen.findByRole("alert");

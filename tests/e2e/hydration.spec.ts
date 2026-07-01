@@ -6,43 +6,43 @@ import { waitForHydration } from "./helpers";
  * Regression guard for app hydration (the "no-JS site" bug).
  *
  * The app SSRs fine but only becomes interactive if the served HTML references
- * the built client entry — a `<script type="module">` that import()s the client
- * bundle, which runs app/client.tsx's hydrateRoot. That script is emitted by
- * `<Scripts/>` (app/routes/__root.tsx) from the router manifest, which is only
- * populated when `getRouterManifest` is passed to `createStartHandler` in
- * app/ssr.tsx. When that wiring is dropped, the manifest is empty (the dehydrated
- * payload's top-level manifest serializes to `{"$undefined":0}`), no client
- * script is injected, and NOTHING hydrates: voting, the add-listing form, the
- * taxonomy filter, sort, and SPA <Link> navigation are all inert (a no-JS site).
+ * the built client entry — a `<script type="module">` whose `src` loads the
+ * client bundle, which runs app/client.tsx's hydrateRoot (which in turn imports
+ * `getRouter` from app/router.tsx). Since the TanStack Start vinxi→Vite-plugin
+ * migration (issue #198) the entry is wired automatically by the plugin; if that
+ * wiring breaks (e.g. app/router.tsx stops exporting `getRouter`, or the client
+ * entry is dropped), no client script is injected and NOTHING hydrates: voting,
+ * the add-listing form, the taxonomy filter, sort, and SPA <Link> navigation are
+ * all inert (a no-JS site).
  *
  * These tests run against the SAME harness CI uses (`pnpm dev`, per
  * playwright.config.ts), and are written to also be correct against the prod
- * build. The client-entry path differs by mode: dev injects an unhashed
- * `import("/_build/@fs/.../app/client.tsx")`, prod injects the hashed
- * `import("/_build/assets/client-*.js")` — the assertions accept both.
+ * build. The client-entry `src` differs by mode: dev injects the virtual module
+ * `/@id/virtual:tanstack-start-dev-client-entry`, prod injects the hashed
+ * `/assets/index-*.js` bundle — the assertion accepts both and then fetches the
+ * referenced src to prove the entry asset actually resolves.
  */
 
-// The module-script entry import target: prod hashed bundle OR the dev @fs path.
-const CLIENT_ENTRY_IMPORT =
-  /import\(["'][^"']*(?:\/_build\/assets\/client-[^"']*\.js|\/app\/client\.tsx)["']\)/;
+// The module-script entry src: prod hashed bundle OR the dev virtual entry id.
+const CLIENT_ENTRY_SRC =
+  /<script[^>]*type="module"[^>]*\ssrc="([^"]*(?:\/assets\/index-[^"]*\.js|virtual:tanstack-start-dev-client-entry)[^"]*)"/;
 
 test("served HTML injects the client module entry", async ({ request }) => {
   const res = await request.get("/");
   expect(res.status()).toBe(200);
   const html = await res.text();
 
-  // A real client-entry script: `<script type="module">` whose body import()s the
-  // client bundle (hashed in prod, the @fs source path in dev). Without this the
-  // app is no-JS.
+  // A real client-entry script: `<script type="module">` whose `src` loads the
+  // client bundle (hashed /assets/index-*.js in prod, the virtual entry id in
+  // dev). Without this the app is no-JS.
   expect(html).toMatch(/<script[^>]*type="module"/);
-  expect(html).toMatch(CLIENT_ENTRY_IMPORT);
+  const src = html.match(CLIENT_ENTRY_SRC)?.[1];
+  expect(src, "no client module entry <script src> found in served HTML").toBeTruthy();
 
-  // The dehydrated router manifest must actually carry the root route's assets.
-  // The bug serialized the whole manifest as `{"$undefined":0}` (no `routes`);
-  // a working manifest has `manifest":{"routes":{"__root__":{...}`. Asserting the
-  // populated shape is meaningful in both dev and prod (unlike the literal
-  // `{"$undefined":0}`, which never serializes once the manifest is wired).
-  expect(html).toMatch(/manifest\\?":\{\\?"routes\\?":\{\\?"__root__\\?":/);
+  // The referenced entry asset must actually resolve — a broken asset path would
+  // mean the browser never loads the client bundle and the app never hydrates.
+  const entryRes = await request.get(src as string);
+  expect(entryRes.status(), `client entry ${src} did not resolve`).toBe(200);
 });
 
 test("the app hydrates: a <Link> does client-side navigation, not a full reload", async ({

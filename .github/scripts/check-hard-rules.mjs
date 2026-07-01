@@ -86,7 +86,7 @@ function* lines(content) {
 /**
  * Rule #1: No `process.env` outside app/env.ts.
  * Scope: app/**\/*.{ts,tsx}, EXCLUDING app/env.ts and test files. Build tooling
- * (app.config.ts, scripts/**, .github/**, vitest/playwright config) is out of
+ * (vite.config.ts, scripts/**, .github/**, vitest/playwright config) is out of
  * scope — only app/ runtime code.
  */
 export function checkProcessEnv(content, path) {

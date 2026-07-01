@@ -1,0 +1,1 @@
+- `[manual]` Migrated TanStack Start off vinxi to its Vite plugin (Start `^1.167`, vite 7) and removed the `@tanstack/*` `pnpm.overrides` pin block, clearing the `vite`/`esbuild`/`start-server-core` osv-scanner advisory cluster (ADR-012, #198).

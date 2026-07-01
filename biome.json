@@ -32,10 +32,10 @@
   "files": {
     "ignore": [
       "app/routeTree.gen.ts",
-      "app.config.timestamp_*",
       "node_modules",
-      ".vinxi",
       ".output",
+      ".nitro",
+      ".tanstack",
       "dist",
       ".claude",
       "test-results",

@@ -32,6 +32,7 @@ vi.mock("~/server/rate-limit", () => ({
   enforceWriteLimit: (userId?: string) => enforceWriteLimitMock(userId),
 }));
 
+import { callServerFn } from "../../tests/server-fn";
 import {
   autocompletePlaces,
   buildMapsUrl,
@@ -215,7 +216,7 @@ describe("autocompletePlaces — auth + rate limit (#86)", () => {
     const fetchSpy = mockFetchOnce({ suggestions: [] });
     vi.stubGlobal("fetch", fetchSpy);
 
-    await autocompletePlaces({ data: { query: "cafe" } });
+    await callServerFn(() => autocompletePlaces({ data: { query: "cafe" } }));
 
     expect(requireCurrentUserMock).toHaveBeenCalledTimes(1);
     // Metered on the authenticated user id, after the auth gate resolved them.
@@ -230,7 +231,9 @@ describe("autocompletePlaces — auth + rate limit (#86)", () => {
     const fetchSpy = mockFetchOnce({ suggestions: [] });
     vi.stubGlobal("fetch", fetchSpy);
 
-    await expect(autocompletePlaces({ data: { query: "cafe" } })).rejects.toBe(unauthorized);
+    await expect(callServerFn(() => autocompletePlaces({ data: { query: "cafe" } }))).rejects.toBe(
+      unauthorized
+    );
     // Anonymous callers are short-circuited before the limiter and the paid call.
     expect(enforceWriteLimitMock).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -242,7 +245,9 @@ describe("autocompletePlaces — auth + rate limit (#86)", () => {
     const fetchSpy = mockFetchOnce({ suggestions: [] });
     vi.stubGlobal("fetch", fetchSpy);
 
-    await expect(autocompletePlaces({ data: { query: "cafe" } })).rejects.toBe(tooFast);
+    await expect(callServerFn(() => autocompletePlaces({ data: { query: "cafe" } }))).rejects.toBe(
+      tooFast
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
@@ -257,7 +262,7 @@ describe("getPlaceDetails — auth + rate limit (#86)", () => {
     });
     vi.stubGlobal("fetch", fetchSpy);
 
-    await getPlaceDetails({ data: { placeId: "ChIJ_target" } });
+    await callServerFn(() => getPlaceDetails({ data: { placeId: "ChIJ_target" } }));
 
     expect(requireCurrentUserMock).toHaveBeenCalledTimes(1);
     expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
@@ -271,7 +276,9 @@ describe("getPlaceDetails — auth + rate limit (#86)", () => {
     const fetchSpy = mockFetchOnce({});
     vi.stubGlobal("fetch", fetchSpy);
 
-    await expect(getPlaceDetails({ data: { placeId: "ChIJ_target" } })).rejects.toBe(unauthorized);
+    await expect(
+      callServerFn(() => getPlaceDetails({ data: { placeId: "ChIJ_target" } }))
+    ).rejects.toBe(unauthorized);
     expect(enforceWriteLimitMock).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -282,7 +289,9 @@ describe("getPlaceDetails — auth + rate limit (#86)", () => {
     const fetchSpy = mockFetchOnce({});
     vi.stubGlobal("fetch", fetchSpy);
 
-    await expect(getPlaceDetails({ data: { placeId: "ChIJ_target" } })).rejects.toBe(tooFast);
+    await expect(
+      callServerFn(() => getPlaceDetails({ data: { placeId: "ChIJ_target" } }))
+    ).rejects.toBe(tooFast);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

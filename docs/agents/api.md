@@ -145,7 +145,7 @@ import { HTTPException } from "hono/http-exception";
 if (!item) throw new HTTPException(404, { message: "Item not found" });
 ```
 
-The catch-all in `app/routes/api.$.ts` forwards every method — including `OPTIONS` (CORS preflight) and `HEAD` — to Hono, so add CORS middleware there if you need it.
+The catch-all in `app/routes/api.$.ts` forwards every method — including `OPTIONS` (CORS preflight) and `HEAD` — to Hono, so add CORS middleware there if you need it. It is a TanStack Start **Server Route** (`createFileRoute("/api/$")({ server: { handlers: { GET, POST, … } } })`, each handler calling `app.fetch(request)`) — the post-vinxi replacement for the old `createAPIFileRoute` / `app/api.ts` router (ADR-012).
 
 ## RPC Client — Frontend Consuming Hono
 

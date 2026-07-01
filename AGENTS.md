@@ -61,7 +61,7 @@ This repo uses **progressive documentation** — `AGENTS.md` stays lean and link
 
 | Concern              | Tool                          | Notes                                      |
 | -------------------- | ----------------------------- | ------------------------------------------ |
-| Framework            | TanStack Start v1             | Built on Vinxi                             |
+| Framework            | TanStack Start v1             | Vite plugin (post-vinxi, ADR-012); `vite.config.ts` |
 | Routing              | TanStack Router (file-based)  | Type-safe, auto-generates route tree       |
 | Server State         | TanStack Query v5             | For all async/server data                  |
 | API Layer            | Hono v4 + server functions    | Dual-layer: server fns for route data, Hono for portable endpoints. See `docs/agents/api.md` |
@@ -80,7 +80,7 @@ This repo uses **progressive documentation** — `AGENTS.md` stays lean and link
 
 These apply everywhere, always, with no exceptions.
 
-- **No `process.env` access outside `app/env.ts`.** All env vars go through the Zod-validated `getEnv()` accessor. (One narrow exception: build-time tooling like `app.config.ts` may read **non-secret** platform build flags such as `VERCEL` directly — never secrets. See `docs/agents/environment.md`.)
+- **No `process.env` access outside `app/env.ts`.** All env vars go through the Zod-validated `getEnv()` accessor. (One narrow exception: build-time tooling like `vite.config.ts` may read **non-secret** platform build flags such as `VERCEL` directly — never secrets. See `docs/agents/environment.md`.)
 - **No `any`.** Use `unknown` and narrow it, or fix the type properly.
 - **No `@ts-ignore` or `@ts-expect-error`** without a comment explaining why.
 - **No `useEffect` + `useState` for data fetching.** Use TanStack Query.
