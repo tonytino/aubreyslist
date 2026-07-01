@@ -1,0 +1,1 @@
+- `[manual]` Wired up client-side Sentry error monitoring: the `@sentry/tanstackstart-react` SDK now initializes before hydration and captures browser errors, including those caught by the root error boundary (AUB-105).
