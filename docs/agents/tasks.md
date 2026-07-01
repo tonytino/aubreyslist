@@ -138,7 +138,10 @@ Do not close the issue yourself. The merged PR closes it automatically via the `
 Stop and leave a comment on the issue if:
 
 - The acceptance criteria are ambiguous or contradictory
-- The task touches `safe:human` concerns (auth, schema changes, deploys, external services)
+- The task requires an action only the human can take — provisioning a
+  secret/account, running a deploy, applying a prod migration. (A `safe:human`
+  label is **not** itself a stop signal: implement the change and open the PR;
+  the human just reviews and merges it — see the label reference below.)
 - You discover the actual scope is `size:l` — don't expand silently
 - Something unexpected is broken that blocks progress
 
@@ -161,8 +164,8 @@ gh issue edit <NUMBER> --remove-label "status:in-progress" --add-label "status:b
 | `size:s` | < 2 hrs, isolated change |
 | `size:m` | 2–4 hrs, multi-file |
 | `size:l` | Needs planning session first |
-| `safe:agent` | Agent can proceed without pre-approval |
-| `safe:human` | Human must approve before agent acts |
+| `safe:agent` | Agent may merge the PR once CI passes |
+| `safe:human` | Agent implements it, but a human reviews and merges — never auto-merged |
 | `type:bug` | Something broken |
 | `type:feature` | New functionality |
 | `type:chore` | Maintenance / tooling |
