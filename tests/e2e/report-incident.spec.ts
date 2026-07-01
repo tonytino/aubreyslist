@@ -72,6 +72,9 @@ test.describe("report an incident", () => {
     // Yesterday's UTC calendar date — unambiguously in-window and strictly past.
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+    // The report form lives in a modal — open it via its trigger button first.
+    await page.getByRole("button", { name: "Report an incident" }).click();
+
     const form = page.getByRole("form", { name: "Report an incident" });
     await form.getByLabel(/Date it happened/).fill(yesterday);
     await form.getByLabel("Severity (optional)").selectOption("moderate");

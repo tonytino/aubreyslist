@@ -4,6 +4,16 @@ import { toast } from "sonner";
 import { SafetySignal } from "~/components/SafetySignal";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "~/components/ui/dialog";
 import type { Incident } from "~/db/schema";
 import { removeIncident, submitIncident, updateIncident } from "~/server/incidents/incidents.fn";
 import { INCIDENT_SEVERITIES } from "~/trust/incident-recency";
@@ -46,7 +56,7 @@ export function IncidentReports({ listingId, incidents, viewerId }: IncidentRepo
     <div className="flex flex-col gap-4">
       <IncidentList listingId={listingId} incidents={incidents} viewerId={viewerId} />
       {viewerId !== null ? (
-        <IncidentForm listingId={listingId} />
+        <ReportIncidentDialog listingId={listingId} />
       ) : (
         <p className="text-body-sm text-muted-foreground">
           <a href="/api/auth/google" className="underline underline-offset-4">
@@ -341,8 +351,41 @@ function IncidentEditForm({
   );
 }
 
-/** The login-gated submission form. */
-function IncidentForm({ listingId }: { listingId: string }) {
+/**
+ * The login-gated report flow, gated behind a button that opens a modal.
+ *
+ * The submission form lives inside a `Dialog` rather than being always-expanded
+ * on the page: a fully-open form reads as an active incident/alert until you
+ * realise it is just an empty form, which is visual noise on an otherwise calm
+ * listing page. The trigger button keeps the affordance discoverable while the
+ * form stays out of the way until a diner actually wants to file a report.
+ */
+function ReportIncidentDialog({ listingId }: { listingId: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" className="self-start">
+          <SafetySignal state="incident" label="Report an incident" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Report a “got glutened here” incident</DialogTitle>
+          <DialogDescription>
+            Share when it happened so other diners are warned. A recent report flags this listing at
+            the top of the page.
+          </DialogDescription>
+        </DialogHeader>
+        <IncidentForm listingId={listingId} onSuccess={() => setOpen(false)} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The login-gated submission form, rendered inside the report modal. */
+function IncidentForm({ listingId, onSuccess }: { listingId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
   const [occurredOn, setOccurredOn] = useState("");
   const [severity, setSeverity] = useState<SeverityChoice>("");
@@ -365,6 +408,7 @@ function IncidentForm({ listingId }: { listingId: string }) {
       setNote("");
       queryClient.invalidateQueries({ queryKey: incidentsQueryKey(listingId) });
       toast.success("Incident reported");
+      onSuccess();
     },
     onError: () => {
       toast.error("Could not submit the report. Please try again.");
@@ -376,7 +420,7 @@ function IncidentForm({ listingId }: { listingId: string }) {
   return (
     <form
       aria-label="Report an incident"
-      className="flex flex-col gap-3 rounded-card border border-border bg-muted p-gutter"
+      className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit) {
@@ -384,13 +428,6 @@ function IncidentForm({ listingId }: { listingId: string }) {
         }
       }}
     >
-      <div className="flex items-center gap-2">
-        <SafetySignal state="incident" />
-        <span className="text-body-sm font-medium text-foreground">
-          Report a “got glutened here” incident
-        </span>
-      </div>
-
       <label className="flex flex-col gap-1">
         <span className="text-body-sm font-medium text-foreground">
           Date it happened <span className="text-incident">*</span>
@@ -439,9 +476,16 @@ function IncidentForm({ listingId }: { listingId: string }) {
         </p>
       ) : null}
 
-      <Button type="submit" className="self-start" disabled={!canSubmit || report.isPending}>
-        {report.isPending ? "Submitting…" : "Submit report"}
-      </Button>
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button type="button" variant="outline" disabled={report.isPending}>
+            Cancel
+          </Button>
+        </DialogClose>
+        <Button type="submit" disabled={!canSubmit || report.isPending}>
+          {report.isPending ? "Submitting…" : "Submit report"}
+        </Button>
+      </DialogFooter>
     </form>
   );
 }
