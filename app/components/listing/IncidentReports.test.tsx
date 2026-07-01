@@ -61,11 +61,22 @@ describe("IncidentReports", () => {
     expect(screen.queryByRole("button", { name: /Submit report/i })).not.toBeInTheDocument();
   });
 
-  it("shows the submission form when signed in", () => {
+  it("gates the submission form behind a modal trigger when signed in", () => {
     renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} viewerId="user-1" />);
 
-    expect(screen.getByRole("button", { name: /Submit report/i })).toBeInTheDocument();
+    // The form is not expanded on the page — only the trigger button is shown.
+    expect(screen.getByRole("button", { name: /Report an incident/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Submit report/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
+  });
+
+  it("opens the report form in a modal when the trigger is clicked", () => {
+    renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} viewerId="user-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Report an incident/i }));
+
+    expect(screen.getByRole("form", { name: "Report an incident" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Submit report/i })).toBeInTheDocument();
   });
 
   it("lists incidents most-recent-first with date + severity + note", () => {
@@ -90,6 +101,7 @@ describe("IncidentReports", () => {
     queryClient.setQueryData(incidentsQueryKey("listing-1"), []);
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
+    fireEvent.click(screen.getByRole("button", { name: /Report an incident/i }));
     fireEvent.change(screen.getByLabelText(/Date it happened/i), {
       target: { value: "2026-06-01" },
     });
@@ -110,6 +122,7 @@ describe("IncidentReports", () => {
     submitIncidentMock.mockRejectedValueOnce(new Error("boom"));
     renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} viewerId="user-1" />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Report an incident/i }));
     fireEvent.change(screen.getByLabelText(/Date it happened/i), {
       target: { value: "2026-06-01" },
     });
