@@ -108,17 +108,18 @@ existing stack (Biome, Lefthook) parses or validates commit-message structure.
 Config is in `commitlint.config.mjs`. knip's commitlint plugin auto-detects that
 config, so these are not flagged as unused (no `ignoreDependencies` entry needed).
 
-### UI layer: shadcn/ui + Phosphor (ADR-011)
+### UI layer: shadcn/ui + lucide-react (ADR-011)
 
 Full shadcn/ui adoption brought in `class-variance-authority`, `clsx`,
 `tailwind-merge`, `@radix-ui/react-slot`, and `@radix-ui/react-label` (component
-machinery) plus `@phosphor-icons/react` (icons). All are runtime `dependencies`
-(they ship in the client bundle). shadcn components are **copy-in source** under
-`app/components/ui/`, not a package — so the only packages are the primitives'
-building blocks. Add further `@radix-ui/*` primitives **per-component, on demand**
-(when adding a dialog, popover, dropdown, etc.) — never speculatively. See
-ADR-011 and `docs/agents/styling.md` for the import conventions (notably:
-Phosphor must be imported from `@phosphor-icons/react/dist/ssr`).
+machinery) plus `lucide-react` (icons — this superseded `@phosphor-icons/react`
+in AUB-61). All are runtime `dependencies` (they ship in the client bundle).
+shadcn components are **copy-in source** under `app/components/ui/`, not a package
+— so the only packages are the primitives' building blocks. Add further
+`@radix-ui/*` primitives **per-component, on demand** (when adding a dialog,
+popover, dropdown, etc.) — never speculatively. See ADR-011 and
+`docs/agents/styling.md` for the icon import conventions (lucide is imported from
+the `"lucide-react"` barrel — it is SSR-safe, no special entrypoint needed).
 
 ## Unused Dependency Check
 

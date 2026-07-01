@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Clock, Leaf, type LucideIcon, ShieldCheck, TriangleAlert } from "lucide-react";
 
 /**
  * The four safety/trust states surfaced across the app. See
@@ -17,26 +17,8 @@ interface SafetyStateConfig {
   solid: string;
   /** Tailwind utilities for the soft (pastel-filled) variant. */
   soft: string;
-  /** Distinct inline-SVG glyph per state — shape carries meaning, not just colour. */
-  icon: ReactNode;
-}
-
-function Icon({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      viewBox="0 0 24 24"
-      className="h-4 w-4 shrink-0"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.25"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {children}
-    </svg>
-  );
+  /** Distinct lucide glyph per state — shape carries meaning, not just colour. */
+  icon: LucideIcon;
 }
 
 /**
@@ -50,51 +32,29 @@ const STATES: Record<SafetyState, SafetyStateConfig> = {
     label: "Celiac-safe",
     solid: "bg-celiac-safe text-celiac-safe-foreground",
     soft: "bg-celiac-safe-soft text-celiac-safe border border-celiac-safe/30",
-    // shield + check
-    icon: (
-      <Icon>
-        <path d="M12 3l7 3v5c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6l7-3z" />
-        <path d="M9 12l2 2 4-4" />
-      </Icon>
-    ),
+    // shield + check — headline trust
+    icon: ShieldCheck,
   },
   "gluten-friendly": {
     label: "Gluten-friendly",
     solid: "bg-gluten-friendly text-gluten-friendly-foreground",
     soft: "bg-gluten-friendly-soft text-gluten-friendly border border-gluten-friendly/30",
-    // info circle — "options, with caution"
-    icon: (
-      <Icon>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 11v5" />
-        <path d="M12 8h.01" />
-      </Icon>
-    ),
+    // leaf — "GF-ish options, not safe"
+    icon: Leaf,
   },
   stale: {
-    label: "Stale listing",
+    label: "Needs update",
     solid: "bg-stale text-stale-foreground",
     soft: "bg-stale-soft text-stale border border-stale/30",
     // clock — freshness/recency
-    icon: (
-      <Icon>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 2" />
-      </Icon>
-    ),
+    icon: Clock,
   },
   incident: {
     label: "Recent incident",
     solid: "bg-incident text-incident-foreground",
     soft: "bg-incident-soft text-incident border border-incident/30",
     // warning triangle — recent harm
-    icon: (
-      <Icon>
-        <path d="M12 4l9 16H3l9-16z" />
-        <path d="M12 10v4" />
-        <path d="M12 17h.01" />
-      </Icon>
-    ),
+    icon: TriangleAlert,
   },
 };
 
@@ -119,6 +79,7 @@ interface SafetySignalProps {
 export function SafetySignal({ state, variant = "soft", label, className }: SafetySignalProps) {
   const config = STATES[state];
   const text = label ?? config.label;
+  const Icon = config.icon;
 
   return (
     <span
@@ -127,7 +88,7 @@ export function SafetySignal({ state, variant = "soft", label, className }: Safe
         variant === "solid" ? config.solid : config.soft
       }${className ? ` ${className}` : ""}`}
     >
-      {config.icon}
+      <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={2.25} />
       <span>{text}</span>
     </span>
   );

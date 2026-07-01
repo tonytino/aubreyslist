@@ -10,9 +10,10 @@ import {
   listings,
 } from "~/db/schema";
 import { BROWSE_PAGE_SIZE, MAX_PAGE_SIZE } from "~/listings/browse-params";
-import type { Coords } from "~/listings/distance";
+import { type Coords, EARTH_RADIUS_KM } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
+import { formatDistanceLabel } from "~/trust/browse-card-format";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident, toCalendarDayString } from "~/trust/incident-recency";
 import { DEFAULT_STALENESS_MONTHS, stalenessCutoff } from "~/trust/summary";
@@ -87,6 +88,12 @@ export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 export interface BrowseListingCard {
   listing: Listing;
   glance: ListingTrustGlance;
+  /**
+   * A "0.4 mi" distance label, present ONLY when the page is distance-sorted
+   * with a complete user coordinate pair. Reused from the distance-sort path's
+   * haversine (never recomputed client-side); omitted for every other sort.
+   */
+  distanceLabel?: string;
 }
 
 /** A page of browse cards plus the cursor info the UI needs to paginate. */
@@ -146,13 +153,20 @@ export async function getBrowseListings(
       : undefined;
   const orderBy = buildOrderBy(sort, trust, now, resolvedStalenessMonths, coords);
 
+  // Only compute a distance VALUE when actually distance-sorting with a complete
+  // coord pair — the label is shown solely in that case (Phase 2a). We reuse the
+  // SAME haversine the ordering derives from (`distanceKmExpr`), so the label and
+  // the sort never disagree, and no distance is computed for other sorts.
+  const distanceKm = sort === "distance" && coords ? distanceKmExpr(coords) : null;
+
   // 1. The page of listings under the current search + filter + sort, plus the
   //    matching total (same `WHERE`) so the UI can render "X of Y" + has-more.
   //    The trust subquery is LEFT JOINed so the sort can order by its columns;
-  //    rows are wrapped as `{ listing }` because of the projection.
+  //    rows are wrapped as `{ listing }` because of the projection. When
+  //    distance-sorting, the per-row distance (km) is selected alongside.
   const [pageListings, totalRows] = await Promise.all([
     db
-      .select({ listing: listings })
+      .select(distanceKm ? { listing: listings, distanceKm } : { listing: listings })
       .from(listings)
       .leftJoin(trust, eq(trust.listingId, listings.id))
       .where(where)
@@ -172,23 +186,45 @@ export async function getBrowseListings(
 
   const pageRows = pageListings.map((row) => row.listing);
 
+  // The per-row distance (km), keyed by listing id, when distance-sorting. Some
+  // rows in tests (or a non-distance sort) omit the column; a missing/NaN value
+  // yields no label rather than a fabricated "0.0 mi".
+  const distanceByListing = new Map<string, number>();
+  for (const row of pageListings) {
+    const km = (row as { distanceKm?: number | string | null }).distanceKm;
+    if (km !== undefined && km !== null) {
+      const n = Number(km);
+      if (Number.isFinite(n)) {
+        distanceByListing.set(row.listing.id, n);
+      }
+    }
+  }
+
   const listingIds = pageRows.map((listing) => listing.id);
 
   // 2. + 3. Batch the two trust signals for exactly this page's listings.
-  const [celiacAggregates, recentIncidentIds] = await Promise.all([
+  const [celiacAggregates, recentIncidentDates] = await Promise.all([
     getCeliacAggregatesByListing(listingIds),
-    getRecentIncidentListingIds(listingIds, now),
+    getRecentIncidentDatesByListing(listingIds, now),
   ]);
 
-  const cards: BrowseListingCard[] = pageRows.map((listing) => ({
-    listing,
-    glance: deriveListingTrustGlance(
-      celiacAggregates.get(listing.id) ?? null,
-      recentIncidentIds.has(listing.id),
+  const cards: BrowseListingCard[] = pageRows.map((listing) => {
+    const celiac = celiacAggregates.get(listing.id) ?? null;
+    const km = distanceByListing.get(listing.id);
+    const glance = deriveListingTrustGlance(
+      celiac?.aggregate ?? null,
+      celiac?.contributors ?? 0,
+      recentIncidentDates.get(listing.id) ?? null,
       now,
       resolvedStalenessMonths
-    ),
-  }));
+    );
+    // Distance label only when distance-sorting produced a value for this row.
+    // Spread it in conditionally so the optional prop is truly absent (not
+    // `undefined`) under `exactOptionalPropertyTypes`.
+    return km !== undefined
+      ? { listing, glance, distanceLabel: formatDistanceLabel(km) }
+      : { listing, glance };
+  });
 
   return { cards, page, pageSize, sort, total, hasMore: offset + pageRows.length < total };
 }
@@ -350,18 +386,52 @@ function buildOrderBy(
 }
 
 /**
+ * The great-circle distance in KILOMETRES from `coords` to each listing's stored
+ * lat/lng, as a SQL expression — the FULL haversine (`2 * R * asin(sqrt(h))`),
+ * NOT the ordering-only `h` term `buildOrderBy` uses. We need the actual value
+ * (not just a monotonic rank) to render a "0.4 mi" label, so this is the exact
+ * SQL analogue of the pure `haversineKm` helper (same `EARTH_RADIUS_KM`), keeping
+ * the displayed distance and the ordering derived from the same definition.
+ *
+ * Selected into the page query ONLY when distance-sorting with a complete coord
+ * pair (below), so a non-distance sort pays nothing for it.
+ */
+function distanceKmExpr(coords: Coords): SQL<number> {
+  const h = sql`
+    sin(radians(${listings.lat} - ${coords.lat}) / 2) ^ 2
+    + cos(radians(${coords.lat})) * cos(radians(${listings.lat}))
+    * sin(radians(${listings.lng} - ${coords.lng}) / 2) ^ 2`;
+  return sql<number>`2 * ${EARTH_RADIUS_KM} * asin(least(1, sqrt(${h})))`;
+}
+
+/** A listing's celiac aggregate plus its distinct-contributor count. */
+interface CeliacAggregateWithContributors {
+  aggregate: ClaimAggregate;
+  /** Distinct people who attested (confirm OR dispute) the celiac claim. */
+  contributors: number;
+}
+
+/**
  * Batch-load the `celiac_safe_vs_gluten_friendly` claim aggregate (confirm/
- * dispute counts + recency) for each of `listingIds`, in ONE grouped query.
+ * dispute counts + recency) AND the distinct-contributor count for each of
+ * `listingIds`, in ONE grouped query.
  *
  * Mirrors `getListingClaimAggregates`'s conditional-count pattern but scoped to
  * the single headline attribute and across many listings (`listingId IN (…)`),
- * so the browse page needs one query for all cards rather than one per card.
+ * so the browse page needs one query for all cards rather than one per card
+ * (NO N+1). Contributors is computed IN THE SAME grouped query as a
+ * `count(distinct user_id)` over the LEFT-joined `attestations` — the unique
+ * `(claim_id, user_id)` constraint means one row per person per claim, so a
+ * distinct count of `user_id` is exactly "how many different people weighed in".
+ * The LEFT JOIN yields a single NULL `user_id` row for a claim with no
+ * attestations, which `count(distinct …)` correctly counts as `0`.
+ *
  * Returns a map keyed by `listingId`; a listing with no celiac claim is absent
  * (the caller treats that as "no evidence" → "Not yet attested").
  */
 async function getCeliacAggregatesByListing(
   listingIds: string[]
-): Promise<Map<string, ClaimAggregate>> {
+): Promise<Map<string, CeliacAggregateWithContributors>> {
   const rows = await getDb()
     .select({
       listingId: claims.listingId,
@@ -369,6 +439,10 @@ async function getCeliacAggregatesByListing(
       lastConfirmedAt: claims.lastConfirmedAt,
       confirmCount: sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`,
       disputeCount: sql<number>`count(*) filter (where ${attestations.value} = 'dispute')`,
+      // Distinct people who attested this claim either way — the "N neighbors"
+      // evidence count. Computed IN this grouped query (no extra round-trip), so
+      // it stays batched (no N+1). NULL user_id (no attestations) counts as 0.
+      contributors: sql<number>`count(distinct ${attestations.userId})`,
     })
     .from(claims)
     .leftJoin(attestations, eq(attestations.claimId, claims.id))
@@ -380,25 +454,36 @@ async function getCeliacAggregatesByListing(
     )
     .groupBy(claims.listingId, claims.id, claims.lastConfirmedAt);
 
-  const byListing = new Map<string, ClaimAggregate>();
+  const byListing = new Map<string, CeliacAggregateWithContributors>();
   for (const row of rows) {
     byListing.set(row.listingId, {
-      claimId: row.claimId,
-      lastConfirmedAt: row.lastConfirmedAt,
-      confirmCount: Number(row.confirmCount),
-      disputeCount: Number(row.disputeCount),
+      aggregate: {
+        claimId: row.claimId,
+        lastConfirmedAt: row.lastConfirmedAt,
+        confirmCount: Number(row.confirmCount),
+        disputeCount: Number(row.disputeCount),
+      },
+      contributors: Number(row.contributors),
     });
   }
   return byListing;
 }
 
 /**
- * Batch-load incidents for `listingIds` in ONE query and reduce to the set of
- * listing ids that have a RECENT incident (within #30's recency window). Uses
- * the same pure `findRecentIncident` helper the listing-detail banner uses, so
- * "recent" means exactly the same thing on the card as on the detail page.
+ * Batch-load incidents for `listingIds` in ONE query and reduce to a map from
+ * listing id → the most recent RECENT incident's instant (within #30's recency
+ * window), or absent when the listing has no recent incident. Uses the same pure
+ * `findRecentIncident` helper the listing-detail banner uses, so "recent" means
+ * exactly the same thing on the card as on the detail page.
+ *
+ * The returned `Date` is the incident day at UTC midnight (incidents are stored
+ * as calendar dates, no time-of-day), so the card's freshness cue can phrase
+ * "Reported Nd ago" from the incident's own recency without fabricating a time.
  */
-async function getRecentIncidentListingIds(listingIds: string[], now: Date): Promise<Set<string>> {
+async function getRecentIncidentDatesByListing(
+  listingIds: string[],
+  now: Date
+): Promise<Map<string, Date>> {
   const rows = await getDb()
     .select({ listingId: incidents.listingId, occurredOn: incidents.occurredOn })
     .from(incidents)
@@ -427,10 +512,13 @@ async function getRecentIncidentListingIds(listingIds: string[], now: Date): Pro
     }
   }
 
-  const recent = new Set<string>();
+  const recent = new Map<string, Date>();
   for (const [listingId, incidentList] of byListing) {
-    if (findRecentIncident(incidentList, now) !== null) {
-      recent.add(listingId);
+    const mostRecent = findRecentIncident(incidentList, now);
+    if (mostRecent !== null) {
+      // The recent incident's calendar day at UTC midnight — the honest instant
+      // the freshness cue phrases "Reported Nd ago" from.
+      recent.set(listingId, new Date(`${mostRecent.occurredOn}T00:00:00Z`));
     }
   }
   return recent;

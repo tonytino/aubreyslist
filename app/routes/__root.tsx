@@ -28,6 +28,18 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: defaultSeoMeta(),
     links: [
+      // Preconnect to Google Fonts hosts so the font CSS + files start fetching
+      // as early as possible (the second uses crossOrigin because fonts are
+      // fetched anonymously).
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      // Bricolage Grotesque (display/headings) + Public Sans (body/UI), loaded
+      // with display=swap so text paints immediately in the fallback and swaps
+      // to the webfont on load (no invisible-text FOIT).
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Public+Sans:ital,wght@0,300..800;1,300..800&display=swap",
+      },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },

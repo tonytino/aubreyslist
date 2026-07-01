@@ -1,0 +1,1 @@
+- `[manual]` Redesigned the browse restaurant card (food-photo tile, freshness cue, attestation/contributor evidence counts, and an attributed Google-rating slot) and refreshed the `SafetySignal` chip with lucide icons; the stale state's label is now "Needs update".

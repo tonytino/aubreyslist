@@ -1,7 +1,7 @@
-import { MapPin } from "@phosphor-icons/react/dist/ssr";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { MapPin } from "lucide-react";
 import { z } from "zod";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
 import { FlagControl } from "~/components/listing/FlagControl";
@@ -152,7 +152,7 @@ function ListingDetail() {
         {isHttpUrl(listing.mapsUrl) ? (
           <Button asChild size="lg">
             <a href={listing.mapsUrl} target="_blank" rel="noreferrer noopener">
-              <MapPin aria-hidden weight="fill" className="h-4 w-4" />
+              <MapPin aria-hidden className="h-4 w-4" />
               Open in Google Maps
             </a>
           </Button>

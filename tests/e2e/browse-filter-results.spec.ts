@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
-import { waitForBrowseReady } from "./helpers";
+import { openBrowseFilters, waitForBrowseReady } from "./helpers";
 
 /**
  * Browse + filter, with REAL seeded results (issue #45).
@@ -66,7 +66,9 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
 
   test("celiac-safe + dedicated fryer filter narrows to the matching listing", async ({ page }) => {
     await page.goto("/listings");
-    await waitForBrowseReady(page);
+    // The taxonomy filter lives in the "Filters" bottom sheet in the AUB-61
+    // redesign; open it before toggling the attribute checkboxes.
+    await openBrowseFilters(page);
 
     // Apply both taxonomy checkboxes (labels come from CLAIM_ATTRIBUTE_LABELS).
     // click() (not check()) — the checkbox is URL-controlled and re-renders on
@@ -76,6 +78,10 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
 
     await page.getByRole("checkbox", { name: "Dedicated fryer" }).click();
     await expect(page).toHaveURL(/attrs=[^&]*dedicated_fryer/);
+
+    // Close the filter sheet so the filtered result list underneath is visible.
+    await page.getByRole("button", { name: "Close" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
 
     // The celiac-only listing is excluded by the dedicated-fryer constraint —
     // scoped to its unique name, robust regardless of pagination.
@@ -90,5 +96,38 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     await card.click();
     await expect(page).toHaveURL(new RegExp(`/listings/${bothId}$`));
     await expect(page.getByRole("heading", { name: bothName, level: 1 })).toBeVisible();
+  });
+
+  /**
+   * Server-side search covers ALL listings, not just the loaded page. We seed a
+   * listing whose name sorts to the very END of the alphabetical default order
+   * (a `zzzz-` prefix), so on any populated branch it is paginated OFF page 1.
+   * Searching its unique token from the directory (URL `?q=`) must still surface
+   * it — proving the redesign routes free-text search through the server and can
+   * find a match that isn't on the first page (an honesty requirement: a page-
+   * scoped client filter would have hidden it).
+   */
+  test("server-side search finds a listing that isn't on page 1", async ({ page }) => {
+    const lateToken = uniqueToken("zsearch");
+    const late = await seeder.createListing(lateToken, { name: `zzzz-${lateToken} Diner` });
+
+    await page.goto("/listings");
+    // Wait for hydration + the route's search-param canonicalization before typing —
+    // otherwise the debounced `?q=` navigate races the not-yet-wired input onChange
+    // (and the in-flight canonicalizing navigate clobbers it), leaving `q=` empty.
+    await waitForBrowseReady(page);
+    // Type the unique token into the directory search; the route debounces it into
+    // the URL `?q=`, which runs the server ILIKE over name + address.
+    await page.getByRole("searchbox", { name: "Search listings" }).fill(lateToken);
+    await expect(page).toHaveURL(new RegExp(`q=[^&]*${lateToken}`));
+
+    // The card for the late-sorting listing is present even though it would never
+    // appear on page 1 without a query — the search reached beyond the first page.
+    const card = page.getByRole("link", { name: late.name });
+    await expect(card).toHaveAttribute("href", `/listings/${late.id}`);
+
+    // And the honest count reflects the server-filtered total (a single match),
+    // not a page-scoped number.
+    await expect(page.getByText(/\bplaces near\b/)).toContainText("1");
   });
 });

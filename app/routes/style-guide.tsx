@@ -1,5 +1,5 @@
-import { Plus } from "@phosphor-icons/react/dist/ssr";
 import { createFileRoute } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { SAFETY_STATES, SafetySignal } from "~/components/SafetySignal";
 import { Wordmark } from "~/components/Wordmark";
@@ -173,7 +173,7 @@ function StyleGuide() {
             ))}
             <Labeled label="size=icon">
               <Button size="icon" aria-label="Add">
-                <Plus weight="bold" />
+                <Plus strokeWidth={2.4} />
               </Button>
             </Labeled>
           </div>
@@ -184,7 +184,7 @@ function StyleGuide() {
             </Labeled>
             <Labeled label="leading icon">
               <Button>
-                <Plus weight="bold" />
+                <Plus strokeWidth={2.4} />
                 Add listing
               </Button>
             </Labeled>

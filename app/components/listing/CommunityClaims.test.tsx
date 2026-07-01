@@ -193,7 +193,7 @@ describe("CommunityClaims", () => {
       // Recency phrasing is relative to the injected `now`, not the live clock.
       expect(screen.getByText("last confirmed 3 weeks ago")).toBeInTheDocument();
       // 3 weeks < 6-month window relative to `now`, so it is NOT flagged stale.
-      expect(screen.queryByText("Stale listing")).not.toBeInTheDocument();
+      expect(screen.queryByText("Needs update")).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

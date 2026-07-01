@@ -6,22 +6,33 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import type { Listing } from "~/db/schema";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
-import { ListingCard } from "./ListingCard";
+import { ListingCard, RestaurantCard, type RestaurantCardVM } from "./ListingCard";
 
 /**
- * Tests for the browse-list card (#33). Covers the trust-glance render across
- * states — celiac-safe, gluten-friendly, the honest "Not yet attested" empty
- * state, and the recent-incident flag — and that the card links to the detail
- * page. The accessible signals (colour + icon + TEXT label) are asserted via
- * their visible text, never colour.
+ * Tests for the browse-list card (#33, AUB-61 redesign). Covers the trust-glance
+ * render across states — celiac-safe, gluten-friendly, the honest "Not yet
+ * attested" empty state, the recent-incident flag — plus the redesign's new
+ * surface: the attributed (non-safety) Google rating pill, evidence counts, and
+ * the photo placeholder vs `<img>`. The accessible signals (colour + icon + TEXT
+ * label) are asserted via their visible text, never colour.
  *
- * `ListingCard` uses TanStack Router's `Link`, so it must render inside a router.
- * We mount a tiny in-memory router whose tree includes the `/listings/$id` target
- * so `Link` can resolve its href without the full app route tree.
+ * The card uses TanStack Router's `Link`, so it must render inside a router. We
+ * mount a tiny in-memory router whose tree includes the `/listings/$id` target so
+ * `Link` can resolve its href without the full app route tree.
  */
+
+const baseVm: RestaurantCardVM = {
+  id: "listing-1",
+  name: "Acme Gluten-Free",
+  address: "123 Main St, Denver, CO",
+  safetyState: "celiac-safe",
+  hasRecentIncident: false,
+  accent: "lavender",
+};
 
 const baseListing: Listing = {
   id: "listing-1",
@@ -37,12 +48,13 @@ const baseListing: Listing = {
   updatedAt: new Date(),
 };
 
-function renderCard(glance: ListingTrustGlance) {
+/** Mount `element` inside a minimal router that can resolve `/listings/$id`. */
+function renderInRouter(element: ReactNode) {
   const rootRoute = createRootRoute();
   const browseRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/",
-    component: () => <ListingCard listing={baseListing} glance={glance} />,
+    component: () => <>{element}</>,
   });
   // The link target must exist in the tree for `Link` to type/resolve.
   const detailRoute = createRoute({
@@ -59,31 +71,52 @@ function renderCard(glance: ListingTrustGlance) {
   render(<RouterProvider router={router as unknown as never} />);
 }
 
-describe("ListingCard", () => {
+function renderCard(overrides: Partial<RestaurantCardVM> = {}) {
+  renderInRouter(<RestaurantCard vm={{ ...baseVm, ...overrides }} />);
+}
+
+describe("RestaurantCard", () => {
   it("renders the listing name and address", async () => {
-    renderCard({ safetyState: "celiac-safe", hasRecentIncident: false });
+    renderCard();
     expect(await screen.findByRole("heading", { name: "Acme Gluten-Free" })).toBeInTheDocument();
-    expect(screen.getByText("123 Main St, Denver, CO")).toBeInTheDocument();
+    expect(screen.getByText(/123 Main St, Denver, CO/)).toBeInTheDocument();
   });
 
-  it("links to the listing detail page", async () => {
-    renderCard({ safetyState: "celiac-safe", hasRecentIncident: false });
+  it("appends the distance label to the location line when provided", async () => {
+    renderCard({ distanceLabel: "0.4 mi" });
+    expect(await screen.findByText("123 Main St, Denver, CO · 0.4 mi")).toBeInTheDocument();
+  });
+
+  it("links the whole card to the listing detail page", async () => {
+    renderCard();
     const link = await screen.findByRole("link");
     expect(link).toHaveAttribute("href", "/listings/listing-1");
   });
 
-  it("shows the celiac-safe label (text, not colour alone)", async () => {
-    renderCard({ safetyState: "celiac-safe", hasRecentIncident: false });
+  it("renders the save button as a sibling of the link, not nested in the anchor", async () => {
+    renderCard();
+    // The stretched-link pattern keeps a valid DOM: the <button> must NOT be a
+    // descendant of the <a> (a button inside an anchor is invalid HTML + an a11y
+    // defect). Both remain independently present.
+    const link = await screen.findByRole("link");
+    const saveButton = screen.getByRole("button", { name: "Save this spot" });
+    expect(saveButton).toBeInTheDocument();
+    expect(link).not.toContainElement(saveButton);
+    expect(saveButton).not.toContainElement(link);
+  });
+
+  it("shows the SafetySignal for a non-null state (text, not colour alone)", async () => {
+    renderCard({ safetyState: "celiac-safe" });
     expect(await screen.findByText("Celiac-safe")).toBeInTheDocument();
   });
 
   it("shows the gluten-friendly label", async () => {
-    renderCard({ safetyState: "gluten-friendly", hasRecentIncident: false });
+    renderCard({ safetyState: "gluten-friendly" });
     expect(await screen.findByText("Gluten-friendly")).toBeInTheDocument();
   });
 
-  it("renders an honest Not yet attested state when there is no evidence", async () => {
-    renderCard({ safetyState: null, hasRecentIncident: false });
+  it("renders an honest Not yet attested state when safetyState is null", async () => {
+    renderCard({ safetyState: null });
     expect(await screen.findByText("Not yet attested")).toBeInTheDocument();
     expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
   });
@@ -95,8 +128,111 @@ describe("ListingCard", () => {
   });
 
   it("does not show the incident warning when there is no recent incident", async () => {
-    renderCard({ safetyState: "celiac-safe", hasRecentIncident: false });
+    renderCard({ hasRecentIncident: false });
     await screen.findByText("Celiac-safe");
     expect(screen.queryByText("Recent incident")).not.toBeInTheDocument();
+  });
+
+  it("does not render a Google rating pill when googleRating is absent", async () => {
+    renderCard({ googleRating: null });
+    await screen.findByText("Celiac-safe");
+    expect(screen.queryByTestId("google-rating")).not.toBeInTheDocument();
+    expect(screen.queryByText("Google")).not.toBeInTheDocument();
+  });
+
+  it("renders an ATTRIBUTED Google rating pill only when googleRating is present", async () => {
+    renderCard({ googleRating: { value: 4.8, count: 128 } });
+    const pill = await screen.findByTestId("google-rating");
+    // The value is shown AND explicitly attributed to Google...
+    expect(pill).toHaveTextContent("4.8");
+    expect(pill).toHaveTextContent("Google");
+    // ...and it is NOT presented as a safety verdict (ADR-007): no safety label,
+    // and it carries no SafetySignal state marker.
+    expect(pill).not.toHaveTextContent(/celiac|safe|gluten/i);
+    expect(pill).not.toHaveAttribute("data-safety-state");
+  });
+
+  it("renders evidence counts when present", async () => {
+    renderCard({ evidence: { confirmations: 128, contributors: 41 } });
+    expect(await screen.findByText("128 confirmations · 41 neighbors")).toBeInTheDocument();
+  });
+
+  it("renders a freshness cue with its label when present", async () => {
+    renderCard({ freshness: { kind: "fresh", label: "Verified 3d ago" } });
+    expect(await screen.findByText("Verified 3d ago")).toBeInTheDocument();
+  });
+
+  it("renders the accent placeholder tile when no photoUrl is given", async () => {
+    renderCard({ photoUrl: null });
+    expect(await screen.findByText("Food photo")).toBeInTheDocument();
+    expect(screen.queryByTestId("food-photo")).not.toBeInTheDocument();
+  });
+
+  it("renders an <img> instead of the placeholder when photoUrl is set", async () => {
+    renderCard({ photoUrl: "https://cdn.example.com/root-and-rye.jpg" });
+    // The photo is decorative (alt=""), so it has no `img` role — assert on src.
+    const img = await screen.findByTestId("food-photo");
+    expect(img).toHaveAttribute("src", "https://cdn.example.com/root-and-rye.jpg");
+    expect(screen.queryByText("Food photo")).not.toBeInTheDocument();
+  });
+});
+
+describe("ListingCard (mapping wrapper)", () => {
+  /** A fully-derived glance; overrides tweak individual fields per test. */
+  const baseGlance: ListingTrustGlance = {
+    safetyState: "celiac-safe",
+    hasRecentIncident: false,
+    evidence: null,
+    freshness: null,
+  };
+
+  function renderWrapper(glance: Partial<ListingTrustGlance> = {}, distanceLabel?: string) {
+    renderInRouter(
+      <ListingCard
+        listing={baseListing}
+        glance={{ ...baseGlance, ...glance }}
+        distanceLabel={distanceLabel}
+      />
+    );
+  }
+
+  it("maps a Listing + glance onto the card and links to the detail page", async () => {
+    renderWrapper();
+    expect(await screen.findByRole("heading", { name: "Acme Gluten-Free" })).toBeInTheDocument();
+    expect(screen.getByText(/123 Main St, Denver, CO/)).toBeInTheDocument();
+    const link = await screen.findByRole("link");
+    expect(link).toHaveAttribute("href", "/listings/listing-1");
+  });
+
+  it("passes the null safetyState through to the honest Not yet attested chip", async () => {
+    renderWrapper({ safetyState: null });
+    expect(await screen.findByText("Not yet attested")).toBeInTheDocument();
+  });
+
+  it("passes the recent-incident flag through", async () => {
+    renderWrapper({ hasRecentIncident: true });
+    expect(await screen.findByText("Recent incident")).toBeInTheDocument();
+  });
+
+  it("maps the glance's evidence counts onto the card", async () => {
+    renderWrapper({ evidence: { confirmations: 12, contributors: 5 } });
+    expect(await screen.findByText("12 confirmations · 5 neighbors")).toBeInTheDocument();
+  });
+
+  it("maps the glance's freshness cue onto the card", async () => {
+    renderWrapper({ freshness: { kind: "stale", label: "Updated 8mo ago" } });
+    expect(await screen.findByText("Updated 8mo ago")).toBeInTheDocument();
+  });
+
+  it("maps the distanceLabel onto the card's location line", async () => {
+    renderWrapper({}, "0.4 mi");
+    expect(await screen.findByText("123 Main St, Denver, CO · 0.4 mi")).toBeInTheDocument();
+  });
+
+  it("omits evidence/freshness when the glance carries none", async () => {
+    renderWrapper();
+    await screen.findByText("Celiac-safe");
+    expect(screen.queryByText(/confirmations/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
   });
 });

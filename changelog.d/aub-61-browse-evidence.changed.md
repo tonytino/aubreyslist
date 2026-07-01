@@ -1,0 +1,1 @@
+- `[manual]` Browse listings now surface attestation evidence counts (confirmations + distinct contributors), a freshness cue, and a distance label (when sorting by distance), powering the redesigned restaurant card — computed in the existing batched query with no extra round-trips.

@@ -31,7 +31,7 @@ interface ClaimTrustSummaryProps {
  * REUSABLE / DROP-IN: this component takes only an `attribute` + `aggregate`
  * (no DB, no route coupling), so the browse-list cards (#33) can render the
  * same summary without change. Accessibility: meaning is carried in text +
- * (for a stale claim) an explicit "Stale listing" word — never colour alone.
+ * (for a stale claim) an explicit "Needs update" word — never colour alone.
  */
 export function ClaimTrustSummaryRow({
   attribute,
@@ -59,7 +59,7 @@ export function ClaimTrustSummaryRow({
           {summary.stale ? (
             <>
               <span aria-hidden="true"> · </span>
-              <span className="font-medium text-stale">Stale listing</span>
+              <span className="font-medium text-stale">Needs update</span>
             </>
           ) : null}
         </p>

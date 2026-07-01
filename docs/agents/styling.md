@@ -117,8 +117,8 @@ label** for all four states:
 | State | Label | Icon shape | Meaning |
 | --- | --- | --- | --- |
 | `celiac-safe` | "Celiac-safe" | shield + check | headline trust state |
-| `gluten-friendly` | "Gluten-friendly" | info circle | GF-ish only — *not* safe |
-| `stale` | "Stale listing" | clock | outside the staleness window |
+| `gluten-friendly` | "Gluten-friendly" | leaf | GF-ish only — *not* safe |
+| `stale` | "Needs update" | clock | outside the staleness window |
 | `incident` | "Recent incident" | warning triangle | recent "got glutened" harm |
 
 ```tsx
@@ -165,17 +165,33 @@ Domain components (`SafetySignal`, `ListingCard`) stay where they are and may
 compose primitives. The `SafetySignal` colour+icon+label contract is **not**
 shadcn's job and must not be regressed.
 
-### Icons — Phosphor, SSR import only
+### Icons — lucide-react
 
-Use `@phosphor-icons/react`, imported from the **SSR-safe entrypoint** (this is an
-SSR app):
+Use [`lucide-react`](https://lucide.dev), imported from the **barrel** — it is
+SSR-safe, so there is no separate entrypoint (unlike the Phosphor library it
+replaced; see ADR-011):
 
 ```tsx
-import { ShieldCheck, Plus } from "@phosphor-icons/react/dist/ssr";
+import { ShieldCheck, Plus } from "lucide-react";
 
-<Plus weight="bold" className="h-4 w-4" />
+<Plus className="h-4 w-4" />
 ```
 
-Never import from the barrel `@phosphor-icons/react` in app code — it causes
-SSR/bundle issues. Do not swap the `SafetySignal` SVGs for Phosphor unless each
-safety state keeps a distinct greyscale-survivable shape (a reviewed change).
+Conventions:
+
+- **Sizing** — pass a `size` prop (pixels) or a Tailwind `size-*` / `h-* w-*`
+  utility. Keep icon sizes visually equivalent to the surrounding text/control.
+- **Stroke weight** — lucide icons are stroked; the default `strokeWidth` is `2`.
+  For bold emphasis use `strokeWidth={2.4}` (this is the equivalent of Phosphor's
+  old `weight="bold"`).
+- **Filled icons** — lucide has no `weight="fill"`. When an icon must read as a
+  solid shape (e.g. a selected radio dot), fill the outline with the current text
+  colour via the Tailwind `fill-current` utility:
+
+  ```tsx
+  <Circle className="size-2 fill-current" aria-hidden="true" />
+  ```
+
+`SafetySignal` uses lucide icons — one distinct, greyscale-survivable shape per
+state (`ShieldCheck` / `Leaf` / `Clock` / `TriangleAlert`). Keep them distinct
+if you ever revisit the mapping; the shape is load-bearing, not just the colour.

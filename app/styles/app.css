@@ -96,6 +96,9 @@
   --text-title: 1.5rem; /* 24px */
   --text-title--line-height: 2rem;
   --text-title--font-weight: 600;
+  --text-card-title: 1.1875rem; /* 19px — browse RestaurantCard name (AUB-61) */
+  --text-card-title--line-height: 1.5rem;
+  --text-card-title--font-weight: 700;
   --text-headline: 2rem; /* 32px */
   --text-headline--line-height: 2.5rem;
   --text-headline--font-weight: 700;
@@ -144,6 +147,41 @@
   --color-popover-foreground: var(--color-foreground);
   --color-input: var(--color-border); /* input/control border */
   --color-ring: var(--color-brand-ring); /* focus ring */
+
+  /* ----------------------------------------------------------------------- */
+  /* Typefaces (AUB-61). Loaded from Google Fonts (font-display: swap) via    */
+  /* <link> tags in app/routes/__root.tsx. Public Sans backs Tailwind's       */
+  /* default `font-sans` (body/UI); Bricolage Grotesque backs `font-display`  */
+  /* (headings). Component phases apply `font-display`; this phase only wires  */
+  /* the tokens so body text resolves to Public Sans.                         */
+  /* ----------------------------------------------------------------------- */
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+
+  /* ----------------------------------------------------------------------- */
+  /* Animations (AUB-61). The directory's loading skeletons shimmer via the   */
+  /* `animate-shimmer` utility this token backs. The reduced-motion guard     */
+  /* below neutralises it for users who opt out (styling.md → motion).        */
+  /* ----------------------------------------------------------------------- */
+  --animate-shimmer: shimmer 1.3s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Respect prefers-reduced-motion: hold the shimmer still (no sliding gradient)
+   for users who opt out of motion, while the skeleton shape still communicates
+   that content is loading. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer {
+    animation: none;
+  }
 }
 
 /* ------------------------------------------------------------------------- */

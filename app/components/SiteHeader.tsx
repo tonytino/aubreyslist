@@ -1,6 +1,6 @@
-import { List, MagnifyingGlass, Plus } from "@phosphor-icons/react/dist/ssr";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Menu, Plus, Search } from "lucide-react";
 import type { ComponentType } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { ThemeToggle } from "~/components/ThemeToggle";
@@ -23,7 +23,7 @@ interface NavItem {
 // Primary navigation. Each item targets its real, existing route so the active
 // state is accurate.
 const NAV_ITEMS: readonly NavItem[] = [
-  { to: "/listings", label: "Browse", Icon: MagnifyingGlass },
+  { to: "/listings", label: "Browse", Icon: Search },
   { to: "/listings/new", label: "Add a listing", Icon: Plus },
   { to: "/about", label: "About", Icon: null },
 ];
@@ -54,7 +54,7 @@ export function SiteHeader() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="icon" aria-label="Open menu">
-                <List aria-hidden className="h-5 w-5" />
+                <Menu aria-hidden className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">

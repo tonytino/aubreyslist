@@ -30,6 +30,12 @@ are hand-authored from the canonical sources into `app/components/ui/`;
 unchanged once network allows. Phosphor (`@phosphor-icons/react`) is the icon
 library.
 
+> **Update (AUB-61):** the icon library was later switched from Phosphor to
+> lucide-react. The Phosphor-specific guidance below (SSR-safe import path, etc.)
+> is retained for historical context but is **no longer current** — see
+> `docs/agents/styling.md` and `docs/agents/dependencies.md` for the lucide-react
+> conventions.
+
 ## Consequences
 
 - **Token reconciliation is additive, never destructive.** shadcn's semantic
