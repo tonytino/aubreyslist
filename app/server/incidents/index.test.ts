@@ -354,8 +354,12 @@ describe("listIncidents — most-recent first", () => {
     // The Neon HTTP driver returns a Postgres `date` as a JS Date (Drizzle's
     // `PgDateString` passes it through verbatim). The recent-incident banner's
     // recency logic requires a strict `YYYY-MM-DD` string, so `listIncidents`
-    // normalizes at the read boundary. Model the driver handing back a Date.
-    state.listRows = [{ id: "d", occurredOn: new Date("2026-06-28T00:00:00.000Z") }];
+    // normalizes at the read boundary. Model the driver handing back a Date —
+    // and model it FAITHFULLY: the driver (pg-types, OID 1082) builds the Date at
+    // LOCAL midnight, `new Date(y, m-1, d)`, NOT UTC midnight (#144). Using a
+    // UTC-midnight Date here would be a TZ-sensitive mismodel that reads back the
+    // prior calendar day on any negative-offset runner (e.g. America/Denver).
+    state.listRows = [{ id: "d", occurredOn: new Date(2026, 5, 28) }];
 
     const rows = await listIncidents({ listingId: "listing-1" });
 
