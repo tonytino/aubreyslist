@@ -1,0 +1,1 @@
+- `[manual]` Replaced the check-in-a-circle brand glyph with a custom ear-of-wheat mark — the "gluten" symbol set inside the universal "no gluten" prohibition, but with the ring + slash rendered invisible: gluten, with the "no" made silent. Applied to the header `Wordmark` and the `public/favicon.svg`.

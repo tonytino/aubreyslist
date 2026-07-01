@@ -1,0 +1,1 @@
+- `[manual]` Added site-wide link-preview metadata so a shared URL unfurls with a title, description, and share card instead of a bare link: an Open Graph + Twitter Card set (`app/lib/seo.ts`, spread into the root head), a 1200×630 `og-image.png`, `theme-color`, `apple-touch-icon.png`, PWA icons (192/512), and a `site.webmanifest`.

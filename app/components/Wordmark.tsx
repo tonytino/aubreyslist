@@ -20,9 +20,12 @@ const markSize: Record<NonNullable<WordmarkProps["size"]>, string> = {
 /**
  * Aubrey's List brand wordmark for the app header.
  *
- * Text-based with a small inline-SVG "check + plate" glyph in brand purple.
- * The decorative mark is `aria-hidden`; the accessible name comes from the
- * styled text so assistive tech reads "Aubrey's List" once.
+ * Text-based with a small inline-SVG ear-of-wheat glyph in brand purple — the
+ * "gluten" symbol set as if inside the universal "no gluten" prohibition mark,
+ * but with the ring + slash rendered invisible (the `no-symbol` group has no
+ * stroke): gluten, with the "no" made silent. The decorative mark is
+ * `aria-hidden`; the accessible name comes from the styled text so assistive
+ * tech reads "Aubrey's List" once.
  */
 export function Wordmark({ size = "md", className }: WordmarkProps) {
   return (
@@ -38,14 +41,26 @@ export function Wordmark({ size = "md", className }: WordmarkProps) {
         className={`${markSize[size]} text-brand`}
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.25"
+        strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {/* plate / list disc */}
-        <circle cx="12" cy="12" r="9" />
-        {/* affirmative check — "verified safe" */}
-        <path d="M8 12.5l2.5 2.5L16 9" />
+        {/* Prohibition ring + slash — present but invisibly rendered. */}
+        <g className="no-symbol" stroke="none">
+          <circle cx="12" cy="12" r="10.5" />
+          <line x1="4.6" y1="19.4" x2="19.4" y2="4.6" />
+        </g>
+        {/* Ear of wheat: central stalk, top awns, three tiers of grains. */}
+        <path d="M12 21.5V9" />
+        <path d="M12 9V4" />
+        <path d="M12 9L9.2 5.4" />
+        <path d="M12 9l2.8-3.6" />
+        <path d="M12 11.5C10.4 11 9 10 8.4 8.4" />
+        <path d="M12 11.5c1.6-.5 3-1.5 3.6-3.1" />
+        <path d="M12 15c-1.6-.5-3-1.5-3.6-3.1" />
+        <path d="M12 15c1.6-.5 3-1.5 3.6-3.1" />
+        <path d="M12 18.5c-1.6-.5-3-1.5-3.6-3.1" />
+        <path d="M12 18.5c1.6-.5 3-1.5 3.6-3.1" />
       </svg>
       <span>
         Aubrey's <span className="text-brand">List</span>

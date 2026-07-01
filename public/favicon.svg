@@ -1,7 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" role="img" aria-label="Aubrey's List">
+  <!--
+    Aubrey's List mark: an ear of wheat — the "gluten" glyph — set as if inside
+    the universal "no gluten" prohibition symbol, but with the ring + slash
+    rendered INVISIBLE (stroke:none). The prohibition is present in the markup
+    (the `no-symbol` group) yet unseen: gluten, with the "no" made silent.
+  -->
   <rect width="24" height="24" rx="5.5" fill="#6d28d9"/>
-  <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="7"/>
-    <path d="M8.5 12.3l2.4 2.4 4.8-5"/>
+  <g transform="translate(0.48 -0.02) scale(0.96)">
+    <g class="no-symbol" stroke="none" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="10.5"/>
+      <line x1="4.6" y1="19.4" x2="19.4" y2="4.6"/>
+    </g>
+    <g fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 21.5V9"/>
+      <path d="M12 9V4"/>
+      <path d="M12 9L9.2 5.4"/>
+      <path d="M12 9l2.8-3.6"/>
+      <path d="M12 11.5C10.4 11 9 10 8.4 8.4"/>
+      <path d="M12 11.5c1.6-.5 3-1.5 3.6-3.1"/>
+      <path d="M12 15c-1.6-.5-3-1.5-3.6-3.1"/>
+      <path d="M12 15c1.6-.5 3-1.5 3.6-3.1"/>
+      <path d="M12 18.5c-1.6-.5-3-1.5-3.6-3.1"/>
+      <path d="M12 18.5c1.6-.5 3-1.5 3.6-3.1"/>
+    </g>
   </g>
 </svg>
