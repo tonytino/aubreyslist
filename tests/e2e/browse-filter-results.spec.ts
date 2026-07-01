@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
-import { openBrowseFilters } from "./helpers";
+import { openBrowseFilters, waitForBrowseReady } from "./helpers";
 
 /**
  * Browse + filter, with REAL seeded results (issue #45).
@@ -112,6 +112,10 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     const late = await seeder.createListing(lateToken, { name: `zzzz-${lateToken} Diner` });
 
     await page.goto("/listings");
+    // Wait for hydration + the route's search-param canonicalization before typing —
+    // otherwise the debounced `?q=` navigate races the not-yet-wired input onChange
+    // (and the in-flight canonicalizing navigate clobbers it), leaving `q=` empty.
+    await waitForBrowseReady(page);
     // Type the unique token into the directory search; the route debounces it into
     // the URL `?q=`, which runs the server ILIKE over name + address.
     await page.getByRole("searchbox", { name: "Search listings" }).fill(lateToken);
