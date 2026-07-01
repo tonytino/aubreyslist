@@ -1,0 +1,67 @@
+name: Cleanup Neon preview branch
+
+# Deletes the Neon preview database branch for a PR as soon as that PR is
+# closed (whether merged or closed without merging).
+#
+# Why this exists:
+# The Neon<>Vercel (Vercel-Managed) integration creates one Neon branch per git
+# branch, named `preview/<git-branch>`, when a Vercel preview deploy runs. That
+# integration does NOT delete the branch on PR close — cleanup is tied to
+# Vercel's deployment retention (preview deployments linger for ~6 months), so
+# the Neon branches pile up and eventually trip the free-tier branch limit,
+# which today means deleting them by hand. This workflow removes the branch the
+# moment the PR closes instead.
+#
+# Safety: it only ever targets `preview/<head branch>` of the closing PR, so it
+# cannot touch `main`/production or the persistent `ci` branch used by ci.yml.
+#
+# Skips gracefully (with a warning, not a failure) if the Neon credentials are
+# not configured, so this workflow is safe to merge before the secret/variable
+# exist. See docs/agents/database.md and Neon's "Managing Vercel preview branch
+# cleanup" guide.
+on:
+  pull_request:
+    types: [closed]
+
+# Least privilege: this workflow only calls the Neon API (via a secret + repo
+# variable) and needs nothing from the repository or GitHub API.
+permissions:
+  contents: read
+
+# One cleanup per PR; a reopen+close race should not run two deletes at once.
+concurrency:
+  group: neon-cleanup-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  delete-preview-branch:
+    name: Delete Neon branch
+    runs-on: ubuntu-latest
+
+    steps:
+      # The `secrets` context isn't allowed in a step-level `if`, so detect the
+      # Neon credentials here and gate the delete step on this output. Both the
+      # API key (secret) and project id (variable) must be present.
+      - name: Check for Neon credentials
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          if [ -n "$NEON_API_KEY" ] && [ -n "$NEON_PROJECT_ID" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::NEON_API_KEY and/or NEON_PROJECT_ID are not set — skipping Neon preview branch cleanup."
+          fi
+
+      # `branch: preview/${{ github.head_ref }}` matches the name the Neon<>Vercel
+      # integration assigns. Deleting a branch that doesn't exist is a no-op that
+      # the action treats as success, so PRs whose branch never got a Neon
+      # preview (e.g. no preview deploy ran) don't fail this job.
+      - name: Delete preview branch
+        if: steps.neon.outputs.enabled == 'true'
+        uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: preview/${{ github.head_ref }}
+          api_key: ${{ secrets.NEON_API_KEY }}
