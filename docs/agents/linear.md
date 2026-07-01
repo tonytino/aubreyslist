@@ -146,7 +146,6 @@ Migration complete (ADR-012):
       Project, or a `v1 hardening & audits (historical)` bucket for issues with
       no epic). Every migrated GitHub issue/epic was closed with a pointer to its
       Linear counterpart, so GitHub now has **0 open issues**.
-- [ ] Confirm Linear ↔ GitHub integration links PRs and transitions state.
 
 Linear (`AUB`) is now authoritative for all tracked work; the GitHub Issues list
 (`docs/agents/issues.md`) is historical. Archive the imported `Done` issues in
