@@ -23,7 +23,7 @@ vi.mock("~/server/incidents/incidents.fn", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { toast } from "sonner";
 
-import { IncidentReports, incidentsQueryKey } from "./IncidentReports";
+import { IncidentReports, incidentsQueryKey, todayForDateInput } from "./IncidentReports";
 
 function renderWithQuery(ui: ReactElement): QueryClient {
   const queryClient = new QueryClient({
@@ -77,6 +77,22 @@ describe("IncidentReports", () => {
 
     expect(screen.getByRole("form", { name: "Report an incident" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Submit report/i })).toBeInTheDocument();
+  });
+
+  it("pre-fills the date field with today, never past the server's no-future ceiling", () => {
+    renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} viewerId="user-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Report an incident/i }));
+
+    const value = (screen.getByLabelText(/Date it happened/i) as HTMLInputElement).value;
+    // Pre-filled (not empty) so the common "happened today" case needs no picking…
+    expect(value).not.toBe("");
+    expect(value).toBe(todayForDateInput());
+    // …and never a future date: the server rejects `occurredOn > todayUtcMidnight`
+    // (a UTC-based rule), so the default must not exceed the UTC calendar day even
+    // for a browser ahead of UTC. YYYY-MM-DD strings compare chronologically.
+    const utcCeiling = new Date().toISOString().slice(0, 10);
+    expect(value <= utcCeiling).toBe(true);
   });
 
   it("lists incidents most-recent-first with date + severity + note", () => {
