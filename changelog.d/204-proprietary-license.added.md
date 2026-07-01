@@ -1,0 +1,1 @@
+- `[manual]` Add a proprietary `LICENSE` (all rights reserved) and set `package.json` `"license": "UNLICENSED"`. The project ships no rights to use, copy, modify, or distribute the code without written permission (#204).

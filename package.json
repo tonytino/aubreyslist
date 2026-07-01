@@ -2,6 +2,7 @@
   "name": "aubreyslist",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "engines": {
