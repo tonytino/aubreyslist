@@ -48,7 +48,8 @@ Existing labels are `Improvement`, `Bug`, `Feature`. To preserve the rest of the
 taxonomy, **create these labels once** (setup step, not per-task):
 
 - Type completeness: `Chore`, `Docs` (alongside `Bug` / `Feature` / `Improvement`).
-- Agent safety: **`safe:agent`** and **`safe:human`** — the claim gate below.
+- Merge gate: **`safe:agent`** (agent may merge once green) vs **`safe:human`**
+  (a human must approve and merge — agents may still do the work).
 - Size: use Linear **estimates** (XS/S/M/L → 1/2/3/5) instead of `size:*` labels.
 
 ---
@@ -62,8 +63,10 @@ taxonomy, **create these labels once** (setup step, not per-task):
    mcp__Linear__list_issues  team:aubreyslist  state:Todo  assignee:null  label:safe:agent
    ```
 
-   Skip `safe:human` items (auth, schema, deploys, external services) — those
-   need human approval first, same rule as `docs/agents/tasks.md`.
+   `safe:human` items (auth, schema, deploys, external services) are still
+   **workable** — that label gates the **merge**, not the work. Do the work and
+   open the PR as normal; a human reviews, approves, and merges it. Never
+   self-merge a `safe:human` change.
 
 2. **Claim it** (the assignment is the lock): `save_issue` with `id`,
    `assignee:"me"`, `state:"In Progress"`. Don't pick up an already-assigned
