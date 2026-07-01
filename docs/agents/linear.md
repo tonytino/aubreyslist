@@ -81,9 +81,36 @@ taxonomy, **create these labels once** (setup step, not per-task):
 5. **Hand off:** move the issue to **In Review**. The merged PR closes it —
    don't set Done by hand.
 
+6. **Archive it once Done.** After the issue reaches **Done** (or `Canceled` /
+   `Duplicate`), **archive it** so it drops out of the 250-issue budget. See
+   *Issue hygiene* below — this is not optional.
+
 > **GitHub, not Linear, still gates merge.** CI (`pr-title`, `pr-labels`,
 > changelog) is unchanged. Linear tracks *what* and *why*; GitHub enforces *how
 > it ships*.
+
+---
+
+## Issue hygiene: archive what you finish
+
+> **Decision rule:** A completed issue that's still un-archived is dead weight
+> counting against the cap. **Archive every issue you move to `Done`,
+> `Canceled`, or `Duplicate`.** Free tier counts **non-archived** issues toward
+> the hard **250** limit — and creation *blocks* with no grace period once you
+> hit it. Archiving is how we stay under it.
+
+- **When you finish work, archive the issue** in the same session — don't leave
+  `Done` issues piling up. (`update_issue` / `save_issue` supports archiving; if
+  the tool exposes it as a distinct action, use that.) Archived issues are fully
+  recoverable, so there's no downside to archiving early.
+- **Sweep periodically.** Any agent doing Linear housekeeping should archive
+  lingering `Done` / `Canceled` / `Duplicate` issues it finds, not just its own.
+- **Turn on auto-archive as a backstop** (team setting): auto-archive completed
+  issues after the shortest offered interval. Belt-and-suspenders with the
+  per-issue rule above — the manual rule is primary because it frees budget
+  immediately.
+- **Watch the headroom.** If `list_issues` (non-archived) approaches ~200, stop
+  and archive before creating more, rather than hitting the block mid-task.
 
 ---
 
