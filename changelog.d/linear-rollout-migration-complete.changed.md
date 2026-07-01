@@ -1,0 +1,1 @@
+- `[manual]` Marked the Linear rollout checklist (`docs/agents/linear.md`) complete: labels created, and all GitHub epics/issues ported into the `AUB` team (epics → Projects, open work → Backlog Issues, historical work → Done). GitHub Issues are now historical; Linear is authoritative.
