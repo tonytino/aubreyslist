@@ -117,6 +117,72 @@ taxonomy, **create these labels once** (setup step, not per-task):
 
 ---
 
+## GitHub integration: PR linking vs. Issues Sync
+
+Linear's GitHub integration is **two independent features**. We rely on the
+first; the second is a deliberate *no* on the current plan.
+
+**1. PR / branch linking (magic words) — in use, free tier.** Branch name or PR
+body carries `Fixes AUB-123` (see the claim → PR flow above). Merging the PR
+transitions the linked issue **In Review → Done**. This is the backbone of the
+Linear ↔ GitHub bridge and needs no per-issue mirroring. Nothing here counts
+extra against the 250-issue cap — the Linear issue already exists.
+
+**2. GitHub **Issues Sync** — a mirror of GitHub issues ↔ Linear issues.** A
+separate feature that imports issues from a linked GitHub repo into Linear and
+keeps them **bidirectionally** in sync (title, description, state, labels,
+assignee, comments flow both ways). This is what would remove future manual
+GitHub→Linear ports.
+
+### Findings (researched 2026-07-01)
+
+- **Plan tier:** Issues Sync is **available on the free tier** — it is *not*
+  gated to paid plans. Only advanced agentic features (Code Intelligence, AI
+  agents on PRs) require Business/Enterprise. So feasibility is not the blocker.
+- **Directionality:** two-way by default. Closing/editing on either side
+  propagates to the other.
+- **Scoping:** configured **per repo → team** link (Settings → Integrations →
+  GitHub → Connected organizations → **+**, then pick the repo and the `AUB`
+  team). Repo-level selection is the reliable scoping lever. **Native inbound
+  label-filtering ("only sync GitHub issues labeled X") is *not* confirmed** —
+  the native integration appears to import at repo granularity; selective
+  label-gated sync is a third-party (`synclinear`) capability. Treat label
+  scoping as **unverified until checked in the Linear UI at setup time.**
+- **250-cap interaction:** every synced GitHub issue becomes a non-archived
+  Linear issue counting against the hard **250** limit. Linking a busy repo
+  with no label filter can exhaust the budget quickly.
+- **Archive-on-done interaction:** because state syncs both ways, archiving a
+  Linear issue whose GitHub counterpart is still **open** risks churn or
+  resurrection. Only archive when the issue is closed on **both** sides.
+- **Double-track tension:** Issues Sync creates exactly the GitHub-issue ↔
+  Linear-issue mirror the Boundaries table warns against. For planned agent work
+  (which starts in Linear and links via PR magic words) it is redundant.
+
+### Decision: don't enable blanket Issues Sync (revisit if GitHub-native volume grows)
+
+Default to **keeping Issues Sync off.** Planned work starts in Linear (ADR-012);
+GitHub-native issues are the exception, so triage the occasional one by hand
+rather than paying the cap + double-track cost of a standing bidirectional
+mirror. The one-time bulk port that motivated this task is not an ongoing
+burden.
+
+If GitHub-native issue volume later justifies auto-sync, enable it **narrowly**:
+scope to a single repo, and **first verify in the Linear UI whether inbound
+issues can be label-filtered.** If they can't, do **not** link a high-traffic
+repo — an unfiltered link is the fastest way to blow the 250-issue budget.
+
+### Human setup (OAuth — agents can't click through this)
+
+Whoever enables it needs Linear **admin** + GitHub **org owner**:
+
+1. Settings → Integrations → GitHub → connect the org (this also powers PR/branch
+   linking — the piece the rollout checklist below actually requires).
+2. *(only if enabling Issues Sync)* Connected organizations → **+** → select the
+   repo and the `AUB` team; check for a label-scoping option **before** linking;
+   choose one-way vs two-way. Leave off unless the volume case is real.
+
+---
+
 ## Boundaries (don't blur the three systems)
 
 | System        | Owns                                    | Don't use it for                  |
@@ -140,7 +206,12 @@ Staged migration (ADR-012), not a big bang:
 - [x] Create the `aubreyslist` team (`AUB`).
 - [ ] Create labels: `Chore`, `Docs`, `safe:agent`, `safe:human`.
 - [ ] Port seed GitHub epics `#8`, `#9` (and children) into Projects/Issues.
-- [ ] Confirm Linear ↔ GitHub integration links PRs and transitions state.
+- [ ] Confirm Linear ↔ GitHub integration links PRs and transitions state
+      (PR/branch magic words — the *first* feature under *GitHub integration*
+      above; human must connect the org in the Linear UI).
+- [x] Evaluate GitHub **Issues Sync**: free-tier-supported but **intentionally
+      left off** — see the decision under *GitHub integration* above. Keep
+      opening planned work directly in Linear.
 
 Until ported, the GitHub Issues list (`docs/agents/issues.md`) stays
 authoritative for in-flight work; **new** epics start in Linear.
