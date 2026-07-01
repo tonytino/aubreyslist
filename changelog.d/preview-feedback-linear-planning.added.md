@@ -1,0 +1,2 @@
+- `[manual]` Documented the Vercel Toolbar preview-feedback loop (`docs/agents/preview-feedback.md`) so agents can read, reply to, and resolve viewport-anchored comments via the Vercel MCP.
+- `[manual]` Adopted Linear as the planning/epic layer (ADR-012, `docs/agents/linear.md`); GitHub remains the code layer. Marked the GitHub Projects rationale in `docs/agents/issues.md` as superseded.

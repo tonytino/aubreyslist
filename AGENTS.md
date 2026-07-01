@@ -24,7 +24,9 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Cutting the v1 release (readiness checklist)   | `docs/product/v1-readiness.md` |
 | Domain: listings, GF taxonomy, trust, roles   | `docs/agents/domain.md`       |
 | Finding and claiming work                     | `docs/agents/tasks.md`        |
-| Epics, sub-issues, organizing the issue list  | `docs/agents/issues.md`       |
+| Planning, epics, tracked work (Linear)        | `docs/agents/linear.md`       |
+| Epics via GitHub issues (legacy/in-flight)    | `docs/agents/issues.md`       |
+| Acting on Vercel preview comments (visual feedback) | `docs/agents/preview-feedback.md` |
 | Orchestrating agents, reviewing agent output  | `docs/agents/orchestration.md` |
 | Routes, pages, navigation                     | `docs/agents/routing.md`      |
 | API endpoints, server logic                   | `docs/agents/api.md`          |
@@ -96,7 +98,10 @@ These apply everywhere, always, with no exceptions.
 
 ## Finding Work
 
-Tasks are tracked as GitHub Issues. The full workflow is in `docs/agents/tasks.md`.
+Planning and epics live in **Linear** (`docs/agents/linear.md`, ADR-012); code
+ships through **GitHub** PRs. In-flight GitHub-native issues follow the workflow
+in `docs/agents/tasks.md`. Visual/responsive feedback comes from Vercel preview
+comments (`docs/agents/preview-feedback.md`).
 
 > Web sessions use the GitHub MCP tools (`mcp__github__*`); local sessions use the `gh` CLI shown below. The commands are illustrative — the MCP equivalents do the same thing.
 

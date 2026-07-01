@@ -69,8 +69,13 @@ same, expressed as search queries.
 
 ---
 
-## Why no Projects board
+## Why no GitHub Projects board
 
 A full **GitHub Projects board was deliberately not adopted**: agents in this
 environment can't create or interact with a Projects board, so epics +
-`type:epic` + native sub-issues are the organizing mechanism instead.
+`type:epic` + native sub-issues were the organizing mechanism instead.
+
+> **Superseded by ADR-012.** Planning and epics now live in **Linear**, which
+> agents *can* manipulate (see `docs/agents/linear.md`). This doc is retained for
+> the seed GitHub epics (`#8`, `#9`) and any in-flight GitHub-native work until
+> they're ported. **New epics start in Linear, not as `type:epic` issues.**
