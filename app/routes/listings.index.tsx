@@ -303,7 +303,7 @@ function BrowseListings() {
   const quickActive = quick !== null;
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-var(--site-header-h,3.5rem))] w-full max-w-[428px] flex-col">
+    <div className="mx-auto flex h-[calc(100dvh-var(--site-header-h,3.5rem))] w-full max-w-[428px] flex-col md:max-w-3xl xl:max-w-6xl">
       {/* Sticky header: location · wordmark · community, then search + chips +
           count/view row. `flex-none` so the scroll happens in the content area. */}
       <div className="flex-none border-b border-border bg-surface">
