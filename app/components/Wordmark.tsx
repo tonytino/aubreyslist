@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 interface WordmarkProps {
   /** Visual size of the wordmark. Defaults to `md`. */
   size?: "sm" | "md" | "lg";
@@ -21,13 +23,18 @@ const markSize: Record<NonNullable<WordmarkProps["size"]>, string> = {
  * Aubrey's List brand wordmark for the app header.
  *
  * Text-based with a small inline-SVG ear-of-wheat glyph in brand purple — the
- * "gluten" symbol set as if inside the universal "no gluten" prohibition mark,
- * but with the ring + slash rendered invisible (the `no-symbol` group has no
- * stroke): gluten, with the "no" made silent. The decorative mark is
- * `aria-hidden`; the accessible name comes from the styled text so assistive
- * tech reads "Aubrey's List" once.
+ * "gluten" symbol with a single diagonal strike wiped through it, as if erased.
+ * The strike is a cutout, not a drawn line: a mask removes a diagonal band from
+ * the wheat so the gap shows the background through — gluten, struck out. The
+ * mask id is per-instance (`useId`) so multiple wordmarks on one page don't
+ * collide. The decorative mark is `aria-hidden`; the accessible name comes from
+ * the styled text so assistive tech reads "Aubrey's List" once.
  */
 export function Wordmark({ size = "md", className }: WordmarkProps) {
+  // Per-instance id so the mask reference is unique when the wordmark renders
+  // more than once on a page (e.g. the style guide). Strip colons from React's
+  // generated id so it is a safe `url(#…)` fragment reference.
+  const maskId = `wheat-strike-${useId().replace(/:/g, "")}`;
   return (
     <span
       className={`inline-flex items-center gap-2 font-semibold text-foreground ${sizeText[size]}${
@@ -45,22 +52,33 @@ export function Wordmark({ size = "md", className }: WordmarkProps) {
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {/* Prohibition ring + slash — present but invisibly rendered. */}
-        <g className="no-symbol" stroke="none">
-          <circle cx="12" cy="12" r="10.5" />
-          <line x1="4.6" y1="19.4" x2="19.4" y2="4.6" />
-        </g>
+        {/* The diagonal strike, wiped out of the wheat as a cutout (not drawn):
+            white keeps the wheat, the black band erases a diagonal through it. */}
+        <mask id={maskId}>
+          <rect width="24" height="24" fill="#fff" />
+          <line
+            x1="18"
+            y1="6"
+            x2="6"
+            y2="18"
+            stroke="#000"
+            strokeWidth="4.4"
+            strokeLinecap="round"
+          />
+        </mask>
         {/* Ear of wheat: central stalk, top awns, three tiers of grains. */}
-        <path d="M12 21.5V9" />
-        <path d="M12 9V4" />
-        <path d="M12 9L9.2 5.4" />
-        <path d="M12 9l2.8-3.6" />
-        <path d="M12 11.5C10.4 11 9 10 8.4 8.4" />
-        <path d="M12 11.5c1.6-.5 3-1.5 3.6-3.1" />
-        <path d="M12 15c-1.6-.5-3-1.5-3.6-3.1" />
-        <path d="M12 15c1.6-.5 3-1.5 3.6-3.1" />
-        <path d="M12 18.5c-1.6-.5-3-1.5-3.6-3.1" />
-        <path d="M12 18.5c1.6-.5 3-1.5 3.6-3.1" />
+        <g mask={`url(#${maskId})`}>
+          <path d="M12 21.5V9" />
+          <path d="M12 9V4" />
+          <path d="M12 9L9.2 5.4" />
+          <path d="M12 9l2.8-3.6" />
+          <path d="M12 11.5C10.4 11 9 10 8.4 8.4" />
+          <path d="M12 11.5c1.6-.5 3-1.5 3.6-3.1" />
+          <path d="M12 15c-1.6-.5-3-1.5-3.6-3.1" />
+          <path d="M12 15c1.6-.5 3-1.5 3.6-3.1" />
+          <path d="M12 18.5c-1.6-.5-3-1.5-3.6-3.1" />
+          <path d="M12 18.5c1.6-.5 3-1.5 3.6-3.1" />
+        </g>
       </svg>
       <span>
         Aubrey's <span className="text-brand">List</span>

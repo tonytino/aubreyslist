@@ -1,17 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" role="img" aria-label="Aubrey's List">
   <!--
-    Aubrey's List mark: an ear of wheat — the "gluten" glyph — set as if inside
-    the universal "no gluten" prohibition symbol, but with the ring + slash
-    rendered INVISIBLE (stroke:none). The prohibition is present in the markup
-    (the `no-symbol` group) yet unseen: gluten, with the "no" made silent.
+    Aubrey's List mark: an ear of wheat — the "gluten" glyph — with a single
+    diagonal strike wiped through it, as if erased. The strike is not a drawn
+    line but a cutout: a mask removes a diagonal band from the wheat, so the
+    gap shows the background through. Gluten, struck out.
   -->
   <rect width="24" height="24" rx="5.5" fill="#6d28d9"/>
+  <defs>
+    <mask id="wheat-strike">
+      <rect width="24" height="24" fill="#fff"/>
+      <line x1="18" y1="6" x2="6" y2="18" stroke="#000" stroke-width="4.4" stroke-linecap="round"/>
+    </mask>
+  </defs>
   <g transform="translate(0.48 -0.02) scale(0.96)">
-    <g class="no-symbol" stroke="none" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="10.5"/>
-      <line x1="4.6" y1="19.4" x2="19.4" y2="4.6"/>
-    </g>
-    <g fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <g mask="url(#wheat-strike)" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 21.5V9"/>
       <path d="M12 9V4"/>
       <path d="M12 9L9.2 5.4"/>
