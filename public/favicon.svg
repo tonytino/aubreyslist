@@ -9,7 +9,7 @@
   <defs>
     <mask id="wheat-strike">
       <rect width="24" height="24" fill="#fff"/>
-      <line x1="18" y1="6" x2="6" y2="18" stroke="#000" stroke-width="4.4" stroke-linecap="round"/>
+      <line x1="18" y1="6" x2="6" y2="18" stroke="#000" stroke-width="2.86" stroke-linecap="round"/>
     </mask>
   </defs>
   <g transform="translate(0.48 -0.02) scale(0.96)">

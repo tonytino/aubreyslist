@@ -62,7 +62,7 @@ export function Wordmark({ size = "md", className }: WordmarkProps) {
             x2="6"
             y2="18"
             stroke="#000"
-            strokeWidth="4.4"
+            strokeWidth="2.86"
             strokeLinecap="round"
           />
         </mask>
