@@ -157,6 +157,31 @@
   /* ----------------------------------------------------------------------- */
   --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+
+  /* ----------------------------------------------------------------------- */
+  /* Animations (AUB-61). The directory's loading skeletons shimmer via the   */
+  /* `animate-shimmer` utility this token backs. The reduced-motion guard     */
+  /* below neutralises it for users who opt out (styling.md → motion).        */
+  /* ----------------------------------------------------------------------- */
+  --animate-shimmer: shimmer 1.3s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Respect prefers-reduced-motion: hold the shimmer still (no sliding gradient)
+   for users who opt out of motion, while the skeleton shape still communicates
+   that content is loading. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer {
+    animation: none;
+  }
 }
 
 /* ------------------------------------------------------------------------- */

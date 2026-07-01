@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { waitForBrowseReady } from "./helpers";
+import { openBrowseFilters } from "./helpers";
 
 /**
  * "Near me" distance sort (#37). Choosing the distance sort requests browser
@@ -23,10 +23,10 @@ test.describe("near me — geolocation granted", () => {
 
   test("sorting by distance with permission granted puts coords in the URL", async ({ page }) => {
     await page.goto("/listings");
+    await openBrowseFilters(page);
 
     const sort = page.getByLabel("Sort by");
     await expect(sort).toBeVisible();
-    await waitForBrowseReady(page);
 
     await sort.selectOption("distance");
 
@@ -35,9 +35,15 @@ test.describe("near me — geolocation granted", () => {
     await expect(page).toHaveURL(/lat=39\.7392/);
     await expect(page).toHaveURL(/lng=-104\.9903/);
 
-    // The list (or honest empty state) still renders — distance sort never crashes.
+    // Close the Filters sheet and confirm the RESULTS CONTENT actually renders
+    // under the distance sort — either a results list or an honest empty/
+    // no-results heading. Distance sort never crashes.
+    await page.getByRole("button", { name: "Close" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
     const resultsList = page.getByRole("list");
-    const emptyState = page.getByRole("heading", { name: "No listings yet" });
+    const emptyState = page.getByRole("heading", {
+      name: /Let's find your safe table|No spots match/,
+    });
     await expect(resultsList.or(emptyState).first()).toBeVisible();
   });
 });
@@ -66,10 +72,10 @@ test.describe("near me — geolocation denied", () => {
     page,
   }) => {
     await page.goto("/listings");
+    await openBrowseFilters(page);
 
     const sort = page.getByLabel("Sort by");
     await expect(sort).toBeVisible();
-    await waitForBrowseReady(page);
 
     await sort.selectOption("distance");
 
@@ -79,9 +85,14 @@ test.describe("near me — geolocation denied", () => {
     await expect(page).not.toHaveURL(/lat=/);
     await expect(page.getByRole("alert")).toContainText(/denied/i);
 
-    // The list still renders under the fallback order.
+    // Close the Filters sheet and confirm the RESULTS CONTENT renders under the
+    // fallback order — a results list or an honest empty/no-results heading.
+    await page.getByRole("button", { name: "Close" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
     const resultsList = page.getByRole("list");
-    const emptyState = page.getByRole("heading", { name: "No listings yet" });
+    const emptyState = page.getByRole("heading", {
+      name: /Let's find your safe table|No spots match/,
+    });
     await expect(resultsList.or(emptyState).first()).toBeVisible();
   });
 });

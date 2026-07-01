@@ -1,19 +1,21 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Funnel } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
-import { ListingCard } from "~/components/listing/ListingCard";
-import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { AddSpotFab } from "~/components/directory/AddSpotFab";
+import { DirectoryHeader } from "~/components/directory/DirectoryHeader";
+import { DirectoryList } from "~/components/directory/DirectoryList";
+import { DirectoryMap, type DirectoryMapEntry } from "~/components/directory/DirectoryMap";
+import { DirectorySearch } from "~/components/directory/DirectorySearch";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "~/components/ui/sheet";
+  DirectoryEmpty,
+  DirectoryNoResults,
+  LoadingSkeletons,
+} from "~/components/directory/DirectoryStates";
+import { FilterChips } from "~/components/directory/FilterChips";
+import { type DirectoryView, ViewToggle } from "~/components/directory/ViewToggle";
+import { type QuickFilter, filterByQuick } from "~/components/directory/filtering";
+import { listingToCardVM } from "~/components/listing/ListingCard";
 import {
   BROWSE_PAGE_SIZE,
   type UserCoords,
@@ -33,36 +35,42 @@ import type { BrowseListingsPage } from "~/server/listings/browse";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
 
 /**
- * Browse list — the default Denver discovery view (issue #33, domain.md →
- * Discovery, "list-first"). A page of scannable listing cards, each showing the
- * headline celiac-safe vs. gluten-friendly state and a recent-incident flag at a
- * glance. Open to anonymous visitors (reads are open).
+ * The Denver restaurant directory — the default discovery screen (domain.md →
+ * Discovery, "list-first"), rebuilt to the AUB-61 Claude Design bundle
+ * (Phase 2b). Open to anonymous visitors (reads are open).
  *
- * URL-DRIVEN STATE. Both the page number (`?page=2`) and the GF taxonomy filter
- * (`?attrs=dedicated_fryer,celiac_safe_vs_gluten_friendly`, #35) live in the URL
- * so the view is linkable/shareable, SSR-friendly, and back/forward works. The
- * filter resets to page 1 whenever the selection changes. Data is prefetched in
- * the loader and read via `useSuspenseQuery`, so it is dehydrated into the SSR
- * HTML and hydrates with no loading flash (docs/agents/api.md). The trust glance
- * and the consensus-based filtering are computed server-side (one batched query
- * set, no N+1) by `fetchBrowseListings`.
+ * DATA PATTERN — PRESERVED. The page number and the GF taxonomy filter still live
+ * in the URL (`?page=`, `?attrs=`, `?sort=`, `?lat=`/`?lng=`), so the
+ * server-filtered, SSR-prefetched view stays linkable/shareable and back/forward
+ * works. Data is prefetched in the loader and read via `useSuspenseQuery`, so it
+ * dehydrates into the SSR HTML and hydrates with no loading flash
+ * (docs/agents/api.md). The trust glance + consensus taxonomy filter are computed
+ * server-side (one batched query set) by `fetchBrowseListings`.
+ *
+ * BUNDLE LAYER — CLIENT-SIDE. On top of that server page, the redesign adds
+ * INSTANT client-side affordances over the ALREADY-LOADED page: a search field
+ * (name + address substring, no shimmer) and three mutually-exclusive "quick"
+ * chips (celiac / gluten-friendly / recently-verified) that DO flash the bundle's
+ * ~430ms loading shimmer. The real, server-side taxonomy filter is untouched — it
+ * lives behind the "Filters" chip's sheet and still drives `?attrs=`.
  */
 
 const browseSearchSchema = z.object({
   page: z.number().int().min(1).catch(1),
   /** Comma-separated taxonomy attributes (#35); defaults to "" (no filter). */
   attrs: z.string().catch("").default(""),
+  // Free-text search over name + address (#34). URL-driven like page/attrs/sort so
+  // the search is SERVER-COMPLETE (covers ALL listings, not just the loaded page),
+  // linkable/shareable, and back/forward-correct. Empty string → no text
+  // constraint. Bounded to the server's accepted length; garbage degrades to "".
+  q: z.string().max(256).catch("").default(""),
   // `?sort=` mirrors the `?page=` URL-param pattern (#36): linkable, back/forward
   // works. A plain enum (NOT a `.transform()`) so the value round-trips cleanly
   // when the router re-serializes search state on navigation; unknown/garbage
   // tokens degrade to the stable alphabetical default via `.catch`.
   sort: z.enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]]).catch(DEFAULT_BROWSE_SORT),
   // The user's location for the "near me" distance sort (#37), kept in the URL
-  // (so a distance-sorted view is linkable/back-forwardable like the rest). Only
-  // populated once the user opts into the distance sort AND grants geolocation;
-  // out-of-range/garbage values degrade to `undefined` (no coords → the server
-  // falls back to alphabetical). Both are independent optionals but only USED as
-  // a pair.
+  // (so a distance-sorted view is linkable/back-forwardable like the rest).
   lat: z.number().finite().min(-90).max(90).optional().catch(undefined),
   lng: z.number().finite().min(-180).max(180).optional().catch(undefined),
 });
@@ -71,7 +79,8 @@ function browseQueryOptions(
   page: number,
   attrs: ClaimAttribute[],
   sort: BrowseSort,
-  coords: UserCoords | undefined
+  coords: UserCoords | undefined,
+  q: string
 ) {
   // Only thread coords to the server when actually distance-sorting — a non-pair
   // (or a non-distance sort) means no coords, and the server falls back to the
@@ -79,70 +88,173 @@ function browseQueryOptions(
   // results cached independently.
   const userLat = sort === "distance" ? coords?.lat : undefined;
   const userLng = sort === "distance" ? coords?.lng : undefined;
+  // Normalize the free-text query for the cache key so `""` and whitespace share
+  // one cache entry (the server treats a blank query as "no text constraint").
+  const trimmedQ = q.trim();
   return queryOptions({
-    queryKey: ["browse-listings", page, attrs, sort, userLat ?? null, userLng ?? null],
+    queryKey: ["browse-listings", page, attrs, sort, userLat ?? null, userLng ?? null, trimmedQ],
     queryFn: () =>
       fetchBrowseListings({
-        data: { page, pageSize: BROWSE_PAGE_SIZE, attrs, sort, userLat, userLng },
+        data: { page, pageSize: BROWSE_PAGE_SIZE, attrs, sort, userLat, userLng, q: trimmedQ },
       }),
   });
 }
 
 export const Route = createFileRoute("/listings/")({
   validateSearch: browseSearchSchema,
-  loaderDeps: ({ search: { page, attrs, sort, lat, lng } }) => ({ page, attrs, sort, lat, lng }),
-  loader: async ({ context, deps: { page, attrs, sort, lat, lng } }) => {
+  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q } }) => ({
+    page,
+    attrs,
+    sort,
+    lat,
+    lng,
+    q,
+  }),
+  loader: async ({ context, deps: { page, attrs, sort, lat, lng, q } }) => {
     await context.queryClient.ensureQueryData(
-      browseQueryOptions(page, parseAttrs(attrs), sort, coordsFromSearch(lat, lng))
+      browseQueryOptions(page, parseAttrs(attrs), sort, coordsFromSearch(lat, lng), q)
     );
   },
   component: BrowseListings,
 });
 
+/** How long the bundle flashes the loading shimmer after a quick-chip change. */
+const QUICK_SHIMMER_MS = 430;
+
+/** Debounce before a keystroke is pushed to the URL `?q=` (keeps typing smooth). */
+const SEARCH_DEBOUNCE_MS = 275;
+
 function BrowseListings() {
-  const { page, attrs: attrsParam, sort, lat, lng } = Route.useSearch();
+  const { page, attrs: attrsParam, sort, lat, lng, q: qParam } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
   const coords = coordsFromSearch(lat, lng);
-  const { data } = useSuspenseQuery(browseQueryOptions(page, attrs, sort, coords));
+  const { data } = useSuspenseQuery(browseQueryOptions(page, attrs, sort, coords, qParam));
   const geo = useGeolocation();
 
-  const hasFilters = attrs.length > 0;
+  // Client-side directory state (the bundle layer). Text search is SERVER-side
+  // (URL `?q=`); the quick chips filter the current server result set client-side.
+  // View + selection are pure UI.
+  const [quick, setQuick] = useState<QuickFilter>(null);
+  const [view, setView] = useState<DirectoryView>("list");
+  const [loading, setLoading] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Toggling a filter always resets to page 1 — the old page may not exist under
-  // the narrower (or wider) result set, and starting at the top is least
-  // surprising. The current sort (and any active distance coords) is preserved.
+  // The search box is a controlled local input mirrored to the URL `?q=` with a
+  // debounce, so typing stays smooth while the SERVER search covers every listing
+  // (not just the loaded page). It seeds from the URL so a shared/linked search
+  // hydrates correctly, and reconciles if the URL changes underneath it.
+  const [searchInput, setSearchInput] = useState(qParam);
+  const lastPushedQ = useRef(qParam);
+  useEffect(() => {
+    // Reconcile local input when the URL `q` changes from elsewhere (link, back/
+    // forward, clear-all) and it isn't the value we just pushed.
+    if (qParam !== lastPushedQ.current) {
+      lastPushedQ.current = qParam;
+      setSearchInput(qParam);
+    }
+  }, [qParam]);
+
+  // Debounce the input → URL navigation (~275ms). A blank/whitespace query is
+  // normalized to "" so it round-trips as "no text constraint". Searching resets
+  // to page 1 (a page index is meaningless under a new result set) and preserves
+  // the active taxonomy filter, sort, and coords.
+  useEffect(() => {
+    const next = searchInput.trim();
+    if (next === qParam.trim()) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      lastPushedQ.current = next;
+      navigate({ search: { page: 1, attrs: attrsParam, sort, lat, lng, q: next } });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, qParam, attrsParam, sort, lat, lng, navigate]);
+
+  // The full server page as VMs (mapped once, via the shared `listingToCardVM`).
+  const allVms = useMemo(
+    () => data.cards.map((card) => listingToCardVM(card.listing, card.glance, card.distanceLabel)),
+    [data.cards]
+  );
+
+  // The subset the directory actually shows — the quick chip refines the server
+  // result set client-side (text search already applied server-side).
+  const visibleVms = useMemo(() => filterByQuick(allVms, quick), [allVms, quick]);
+
+  // Map entries pair each visible VM with its real coordinates to project (never
+  // recomputed — straight from the loaded listing).
+  const mapEntries: DirectoryMapEntry[] = useMemo(() => {
+    const coordsById = new Map(data.cards.map((card) => [card.listing.id, card.listing]));
+    return visibleVms.flatMap((vm) => {
+      const listing = coordsById.get(vm.id);
+      return listing ? [{ vm, lat: listing.lat, lng: listing.lng }] : [];
+    });
+  }, [visibleVms, data.cards]);
+
+  // Default the map selection to the first visible entry, and keep the selection
+  // valid as the filtered set changes (so a pin never points at a hidden card).
+  useEffect(() => {
+    if (mapEntries.length === 0) {
+      if (selectedId !== null) setSelectedId(null);
+      return;
+    }
+    const stillVisible = mapEntries.some((entry) => entry.vm.id === selectedId);
+    if (!stillVisible) {
+      setSelectedId(mapEntries[0]?.vm.id ?? null);
+    }
+  }, [mapEntries, selectedId]);
+
+  // A quick-chip change flashes the bundle's ~430ms shimmer to make filtering
+  // feel responsive; search does NOT (it must feel instant). The timer is cleared
+  // on unmount / re-trigger so it never fires against a stale render.
+  const shimmerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function changeQuick(next: QuickFilter) {
+    setQuick(next);
+    setLoading(true);
+    if (shimmerTimer.current) clearTimeout(shimmerTimer.current);
+    shimmerTimer.current = setTimeout(() => setLoading(false), QUICK_SHIMMER_MS);
+  }
+  useEffect(
+    () => () => {
+      if (shimmerTimer.current) clearTimeout(shimmerTimer.current);
+    },
+    []
+  );
+
+  // Toggling a taxonomy attribute (the REAL server filter) always resets to page
+  // 1 and preserves the search query, sort + coords, exactly as before the
+  // redesign.
   function toggleAttribute(attribute: ClaimAttribute) {
     const next = attrs.includes(attribute)
       ? attrs.filter((a) => a !== attribute)
       : [...attrs, attribute];
-    navigate({ search: { page: 1, attrs: serializeAttrs(next), sort, lat, lng } });
+    navigate({ search: { page: 1, attrs: serializeAttrs(next), sort, lat, lng, q: qParam } });
   }
 
-  function clearFilters() {
-    navigate({ search: { page: 1, attrs: "", sort, lat, lng } });
+  function clearAttributes() {
+    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: qParam } });
   }
 
   /**
-   * Change the sort, resetting to page 1 (a page index is meaningless across a
-   * re-ordering) and preserving the active filter selection.
-   *
-   * "Near me" (#37) is special: distance needs the user's coordinates, so we DO
-   * NOT request geolocation until the user actually picks this option (no
-   * surprise prompt on load). On grant we navigate to `sort=distance` with the
-   * coords in the URL; on denial/unavailable/timeout we GRACEFULLY FALL BACK to
-   * the default sort and surface the hook's accessible message — never crash,
-   * never hang. Leaving the distance sort drops the coords from the URL.
+   * Change the server-side sort (#36/#37), resetting to page 1. "Near me" is
+   * special: it requests geolocation only on opt-in and falls back to the default
+   * order on denial/unavailable — never a surprise prompt, never a crash.
    */
   function changeSort(next: BrowseSort) {
     if (next !== "distance") {
       geo.reset();
       navigate({
-        search: { page: 1, attrs: attrsParam, sort: next, lat: undefined, lng: undefined },
+        search: {
+          page: 1,
+          attrs: attrsParam,
+          sort: next,
+          lat: undefined,
+          lng: undefined,
+          q: qParam,
+        },
       });
       return;
     }
-
     void geo.request().then((result) => {
       if (result.status === "success") {
         navigate({
@@ -152,11 +264,10 @@ function BrowseListings() {
             sort: "distance",
             lat: result.coords.lat,
             lng: result.coords.lng,
+            q: qParam,
           },
         });
       } else {
-        // Denied / unavailable / errored: revert to the stable default order. The
-        // accessible message rendered below explains why; the control reflects it.
         navigate({
           search: {
             page: 1,
@@ -164,303 +275,195 @@ function BrowseListings() {
             sort: DEFAULT_BROWSE_SORT,
             lat: undefined,
             lng: undefined,
+            q: qParam,
           },
         });
       }
     });
   }
 
-  return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-headline font-bold tracking-tight text-foreground">
-          Browse Denver listings
-        </h1>
-        <p className="text-body text-muted-foreground">
-          Restaurants the community is tracking for gluten-free safety. Each card shows what the
-          community has attested at a glance — celiac-safe vs. merely gluten-friendly — and flags
-          any recent “got glutened” reports. Tap a card for the full trust breakdown.
-        </p>
-      </header>
+  // The no-results CTA clears EVERYTHING: the client quick chip AND the
+  // server-side search + taxonomy filter (resets to page 1 with no `?q=`/`?attrs=`).
+  function clearAll() {
+    setQuick(null);
+    setSearchInput("");
+    lastPushedQ.current = "";
+    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: "" } });
+  }
 
-      <div className="mt-section flex flex-col gap-4">
-        {/* Mobile (<sm): the filter lives behind a "Filters" Sheet to keep the
-            list scannable on small screens. Desktop (sm+): the same filter is
-            inline so the checkboxes are always reachable (and the browse e2e at
-            the default desktop viewport finds them directly). The URL-driven,
-            <fieldset>/<legend>/checkbox markup is identical in both placements —
-            it is the SAME TaxonomyFilter component, just differently presented. */}
-        <FilterControls
-          attrs={attrs}
-          onToggle={toggleAttribute}
-          onClear={clearFilters}
-          activeCount={attrs.length}
-        />
-        <SortControl sort={sort} onChange={changeSort} prompting={geo.status === "prompting"} />
-        {geo.error ? <GeolocationNotice message={geo.error} /> : null}
+  // Whether any filter is active across BOTH layers — decides empty vs no-results.
+  // Uses the URL `?q=` (the server-applied search), not the in-flight local input.
+  const anyFilterActive = qParam.trim() !== "" || quick !== null || attrs.length > 0;
+
+  // Honest counts. `data.total` is the SERVER total AFTER search + taxonomy filter
+  // (the count query shares the same WHERE), so it reflects EVERY matching listing
+  // — never just the loaded page. When a quick chip is active it refines the shown
+  // results client-side, so we present that as a count of the results shown, never
+  // as the grand total (honesty: it hasn't filtered the whole table).
+  const quickActive = quick !== null;
+
+  return (
+    <div className="mx-auto flex h-[calc(100dvh-var(--site-header-h,3.5rem))] w-full max-w-[428px] flex-col">
+      {/* Sticky header: location · wordmark · community, then search + chips +
+          count/view row. `flex-none` so the scroll happens in the content area. */}
+      <div className="flex-none border-b border-border bg-surface">
+        <DirectoryHeader />
+        <div className="flex flex-col gap-3 px-gutter pb-3">
+          <DirectorySearch value={searchInput} onChange={setSearchInput} />
+          <FilterChips
+            attrs={attrs}
+            onToggleAttr={toggleAttribute}
+            onClearAttrs={clearAttributes}
+            quick={quick}
+            onQuickChange={changeQuick}
+            sheetExtras={
+              <DirectoryServerControls
+                sort={sort}
+                onSortChange={changeSort}
+                prompting={geo.status === "prompting"}
+                geoError={geo.error}
+                data={data}
+                attrsParam={attrsParam}
+                coords={coords}
+              />
+            }
+          />
+          <div className="flex items-center justify-between gap-3">
+            {quickActive ? (
+              // A quick chip refines only the SHOWN results client-side, so we
+              // never claim this is the full total — honest phrasing.
+              <p className="text-body-sm text-muted-foreground">
+                <span className="font-bold text-foreground">{visibleVms.length}</span> of{" "}
+                {data.total} shown match
+              </p>
+            ) : (
+              // The honest SERVER total after search + taxonomy filter — every
+              // matching listing across all pages, not just this page.
+              <p className="text-body-sm text-muted-foreground">
+                <span className="font-bold text-foreground">{data.total}</span> places near{" "}
+                <span className="font-semibold text-brand-strong">Denver</span>
+              </p>
+            )}
+            <ViewToggle view={view} onChange={setView} />
+          </div>
+        </div>
       </div>
 
-      {data.cards.length === 0 ? (
-        <BrowseEmptyState hasFilters={hasFilters} onClear={clearFilters} />
-      ) : (
-        <BrowseResults data={data} attrs={attrs} coords={coords} />
-      )}
+      {/* Content area — renders exactly ONE state. Scrollable; the FAB floats over
+          it. `relative` so the absolutely-positioned map + FAB anchor here. */}
+      <div className="relative flex-1 overflow-y-auto bg-background px-gutter pt-4">
+        {loading ? (
+          <LoadingSkeletons />
+        ) : visibleVms.length === 0 ? (
+          anyFilterActive ? (
+            <DirectoryNoResults onClearAll={clearAll} />
+          ) : (
+            <DirectoryEmpty onBrowseCeliac={() => changeQuick("celiac")} />
+          )
+        ) : view === "map" ? (
+          <DirectoryMap entries={mapEntries} selectedId={selectedId} onSelect={setSelectedId} />
+        ) : (
+          <DirectoryList cards={visibleVms} />
+        )}
+
+        <AddSpotFab />
+      </div>
     </div>
   );
 }
 
 /**
- * Responsive placement for the GF taxonomy filter (#35). Desktop (sm+) shows the
- * `TaxonomyFilter` inline so its checkboxes are always present and reachable
- * (the browse e2e runs at the default desktop viewport and clicks them directly).
- * Mobile (<sm) collapses it behind a "Filters" Sheet to keep the list scannable;
- * a count Badge surfaces how many attributes are active so the affordance is
- * honest about hidden state. Crucially BOTH paths render the SAME component, so
- * the URL-driven, accessible <fieldset>/<legend>/checkbox markup is preserved
- * verbatim in either placement — the Sheet is purely a mobile presentation shell.
+ * The server-driven sort + pagination controls, hosted inside the Filters sheet.
  *
- * Only one copy is in the DOM at a time at a given viewport: the inline filter is
- * `hidden` below sm, and the Sheet's content (the mobile copy) is unmounted by
- * Radix until the Sheet is opened. So the desktop checkboxes are never ambiguous.
+ * The redesign's chips/search are CLIENT-side over the loaded page; these are the
+ * SERVER capabilities the bundle doesn't surface visibly but which must stay
+ * reachable and URL-driven (`?sort=`, `?page=`). Keeping them here preserves the
+ * shareable/back-forward-correct behaviour without cluttering the mobile header.
  */
-function FilterControls({
-  attrs,
-  onToggle,
-  onClear,
-  activeCount,
-}: {
-  attrs: ClaimAttribute[];
-  onToggle: (attribute: ClaimAttribute) => void;
-  onClear: () => void;
-  activeCount: number;
-}) {
-  return (
-    <>
-      {/* Desktop / sm+: inline filter. */}
-      <div className="hidden sm:block">
-        <TaxonomyFilter selected={attrs} onToggle={onToggle} onClear={onClear} />
-      </div>
-
-      {/* Mobile / <sm: filter behind a Sheet. */}
-      <div className="sm:hidden">
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline" className="w-full justify-center">
-              <Funnel strokeWidth={2.4} aria-hidden="true" />
-              Filters
-              {activeCount > 0 ? (
-                <Badge variant="secondary" className="ml-1">
-                  {activeCount}
-                </Badge>
-              ) : null}
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle>Filter listings</SheetTitle>
-              <SheetDescription>
-                Narrow the list to places affirmed for the attributes you pick.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="px-4 pb-4">
-              <TaxonomyFilter selected={attrs} onToggle={onToggle} onClear={onClear} />
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
-    </>
-  );
-}
-
-/**
- * Accessible fallback notice for the "near me" sort (#37). When geolocation is
- * denied/unavailable, the message is conveyed as TEXT in an assertive live region
- * (announced to screen readers) — never colour alone (styling.md). It explains
- * the fallback to alphabetical so the user isn't left wondering why distance sort
- * didn't take.
- */
-function GeolocationNotice({ message }: { message: string }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-card border border-stale bg-stale-soft px-3 py-2 text-body-sm text-foreground"
-    >
-      {message}
-    </p>
-  );
-}
-
-/**
- * URL-driven sort control (#36). An accessible, labeled `<select>` — selection,
- * not colour, conveys state (styling.md). Changing it navigates to the same
- * route with the new `?sort=` and RESETS to page 1 (the previous page index is
- * meaningless under a new order) while PRESERVING the active filter, mirroring
- * the `?page=`/`?attrs=` URL-param pattern.
- *
- * Options come from the shared `BROWSE_SORT_OPTIONS` registry, so #37's
- * `distance` option appears here automatically once added there.
- */
-function SortControl({
+function DirectoryServerControls({
   sort,
-  onChange,
+  onSortChange,
   prompting,
+  geoError,
+  data,
+  attrsParam,
+  coords,
 }: {
   sort: BrowseSort;
-  onChange: (next: BrowseSort) => void;
-  /** True while the "near me" sort is awaiting the browser geolocation prompt. */
+  onSortChange: (next: BrowseSort) => void;
   prompting: boolean;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <label htmlFor="browse-sort" className="text-body-sm font-medium text-foreground">
-        Sort by
-      </label>
-      <select
-        id="browse-sort"
-        value={sort}
-        onChange={(event) => onChange(event.target.value as BrowseSort)}
-        className="rounded-card border border-border bg-surface px-3 py-2 text-body-sm font-medium text-foreground focus-visible:border-brand-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
-      >
-        {BROWSE_SORT_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      {/* Text status (not colour) while we wait on the geolocation prompt; an
-          <output> is an implicit polite live region so it's announced without
-          interrupting. */}
-      <output className="text-body-sm text-muted-foreground">
-        {prompting ? "Finding your location…" : null}
-      </output>
-    </div>
-  );
-}
-
-function BrowseResults({
-  data,
-  attrs,
-  coords,
-}: {
+  geoError: string | null;
   data: BrowseListingsPage;
-  attrs: ClaimAttribute[];
-  coords: UserCoords | undefined;
-}) {
-  const showingFrom = (data.page - 1) * data.pageSize + 1;
-  const showingTo = (data.page - 1) * data.pageSize + data.cards.length;
-
-  return (
-    <>
-      <p className="mt-section text-body-sm text-muted-foreground">
-        Showing {showingFrom}–{showingTo} of {data.total}
-      </p>
-
-      <ul className="mt-3 flex flex-col gap-3">
-        {data.cards.map((card) => (
-          <ListingCard
-            key={card.listing.id}
-            listing={card.listing}
-            glance={card.glance}
-            distanceLabel={card.distanceLabel}
-          />
-        ))}
-      </ul>
-
-      <Pagination data={data} attrs={attrs} coords={coords} />
-    </>
-  );
-}
-
-function Pagination({
-  data,
-  attrs,
-  coords,
-}: {
-  data: BrowseListingsPage;
-  attrs: ClaimAttribute[];
+  attrsParam: string;
   coords: UserCoords | undefined;
 }) {
   const hasPrev = data.page > 1;
   const hasNext = data.hasMore;
-  const attrsParam = serializeAttrs(attrs);
-  // Carry the active distance coords across pages so "near me" survives paging.
   const lat = data.sort === "distance" ? coords?.lat : undefined;
   const lng = data.sort === "distance" ? coords?.lng : undefined;
 
-  if (!hasPrev && !hasNext) {
-    return null;
-  }
-
   return (
-    <nav aria-label="Pagination" className="mt-section flex items-center justify-between gap-3">
-      {hasPrev ? (
-        <Button variant="outline" size="sm" asChild>
-          <Link
-            to="/listings"
-            search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort, lat, lng }}
-          >
-            ← Previous
-          </Link>
-        </Button>
-      ) : (
-        <span aria-hidden="true" />
-      )}
-
-      <span className="text-body-sm text-muted-foreground">Page {data.page}</span>
-
-      {hasNext ? (
-        <Button variant="outline" size="sm" asChild>
-          <Link
-            to="/listings"
-            search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort, lat, lng }}
-          >
-            Next →
-          </Link>
-        </Button>
-      ) : (
-        <span aria-hidden="true" />
-      )}
-    </nav>
-  );
-}
-
-/**
- * Honest empty state (domain.md — never fabricate rows). Distinguishes two
- * cases: a filter that matched nothing (offer to clear it) vs. a genuinely empty
- * directory (offer to add the first listing).
- */
-function BrowseEmptyState({
-  hasFilters,
-  onClear,
-}: {
-  hasFilters: boolean;
-  onClear: () => void;
-}) {
-  if (hasFilters) {
-    return (
-      <div className="mt-section flex flex-col items-start gap-3 rounded-card border border-dashed border-border bg-surface p-gutter">
-        <h2 className="text-title font-semibold text-foreground">No matching listings</h2>
-        <p className="text-body text-muted-foreground">
-          No restaurants meet every attribute you selected with positive community consensus yet.
-          Try removing a filter to widen your search.
-        </p>
-        <Button type="button" onClick={onClear}>
-          Clear filters
-        </Button>
+    <div className="flex flex-col gap-3 border-t border-border pt-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor="browse-sort" className="text-body-sm font-medium text-foreground">
+          Sort by
+        </label>
+        <select
+          id="browse-sort"
+          value={sort}
+          onChange={(event) => onSortChange(event.target.value as BrowseSort)}
+          className="rounded-card border border-border bg-surface px-3 py-2 text-body-sm font-medium text-foreground focus-visible:border-brand-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+        >
+          {BROWSE_SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <output className="text-body-sm text-muted-foreground">
+          {prompting ? "Finding your location…" : null}
+        </output>
       </div>
-    );
-  }
 
-  return (
-    <div className="mt-section flex flex-col items-start gap-3 rounded-card border border-dashed border-border bg-surface p-gutter">
-      <h2 className="text-title font-semibold text-foreground">No listings yet</h2>
-      <p className="text-body text-muted-foreground">
-        No restaurants have been added to the Denver directory yet. Be the first — add a place you
-        trust (or want the community to vet) and start the trust record.
-      </p>
-      <Button asChild>
-        <Link to="/listings/new">Add a listing</Link>
-      </Button>
+      {geoError ? (
+        <p
+          role="alert"
+          className="rounded-card border border-stale bg-stale-soft px-3 py-2 text-body-sm text-foreground"
+        >
+          {geoError}
+        </p>
+      ) : null}
+
+      {hasPrev || hasNext ? (
+        <nav
+          aria-label="Pagination"
+          className="flex items-center justify-between gap-3 text-body-sm"
+        >
+          {hasPrev ? (
+            <Link
+              to="/listings"
+              search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort, lat, lng }}
+              className="font-semibold text-brand hover:text-brand-strong"
+            >
+              ← Previous
+            </Link>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          <span className="text-muted-foreground">Page {data.page}</span>
+          {hasNext ? (
+            <Link
+              to="/listings"
+              search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort, lat, lng }}
+              className="font-semibold text-brand hover:text-brand-strong"
+            >
+              Next →
+            </Link>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+        </nav>
+      ) : null}
     </div>
   );
 }

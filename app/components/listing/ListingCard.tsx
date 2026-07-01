@@ -265,8 +265,23 @@ interface ListingCardProps {
  * type, the pure `ListingTrustGlance` type, and the presentational card) — no
  * `getDb`/server-only import — so it is safe in the browse route's client bundle.
  */
-export function ListingCard({ listing, glance, distanceLabel }: ListingCardProps) {
-  const vm: RestaurantCardVM = {
+/**
+ * Map the real {@link Listing} + {@link ListingTrustGlance} (+ optional distance
+ * label) into the flat, client-safe {@link RestaurantCardVM} the presentational
+ * card consumes.
+ *
+ * Exported as the SINGLE mapping site so every browse surface (the list card, the
+ * map pins, and the map carousel) derives its VM the same way — no duplicated
+ * trust/accent logic. The glance already carries the server-derived evidence
+ * counts and freshness cue, so this only maps them onto the VM; it never touches
+ * `db` or re-derives trust.
+ */
+export function listingToCardVM(
+  listing: Listing,
+  glance: ListingTrustGlance,
+  distanceLabel?: string | undefined
+): RestaurantCardVM {
+  return {
     id: listing.id,
     name: listing.name,
     address: listing.address,
@@ -280,6 +295,10 @@ export function ListingCard({ listing, glance, distanceLabel }: ListingCardProps
     ...(glance.freshness ? { freshness: glance.freshness } : {}),
     ...(distanceLabel !== undefined ? { distanceLabel } : {}),
   };
+}
+
+export function ListingCard({ listing, glance, distanceLabel }: ListingCardProps) {
+  const vm = listingToCardVM(listing, glance, distanceLabel);
 
   return (
     <li>

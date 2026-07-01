@@ -38,3 +38,15 @@ export async function waitForBrowseReady(page: Page): Promise<void> {
   await waitForHydration(page);
   await expect(page).toHaveURL(/sort=/);
 }
+
+/**
+ * Open the directory's "Filters" bottom sheet, where the AUB-61 redesign hosts
+ * the server-side sort control + taxonomy filter (the mobile header surfaces the
+ * search + quick chips instead). Waits for the route to be ready first so the
+ * chip's handler is wired, then opens the sheet and waits for its dialog.
+ */
+export async function openBrowseFilters(page: Page): Promise<void> {
+  await waitForBrowseReady(page);
+  await page.getByRole("button", { name: "Filters" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+}
