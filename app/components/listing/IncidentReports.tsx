@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { SafetySignal } from "~/components/SafetySignal";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -16,7 +15,7 @@ import {
 } from "~/components/ui/dialog";
 import type { Incident } from "~/db/schema";
 import { removeIncident, submitIncident, updateIncident } from "~/server/incidents/incidents.fn";
-import { INCIDENT_SEVERITIES } from "~/trust/incident-recency";
+import { INCIDENT_SEVERITIES, toCalendarDayString } from "~/trust/incident-recency";
 import { FlagControl } from "./FlagControl";
 import { formatIncidentDate, formatSeverity } from "./incident-format";
 
@@ -366,11 +365,14 @@ function ReportIncidentDialog({ listingId }: { listingId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" className="self-start">
-          <SafetySignal state="incident" label="Report an incident" />
+        <Button type="button" variant="destructive" className="self-start">
+          Report an incident
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      {/* Don't auto-focus the first field on open: focusing the native date input
+          pops its picker open, which reads as a confusing half-open state. Let the
+          modal open calm; the diner engages the date field themselves. */}
+      <DialogContent onOpenAutoFocus={(event) => event.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Report a “got glutened here” incident</DialogTitle>
           <DialogDescription>
@@ -387,7 +389,11 @@ function ReportIncidentDialog({ listingId }: { listingId: string }) {
 /** The login-gated submission form, rendered inside the report modal. */
 function IncidentForm({ listingId, onSuccess }: { listingId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
-  const [occurredOn, setOccurredOn] = useState("");
+  // Default to today (the common case — you report a reaction the day it happens),
+  // pre-filled but editable. `toCalendarDayString` reads local getters, so this is
+  // the viewer's local calendar day; for the Denver pilot (behind UTC) it always
+  // satisfies the server's no-future `<= todayUtcMidnight()` rule.
+  const [occurredOn, setOccurredOn] = useState(() => toCalendarDayString(new Date()));
   const [severity, setSeverity] = useState<SeverityChoice>("");
   const [note, setNote] = useState("");
 
@@ -403,7 +409,7 @@ function IncidentForm({ listingId, onSuccess }: { listingId: string; onSuccess: 
         },
       }),
     onSuccess: () => {
-      setOccurredOn("");
+      setOccurredOn(toCalendarDayString(new Date()));
       setSeverity("");
       setNote("");
       queryClient.invalidateQueries({ queryKey: incidentsQueryKey(listingId) });

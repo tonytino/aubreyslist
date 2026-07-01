@@ -23,6 +23,7 @@ vi.mock("~/server/incidents/incidents.fn", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { toast } from "sonner";
 
+import { toCalendarDayString } from "~/trust/incident-recency";
 import { IncidentReports, incidentsQueryKey } from "./IncidentReports";
 
 function renderWithQuery(ui: ReactElement): QueryClient {
@@ -77,6 +78,17 @@ describe("IncidentReports", () => {
 
     expect(screen.getByRole("form", { name: "Report an incident" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Submit report/i })).toBeInTheDocument();
+  });
+
+  it("pre-fills the date field with today when the modal opens", () => {
+    renderWithQuery(<IncidentReports listingId="listing-1" incidents={[]} viewerId="user-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Report an incident/i }));
+
+    // Same local-calendar-day basis the component uses (toCalendarDayString), so
+    // the diner isn't forced to pick a date for the common "happened today" case.
+    const today = toCalendarDayString(new Date());
+    expect(screen.getByLabelText(/Date it happened/i)).toHaveValue(today);
   });
 
   it("lists incidents most-recent-first with date + severity + note", () => {
