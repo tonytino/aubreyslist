@@ -351,6 +351,26 @@ function IncidentEditForm({
 }
 
 /**
+ * The `YYYY-MM-DD` default for the "date it happened" field: the viewer's LOCAL
+ * calendar day (the natural "it happened today" default), CLAMPED so it never
+ * exceeds the UTC calendar day.
+ *
+ * Why the clamp: the report schema's no-future rule is UTC-based
+ * (`occurredOn <= todayUtcMidnight()`). A browser AHEAD of UTC (positive offset,
+ * e.g. Asia/Tokyo in the morning) has a local calendar day that can be UTC-
+ * *tomorrow*, which the server would reject as "in the future". Taking the
+ * earlier of {local day, UTC day} keeps the friendly local default where it's
+ * valid (incl. the Americas / Denver pilot, always behind UTC) and falls back to
+ * the UTC ceiling exactly when the local day would be rejected. `YYYY-MM-DD`
+ * strings compare chronologically, so the min is a plain string comparison.
+ */
+export function todayForDateInput(now: Date = new Date()): string {
+  const localDay = toCalendarDayString(now);
+  const utcDay = now.toISOString().slice(0, 10);
+  return localDay < utcDay ? localDay : utcDay;
+}
+
+/**
  * The login-gated report flow, gated behind a button that opens a modal.
  *
  * The submission form lives inside a `Dialog` rather than being always-expanded
@@ -390,10 +410,9 @@ function ReportIncidentDialog({ listingId }: { listingId: string }) {
 function IncidentForm({ listingId, onSuccess }: { listingId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
   // Default to today (the common case — you report a reaction the day it happens),
-  // pre-filled but editable. `toCalendarDayString` reads local getters, so this is
-  // the viewer's local calendar day; for the Denver pilot (behind UTC) it always
-  // satisfies the server's no-future `<= todayUtcMidnight()` rule.
-  const [occurredOn, setOccurredOn] = useState(() => toCalendarDayString(new Date()));
+  // pre-filled but editable. Clamped to the UTC ceiling so it can never be a date
+  // the server's no-future rule rejects — see todayForDateInput.
+  const [occurredOn, setOccurredOn] = useState(todayForDateInput);
   const [severity, setSeverity] = useState<SeverityChoice>("");
   const [note, setNote] = useState("");
 
@@ -409,7 +428,7 @@ function IncidentForm({ listingId, onSuccess }: { listingId: string; onSuccess: 
         },
       }),
     onSuccess: () => {
-      setOccurredOn(toCalendarDayString(new Date()));
+      setOccurredOn(todayForDateInput());
       setSeverity("");
       setNote("");
       queryClient.invalidateQueries({ queryKey: incidentsQueryKey(listingId) });
