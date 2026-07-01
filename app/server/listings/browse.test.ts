@@ -21,6 +21,12 @@ interface ListingRow {
   id: string;
   name: string;
   address: string;
+  /**
+   * When set, the page query row carries this per-row distance (km) — the mock
+   * attaches it alongside `{ listing }`, mirroring the real distance-sort SELECT
+   * so the assembled card's `distanceLabel` can be asserted.
+   */
+  distanceKm?: number;
 }
 
 const h = vi.hoisted(() => {
@@ -47,7 +53,13 @@ const h = vi.hoisted(() => {
   //   select({listing}).from().leftJoin(trust).where().orderBy().limit().offset()
   // Each row is wrapped as `{ listing }` because of the projection.
   const offsetMock = vi.fn(() =>
-    Promise.resolve(state.pageListings.map((listing) => ({ listing })))
+    Promise.resolve(
+      state.pageListings.map(({ distanceKm, ...listing }) =>
+        // Mirror the real projection: `{ listing }`, plus `distanceKm` when the
+        // fixture supplies one (the distance-sort SELECT adds that column).
+        distanceKm === undefined ? { listing } : { listing, distanceKm }
+      )
+    )
   );
   const limitMock = vi.fn(() => ({ offset: offsetMock }));
   const orderByMock = vi.fn((...args: unknown[]) => {
@@ -201,6 +213,47 @@ describe("getBrowseListings", () => {
     expect(result.cards[0]?.listing.name).toBe("Acme GF");
     expect(result.cards[0]?.glance.safetyState).toBe("celiac-safe");
     expect(result.cards[0]?.glance.hasRecentIncident).toBe(false);
+  });
+
+  it("surfaces evidence counts (confirmations + distinct contributors) from the aggregate", async () => {
+    state.pageListings = [{ id: "l1", name: "Acme GF", address: "1 Main St" }];
+    state.total = 1;
+    // The grouped celiac-aggregate query computes `contributors` in-batch as
+    // count(distinct user_id) — asserted here as a plain passthrough count.
+    state.celiacRows = [
+      {
+        listingId: "l1",
+        claimId: "c1",
+        lastConfirmedAt: new Date("2026-06-25T00:00:00Z"),
+        confirmCount: "8",
+        disputeCount: "1",
+        contributors: "6",
+      },
+    ];
+
+    const result = await getBrowseListings(baseInput, NOW);
+
+    expect(result.cards[0]?.glance.evidence).toEqual({ confirmations: 8, contributors: 6 });
+  });
+
+  it("omits evidence counts (null) for a claim with zero votes", async () => {
+    state.pageListings = [{ id: "l1", name: "Acme GF", address: "1 Main St" }];
+    state.total = 1;
+    state.celiacRows = [
+      {
+        listingId: "l1",
+        claimId: "c1",
+        lastConfirmedAt: null,
+        confirmCount: "0",
+        disputeCount: "0",
+        contributors: "0",
+      },
+    ];
+
+    const result = await getBrowseListings(baseInput, NOW);
+
+    // A zero-vote claim shows the honest empty state, never "0 confirmations".
+    expect(result.cards[0]?.glance.evidence).toBeNull();
   });
 
   it("shows Not yet attested (null state) for a listing with no celiac claim", async () => {
@@ -448,6 +501,29 @@ describe("getBrowseListings", () => {
     expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toContain("%taco%");
     expect(state.orderByArgs).toHaveLength(2);
     expect(renderArg(state.orderByArgs[0])).toContain("radians");
+  });
+
+  it("labels each card's distance (mi) from the selected per-row distance km", async () => {
+    // The distance-sort SELECT adds a `distanceKm` column; the loader converts it
+    // to a "0.4 mi" label per card. ~0.644 km ≈ 0.4 mi.
+    state.pageListings = [{ id: "l1", name: "A", address: "a", distanceKm: 0.643_738 }];
+    state.total = 1;
+
+    const result = await getBrowseListings(
+      { ...baseInput, sort: "distance", userLat: 39.7392, userLng: -104.9903 },
+      NOW
+    );
+
+    expect(result.cards[0]?.distanceLabel).toBe("0.4 mi");
+  });
+
+  it("omits the distance label when NOT distance-sorting (no distance column)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    const result = await getBrowseListings({ ...baseInput, sort: "alpha" }, NOW);
+
+    expect(result.cards[0]?.distanceLabel).toBeUndefined();
   });
 
   // --- #34/#35: WHERE composition (search + taxonomy filter) ----------------

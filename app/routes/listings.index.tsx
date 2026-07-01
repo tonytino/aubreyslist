@@ -357,7 +357,12 @@ function BrowseResults({
 
       <ul className="mt-3 flex flex-col gap-3">
         {data.cards.map((card) => (
-          <ListingCard key={card.listing.id} listing={card.listing} glance={card.glance} />
+          <ListingCard
+            key={card.listing.id}
+            listing={card.listing}
+            glance={card.glance}
+            distanceLabel={card.distanceLabel}
+          />
         ))}
       </ul>
 

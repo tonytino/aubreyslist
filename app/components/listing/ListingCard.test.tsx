@@ -177,13 +177,27 @@ describe("RestaurantCard", () => {
   });
 });
 
-describe("ListingCard (compatibility wrapper)", () => {
-  function renderWrapper(glance: ListingTrustGlance) {
-    renderInRouter(<ListingCard listing={baseListing} glance={glance} />);
+describe("ListingCard (mapping wrapper)", () => {
+  /** A fully-derived glance; overrides tweak individual fields per test. */
+  const baseGlance: ListingTrustGlance = {
+    safetyState: "celiac-safe",
+    hasRecentIncident: false,
+    evidence: null,
+    freshness: null,
+  };
+
+  function renderWrapper(glance: Partial<ListingTrustGlance> = {}, distanceLabel?: string) {
+    renderInRouter(
+      <ListingCard
+        listing={baseListing}
+        glance={{ ...baseGlance, ...glance }}
+        distanceLabel={distanceLabel}
+      />
+    );
   }
 
   it("maps a Listing + glance onto the card and links to the detail page", async () => {
-    renderWrapper({ safetyState: "celiac-safe", hasRecentIncident: false });
+    renderWrapper();
     expect(await screen.findByRole("heading", { name: "Acme Gluten-Free" })).toBeInTheDocument();
     expect(screen.getByText(/123 Main St, Denver, CO/)).toBeInTheDocument();
     const link = await screen.findByRole("link");
@@ -191,12 +205,34 @@ describe("ListingCard (compatibility wrapper)", () => {
   });
 
   it("passes the null safetyState through to the honest Not yet attested chip", async () => {
-    renderWrapper({ safetyState: null, hasRecentIncident: false });
+    renderWrapper({ safetyState: null });
     expect(await screen.findByText("Not yet attested")).toBeInTheDocument();
   });
 
   it("passes the recent-incident flag through", async () => {
-    renderWrapper({ safetyState: "celiac-safe", hasRecentIncident: true });
+    renderWrapper({ hasRecentIncident: true });
     expect(await screen.findByText("Recent incident")).toBeInTheDocument();
+  });
+
+  it("maps the glance's evidence counts onto the card", async () => {
+    renderWrapper({ evidence: { confirmations: 12, contributors: 5 } });
+    expect(await screen.findByText("12 confirmations · 5 neighbors")).toBeInTheDocument();
+  });
+
+  it("maps the glance's freshness cue onto the card", async () => {
+    renderWrapper({ freshness: { kind: "stale", label: "Updated 8mo ago" } });
+    expect(await screen.findByText("Updated 8mo ago")).toBeInTheDocument();
+  });
+
+  it("maps the distanceLabel onto the card's location line", async () => {
+    renderWrapper({}, "0.4 mi");
+    expect(await screen.findByText("123 Main St, Denver, CO · 0.4 mi")).toBeInTheDocument();
+  });
+
+  it("omits evidence/freshness when the glance carries none", async () => {
+    renderWrapper();
+    await screen.findByText("Celiac-safe");
+    expect(screen.queryByText(/confirmations/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
   });
 });

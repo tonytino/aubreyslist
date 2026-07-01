@@ -160,7 +160,11 @@ describe("INVARIANT 2 — a recent incident flags the summary regardless of conf
     for (const confirmCount of COUNT_GRID) {
       const celiacSafe = aggregate(confirmCount, 0, freshConfirm);
       for (const hasRecentIncident of [true, false]) {
-        const glance = deriveListingTrustGlance(celiacSafe, hasRecentIncident, NOW);
+        // The glance now takes the most recent in-window incident's INSTANT (or
+        // null); `hasRecentIncident` is derived from it (non-null ⟺ flagged), so
+        // we thread a within-window date when the case wants the flag set.
+        const recentIncidentAt = hasRecentIncident ? new Date(NOW.getTime() - DAY_MS) : null;
+        const glance = deriveListingTrustGlance(celiacSafe, 1, recentIncidentAt, NOW);
 
         // Surfaced verbatim, never buried by the confirm count.
         expect(glance.hasRecentIncident).toBe(hasRecentIncident);

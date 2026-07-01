@@ -240,23 +240,32 @@ interface ListingCardProps {
   listing: Listing;
   /** The precomputed at-a-glance trust for this listing (#33). */
   glance: ListingTrustGlance;
+  /**
+   * A "0.4 mi" distance label, present ONLY when the browse page is
+   * distance-sorted (already derived server-side from the sort's haversine).
+   * Explicitly `| undefined` so the route can forward `card.distanceLabel`
+   * (optional on the server card) directly under `exactOptionalPropertyTypes`.
+   */
+  distanceLabel?: string | undefined;
 }
 
 /**
- * Thin compatibility wrapper preserving the browse route's existing call site
- * (`<ListingCard listing={…} glance={…} />`) while Phase 2 rewires the route to
- * build a full {@link RestaurantCardVM} directly.
+ * Thin wrapper preserving the browse route's call site
+ * (`<ListingCard listing={…} glance={…} distanceLabel={…} />`) and mapping the
+ * real {@link Listing} + {@link ListingTrustGlance} (+ an optional, already-
+ * derived distance label) into the full {@link RestaurantCardVM} the card renders.
  *
- * It maps the real {@link Listing} + {@link ListingTrustGlance} into a PARTIAL
- * view-model — `address`, `safetyState`, `hasRecentIncident`, and a stable
- * `accent` hashed from `listing.id`. `distanceLabel` / `evidence` / `freshness` /
- * `googleRating` are intentionally left undefined until Phase 2 supplies them.
+ * The glance carries the ALREADY-DERIVED evidence counts and freshness cue
+ * (computed server-side in the batched browse query set), so this wrapper only
+ * MAPS them onto the VM — it never touches `db` or re-derives trust. `accent` is
+ * a stable per-listing gradient hashed from `listing.id`; `googleRating`/`photoUrl`
+ * are left undefined until a later phase supplies them.
  *
  * CLIENT-SAFE: imports only pure/client-safe/type-only modules (the `Listing`
  * type, the pure `ListingTrustGlance` type, and the presentational card) — no
  * `getDb`/server-only import — so it is safe in the browse route's client bundle.
  */
-export function ListingCard({ listing, glance }: ListingCardProps) {
+export function ListingCard({ listing, glance, distanceLabel }: ListingCardProps) {
   const vm: RestaurantCardVM = {
     id: listing.id,
     name: listing.name,
@@ -264,6 +273,12 @@ export function ListingCard({ listing, glance }: ListingCardProps) {
     safetyState: glance.safetyState,
     hasRecentIncident: glance.hasRecentIncident,
     accent: accentForId(listing.id),
+    // Already-derived on the server (batched query set); mapped straight through.
+    // Each optional field is spread in ONLY when present, so the prop stays
+    // truly absent (not `undefined`) under `exactOptionalPropertyTypes`.
+    ...(glance.evidence ? { evidence: glance.evidence } : {}),
+    ...(glance.freshness ? { freshness: glance.freshness } : {}),
+    ...(distanceLabel !== undefined ? { distanceLabel } : {}),
   };
 
   return (
