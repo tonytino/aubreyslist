@@ -1,7 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" role="img" aria-label="Aubrey's List">
+  <!--
+    Aubrey's List mark: an ear of wheat — the "gluten" glyph — with a single
+    diagonal strike wiped through it, as if erased. The strike is not a drawn
+    line but a cutout: a mask removes a diagonal band from the wheat, so the
+    gap shows the background through. Gluten, struck out.
+  -->
   <rect width="24" height="24" rx="5.5" fill="#6d28d9"/>
-  <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="7"/>
-    <path d="M8.5 12.3l2.4 2.4 4.8-5"/>
+  <defs>
+    <mask id="wheat-strike">
+      <rect width="24" height="24" fill="#fff"/>
+      <line x1="18" y1="6" x2="6" y2="18" stroke="#000" stroke-width="2.86" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <g transform="translate(0.48 -0.02) scale(0.96)">
+    <g mask="url(#wheat-strike)" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 21.5V9"/>
+      <path d="M12 9V4"/>
+      <path d="M12 9L9.2 5.4"/>
+      <path d="M12 9l2.8-3.6"/>
+      <path d="M12 11.5C10.4 11 9 10 8.4 8.4"/>
+      <path d="M12 11.5c1.6-.5 3-1.5 3.6-3.1"/>
+      <path d="M12 15c-1.6-.5-3-1.5-3.6-3.1"/>
+      <path d="M12 15c1.6-.5 3-1.5 3.6-3.1"/>
+      <path d="M12 18.5c-1.6-.5-3-1.5-3.6-3.1"/>
+      <path d="M12 18.5c1.6-.5 3-1.5 3.6-3.1"/>
+    </g>
   </g>
 </svg>

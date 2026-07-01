@@ -12,6 +12,7 @@ import { currentUserQuery } from "~/auth/current-user-query";
 import { SiteHeader } from "~/components/SiteHeader";
 import { Button } from "~/components/ui/button";
 import { Toaster } from "~/components/ui/sonner";
+import { defaultSeoMeta } from "~/lib/seo";
 // Import the stylesheet as a bundled URL so the bundler emits a hashed asset
 // and rewrites the href. Referencing the source path ("/app/styles/app.css")
 // works in dev but 404s after `vinxi build`.
@@ -25,14 +26,12 @@ export interface RouterContext {
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Aubrey's List" },
-    ],
+    meta: defaultSeoMeta(),
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/site.webmanifest" },
     ],
   }),
   loader: async ({ context }) => {
