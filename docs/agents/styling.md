@@ -117,8 +117,8 @@ label** for all four states:
 | State | Label | Icon shape | Meaning |
 | --- | --- | --- | --- |
 | `celiac-safe` | "Celiac-safe" | shield + check | headline trust state |
-| `gluten-friendly` | "Gluten-friendly" | info circle | GF-ish only — *not* safe |
-| `stale` | "Stale listing" | clock | outside the staleness window |
+| `gluten-friendly` | "Gluten-friendly" | leaf | GF-ish only — *not* safe |
+| `stale` | "Needs update" | clock | outside the staleness window |
 | `incident` | "Recent incident" | warning triangle | recent "got glutened" harm |
 
 ```tsx
@@ -192,5 +192,6 @@ Conventions:
   <Circle className="size-2 fill-current" aria-hidden="true" />
   ```
 
-Do not swap the `SafetySignal` SVGs for lucide icons unless each safety state
-keeps a distinct greyscale-survivable shape (a reviewed change).
+`SafetySignal` uses lucide icons — one distinct, greyscale-survivable shape per
+state (`ShieldCheck` / `Leaf` / `Clock` / `TriangleAlert`). Keep them distinct
+if you ever revisit the mapping; the shape is load-bearing, not just the colour.

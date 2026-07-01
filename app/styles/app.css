@@ -96,6 +96,9 @@
   --text-title: 1.5rem; /* 24px */
   --text-title--line-height: 2rem;
   --text-title--font-weight: 600;
+  --text-card-title: 1.1875rem; /* 19px — browse RestaurantCard name (AUB-61) */
+  --text-card-title--line-height: 1.5rem;
+  --text-card-title--font-weight: 700;
   --text-headline: 2rem; /* 32px */
   --text-headline--line-height: 2.5rem;
   --text-headline--font-weight: 700;

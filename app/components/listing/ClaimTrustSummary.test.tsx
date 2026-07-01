@@ -34,7 +34,7 @@ describe("ClaimTrustSummaryRow", () => {
     expect(screen.queryByText(/confirm \//)).not.toBeInTheDocument();
   });
 
-  it("surfaces a text 'Stale listing' cue for an aged confirmation (not colour alone)", () => {
+  it("surfaces a text 'Needs update' cue for an aged confirmation (not colour alone)", () => {
     render(
       <ClaimTrustSummaryRow
         attribute="dedicated_fryer"
@@ -43,7 +43,7 @@ describe("ClaimTrustSummaryRow", () => {
       />
     );
     // Meaning carried in the visible word, not just the colour token.
-    expect(screen.getByText("Stale listing")).toBeInTheDocument();
+    expect(screen.getByText("Needs update")).toBeInTheDocument();
   });
 
   it("omits the stale cue for a fresh claim", () => {
@@ -54,7 +54,7 @@ describe("ClaimTrustSummaryRow", () => {
         now={NOW}
       />
     );
-    expect(screen.queryByText("Stale listing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Needs update")).not.toBeInTheDocument();
   });
 
   it("renders the confirm/dispute clarifier for an attribute that has one (Celiac-safe, #175)", () => {
