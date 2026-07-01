@@ -87,6 +87,11 @@ describe("isReviewedException — package-scoped exceptions", () => {
     expect(isReviewedException("lightningcss", "GPL-3.0")).toBe(false);
   });
 
+  it("accepts the axe-core MPL-2.0 dev/test tooling (issue #195)", () => {
+    expect(isReviewedException("axe-core", "MPL-2.0")).toBe(true);
+    expect(isReviewedException("@axe-core/playwright", "MPL-2.0")).toBe(true);
+  });
+
   it("every reviewed exception carries a written rationale", () => {
     for (const e of REVIEWED_EXCEPTIONS) {
       expect(typeof e.reason).toBe("string");
