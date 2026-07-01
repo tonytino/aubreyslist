@@ -32,6 +32,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | API endpoints, server logic                   | `docs/agents/api.md`          |
 | Database, schema, migrations                  | `docs/agents/database.md`     |
 | Tests (unit, component, E2E)                  | `docs/agents/testing.md`      |
+| Visual identity, design language, briefing Claude Design | `docs/agents/design.md` |
 | Styling, Tailwind, CSS                        | `docs/agents/styling.md`      |
 | Environment variables                         | `docs/agents/environment.md`  |
 | Dependencies, versioning, overrides           | `docs/agents/dependencies.md` |
