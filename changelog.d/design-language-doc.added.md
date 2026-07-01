@@ -1,0 +1,1 @@
+- `[manual]` Added `docs/agents/design.md` — the visual identity / design-language doc (modern & vibrant expression on the existing AA-tuned purple palette; the safety-signals-never-rely-on-color-alone rule) — and wired it into the `AGENTS.md` sub-doc index.
