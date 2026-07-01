@@ -20,7 +20,7 @@ export function DirectoryList({
   return (
     <div className="flex flex-col gap-3.5 pb-24">
       {showCommunityBanner ? <CommunityBanner /> : null}
-      <ul className="flex flex-col gap-3.5">
+      <ul className="grid grid-cols-1 gap-3.5 md:grid-cols-2 xl:grid-cols-3">
         {cards.map((vm) => (
           <li key={vm.id}>
             <RestaurantCard vm={vm} />

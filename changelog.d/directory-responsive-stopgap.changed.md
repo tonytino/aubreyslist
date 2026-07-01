@@ -1,0 +1,1 @@
+- `[manual]` The restaurant directory now widens to a multi-column card grid on tablet and desktop instead of a fixed mobile-width column stranded in whitespace (interim responsive stopgap; the full desktop design is tracked in AUB-113).
