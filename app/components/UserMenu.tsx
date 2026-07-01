@@ -1,5 +1,5 @@
-import { ShieldCheck, SignIn, SignOut, User } from "@phosphor-icons/react/dist/ssr";
 import { Link } from "@tanstack/react-router";
+import { LogIn, LogOut, ShieldCheck, User } from "lucide-react";
 import type { SessionUser } from "~/auth/current-user-query";
 import { Button } from "~/components/ui/button";
 import {
@@ -34,7 +34,7 @@ export function UserMenu({ user }: UserMenuProps) {
     return (
       <Button asChild variant="outline" size="sm">
         <a href="/api/auth/google">
-          <SignIn aria-hidden className="h-4 w-4" />
+          <LogIn aria-hidden className="h-4 w-4" />
           Log in
         </a>
       </Button>
@@ -96,7 +96,7 @@ export function UserMenu({ user }: UserMenuProps) {
         <DropdownMenuItem asChild>
           <form method="post" action="/api/auth/sign-out">
             <button type="submit" className="flex w-full items-center gap-2">
-              <SignOut aria-hidden className="h-4 w-4" />
+              <LogOut aria-hidden className="h-4 w-4" />
               Sign out
             </button>
           </form>

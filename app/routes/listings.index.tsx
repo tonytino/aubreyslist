@@ -1,6 +1,6 @@
-import { Funnel } from "@phosphor-icons/react/dist/ssr";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Funnel } from "lucide-react";
 import { z } from "zod";
 import { ListingCard } from "~/components/listing/ListingCard";
 import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
@@ -246,7 +246,7 @@ function FilterControls({
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="outline" className="w-full justify-center">
-              <Funnel weight="bold" aria-hidden="true" />
+              <Funnel strokeWidth={2.4} aria-hidden="true" />
               Filters
               {activeCount > 0 ? (
                 <Badge variant="secondary" className="ml-1">

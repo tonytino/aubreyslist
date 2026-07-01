@@ -144,6 +144,16 @@
   --color-popover-foreground: var(--color-foreground);
   --color-input: var(--color-border); /* input/control border */
   --color-ring: var(--color-brand-ring); /* focus ring */
+
+  /* ----------------------------------------------------------------------- */
+  /* Typefaces (AUB-61). Loaded from Google Fonts (font-display: swap) via    */
+  /* <link> tags in app/routes/__root.tsx. Public Sans backs Tailwind's       */
+  /* default `font-sans` (body/UI); Bricolage Grotesque backs `font-display`  */
+  /* (headings). Component phases apply `font-display`; this phase only wires  */
+  /* the tokens so body text resolves to Public Sans.                         */
+  /* ----------------------------------------------------------------------- */
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
 }
 
 /* ------------------------------------------------------------------------- */

@@ -1,0 +1,1 @@
+- `[manual]` Replaced the Phosphor icon library with `lucide-react` across the UI (single icon library; imported from the SSR-safe barrel).

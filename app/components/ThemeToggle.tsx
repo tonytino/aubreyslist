@@ -1,4 +1,4 @@
-import { Moon, Sun } from "@phosphor-icons/react/dist/ssr";
+import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 

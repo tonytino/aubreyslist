@@ -1,5 +1,5 @@
-import { ForkKnife, MagnifyingGlass, Plus } from "@phosphor-icons/react/dist/ssr";
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Plus, Search, Utensils } from "lucide-react";
 import { SAFETY_STATES, SafetySignal } from "~/components/SafetySignal";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -31,7 +31,7 @@ function Home() {
           {/* Browse list lands in #33; "Add a listing" target is #25's intake route. */}
           <Button asChild size="lg">
             <Link to="/listings">
-              <MagnifyingGlass aria-hidden className="h-4 w-4" />
+              <Search aria-hidden className="h-4 w-4" />
               Browse Denver listings
             </Link>
           </Button>
@@ -61,7 +61,7 @@ function Home() {
                   it sits as a polished sibling, but in a NEUTRAL tone so it never reads
                   as a safety verdict. Icon + text, never colour alone (styling.md). */}
               <span className="inline-flex items-center gap-1.5 rounded-chip border border-border bg-muted px-2.5 py-1 text-body-sm font-medium text-muted-foreground">
-                <ForkKnife aria-hidden className="h-4 w-4 shrink-0" />
+                <Utensils aria-hidden className="h-4 w-4 shrink-0" />
                 {claimAttributeLabel("dedicated_fryer")}
               </span>
             </div>

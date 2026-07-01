@@ -1,0 +1,1 @@
+- `[manual]` Added the Bricolage Grotesque (display) and Public Sans (body/UI) brand fonts, exposed as the `font-display` / `font-sans` Tailwind utilities.
