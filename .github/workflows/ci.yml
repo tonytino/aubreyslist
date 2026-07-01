@@ -401,12 +401,14 @@ jobs:
       # edit or plugin regression could drag neon/drizzle into the browser
       # (the #93/#122/#141 bug class). Rather than rely on every seam using the
       # right import pattern, we assert the actual build output. We grep ONLY
-      # the client assets (.output/public/_build/assets/, where the hashed
-      # browser bundles land) for forbidden tokens. We deliberately do NOT scan
-      # .output/server/, which legitimately contains db code.
+      # the client assets (.output/public/assets/, where the hashed browser
+      # bundles land since the TanStack Start vinxi→Vite-plugin migration —
+      # issue #198; vinxi previously emitted them under _build/assets/) for
+      # forbidden tokens. We deliberately do NOT scan .output/server/, which
+      # legitimately contains db code.
       - name: Assert the client bundle contains no db/neon code
         run: |
-          CLIENT_ASSETS=.output/public/_build/assets
+          CLIENT_ASSETS=.output/public/assets
           if [ ! -d "$CLIENT_ASSETS" ]; then
             echo "::error::Client asset dir $CLIENT_ASSETS not found — the build layout changed; update this guard (issue #159)."
             exit 1
@@ -441,20 +443,23 @@ jobs:
           curl -fsS "http://localhost:3000$CSS" -o /dev/null || { echo "::error::Stylesheet asset $CSS did not resolve (production asset path broken)"; exit 1; }
           echo "✓ Production build serves the homepage (200) and the stylesheet resolves"
           # Guard app hydration: the served HTML MUST reference the built client
-          # entry — a `<script type="module">` that import()s a hashed client
-          # bundle under /_build/assets/. Without it, app/client.tsx's hydrateRoot
-          # never runs and the app ships as a no-JS site (no voting, forms, filter,
-          # sort, or SPA nav). This regresses silently if getRouterManifest stops
-          # being wired into createStartHandler (app/ssr.tsx) — the SSR'd HTML and
-          # CSS still look fine, which is exactly why the stylesheet check above
-          # missed it. We assert the module entry tag AND that the bundle resolves.
+          # entry — a `<script type="module">` that loads the hashed client
+          # bundle under /assets/ (the TanStack Start Vite-plugin output since
+          # issue #198; vinxi previously emitted /_build/assets/client-*.js).
+          # Without it, app/client.tsx's hydrateRoot never runs and the app ships
+          # as a no-JS site (no voting, forms, filter, sort, or SPA nav). This
+          # regresses silently if the framework's router/client entry wiring
+          # breaks (e.g. app/router.tsx stops exporting `getRouter`) — the SSR'd
+          # HTML and CSS still look fine, which is exactly why the stylesheet
+          # check above missed it. We assert the module entry tag AND that the
+          # bundle resolves. The plugin emits the entry as /assets/index-*.js.
           if ! printf '%s' "$HTML" | grep -qE '<script[^>]*type="module"'; then
-            echo "::error::No <script type=\"module\"> client entry in served HTML — the app will not hydrate (no-JS site). Check that getRouterManifest is passed to createStartHandler in app/ssr.tsx."
+            echo "::error::No <script type=\"module\"> client entry in served HTML — the app will not hydrate (no-JS site). Check that app/router.tsx exports getRouter and app/client.tsx renders <StartClient />."
             exit 1
           fi
-          CLIENT_JS=$(printf '%s' "$HTML" | grep -oE '/_build/assets/client-[A-Za-z0-9_-]+\.js' | head -1)
+          CLIENT_JS=$(printf '%s' "$HTML" | grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' | head -1)
           if [ -z "$CLIENT_JS" ]; then
-            echo "::error::Served HTML has a module script but no /_build/assets/client-*.js bundle reference — the client entry asset was not surfaced from the router manifest."
+            echo "::error::Served HTML has a module script but no /assets/index-*.js client bundle reference — the client entry asset was not surfaced by the TanStack Start Vite plugin."
             exit 1
           fi
           echo "Client entry: $CLIENT_JS"
@@ -462,8 +467,9 @@ jobs:
           echo "✓ Client entry module is injected and the client bundle resolves (app will hydrate)"
           # Guard the API router: /api/* must be served by the Hono handoff in the
           # production build. It silently 404s (falling through to the SSR router)
-          # if app/api.ts is missing or API-route generation is off — which is
-          # exactly the regression this asserts against. /api/health needs no DB.
+          # if the app/routes/api.$.ts Server Route (which delegates every method to
+          # the Hono app via app.fetch) stops being wired — which is exactly the
+          # regression this asserts against. /api/health needs no DB.
           API_CODE=$(curl -s -o /tmp/health.json -w '%{http_code}' http://localhost:3000/api/health)
           if [ "$API_CODE" != "200" ]; then
             echo "::error::/api/health returned $API_CODE (expected 200) — the API router is not served in the production build"

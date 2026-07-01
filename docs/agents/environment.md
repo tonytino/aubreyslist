@@ -50,10 +50,10 @@ console.log(env.YOUR_NEW_VAR);
 ## Rules
 
 - Never access `process.env` directly outside of `app/env.ts`.
-  - **Narrow exception — build config only:** `app.config.ts` (and other
+  - **Narrow exception — build config only:** `vite.config.ts` (and other
     build-time tooling that never ships to the client) may read **non-secret
-    platform build flags** directly, e.g. `process.env.VERCEL` to pick a Nitro
-    deployment preset. The rule exists to keep **secrets** validated and
+    platform build flags** directly, e.g. `process.env.VERCEL` to pick the Nitro
+    deployment preset (`nitroV2Plugin`). The rule exists to keep **secrets** validated and
     client-safe via `getEnv()`; a public build flag is neither. **Secrets must
     still never be read outside `app/env.ts`** — do not use this exception for
     `DATABASE_URL`, session, or API keys.

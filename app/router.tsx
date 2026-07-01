@@ -3,7 +3,11 @@ import { createRouter as createTanStackRouter } from "@tanstack/react-router";
 import { routerWithQueryClient } from "@tanstack/react-router-with-query";
 import { routeTree } from "./routeTree.gen";
 
-export function createRouter() {
+// TanStack Start's Vite plugin (post-vinxi) auto-imports `getRouter` from this
+// file via the `#tanstack-router-entry` virtual module — both the client
+// hydration path (hydrateStart) and the SSR handler call it. The name and
+// signature are the framework contract; do not rename to `createRouter`.
+export function getRouter() {
   const queryClient = new QueryClient({
     defaultOptions: {
       // A small non-zero staleTime keeps `defaultPreload: "intent"` from
@@ -31,6 +35,6 @@ export function createRouter() {
 
 declare module "@tanstack/react-router" {
   interface Register {
-    router: ReturnType<typeof createRouter>;
+    router: ReturnType<typeof getRouter>;
   }
 }

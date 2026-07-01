@@ -3,8 +3,9 @@ node_modules/
 
 # Build outputs
 .output/
-.vinxi/
 .vercel/
+.nitro/
+.tanstack/
 dist/
 
 # Test coverage

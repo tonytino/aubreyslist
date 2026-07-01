@@ -92,6 +92,7 @@ vi.mock("~/server/rate-limit", () => ({
   enforceWriteLimit: (userId?: string) => enforceWriteLimitMock(userId),
 }));
 
+import { callServerFn } from "../../../tests/server-fn";
 import { createListing, createListingInputSchema, runCreateListing } from "./create";
 
 // --- Fixtures --------------------------------------------------------------
@@ -477,7 +478,7 @@ describe("createListing — write rate limiting (#18)", () => {
   it("enforces the per-user write limit before the write, on the authed user", async () => {
     returningResult = [listingRow()];
 
-    await createListing({ data: { mode: "places", placeId: "place-123" } });
+    await callServerFn(() => createListing({ data: { mode: "places", placeId: "place-123" } }));
 
     // Metered on the authenticated user's id, after the auth gate resolved them,
     // and before any DB write (the insert ran, so the limiter let it through).
@@ -490,9 +491,9 @@ describe("createListing — write rate limiting (#18)", () => {
     const tooFast = new HTTPException(429, { message: "too fast" });
     enforceWriteLimitMock.mockRejectedValueOnce(tooFast);
 
-    await expect(createListing({ data: { mode: "places", placeId: "place-123" } })).rejects.toBe(
-      tooFast
-    );
+    await expect(
+      callServerFn(() => createListing({ data: { mode: "places", placeId: "place-123" } }))
+    ).rejects.toBe(tooFast);
     // The limiter short-circuits before any DB work.
     expect(insertMock).not.toHaveBeenCalled();
   });

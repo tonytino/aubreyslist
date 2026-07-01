@@ -30,7 +30,6 @@ export default defineConfig({
         "app/routeTree.gen.ts",
         "app/router.tsx",
         "app/client.tsx",
-        "app/ssr.tsx",
         "app/routes/**",
         "app/**/*.d.ts",
       ],
