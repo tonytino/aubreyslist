@@ -1,0 +1,1 @@
+- `[manual]` Corrected `docs/agents/tasks.md` so `safe:human` is stated as a merge gate (agents implement the work; a human reviews and merges, never auto-merged) rather than a bar on agents acting — aligning it with `docs/product/overview.md`.
