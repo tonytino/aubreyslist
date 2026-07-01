@@ -83,6 +83,18 @@ export const REVIEWED_EXCEPTIONS = [
     reason:
       "Platform-specific native binary for lightningcss (same MPL-2.0 review as lightningcss).",
   },
+  {
+    name: "axe-core",
+    license: "MPL-2.0",
+    reason:
+      "Weak (file-level) copyleft. dev/test-time only — the accessibility engine driven by @axe-core/playwright in the a11y test lane (#192); never imported by app code, never shipped in the client or server bundle, and not modified by us, so the MPL's per-file source-sharing obligation is not triggered (same rationale as lightningcss). Reviewed for #195.",
+  },
+  {
+    name: "@axe-core/playwright",
+    license: "MPL-2.0",
+    reason:
+      "Playwright binding for axe-core (same MPL-2.0 review as axe-core): dev/test-time only, never shipped in the app bundle. Reviewed for #195.",
+  },
 ];
 
 /**
