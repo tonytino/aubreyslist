@@ -38,6 +38,47 @@ export const coordsSchema = z.object({
 /** A validated user coordinate (latitude/longitude in degrees). */
 export type Coords = z.infer<typeof coordsSchema>;
 
+/**
+ * Denver Union Station — the DEFAULT browse origin for the distance-radius filter
+ * (user feedback #7) when the user's geolocation is not available (denied,
+ * unavailable, or SSR before the browser grants permission). Anchoring the radius
+ * to a stable, well-known downtown landmark keeps the "Within N mi of …" filter
+ * meaningful for anonymous, non-located visitors rather than silently showing
+ * everything.
+ */
+export const UNION_STATION: Coords = { lat: 39.7539, lng: -104.9999 };
+
+/**
+ * The selectable search-radius options, in MILES (user feedback #7). Presented in
+ * the {@link DistanceSelector} and validated on the `?radius=` URL param; any
+ * value outside this set degrades to {@link DEFAULT_RADIUS_MILES}.
+ */
+export const DISTANCE_RADIUS_OPTIONS = [5, 10, 15, 20, 25] as const;
+
+/** A selectable radius (one of {@link DISTANCE_RADIUS_OPTIONS}), in miles. */
+export type RadiusMiles = (typeof DISTANCE_RADIUS_OPTIONS)[number];
+
+/** The default search radius (miles) when none is chosen — the widest option. */
+export const DEFAULT_RADIUS_MILES: RadiusMiles = 25;
+
+/** Statute miles → kilometres (1 mile = 1.609344 km, exact). */
+export function milesToKm(miles: number): number {
+  return miles * 1.609344;
+}
+
+/**
+ * Coerce a `?radius=` URL-param value to a valid {@link DISTANCE_RADIUS_OPTIONS}
+ * option, falling back to {@link DEFAULT_RADIUS_MILES} for anything unrecognized
+ * (missing, garbage, or an off-list number). Pure/client-safe so the route's
+ * param handling and any server validation share ONE definition of a valid radius.
+ */
+export function parseRadiusMiles(value: unknown): RadiusMiles {
+  const n = typeof value === "string" ? Number(value) : value;
+  return (DISTANCE_RADIUS_OPTIONS as readonly number[]).includes(n as number)
+    ? (n as RadiusMiles)
+    : DEFAULT_RADIUS_MILES;
+}
+
 const toRadians = (degrees: number): number => (degrees * Math.PI) / 180;
 
 /**

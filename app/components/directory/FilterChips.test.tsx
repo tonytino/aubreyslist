@@ -7,13 +7,16 @@ import { FilterChips } from "./FilterChips";
  * chips are real <button>s with `aria-pressed`, mutually exclusive, and toggle
  * off on a second click. The "Filters" chip is the entry point to the existing
  * server-side taxonomy filter (its sheet is Radix-portaled and only mounts on
- * open, so we assert on the trigger + its active-count badge here).
+ * open, so we assert on the trigger + its active-count badge here). The search
+ * leads the row as a {@link SearchChip} (user feedback #5), wired to
+ * `search`/`onSearchChange`.
  */
 
 function renderChips(overrides: Partial<Parameters<typeof FilterChips>[0]> = {}) {
   const onQuickChange = vi.fn();
   const onToggleAttr = vi.fn();
   const onClearAttrs = vi.fn();
+  const onSearchChange = vi.fn();
   render(
     <FilterChips
       attrs={[]}
@@ -21,10 +24,12 @@ function renderChips(overrides: Partial<Parameters<typeof FilterChips>[0]> = {})
       onClearAttrs={onClearAttrs}
       quick={null}
       onQuickChange={onQuickChange}
+      search=""
+      onSearchChange={onSearchChange}
       {...overrides}
     />
   );
-  return { onQuickChange, onToggleAttr, onClearAttrs };
+  return { onQuickChange, onToggleAttr, onClearAttrs, onSearchChange };
 }
 
 describe("FilterChips — quick chips", () => {
@@ -69,5 +74,28 @@ describe("FilterChips — quick chips", () => {
     renderChips({ attrs: ["dedicated_fryer", "celiac_safe_vs_gluten_friendly"] });
     const filters = screen.getByRole("button", { name: /Filters/ });
     expect(filters).toHaveTextContent("2");
+  });
+});
+
+describe("FilterChips — search chip (user feedback #5)", () => {
+  it("renders the search chip as the first control in the row", () => {
+    renderChips();
+    const search = screen.getByRole("button", { name: "Search restaurants" });
+    expect(search).toBeInTheDocument();
+    // The collapsed search chip leads the row, before the Filters trigger.
+    const filters = screen.getByRole("button", { name: "Filters" });
+    expect(search.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("reflects an applied search value as the active chip", () => {
+    renderChips({ search: "rooted" });
+    expect(screen.getByRole("button", { name: "Search: rooted" })).toBeInTheDocument();
+  });
+
+  it("threads search edits through onSearchChange", () => {
+    const { onSearchChange } = renderChips();
+    fireEvent.click(screen.getByRole("button", { name: "Search restaurants" }));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "root" } });
+    expect(onSearchChange).toHaveBeenCalledWith("root");
   });
 });

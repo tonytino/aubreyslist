@@ -3,15 +3,14 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { AddSpotFab } from "~/components/directory/AddSpotFab";
-import { DirectoryHeader } from "~/components/directory/DirectoryHeader";
 import { DirectoryList } from "~/components/directory/DirectoryList";
 import { DirectoryMap, type DirectoryMapEntry } from "~/components/directory/DirectoryMap";
-import { DirectorySearch } from "~/components/directory/DirectorySearch";
 import {
   DirectoryEmpty,
   DirectoryNoResults,
   LoadingSkeletons,
 } from "~/components/directory/DirectoryStates";
+import { DistanceSelector } from "~/components/directory/DistanceSelector";
 import { FilterChips } from "~/components/directory/FilterChips";
 import { type DirectoryView, ViewToggle } from "~/components/directory/ViewToggle";
 import { type QuickFilter, filterByQuick } from "~/components/directory/filtering";
@@ -23,6 +22,7 @@ import {
   parseAttrs,
   serializeAttrs,
 } from "~/listings/browse-params";
+import { DEFAULT_RADIUS_MILES, UNION_STATION, parseRadiusMiles } from "~/listings/distance";
 import {
   BROWSE_SORT_OPTIONS,
   BROWSE_SORT_VALUES,
@@ -48,11 +48,19 @@ import { fetchBrowseListings } from "~/server/listings/browse.fn";
  * server-side (one batched query set) by `fetchBrowseListings`.
  *
  * BUNDLE LAYER — CLIENT-SIDE. On top of that server page, the redesign adds
- * INSTANT client-side affordances over the ALREADY-LOADED page: a search field
- * (name + address substring, no shimmer) and three mutually-exclusive "quick"
- * chips (celiac / gluten-friendly / recently-verified) that DO flash the bundle's
- * ~430ms loading shimmer. The real, server-side taxonomy filter is untouched — it
- * lives behind the "Filters" chip's sheet and still drives `?attrs=`.
+ * INSTANT client-side affordances over the ALREADY-LOADED page: a search-as-chip
+ * that leads the filter row (name + address substring, no shimmer — user feedback
+ * #5) and three mutually-exclusive "quick" chips (celiac / gluten-friendly /
+ * recently-verified) that DO flash the bundle's ~430ms loading shimmer. The real,
+ * server-side taxonomy filter is untouched — it lives behind the "Filters" chip's
+ * sheet and still drives `?attrs=`.
+ *
+ * ROOM FOR RESULTS (feedback batch). The shell is FULL-WIDTH (no max-width caps,
+ * #1); the app-shell nav is always visible and the directory's filter bar offsets
+ * below it (#2); the second community icon + city dropdown are gone (#3/#4); the
+ * community banner is gone (#6); and a distance-radius filter (`?radius=`, #7)
+ * replaces the old count line — anchored to the visitor's coords or Denver Union
+ * Station, applied server-side to BOTH the page and the honest total.
  */
 
 const browseSearchSchema = z.object({
@@ -73,6 +81,17 @@ const browseSearchSchema = z.object({
   // (so a distance-sorted view is linkable/back-forwardable like the rest).
   lat: z.number().finite().min(-90).max(90).optional().catch(undefined),
   lng: z.number().finite().min(-180).max(180).optional().catch(undefined),
+  // Distance-radius FILTER (user feedback #7). URL-driven like the rest so a
+  // narrowed view is linkable/back-forwardable. `parseRadiusMiles` coerces any
+  // value to a valid DISTANCE_RADIUS_OPTIONS option (garbage/off-list → the
+  // DEFAULT_RADIUS_MILES), so it always round-trips as a real radius. The origin
+  // is NOT in the URL — it's derived at render time from the user's live coords
+  // (or Union Station), so a shared link re-anchors to the recipient's location.
+  radius: z
+    .number()
+    .transform((value) => parseRadiusMiles(value))
+    .catch(DEFAULT_RADIUS_MILES)
+    .default(DEFAULT_RADIUS_MILES),
 });
 
 function browseQueryOptions(
@@ -80,7 +99,9 @@ function browseQueryOptions(
   attrs: ClaimAttribute[],
   sort: BrowseSort,
   coords: UserCoords | undefined,
-  q: string
+  q: string,
+  radius: number,
+  origin: UserCoords
 ) {
   // Only thread coords to the server when actually distance-sorting — a non-pair
   // (or a non-distance sort) means no coords, and the server falls back to the
@@ -92,27 +113,66 @@ function browseQueryOptions(
   // one cache entry (the server treats a blank query as "no text constraint").
   const trimmedQ = q.trim();
   return queryOptions({
-    queryKey: ["browse-listings", page, attrs, sort, userLat ?? null, userLng ?? null, trimmedQ],
+    // The radius filter + its origin are part of the identity of a page (they
+    // change the result SET + honest total), so both are in the key — a shared
+    // link and a live-located visitor cache their radius views independently.
+    queryKey: [
+      "browse-listings",
+      page,
+      attrs,
+      sort,
+      userLat ?? null,
+      userLng ?? null,
+      trimmedQ,
+      radius,
+      origin.lat,
+      origin.lng,
+    ],
     queryFn: () =>
       fetchBrowseListings({
-        data: { page, pageSize: BROWSE_PAGE_SIZE, attrs, sort, userLat, userLng, q: trimmedQ },
+        data: {
+          page,
+          pageSize: BROWSE_PAGE_SIZE,
+          attrs,
+          sort,
+          userLat,
+          userLng,
+          q: trimmedQ,
+          // Distance-radius FILTER (user feedback #7): keep only listings within
+          // `radius` mi of the origin. Independent of userLat/userLng (the sort).
+          radiusMiles: radius,
+          originLat: origin.lat,
+          originLng: origin.lng,
+        },
       }),
   });
 }
 
 export const Route = createFileRoute("/listings/")({
   validateSearch: browseSearchSchema,
-  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q } }) => ({
+  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius } }) => ({
     page,
     attrs,
     sort,
     lat,
     lng,
     q,
+    radius,
   }),
-  loader: async ({ context, deps: { page, attrs, sort, lat, lng, q } }) => {
+  loader: async ({ context, deps: { page, attrs, sort, lat, lng, q, radius } }) => {
+    // SSR has no live geolocation, so the radius origin is Denver Union Station
+    // (user feedback #7). The client re-anchors to the visitor's real coords once
+    // granted (see BrowseListings), which refetches under a new query key.
     await context.queryClient.ensureQueryData(
-      browseQueryOptions(page, parseAttrs(attrs), sort, coordsFromSearch(lat, lng), q)
+      browseQueryOptions(
+        page,
+        parseAttrs(attrs),
+        sort,
+        coordsFromSearch(lat, lng),
+        q,
+        radius,
+        UNION_STATION
+      )
     );
   },
   component: BrowseListings,
@@ -125,11 +185,18 @@ const QUICK_SHIMMER_MS = 430;
 const SEARCH_DEBOUNCE_MS = 275;
 
 function BrowseListings() {
-  const { page, attrs: attrsParam, sort, lat, lng, q: qParam } = Route.useSearch();
+  const { page, attrs: attrsParam, sort, lat, lng, q: qParam, radius } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
   const coords = coordsFromSearch(lat, lng);
-  const { data } = useSuspenseQuery(browseQueryOptions(page, attrs, sort, coords, qParam));
+  // Radius-filter ORIGIN (user feedback #7): the visitor's own coords when we have
+  // them (they opted into near-me and we kept the pair in the URL), else Denver
+  // Union Station — the stable downtown anchor so an anonymous, non-located
+  // visitor still gets a meaningful "within N mi" filter rather than everything.
+  const origin: UserCoords = coords ?? UNION_STATION;
+  const { data } = useSuspenseQuery(
+    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin)
+  );
   const geo = useGeolocation();
 
   // Client-side directory state (the bundle layer). Text search is SERVER-side
@@ -166,10 +233,10 @@ function BrowseListings() {
     }
     const timer = setTimeout(() => {
       lastPushedQ.current = next;
-      navigate({ search: { page: 1, attrs: attrsParam, sort, lat, lng, q: next } });
+      navigate({ search: { page: 1, attrs: attrsParam, sort, lat, lng, q: next, radius } });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [searchInput, qParam, attrsParam, sort, lat, lng, navigate]);
+  }, [searchInput, qParam, attrsParam, sort, lat, lng, radius, navigate]);
 
   // The full server page as VMs (mapped once, via the shared `listingToCardVM`).
   const allVms = useMemo(
@@ -228,11 +295,13 @@ function BrowseListings() {
     const next = attrs.includes(attribute)
       ? attrs.filter((a) => a !== attribute)
       : [...attrs, attribute];
-    navigate({ search: { page: 1, attrs: serializeAttrs(next), sort, lat, lng, q: qParam } });
+    navigate({
+      search: { page: 1, attrs: serializeAttrs(next), sort, lat, lng, q: qParam, radius },
+    });
   }
 
   function clearAttributes() {
-    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: qParam } });
+    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: qParam, radius } });
   }
 
   /**
@@ -251,6 +320,7 @@ function BrowseListings() {
           lat: undefined,
           lng: undefined,
           q: qParam,
+          radius,
         },
       });
       return;
@@ -265,6 +335,7 @@ function BrowseListings() {
             lat: result.coords.lat,
             lng: result.coords.lng,
             q: qParam,
+            radius,
           },
         });
       } else {
@@ -276,9 +347,23 @@ function BrowseListings() {
             lat: undefined,
             lng: undefined,
             q: qParam,
+            radius,
           },
         });
       }
+    });
+  }
+
+  /**
+   * Change the distance-radius filter (user feedback #7). Resets to page 1 (a
+   * page index is meaningless under a narrower/wider result set) and preserves
+   * every other param — the search, taxonomy filter, sort, and near-me coords.
+   * The origin isn't in the URL; it's re-derived on render from the visitor's
+   * coords (or Union Station), so only the radius travels here.
+   */
+  function changeRadius(nextRadius: number) {
+    navigate({
+      search: { page: 1, attrs: attrsParam, sort, lat, lng, q: qParam, radius: nextRadius },
     });
   }
 
@@ -288,36 +373,40 @@ function BrowseListings() {
     setQuick(null);
     setSearchInput("");
     lastPushedQ.current = "";
-    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: "" } });
+    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: "", radius } });
   }
 
   // Whether any filter is active across BOTH layers — decides empty vs no-results.
   // Uses the URL `?q=` (the server-applied search), not the in-flight local input.
   const anyFilterActive = qParam.trim() !== "" || quick !== null || attrs.length > 0;
 
-  // Honest counts. `data.total` is the SERVER total AFTER search + taxonomy filter
-  // (the count query shares the same WHERE), so it reflects EVERY matching listing
-  // — never just the loaded page. When a quick chip is active it refines the shown
-  // results client-side, so we present that as a count of the results shown, never
-  // as the grand total (honesty: it hasn't filtered the whole table).
-  const quickActive = quick !== null;
+  // The radius origin label (user feedback #7): "your location" once we have the
+  // visitor's coords (near-me opt-in kept the pair in the URL), else the stable
+  // "Union Station" fallback the radius is anchored to. Distance is a neutral geo
+  // convenience — never a safety signal — so the selector uses plain chip styling.
+  const originLabel = coords ? "your location" : "Union Station";
 
   return (
-    <div className="mx-auto w-full max-w-[428px] md:max-w-3xl xl:max-w-6xl">
-      {/* Sticky header: location · wordmark · community, then search + chips +
-          count/view row. Sticks to the top of the viewport as the PAGE scrolls
-          naturally, so the filters stay reachable without trapping height on a
-          short/landscape viewport. */}
-      <div className="sticky top-0 z-20 border-b border-border bg-surface">
-        <DirectoryHeader />
-        <div className="flex flex-col gap-3 px-gutter pb-3">
-          <DirectorySearch value={searchInput} onChange={setSearchInput} />
+    // FULL-WIDTH (user feedback #1): the directory now spans the whole viewport
+    // (no max-width caps) with the standard page gutter, giving results real room;
+    // the grid inside DirectoryList adds columns on wide screens to fill it.
+    <div className="w-full">
+      {/* The directory's own sticky filter bar: search + chips + distance/view
+          row. It offsets BELOW the always-visible app-shell nav
+          (`top-[var(--site-header-h)]`, user feedback #2) so the two never overlap
+          or leave a gap, and sits at `z-20` — under the nav (`z-40`) and under
+          Radix overlays (`z-50`). It sticks as the PAGE scrolls naturally, so the
+          filters stay reachable without trapping height on a short viewport. */}
+      <div className="sticky top-[var(--site-header-h)] z-20 border-b border-border bg-surface">
+        <div className="flex flex-col gap-3 px-gutter pb-3 pt-3">
           <FilterChips
             attrs={attrs}
             onToggleAttr={toggleAttribute}
             onClearAttrs={clearAttributes}
             quick={quick}
             onQuickChange={changeQuick}
+            search={searchInput}
+            onSearchChange={setSearchInput}
             sheetExtras={
               <DirectoryServerControls
                 sort={sort}
@@ -327,25 +416,17 @@ function BrowseListings() {
                 data={data}
                 attrsParam={attrsParam}
                 coords={coords}
+                radius={radius}
               />
             }
           />
           <div className="flex items-center justify-between gap-3">
-            {quickActive ? (
-              // A quick chip refines only the SHOWN results client-side, so we
-              // never claim this is the full total — honest phrasing.
-              <p className="text-body-sm text-muted-foreground">
-                <span className="font-bold text-foreground">{visibleVms.length}</span> of{" "}
-                {data.total} shown match
-              </p>
-            ) : (
-              // The honest SERVER total after search + taxonomy filter — every
-              // matching listing across all pages, not just this page.
-              <p className="text-body-sm text-muted-foreground">
-                <span className="font-bold text-foreground">{data.total}</span> places near{" "}
-                <span className="font-semibold text-brand-strong">Denver</span>
-              </p>
-            )}
+            {/* The distance-radius filter takes the count's old slot (user
+                feedback #7): a neutral geo control (pin + border), NOT a safety
+                signal. `data.total` stays honest server-side (the radius WHERE
+                constrains the count too), so removing the count text loses no
+                truthfulness — the filtered results themselves are the answer. */}
+            <DistanceSelector value={radius} onChange={changeRadius} originLabel={originLabel} />
             <ViewToggle view={view} onChange={setView} />
           </div>
         </div>
@@ -403,6 +484,7 @@ function DirectoryServerControls({
   data,
   attrsParam,
   coords,
+  radius,
 }: {
   sort: BrowseSort;
   onSortChange: (next: BrowseSort) => void;
@@ -411,6 +493,8 @@ function DirectoryServerControls({
   data: BrowseListingsPage;
   attrsParam: string;
   coords: UserCoords | undefined;
+  /** Current distance-radius filter (miles) — preserved across pagination. */
+  radius: number;
 }) {
   const hasPrev = data.page > 1;
   const hasNext = data.hasMore;
@@ -457,7 +541,7 @@ function DirectoryServerControls({
           {hasPrev ? (
             <Link
               to="/listings"
-              search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort, lat, lng }}
+              search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort, lat, lng, radius }}
               className="font-semibold text-brand hover:text-brand-strong"
             >
               ← Previous
@@ -469,7 +553,7 @@ function DirectoryServerControls({
           {hasNext ? (
             <Link
               to="/listings"
-              search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort, lat, lng }}
+              search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort, lat, lng, radius }}
               className="font-semibold text-brand hover:text-brand-strong"
             >
               Next →

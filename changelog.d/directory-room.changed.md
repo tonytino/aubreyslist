@@ -1,0 +1,1 @@
+- `[manual]` Reworked the restaurant directory for more room: a full-width, multi-column card grid; an always-visible sticky top navigation; and the search moved into an expanding filter chip (it collapses to a colored "applied" chip when a query is active). Removed the redundant location dropdown, the community/profile icon, and the "neighbors verified spots this month" banner.

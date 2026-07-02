@@ -13,9 +13,9 @@ import { DirectoryList } from "./DirectoryList";
 
 /**
  * Tests for the List view (AUB-61). Covers that every view-model renders as a
- * card in the responsive grid and that the community banner is toggleable. The
- * cards use TanStack Router's `Link`, so we mount a minimal in-memory router
- * whose tree includes `/listings/$id` (mirrors ListingCard.test.tsx).
+ * card in the responsive grid. The cards use TanStack Router's `Link`, so we
+ * mount a minimal in-memory router whose tree includes `/listings/$id` (mirrors
+ * ListingCard.test.tsx).
  */
 
 const vms: RestaurantCardVM[] = [
@@ -65,13 +65,12 @@ describe("DirectoryList", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("shows the community banner by default", async () => {
+  it("lays the cards out in a responsive multi-column grid", async () => {
     renderInRouter(<DirectoryList cards={vms} />);
-    expect(await screen.findByText(/neighbors verified spots this month/)).toBeInTheDocument();
-  });
-
-  it("omits the community banner when showCommunityBanner is false", () => {
-    renderInRouter(<DirectoryList cards={vms} showCommunityBanner={false} />);
-    expect(screen.queryByText(/neighbors verified spots this month/)).not.toBeInTheDocument();
+    // Wait for the router-linked cards to mount, then assert the grid widens on
+    // larger breakpoints so the full-width shell (user feedback #1) fills up.
+    await screen.findByRole("heading", { name: "Acme Gluten-Free" });
+    const list = screen.getByRole("list");
+    expect(list).toHaveClass("md:grid-cols-2", "xl:grid-cols-3", "2xl:grid-cols-4");
   });
 });

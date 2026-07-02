@@ -116,18 +116,21 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     // otherwise the debounced `?q=` navigate races the not-yet-wired input onChange
     // (and the in-flight canonicalizing navigate clobbers it), leaving `q=` empty.
     await waitForBrowseReady(page);
-    // Type the unique token into the directory search; the route debounces it into
-    // the URL `?q=`, which runs the server ILIKE over name + address.
-    await page.getByRole("searchbox", { name: "Search listings" }).fill(lateToken);
+    // Search is now the FIRST chip in the filter row (user feedback #5): click the
+    // collapsed "Search restaurants" chip to expand its input, then type the unique
+    // token. The route debounces it into the URL `?q=`, running the server ILIKE
+    // over name + address.
+    await page.getByRole("button", { name: "Search restaurants" }).click();
+    await page.getByRole("searchbox", { name: "Search restaurants" }).fill(lateToken);
     await expect(page).toHaveURL(new RegExp(`q=[^&]*${lateToken}`));
 
     // The card for the late-sorting listing is present even though it would never
     // appear on page 1 without a query — the search reached beyond the first page.
+    // (The honest server-filtered total lives in `data.total`; the redesign
+    // replaced the visible count line with the distance-radius selector, so the
+    // presence of this beyond-page-1 result is the assertion that search is
+    // server-complete.)
     const card = page.getByRole("link", { name: late.name });
     await expect(card).toHaveAttribute("href", `/listings/${late.id}`);
-
-    // And the honest count reflects the server-filtered total (a single match),
-    // not a page-scoped number.
-    await expect(page.getByText(/\bplaces near\b/)).toContainText("1");
   });
 });

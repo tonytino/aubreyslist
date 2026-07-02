@@ -10,7 +10,7 @@ import {
   listings,
 } from "~/db/schema";
 import { BROWSE_PAGE_SIZE, MAX_PAGE_SIZE } from "~/listings/browse-params";
-import { type Coords, EARTH_RADIUS_KM } from "~/listings/distance";
+import { type Coords, EARTH_RADIUS_KM, milesToKm } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
 import { formatDistanceLabel } from "~/trust/browse-card-format";
@@ -81,6 +81,22 @@ export const browseListingsInputSchema = z.object({
    */
   userLat: z.number().finite().min(-90).max(90).optional(),
   userLng: z.number().finite().min(-180).max(180).optional(),
+  /**
+   * Distance-radius FILTER (user feedback #7): keep only listings within
+   * `radiusMiles` of the origin (`originLat`/`originLng`). Optional. This is
+   * INDEPENDENT of `userLat`/`userLng` above — those drive the "near me" SORT
+   * order; these constrain the result SET. Kept separate because the origin
+   * defaults to Denver Union Station when geolocation is unavailable, whereas the
+   * near-me sort has no such fallback (it degrades to alphabetical instead).
+   *
+   * The predicate applies ONLY when a complete triple is present — `radiusMiles`
+   * AND both `originLat` and `originLng`. When any is missing there is no radius
+   * constraint (unchanged behavior). The origin is validated to the same WGS84
+   * ranges as the coords schema so a garbage value can never reach the SQL.
+   */
+  radiusMiles: z.number().finite().positive().optional(),
+  originLat: z.number().finite().min(-90).max(90).optional(),
+  originLng: z.number().finite().min(-180).max(180).optional(),
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
@@ -135,7 +151,22 @@ export async function getBrowseListings(
   // page, the total count, and pagination all reflect ONLY visible listings.
   const visibleListing = eq(listings.moderationStatus, "visible");
   const searchAndFilter = buildBrowseWhere(buildSearchPredicate(input.q ?? ""), input.attrs);
-  const where = searchAndFilter ? and(visibleListing, searchAndFilter) : visibleListing;
+
+  // Distance-radius FILTER (user feedback #7). Applies ONLY when a complete
+  // triple is present — a radius AND both origin coordinates. It is AND-folded
+  // into the SHARED `where` below, so the SAME predicate constrains BOTH the page
+  // query and the count query — the total honestly reflects the radius (a "Within
+  // 5 mi" filter can never report a count that includes out-of-range listings).
+  // Independent of `userLat`/`userLng` (those only drive the sort ORDER BY).
+  const radiusPredicate = buildRadiusPredicate(input.radiusMiles, input.originLat, input.originLng);
+
+  // Compose visibility (#41) with the search/filter (#34/#35) and the radius
+  // filter (feedback #7). `and(...)` drops `undefined` terms, so a missing
+  // search/filter or a missing/incomplete radius simply contributes nothing.
+  const where =
+    searchAndFilter || radiusPredicate
+      ? and(visibleListing, searchAndFilter, radiusPredicate)
+      : visibleListing;
 
   // The ORDER BY (#36). Search/filter live in the WHERE above; sort only touches
   // the ORDER BY, so the three compose cleanly. The trust sort joins a per-listing
@@ -402,6 +433,33 @@ function distanceKmExpr(coords: Coords): SQL<number> {
     + cos(radians(${coords.lat})) * cos(radians(${listings.lat}))
     * sin(radians(${listings.lng} - ${coords.lng}) / 2) ^ 2`;
   return sql<number>`2 * ${EARTH_RADIUS_KM} * asin(least(1, sqrt(${h})))`;
+}
+
+/**
+ * The distance-radius FILTER predicate (user feedback #7): "listing is within
+ * `radiusMiles` of the origin", or `undefined` when the filter is inactive.
+ *
+ * Inactive (→ `undefined`, no constraint) unless a COMPLETE triple is present —
+ * a radius AND both origin coordinates — so a half-origin or a missing radius
+ * leaves the result set unchanged. When active, it compares the SAME great-circle
+ * km expression the near-me sort/label derive from ({@link distanceKmExpr}, the
+ * full haversine against `listings.lat/lng`) to the radius converted to
+ * kilometres ({@link milesToKm}). The comparison is INCLUSIVE (`<=`), so a
+ * listing sitting EXACTLY on the radius boundary is kept.
+ *
+ * Returned as a plain `SQL` so the caller can AND-fold it into the shared `where`
+ * — applying it to the page AND count queries alike keeps `total` honest.
+ */
+function buildRadiusPredicate(
+  radiusMiles: number | undefined,
+  originLat: number | undefined,
+  originLng: number | undefined
+): SQL | undefined {
+  if (radiusMiles === undefined || originLat === undefined || originLng === undefined) {
+    return undefined;
+  }
+  const origin: Coords = { lat: originLat, lng: originLng };
+  return sql`${distanceKmExpr(origin)} <= ${milesToKm(radiusMiles)}`;
 }
 
 /** A listing's celiac aggregate plus its distinct-contributor count. */

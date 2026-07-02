@@ -15,8 +15,9 @@ import { openBrowseFilters } from "./helpers";
 test("browse directory renders for anonymous visitors", async ({ page }) => {
   await page.goto("/listings");
 
-  // The always-present search field proves the directory rendered.
-  await expect(page.getByRole("searchbox", { name: "Search listings" })).toBeVisible();
+  // The search now leads the filter chip row as a collapsed chip (user feedback
+  // #5); its presence proves the directory chrome rendered.
+  await expect(page.getByRole("button", { name: "Search restaurants" })).toBeVisible();
 
   // Either there are cards (a result list) or an honest empty/no-results heading.
   const resultsList = page.getByRole("list");
@@ -30,7 +31,7 @@ test("home Browse CTA navigates to the directory", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Browse Denver listings" }).click();
   await expect(page).toHaveURL(/\/listings/);
-  await expect(page.getByRole("searchbox", { name: "Search listings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Search restaurants" })).toBeVisible();
 });
 
 /**
