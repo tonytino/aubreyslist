@@ -4,7 +4,7 @@ import { RestaurantCard, type RestaurantCardVM } from "~/components/listing/List
 /**
  * The List view (AUB-61, Phase 2b): an optional {@link CommunityBanner} followed
  * by a vertical stack of {@link RestaurantCard}s built from the real per-listing
- * view-models. Bottom padding clears the floating "Add a spot" FAB.
+ * view-models. Bottom padding clears the floating "Add listing" FAB.
  *
  * The cards render from the SAME {@link RestaurantCardVM} the map surfaces use
  * (mapped once via `listingToCardVM`), so the safety glance is identical
