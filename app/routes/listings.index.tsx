@@ -384,13 +384,13 @@ function BrowseListings() {
   // visitor's coords (near-me opt-in kept the pair in the URL), else the stable
   // "Union Station" fallback the radius is anchored to. Distance is a neutral geo
   // convenience — never a safety signal — so the selector uses plain chip styling.
-  const originLabel = coords ? "your location" : "Union Station";
+  // The selector itself shows only "Within X miles" (origin not surfaced).
 
   return (
-    // FULL-WIDTH (user feedback #1): the directory now spans the whole viewport
-    // (no max-width caps) with the standard page gutter, giving results real room;
-    // the grid inside DirectoryList adds columns on wide screens to fill it.
-    <div className="w-full">
+    // WIDTH (user feedback #1, refined per preview comment): a generous but
+    // BOUNDED, centered max-width — edge-to-edge full-bleed looked busted on large
+    // screens. The grid inside DirectoryList adds columns on wide screens to fill it.
+    <div className="mx-auto w-full max-w-[96rem]">
       {/* The directory's own sticky filter bar: search + chips + distance/view
           row. It offsets BELOW the always-visible app-shell nav
           (`top-[var(--site-header-h)]`, user feedback #2) so the two never overlap
@@ -426,7 +426,7 @@ function BrowseListings() {
                 signal. `data.total` stays honest server-side (the radius WHERE
                 constrains the count too), so removing the count text loses no
                 truthfulness — the filtered results themselves are the answer. */}
-            <DistanceSelector value={radius} onChange={changeRadius} originLabel={originLabel} />
+            <DistanceSelector value={radius} onChange={changeRadius} />
             <ViewToggle view={view} onChange={setView} />
           </div>
         </div>

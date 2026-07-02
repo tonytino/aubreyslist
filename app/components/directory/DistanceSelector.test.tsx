@@ -4,37 +4,30 @@ import { DISTANCE_RADIUS_OPTIONS } from "~/listings/distance";
 import { DistanceSelector } from "./DistanceSelector";
 
 /**
- * Tests for the distance-radius selector (user feedback #7). An accessible,
- * controlled `<select>` reading "Within {value} mi of {originLabel}" that reports
- * the chosen radius (miles) back to the caller.
+ * Tests for the distance-radius selector (user feedback #7). A single accessible
+ * `<select>` styled as a chip, reading "Within {value} miles" — the origin is NOT
+ * shown — that reports the chosen radius (miles) back to the caller.
  */
 
 describe("DistanceSelector", () => {
-  it("renders the current value and origin label", () => {
-    render(<DistanceSelector value={10} onChange={() => {}} originLabel="Union Station" />);
-
-    // The labelled control reflects the selected radius…
+  it("reflects the selected radius", () => {
+    render(<DistanceSelector value={10} onChange={() => {}} />);
     expect(screen.getByRole("combobox", { name: "Search radius" })).toHaveValue("10");
-    // …and names the origin the radius is measured from.
-    expect(screen.getByText("Union Station")).toBeInTheDocument();
   });
 
-  it("uses the provided origin label (e.g. 'your location')", () => {
-    render(<DistanceSelector value={25} onChange={() => {}} originLabel="your location" />);
-    expect(screen.getByText("your location")).toBeInTheDocument();
-  });
-
-  it("offers every distance option", () => {
-    render(<DistanceSelector value={25} onChange={() => {}} originLabel="Union Station" />);
+  it("labels each option 'Within N miles' and shows no origin", () => {
+    render(<DistanceSelector value={25} onChange={() => {}} />);
     for (const miles of DISTANCE_RADIUS_OPTIONS) {
-      expect(screen.getByRole("option", { name: `${miles} mi` })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: `Within ${miles} miles` })).toBeInTheDocument();
     }
     expect(screen.getAllByRole("option")).toHaveLength(DISTANCE_RADIUS_OPTIONS.length);
+    // The origin (e.g. "Union Station" / "your location") is deliberately hidden.
+    expect(screen.queryByText(/Union Station|your location/)).not.toBeInTheDocument();
   });
 
   it("calls onChange with the chosen miles as a number", () => {
     const onChange = vi.fn();
-    render(<DistanceSelector value={25} onChange={onChange} originLabel="Union Station" />);
+    render(<DistanceSelector value={25} onChange={onChange} />);
 
     fireEvent.change(screen.getByRole("combobox", { name: "Search radius" }), {
       target: { value: "5" },
