@@ -1,0 +1,1 @@
+- `[manual]` Added the two-part design-orchestration workflow: `design-kickoff` and `design-build` skills plus `docs/agents/design-orchestration.md`, for redesigning a page via Claude Design with a human `design:approved` gate and `safe:human` PRs.

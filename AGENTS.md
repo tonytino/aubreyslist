@@ -28,6 +28,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Epics via GitHub issues (legacy/in-flight)    | `docs/agents/issues.md`       |
 | Acting on Vercel preview comments (visual feedback) | `docs/agents/preview-feedback.md` |
 | Orchestrating agents, reviewing agent output  | `docs/agents/orchestration.md` |
+| Redesigning a page (design → approval → code)  | `docs/agents/design-orchestration.md` |
 | Routes, pages, navigation                     | `docs/agents/routing.md`      |
 | API endpoints, server logic                   | `docs/agents/api.md`          |
 | Database, schema, migrations                  | `docs/agents/database.md`     |
