@@ -613,6 +613,119 @@ describe("getBrowseListings", () => {
     expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toContain("visible");
   });
 
+  // --- feedback #7: distance-radius filter ----------------------------------
+
+  it("folds the radius predicate into the SHARED where (page AND count) so total is honest", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      { ...baseInput, radiusMiles: 5, originLat: 39.7539, originLng: -104.9999 },
+      NOW
+    );
+
+    // The radius constraint applies to BOTH the page and count queries via the
+    // SAME predicate object, so the total reflects the radius (count-honesty).
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+
+    const rendered = dialect.sqlToQuery(state.pageWhere as SQL);
+    const sql = rendered.sql.toLowerCase();
+    // The predicate is the great-circle km expression (haversine over radians)
+    // compared to the radius, INCLUSIVE (`<=`).
+    expect(sql).toContain("radians");
+    expect(sql).toContain("asin");
+    expect(sql).toContain("<=");
+    // The origin coords are bound as params (never hardcoded into the SQL).
+    expect(rendered.params).toContain(39.7539);
+    expect(rendered.params).toContain(-104.9999);
+    // The comparison bound is the radius converted to KM (5 mi × 1.609344).
+    expect(rendered.params).toContain(5 * 1.609344);
+    // Still constrained to visible listings (#41 preserved).
+    expect(rendered.params).toContain("visible");
+  });
+
+  it("uses an inclusive boundary (<= radius-km) so a listing exactly on the radius is kept", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      { ...baseInput, radiusMiles: 10, originLat: 39.7539, originLng: -104.9999 },
+      NOW
+    );
+
+    const rendered = dialect.sqlToQuery(state.pageWhere as SQL);
+    // Inclusive `<=` (not `<`), and the bound is exactly 10 mi in km.
+    expect(rendered.sql.toLowerCase()).toContain("<=");
+    expect(rendered.sql).not.toContain("< $"); // no bare strict `<` against the radius bound
+    expect(rendered.params).toContain(10 * 1.609344);
+  });
+
+  it("composes the radius filter WITH search + taxonomy filter in one shared where", async () => {
+    state.pageListings = [{ id: "l1", name: "Taco House", address: "1 Main St" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      {
+        ...baseInput,
+        q: "taco",
+        attrs: ["dedicated_fryer"],
+        radiusMiles: 15,
+        originLat: 39.7539,
+        originLng: -104.9999,
+      },
+      NOW
+    );
+
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+    const rendered = dialect.sqlToQuery(state.pageWhere as SQL);
+    // Search term + radius bound both live in the single composed predicate.
+    expect(rendered.params).toContain("%taco%");
+    expect(rendered.params).toContain(15 * 1.609344);
+  });
+
+  it("applies NO radius constraint when radiusMiles is absent (unchanged behavior)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    // Origin present but no radius → no distance filter.
+    await getBrowseListings({ ...baseInput, originLat: 39.7539, originLng: -104.9999 }, NOW);
+
+    const sql = renderArg(state.pageWhere);
+    // Only the visibility predicate; no haversine distance comparison.
+    expect(sql).not.toContain("radians");
+    expect(sql).toContain("moderation_status");
+  });
+
+  it("applies NO radius constraint when the origin is incomplete (half a pair)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    // A radius with only originLat (no originLng) is meaningless → no filter.
+    await getBrowseListings({ ...baseInput, radiusMiles: 5, originLat: 39.7539 }, NOW);
+
+    const sql = renderArg(state.pageWhere);
+    expect(sql).not.toContain("radians");
+    expect(sql).toContain("moderation_status");
+  });
+
+  it("keeps the radius filter INDEPENDENT of the near-me sort coords", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    // A radius origin but NO userLat/userLng and a non-distance sort: the radius
+    // still filters (WHERE), while the sort stays alphabetical (ORDER BY).
+    await getBrowseListings(
+      { ...baseInput, sort: "alpha", radiusMiles: 5, originLat: 39.7539, originLng: -104.9999 },
+      NOW
+    );
+
+    expect(renderArg(state.pageWhere)).toContain("radians"); // radius filter active
+    expect(state.orderByArgs).toHaveLength(1); // alphabetical order, not distance
+    expect(renderArg(state.orderByArgs[0])).toContain('"name"');
+  });
+
   // --- The full compose: filter + search + sort + pagination ----------------
 
   it("combines filter + search + sort + pagination: shared WHERE, correct total/hasMore", async () => {

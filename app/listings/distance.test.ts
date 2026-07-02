@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { type Coords, EARTH_RADIUS_KM, coordsSchema, haversineKm } from "./distance";
+import {
+  type Coords,
+  DEFAULT_RADIUS_MILES,
+  DISTANCE_RADIUS_OPTIONS,
+  EARTH_RADIUS_KM,
+  UNION_STATION,
+  coordsSchema,
+  haversineKm,
+  milesToKm,
+  parseRadiusMiles,
+} from "./distance";
 
 /**
  * Tests for the client-safe distance helpers (#37) — the shared, explainable
@@ -60,5 +70,45 @@ describe("haversineKm", () => {
     const antipode: Coords = { lat: -DENVER.lat, lng: DENVER.lng + 180 };
     const half = Math.PI * EARTH_RADIUS_KM;
     expect(haversineKm(DENVER, antipode)).toBeLessThanOrEqual(half + 1);
+  });
+});
+
+// --- distance-radius filter helpers (user feedback #7) ---------------------
+
+describe("UNION_STATION", () => {
+  it("is a valid coordinate near downtown Denver (the default browse origin)", () => {
+    expect(coordsSchema.safeParse(UNION_STATION).success).toBe(true);
+    // Sanity: within a few km of the Denver reference point above.
+    expect(haversineKm(UNION_STATION, DENVER)).toBeLessThan(5);
+  });
+});
+
+describe("milesToKm", () => {
+  it("converts miles to kilometres by the exact factor", () => {
+    expect(milesToKm(1)).toBeCloseTo(1.609344, 6);
+    expect(milesToKm(5)).toBeCloseTo(8.04672, 6);
+    expect(milesToKm(0)).toBe(0);
+  });
+});
+
+describe("parseRadiusMiles", () => {
+  it("accepts each valid option (number or string form)", () => {
+    for (const option of DISTANCE_RADIUS_OPTIONS) {
+      expect(parseRadiusMiles(option)).toBe(option);
+      expect(parseRadiusMiles(String(option))).toBe(option);
+    }
+  });
+
+  it("falls back to the default for missing/garbage/off-list values", () => {
+    expect(parseRadiusMiles(undefined)).toBe(DEFAULT_RADIUS_MILES);
+    expect(parseRadiusMiles(null)).toBe(DEFAULT_RADIUS_MILES);
+    expect(parseRadiusMiles("banana")).toBe(DEFAULT_RADIUS_MILES);
+    expect(parseRadiusMiles(7)).toBe(DEFAULT_RADIUS_MILES); // not one of the options
+    expect(parseRadiusMiles(1000)).toBe(DEFAULT_RADIUS_MILES);
+  });
+
+  it("uses the widest option (25 mi) as the default", () => {
+    expect(DEFAULT_RADIUS_MILES).toBe(25);
+    expect(DISTANCE_RADIUS_OPTIONS).toContain(DEFAULT_RADIUS_MILES);
   });
 });

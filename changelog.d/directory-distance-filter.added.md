@@ -1,0 +1,1 @@
+- `[manual]` Added a distance-radius filter to the restaurant directory: a selector for 5 / 10 / 15 / 20 / 25 miles that narrows listings to within that radius of your location, defaulting to Denver Union Station until the browser provides geolocation. The radius is applied server-side (URL-driven `?radius=`), so the result set and pagination stay honest.

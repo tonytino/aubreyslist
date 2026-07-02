@@ -115,6 +115,15 @@
   --spacing-card: 1.25rem; /* card inner padding */
   --spacing-section: 2.5rem; /* vertical rhythm between sections */
 
+  /* The app-shell SiteHeader's fixed height (user feedback #2). The header is
+     sticky (always visible) with a STABLE height so the directory's own sticky
+     filter bar can offset below it (`top-[var(--site-header-h)]`) and the two
+     never overlap or leave a gap. This is a length/spacing token — it backs the
+     `h-[var(--site-header-h)]` / `top-[var(--site-header-h)]` utilities, NOT a
+     colour token — and MUST equal the header's inner container height (`h-16`).
+     A spacing/length var is exempt from the "no new @theme colour tokens" rule. */
+  --site-header-h: 4rem; /* = h-16; keep in sync with SiteHeader's inner row */
+
   /* ----------------------------------------------------------------------- */
   /* Radii                                                                    */
   /* ----------------------------------------------------------------------- */

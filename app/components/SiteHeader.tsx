@@ -40,13 +40,22 @@ const NAV_ITEMS: readonly NavItem[] = [
  * wordmark optically centred regardless of the side content. The
  * `<nav aria-label="Primary">` wraps the hamburger trigger so the navigation
  * landmark persists even though the items live in a portaled menu.
+ *
+ * ALWAYS-VISIBLE (user feedback #2): the header is `sticky top-0` with an opaque
+ * `bg-background` so the primary nav stays reachable at any scroll position. Its
+ * inner row has a STABLE, known height (`h-16`), mirrored by the `--site-header-h`
+ * token (app/styles/app.css) so the directory's own sticky filter bar can offset
+ * exactly below it (`sticky top-[var(--site-header-h)]`) with no overlap or gap.
+ * Z-INDEX: this sits at `z-40` — above the directory's sticky filter bar (`z-20`)
+ * but BELOW Radix overlays (sheet/dialog/dropdown at `z-50`), so a menu/sheet
+ * always renders over the nav.
  */
 export function SiteHeader() {
   const { data: user } = useSuspenseQuery(currentUserQuery);
 
   return (
-    <header className="border-b border-border">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-x-2 px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-40 border-b border-border bg-background">
+      <div className="mx-auto grid h-16 w-full max-w-[96rem] grid-cols-[1fr_auto_1fr] items-center gap-x-2 px-4 sm:px-6">
         {/* Left: primary nav as a hamburger menu — the same experience at every
             size. The nav items live in a portaled dropdown; the landmark wraps
             the trigger so it persists. */}

@@ -1,6 +1,7 @@
 import { Check, Funnel, Leaf, ShieldCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type * as React from "react";
+import { SearchChip } from "~/components/directory/SearchChip";
 import type { QuickFilter } from "~/components/directory/filtering";
 import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
 import { Badge } from "~/components/ui/badge";
@@ -27,6 +28,12 @@ import type { ClaimAttribute } from "~/listings/taxonomy";
  *     (a single {@link QuickFilter} value), matching the bundle. They are real
  *     `<button>`s carrying `aria-pressed` so the toggle state is announced —
  *     never colour alone.
+ *
+ * SEARCH-AS-CHIP (user feedback #5): the free-text search now leads the row as a
+ * {@link SearchChip} (replacing the old standalone search field above the chips).
+ * It shares the chip visual language and is controlled by the route's
+ * `search`/`onSearchChange` (still mirrored to the URL `?q=` with a debounce there),
+ * so it reads as "just another filter" while staying SERVER-complete.
  *
  * The bundle's "Cuisine" chip is intentionally DROPPED (no cuisine data yet;
  * tracked in AUB-112).
@@ -59,6 +66,8 @@ export function FilterChips({
   onClearAttrs,
   quick,
   onQuickChange,
+  search,
+  onSearchChange,
   sheetExtras,
 }: {
   attrs: ClaimAttribute[];
@@ -66,6 +75,10 @@ export function FilterChips({
   onClearAttrs: () => void;
   quick: QuickFilter;
   onQuickChange: (next: QuickFilter) => void;
+  /** Current free-text search value (the route mirrors it to `?q=`, debounced). */
+  search: string;
+  /** Report a search change straight through — the route debounces it to the URL. */
+  onSearchChange: (next: string) => void;
   /**
    * Extra controls rendered inside the Filters sheet, below the taxonomy filter —
    * the route passes the server-side sort control + pagination here so those
@@ -76,6 +89,10 @@ export function FilterChips({
 }) {
   return (
     <div className="-mx-gutter flex items-center gap-2 overflow-x-auto px-gutter pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* Search leads the row as a chip (user feedback #5) — controlled by the
+          route, which debounces it into the URL `?q=`. */}
+      <SearchChip value={search} onChange={onSearchChange} />
+
       {/* Filters → the real server-side taxonomy filter, in a bottom sheet. */}
       <Sheet>
         <SheetTrigger asChild>
