@@ -37,6 +37,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Environment variables                         | `docs/agents/environment.md`  |
 | Dependencies, versioning, overrides           | `docs/agents/dependencies.md` |
 | Tooling: lint, format, preflight, hooks       | `docs/agents/tooling.md`      |
+| Error monitoring / Sentry config, prod errors | `docs/agents/observability.md` |
 | Adding a changelog entry (fragments)          | `changelog.d/README.md`       |
 | Releasing a new version of the template       | `docs/agents/releases.md`     |
 | Propagating template updates to instances     | `docs/agents/propagation.md`  |
