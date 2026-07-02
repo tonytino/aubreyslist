@@ -68,7 +68,7 @@ export function SearchChip({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onBlur={() => setExpanded(false)}
-          placeholder="Search restaurants by name or address"
+          placeholder="Search restaurants"
           className="w-64 max-w-full rounded-chip border-[1.5px] border-brand-ring bg-surface py-2 pl-9 pr-9 text-body-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring/40 [&::-webkit-search-cancel-button]:appearance-none"
         />
         {applied ? (
@@ -124,7 +124,7 @@ export function SearchChip({
       className={`${chipBase} ${chipInactive}`}
     >
       <Search className="size-4" strokeWidth={2.25} aria-hidden="true" />
-      <span>Search</span>
+      <span>Search restaurants</span>
     </button>
   );
 }

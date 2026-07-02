@@ -12,7 +12,7 @@ describe("SearchChip", () => {
   it("renders a collapsed 'Search' chip when empty", () => {
     render(<SearchChip value="" onChange={() => {}} />);
     const chip = screen.getByRole("button", { name: "Search restaurants" });
-    expect(chip).toHaveTextContent("Search");
+    expect(chip).toHaveTextContent("Search restaurants");
     expect(chip).toHaveAttribute("aria-expanded", "false");
     // No text input while collapsed.
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
@@ -22,7 +22,7 @@ describe("SearchChip", () => {
     render(<SearchChip value="" onChange={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Search restaurants" }));
     const input = screen.getByRole("searchbox", { name: "Search restaurants" });
-    expect(input).toHaveAttribute("placeholder", "Search restaurants by name or address");
+    expect(input).toHaveAttribute("placeholder", "Search restaurants");
   });
 
   it("reports each keystroke to onChange while expanded", () => {

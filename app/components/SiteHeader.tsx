@@ -55,7 +55,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background">
-      <div className="mx-auto grid h-16 w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-x-2 px-4 sm:px-6">
+      <div className="mx-auto grid h-16 w-full max-w-[96rem] grid-cols-[1fr_auto_1fr] items-center gap-x-2 px-4 sm:px-6">
         {/* Left: primary nav as a hamburger menu — the same experience at every
             size. The nav items live in a portaled dropdown; the landmark wraps
             the trigger so it persists. */}

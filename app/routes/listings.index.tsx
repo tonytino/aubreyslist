@@ -397,7 +397,7 @@ function BrowseListings() {
           or leave a gap, and sits at `z-20` — under the nav (`z-40`) and under
           Radix overlays (`z-50`). It sticks as the PAGE scrolls naturally, so the
           filters stay reachable without trapping height on a short viewport. */}
-      <div className="sticky top-[var(--site-header-h)] z-20 border-b border-border bg-surface">
+      <div className="sticky top-[var(--site-header-h)] z-20 border-b border-border bg-background">
         <div className="flex flex-col gap-3 px-gutter pb-3 pt-3">
           <FilterChips
             attrs={attrs}
