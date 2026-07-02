@@ -51,16 +51,22 @@ console.log(env.YOUR_NEW_VAR);
 
 - Never access `process.env` directly outside of `app/env.ts`.
   - **Narrow exception — build config only:** `vite.config.ts` (and other
-    build-time tooling that never ships to the client) may read **non-secret
-    platform build flags** directly, e.g. `process.env.VERCEL` to pick the Nitro
-    deployment preset (`nitroV2Plugin`). The rule exists to keep **secrets** validated and
-    client-safe via `getEnv()`; a public build flag is neither. **Secrets must
-    still never be read outside `app/env.ts`** — do not use this exception for
-    `DATABASE_URL`, session, or API keys.
+    build-time tooling that never ships to the client) may read directly:
+    (a) **non-secret platform build flags**, e.g. `process.env.VERCEL` to pick
+    the Nitro deployment preset (`nitroV2Plugin`); and (b) **build-time-only
+    secrets that are consumed by the build tooling itself and never reach app
+    runtime or the client bundle**, e.g. `process.env.SENTRY_AUTH_TOKEN` in
+    `sentryTanstackStart` for source-map upload. The rule exists to keep
+    **runtime, client-facing secrets** validated and client-safe via
+    `getEnv()`; a public build flag isn't a secret, and a build-only secret
+    never enters the app module graph that `getEnv()` guards. **Runtime secrets
+    must still never be read outside `app/env.ts`** — do not use this exception
+    for `DATABASE_URL`, session, or runtime API keys consumed by app code.
   - **Narrow exception — CLI tooling config:** `drizzle.config.ts` reads
     `process.env.DATABASE_URL` directly because Drizzle Kit runs as a CLI
-    outside the app module graph and cannot import `getEnv()`. This is an
-    accepted build-time tooling exception, not a runtime path.
+    outside the app module graph and cannot import `getEnv()`. This is the same
+    build-time tooling precedent — a secret consumed only by out-of-app-graph
+    tooling — not a runtime path.
 - Never commit `.env`. It is gitignored.
 - Always keep `.env.example` in sync with `app/env.ts`.
 - In CI, secrets are injected via GitHub Actions secrets — see `.github/workflows/ci.yml`.
