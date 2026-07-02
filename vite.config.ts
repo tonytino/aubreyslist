@@ -1,3 +1,4 @@
+import { sentryTanstackStart } from "@sentry/tanstackstart-react/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { nitroV2Plugin } from "@tanstack/nitro-v2-vite-plugin";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
@@ -30,6 +31,27 @@ export default defineConfig({
     // React Fast Refresh / JSX transform. TanStack Start no longer bundles this;
     // it must be registered after tanstackStart() per the plugin's ordering.
     viteReact(),
+    // Sentry TanStack Start plugin (AUB-110). It builds on the framework
+    // plugins above (per Sentry's docs it is registered alongside/after
+    // tanstackStart()), so it sits after them and before the Nitro build
+    // target. Its main jobs are uploading source maps for readable server
+    // stack traces and auto-instrumenting the global middleware wired in
+    // app/start.ts. `org`/`project` identify the Sentry project; the source-map
+    // upload needs `SENTRY_AUTH_TOKEN`, a secret provided only in CI/prod
+    // builds — locally it's absent, so uploads are simply skipped (the plugin
+    // no-ops without it). Actually enabling the prod upload pipeline
+    // (build/start `--import` + the token in the deploy env) is the separate
+    // AUB-106 task.
+    //
+    // Reading `process.env.SENTRY_AUTH_TOKEN` here is allowed: vite.config.ts is
+    // build-time tooling (never shipped to the client), the sanctioned exception
+    // to the "no process.env outside app/env.ts" rule — same precedent as the
+    // `VERCEL` read below. See docs/agents/environment.md.
+    sentryTanstackStart({
+      org: "brbcoding",
+      project: "aubreyslist",
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+    }),
     // Nitro v2 build target. This replaces vinxi's Nitro integration and emits
     // the Node server at .output/server/index.mjs (what `pnpm start` runs and
     // what the CI build-smoke gate probes). On Vercel (which injects `VERCEL=1`)
