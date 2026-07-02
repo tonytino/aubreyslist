@@ -1,0 +1,1 @@
+- `[manual]` Fixed the restaurant directory on short/landscape viewports: switched from a fixed-height inner-scroll app-shell to natural page scroll with a sticky filter header, a bounded map view, and a viewport-fixed "Add listing" button — so all content is reachable and the FAB no longer overlaps cards at any viewport height (portrait, landscape, or desktop).

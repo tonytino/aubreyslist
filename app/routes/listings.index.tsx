@@ -303,10 +303,12 @@ function BrowseListings() {
   const quickActive = quick !== null;
 
   return (
-    <div className="relative mx-auto flex h-[calc(100dvh-var(--site-header-h,3.5rem))] w-full max-w-[428px] flex-col md:max-w-3xl xl:max-w-6xl">
+    <div className="mx-auto w-full max-w-[428px] md:max-w-3xl xl:max-w-6xl">
       {/* Sticky header: location · wordmark · community, then search + chips +
-          count/view row. `flex-none` so the scroll happens in the content area. */}
-      <div className="flex-none border-b border-border bg-surface">
+          count/view row. Sticks to the top of the viewport as the PAGE scrolls
+          naturally, so the filters stay reachable without trapping height on a
+          short/landscape viewport. */}
+      <div className="sticky top-0 z-20 border-b border-border bg-surface">
         <DirectoryHeader />
         <div className="flex flex-col gap-3 px-gutter pb-3">
           <DirectorySearch value={searchInput} onChange={setSearchInput} />
@@ -349,9 +351,11 @@ function BrowseListings() {
         </div>
       </div>
 
-      {/* Content area — renders exactly ONE state. Scrollable; `relative` so the
-          absolutely-positioned map backdrop anchors here. */}
-      <div className="relative flex-1 overflow-y-auto bg-background px-gutter pt-4">
+      {/* Content area — renders exactly ONE state. The PAGE scrolls (no inner
+          scroll region), so this is a plain block with generous bottom padding so
+          the last card clears the viewport-fixed FAB. `relative` still anchors the
+          map's absolutely-positioned backdrop + pins to its bounded wrapper. */}
+      <div className="relative bg-background px-gutter pb-28 pt-4">
         {loading ? (
           <LoadingSkeletons />
         ) : visibleVms.length === 0 ? (
@@ -361,15 +365,23 @@ function BrowseListings() {
             <DirectoryEmpty onBrowseCeliac={() => changeQuick("celiac")} />
           )
         ) : view === "map" ? (
-          <DirectoryMap entries={mapEntries} selectedId={selectedId} onSelect={setSelectedId} />
+          // The map is absolutely positioned (`inset-0`) inside its own root, so
+          // under natural document scroll it needs a BOUNDED, positioned box to
+          // fill. A viewport-relative height (minus the sticky header's footprint)
+          // with a sensible floor keeps the backdrop, pins, and the opaque bottom
+          // carousel band all visible — preserving the carousel-above-pins safety
+          // invariant and pin/mini-card selection sync unchanged.
+          <div className="relative h-[calc(100dvh-14rem)] min-h-[26rem]">
+            <DirectoryMap entries={mapEntries} selectedId={selectedId} onSelect={setSelectedId} />
+          </div>
         ) : (
           <DirectoryList cards={visibleVms} />
         )}
       </div>
 
-      {/* Floating "Add listing" FAB — anchored to the fixed-height shell (NOT the
-          scrolling content area) so it stays pinned to the column's bottom-right
-          instead of scrolling into / overlapping the cards. */}
+      {/* Floating "Add listing" FAB — viewport-fixed (bottom-right) so it stays
+          pinned at any scroll position / viewport height and never overlaps the
+          cards. */}
       <AddSpotFab />
     </div>
   );
