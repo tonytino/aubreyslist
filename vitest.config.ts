@@ -30,6 +30,9 @@ export default defineConfig({
         "app/routeTree.gen.ts",
         "app/router.tsx",
         "app/client.tsx",
+        // Sentry bootstrap: a side-effecting Sentry.init() entry, in the same
+        // not-meaningfully-unit-testable category as client.tsx/router.tsx.
+        "app/instrument.client.ts",
         "app/routes/**",
         "app/**/*.d.ts",
       ],

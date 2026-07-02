@@ -95,6 +95,37 @@ export const REVIEWED_EXCEPTIONS = [
     reason:
       "Playwright binding for axe-core (same MPL-2.0 review as axe-core): dev/test-time only, never shipped in the app bundle. Reviewed for #195.",
   },
+  {
+    name: "@sentry/cli",
+    license: "FSL-1.1-MIT",
+    reason:
+      "Functional Source License (delayed open source): converts to MIT after 2 years and only restricts building a competing product, which we don't. Build-time-only transitive dep of @sentry/tanstackstart-react — it uploads source maps at build (AUB-106) and is never shipped in the client or server bundle. Same build-tool rationale as the lightningcss exception. Reviewed for AUB-110.",
+  },
+  // Platform-specific native binaries for @sentry/cli (same FSL-1.1-MIT review):
+  // pnpm installs only the current platform's optional dep, so which one appears
+  // depends on the machine — @sentry/cli-linux-x64 on the CI runner,
+  // @sentry/cli-darwin on local Macs, etc. All are build-time-only and never
+  // shipped in the app bundle.
+  {
+    name: "@sentry/cli-linux-x64",
+    license: "FSL-1.1-MIT",
+    reason: "Native @sentry/cli binary (Linux x64, e.g. the CI runner). See @sentry/cli.",
+  },
+  {
+    name: "@sentry/cli-linux-arm64",
+    license: "FSL-1.1-MIT",
+    reason: "Native @sentry/cli binary (Linux arm64). See @sentry/cli.",
+  },
+  {
+    name: "@sentry/cli-darwin",
+    license: "FSL-1.1-MIT",
+    reason: "Native @sentry/cli binary (macOS, local dev). See @sentry/cli.",
+  },
+  {
+    name: "@sentry/cli-win32-x64",
+    license: "FSL-1.1-MIT",
+    reason: "Native @sentry/cli binary (Windows x64). See @sentry/cli.",
+  },
 ];
 
 /**

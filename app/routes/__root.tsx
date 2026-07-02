@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/tanstackstart-react";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   HeadContent,
@@ -8,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
+import { useEffect } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { SiteHeader } from "~/components/SiteHeader";
 import { Button } from "~/components/ui/button";
@@ -109,6 +111,12 @@ function NotFound() {
 }
 
 function RootErrorBoundary({ error, reset }: ErrorComponentProps) {
+  // Errors handled by an errorComponent aren't auto-reported, so forward them
+  // to Sentry explicitly.
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-gutter text-center">
       <h1 className="text-headline font-bold tracking-tight">Something went wrong</h1>
