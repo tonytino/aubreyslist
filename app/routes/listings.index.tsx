@@ -303,7 +303,7 @@ function BrowseListings() {
   const quickActive = quick !== null;
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-var(--site-header-h,3.5rem))] w-full max-w-[428px] flex-col md:max-w-3xl xl:max-w-6xl">
+    <div className="relative mx-auto flex h-[calc(100dvh-var(--site-header-h,3.5rem))] w-full max-w-[428px] flex-col md:max-w-3xl xl:max-w-6xl">
       {/* Sticky header: location · wordmark · community, then search + chips +
           count/view row. `flex-none` so the scroll happens in the content area. */}
       <div className="flex-none border-b border-border bg-surface">
@@ -349,8 +349,8 @@ function BrowseListings() {
         </div>
       </div>
 
-      {/* Content area — renders exactly ONE state. Scrollable; the FAB floats over
-          it. `relative` so the absolutely-positioned map + FAB anchor here. */}
+      {/* Content area — renders exactly ONE state. Scrollable; `relative` so the
+          absolutely-positioned map backdrop anchors here. */}
       <div className="relative flex-1 overflow-y-auto bg-background px-gutter pt-4">
         {loading ? (
           <LoadingSkeletons />
@@ -365,9 +365,12 @@ function BrowseListings() {
         ) : (
           <DirectoryList cards={visibleVms} />
         )}
-
-        <AddSpotFab />
       </div>
+
+      {/* Floating "Add listing" FAB — anchored to the fixed-height shell (NOT the
+          scrolling content area) so it stays pinned to the column's bottom-right
+          instead of scrolling into / overlapping the cards. */}
+      <AddSpotFab />
     </div>
   );
 }
