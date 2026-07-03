@@ -1,4 +1,6 @@
-import { Clock, Leaf, type LucideIcon, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Clock, type LucideIcon, ShieldCheck, TriangleAlert } from "lucide-react";
+import type * as React from "react";
+import { WheatStrike } from "./icons/WheatStrike";
 
 /**
  * The four safety/trust states surfaced across the app. See
@@ -39,8 +41,10 @@ const STATES: Record<SafetyState, SafetyStateConfig> = {
     label: "Gluten-friendly",
     solid: "bg-gluten-friendly text-gluten-friendly-foreground",
     soft: "bg-gluten-friendly-soft text-gluten-friendly border border-gluten-friendly/30",
-    // leaf — "GF-ish options, not safe"
-    icon: Leaf,
+    // brand ear-of-wheat with a diagonal strike ("gluten struck out") — reads as
+    // "GF-ish options, deliberately NOT celiac-safe", and stays distinct from the
+    // other three glyphs in greyscale.
+    icon: WheatStrike,
   },
   stale: {
     label: "Needs update",
@@ -58,13 +62,12 @@ const STATES: Record<SafetyState, SafetyStateConfig> = {
   },
 };
 
-interface SafetySignalProps {
+interface SafetySignalProps extends Omit<React.ComponentProps<"span">, "children"> {
   state: SafetyState;
   /** `solid` for high emphasis, `soft` for inline/pastel chips. Defaults to `soft`. */
   variant?: "solid" | "soft";
   /** Override the default label text (e.g. "Recent incident · 3 days ago"). */
   label?: string;
-  className?: string;
 }
 
 /**
@@ -75,8 +78,19 @@ interface SafetySignalProps {
  * label, so screen readers announce the words and sighted users with colour
  * vision deficiency still get an icon shape + text. Never render this signal
  * with colour alone.
+ *
+ * Forwards any extra span props (and `ref`) to the root `<span>`, so a call site
+ * can wrap it in a shadcn `Tooltip` via `<TooltipTrigger asChild>` and pass the
+ * centralized {@link SAFETY_TOOLTIP} copy — the tooltip stays SUPPLEMENTARY; the
+ * colour + icon + label already carry the meaning.
  */
-export function SafetySignal({ state, variant = "soft", label, className }: SafetySignalProps) {
+export function SafetySignal({
+  state,
+  variant = "soft",
+  label,
+  className,
+  ...rest
+}: SafetySignalProps) {
   const config = STATES[state];
   const text = label ?? config.label;
   const Icon = config.icon;
@@ -87,12 +101,34 @@ export function SafetySignal({ state, variant = "soft", label, className }: Safe
       className={`inline-flex items-center gap-1.5 rounded-chip px-2.5 py-1 text-body-sm font-medium ${
         variant === "solid" ? config.solid : config.soft
       }${className ? ` ${className}` : ""}`}
+      {...rest}
     >
       <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={2.25} />
       <span>{text}</span>
     </span>
   );
 }
+
+/**
+ * Canonical per-state explainer copy — the SINGLE source of the wording, lifted
+ * from the About page's trust legend (docs/product/overview.md,
+ * docs/agents/domain.md). Call sites that wrap a safety chip/badge in a shadcn
+ * `Tooltip` pass the matching entry, so the supplementary explanation reads the
+ * same everywhere (the About legend, the style guide, and any status chip).
+ *
+ * The tooltip is ALWAYS supplementary: every {@link SafetySignal} already pairs
+ * colour + icon + a visible text label, so meaning never rests on the tooltip.
+ */
+export const SAFETY_TOOLTIP: Record<SafetyState, string> = {
+  "celiac-safe":
+    "Takes cross-contamination seriously — the kitchen is set up to serve people with celiac disease safely.",
+  "gluten-friendly":
+    "Offers gluten-free options but does not guarantee against cross-contamination — not a celiac-safe promise.",
+  stale:
+    "Not confirmed within the six-month staleness window, so this may be out of date — it is surfaced, not hidden.",
+  incident:
+    'A recent "got glutened here" report flags this listing regardless of how many older confirmations it has.',
+};
 
 /** Exposed so consumers (filters, legends, the style guide) can enumerate states. */
 export const SAFETY_STATES: readonly SafetyState[] = [

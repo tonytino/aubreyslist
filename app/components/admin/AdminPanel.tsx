@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { AdminSettingsView } from "~/server/admin/admin-view.fn";
 import type { AdminUserSummary } from "~/server/admin/list-users.fn";
 import { setIntakeMode } from "~/server/admin/set-intake-mode.fn";
@@ -193,6 +194,13 @@ const ROLE_LABEL: Record<Role, string> = {
   user: "User",
 };
 
+/** Supplementary explainer copy for each role (tooltip only; the label carries meaning). */
+const ROLE_TOOLTIP: Record<Role, string> = {
+  admin: "Full access, including role management and app settings. Seeded out-of-band.",
+  moderator: "Can view the moderation queue and hide, remove, or dismiss flagged content.",
+  user: "A standard signed-in account with no moderation access.",
+};
+
 /**
  * Admin-only role-management section (#142).
  *
@@ -277,7 +285,17 @@ function RoleRow({ account }: { account: AdminUserSummary }) {
           <span className="text-body font-semibold text-foreground">{account.name}</span>
           <span className="text-caption text-muted-foreground">{account.email}</span>
         </div>
-        <Badge variant="secondary">{ROLE_LABEL[account.role]}</Badge>
+        {/* The role Badge is the tooltip TRIGGER: its text label already conveys
+            the role; the tooltip adds a supplementary explanation of what that
+            role can do. `tabIndex={0}` makes it reachable on keyboard focus. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="secondary" tabIndex={0}>
+              {ROLE_LABEL[account.role]}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>{ROLE_TOOLTIP[account.role]}</TooltipContent>
+        </Tooltip>
       </div>
 
       {account.role === "admin" ? (

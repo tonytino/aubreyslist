@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { SAFETY_STATES, SafetySignal } from "~/components/SafetySignal";
+import { SAFETY_STATES, SAFETY_TOOLTIP, SafetySignal } from "~/components/SafetySignal";
 import { Wordmark } from "~/components/Wordmark";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -151,6 +151,24 @@ function StyleGuide() {
         <div className="flex flex-wrap gap-3">
           {SAFETY_STATES.map((state) => (
             <SafetySignal key={state} state={state} variant="solid" />
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Badge with tooltip">
+        <p className="text-body-sm text-muted-foreground">
+          A status chip whose meaning is fully carried by its colour, icon, and text label — the
+          tooltip is supplementary explainer copy (the centralized <code>SAFETY_TOOLTIP</code>),
+          reachable on hover AND keyboard focus, and never the sole carrier of meaning.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {SAFETY_STATES.map((state) => (
+            <Tooltip key={state}>
+              <TooltipTrigger asChild>
+                <SafetySignal state={state} tabIndex={0} />
+              </TooltipTrigger>
+              <TooltipContent>{SAFETY_TOOLTIP[state]}</TooltipContent>
+            </Tooltip>
           ))}
         </div>
       </Section>
