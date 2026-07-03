@@ -13,6 +13,7 @@
 
 import { z } from "zod";
 import { DEFAULT_RADIUS_MILES, parseRadiusMiles } from "~/listings/distance";
+import { QUICK_FILTER_VALUES, type QuickFilterValue } from "~/listings/quick";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 
 /**
@@ -71,4 +72,14 @@ export const browseSearchSchema = z.object({
     .transform((value) => parseRadiusMiles(value))
     .catch(BROWSE_SEARCH_DEFAULTS.radius)
     .default(BROWSE_SEARCH_DEFAULTS.radius),
+  // Prebuilt quick filter (#AUB-135): ONE mutually-exclusive server-side filter
+  // (celiac-safe / gluten-friendly / recently-verified). It carries NO default —
+  // absence means "no quick filter", so it is naturally omitted from the URL when
+  // unset (no `stripSearchParams` entry needed) and a garbage token degrades to
+  // absent via `.catch`. URL-driven like the rest so an applied chip is linkable,
+  // shareable, and back/forward-correct.
+  quick: z
+    .enum(QUICK_FILTER_VALUES as unknown as [QuickFilterValue, ...QuickFilterValue[]])
+    .optional()
+    .catch(undefined),
 });
