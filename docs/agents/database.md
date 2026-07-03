@@ -169,8 +169,10 @@ away from the seed so `pnpm db:seed` is **API-free**:
    (`scripts/refresh-seed-data.ts`) resolves each `query` to a **real Google Place
    ID + coordinates (+ rating)** via Places Text Search (biased to Union Station,
    hard-capped at a 25-mile radius) and **bakes** the fully-resolved entries into
-   `scripts/seed-listings.generated.json`. Needs `GOOGLE_PLACES_API_KEY` (read via
-   `getEnv()`). Anything the API can't resolve, or that falls outside 25 miles, is
+   `scripts/seed-listings.generated.json`. Needs **only** `GOOGLE_PLACES_API_KEY`
+   (read via `getPlacesApiKey()`, a narrow accessor — the refresh never opens a DB
+   connection, so it does **not** require `DATABASE_URL`). Anything the API can't
+   resolve, or that falls outside 25 miles, is
    skipped and logged, never guessed. Run it (and commit the regenerated JSON)
    whenever you curate the sources — locally, or with the **"Refresh seed data"**
    GitHub Action (`.github/workflows/refresh-seed-data.yml`, `workflow_dispatch`),

@@ -16,8 +16,10 @@
  * - The testable core is {@link refreshSeedData}, which takes its sources + a
  *   Places resolver as INJECTED dependencies so unit tests need no live network.
  * - The CLI shell ({@link runCli}) wires the real Text Search resolver, reads
- *   `GOOGLE_PLACES_API_KEY` through the validated `getEnv()` accessor (never raw
- *   `process.env`, per AGENTS.md Hard Rules), and writes the baked JSON.
+ *   `GOOGLE_PLACES_API_KEY` through the validated `getPlacesApiKey()` accessor
+ *   (never raw `process.env`, per AGENTS.md Hard Rules — and NOT the full
+ *   `getEnv()`, so the refresh doesn't require `DATABASE_URL` it never uses), and
+ *   writes the baked JSON.
  *
  * Runs via `node --experimental-strip-types` + the dependency-free alias loader
  * (`scripts/register-aliases.mjs`) — no `tsx`/`ts-node` dependency.
@@ -25,7 +27,7 @@
 
 import { writeFileSync } from "node:fs";
 import { z } from "zod";
-import { getEnv } from "~/env";
+import { getPlacesApiKey } from "~/env";
 import { type Coords, UNION_STATION, haversineKm, milesToKm } from "~/listings/distance";
 import type { SeededListing } from "./seed-data";
 import { SEED_SOURCES, type SeedSource } from "./seed-sources";
@@ -205,12 +207,9 @@ export async function runCli(
     const resolvePlace =
       deps?.resolvePlace ??
       (() => {
-        const apiKey = getEnv().GOOGLE_PLACES_API_KEY;
-        if (apiKey === undefined || apiKey.length === 0) {
-          throw new Error(
-            "GOOGLE_PLACES_API_KEY is required to refresh the seed data. Set it and re-run."
-          );
-        }
+        // Validate ONLY the Places key — the refresh never opens a DB connection,
+        // so it must not require DATABASE_URL (which the full getEnv() would).
+        const apiKey = getPlacesApiKey();
         return makePlacesResolver(apiKey, (m) => log.log(m));
       })();
 
@@ -247,8 +246,8 @@ export async function runCli(
   }
 }
 
-// Run when invoked directly (not when imported by tests). `getEnv()` — and thus
-// GOOGLE_PLACES_API_KEY validation — is only touched on this path.
+// Run when invoked directly (not when imported by tests). `getPlacesApiKey()` — and
+// thus GOOGLE_PLACES_API_KEY validation — is only touched on this path.
 if (import.meta.url === `file://${process.argv[1]}`) {
   runCli()
     .then((code) => {
