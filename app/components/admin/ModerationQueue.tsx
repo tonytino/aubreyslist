@@ -54,7 +54,7 @@ export function ModerationQueue() {
   if (data.access !== "granted") {
     return (
       <p className="text-body-sm text-muted-foreground">
-        You do not have access to the moderation queue.
+        You don't have access to the moderation queue.
       </p>
     );
   }
@@ -62,11 +62,7 @@ export function ModerationQueue() {
   const { items } = data;
 
   if (items.length === 0) {
-    return (
-      <p className="text-body-sm text-muted-foreground">
-        No open flags. Nothing needs review right now.
-      </p>
-    );
+    return <p className="text-body-sm text-muted-foreground">No open flags right now.</p>;
   }
 
   return (
@@ -231,7 +227,7 @@ function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget 
           variant="outline"
           confirmVariant="default"
           title="Hide this content?"
-          description={`This ${targetLabel} will be hidden from the public listing while it stays under review. You can restore it later. The flag will be marked resolved.`}
+          description={`This ${targetLabel} will be hidden from public view and the flag marked resolved. You can restore it later.`}
           onConfirm={() => hide.mutate()}
         />
         <ConfirmActionButton
@@ -241,7 +237,7 @@ function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget 
           variant="destructive"
           confirmVariant="destructive"
           title="Remove this content?"
-          description={`This ${targetLabel} will be removed and will no longer appear in the listing. This is the strongest moderation action — only use it for content that clearly violates the rules.`}
+          description={`This ${targetLabel} will be removed and won't appear in the listing. This is the strongest moderation action, so only use it for content that clearly violates the rules.`}
           onConfirm={() => remove.mutate()}
         />
       </div>

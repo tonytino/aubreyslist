@@ -114,7 +114,7 @@ export function ReviewStep({
 
       <p className="text-body-sm text-muted-foreground">
         Skipped attributes stay "Not yet attested" and record nothing. Celiacs rely on those honest
-        gaps — only attest what you actually know.
+        gaps, so only attest what you know.
       </p>
 
       {error}
