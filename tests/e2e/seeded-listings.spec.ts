@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { seedListings } from "../../scripts/seed";
 import { SEED_LISTINGS, type SeededListing } from "../../scripts/seed-data";
 import { E2E_DB_READY, Seeder } from "./fixtures";
-import { waitForBrowseReady, waitForHydration } from "./helpers";
+import { waitForBrowseSearchApplied, waitForHydration } from "./helpers";
 
 /**
  * Standing coverage for SEEDED listings (AUB-196) — the curated Denver set the
@@ -79,7 +79,7 @@ test.describe("seeded listings — badge + detail page (AUB-196)", () => {
     // Free-text search pins the card onto page 1 regardless of how much other
     // state the persistent CI branch has accrued.
     await page.goto(`/?q=${encodeURIComponent(target.name)}`);
-    await waitForBrowseReady(page);
+    await waitForBrowseSearchApplied(page, target.name);
 
     const card = page
       .locator("li")
@@ -101,7 +101,7 @@ test.describe("seeded listings — badge + detail page (AUB-196)", () => {
     const target = nonCeliacTarget!;
 
     await page.goto(`/?q=${encodeURIComponent(target.name)}`);
-    await waitForBrowseReady(page);
+    await waitForBrowseSearchApplied(page, target.name);
 
     // Navigate through the real card link (the stretched-link covers the card).
     const card = page
@@ -129,7 +129,7 @@ test.describe("seeded listings — badge + detail page (AUB-196)", () => {
     const target = celiacTarget!;
 
     await page.goto(`/?q=${encodeURIComponent(target.name)}`);
-    await waitForBrowseReady(page);
+    await waitForBrowseSearchApplied(page, target.name);
 
     const card = page
       .locator("li")

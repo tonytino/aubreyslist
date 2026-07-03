@@ -38,6 +38,22 @@ export async function waitForBrowseReady(page: Page): Promise<void> {
 }
 
 /**
+ * Wait for the browse route to be ready when visiting WITH a `?q=` search.
+ *
+ * {@link waitForBrowseReady}'s readiness signal is the idle "Search restaurants"
+ * chip — which only exists when NO query is applied. With `?q=` set, the
+ * SearchChip renders its APPLIED state instead: a chip-styled container whose
+ * reopen button is labelled `Search: <query>` (see
+ * app/components/directory/SearchChip.tsx). Waiting for that applied chip both
+ * signals the directory chrome is mounted AND confirms the query round-tripped
+ * from the URL into the control.
+ */
+export async function waitForBrowseSearchApplied(page: Page, query: string): Promise<void> {
+  await waitForHydration(page);
+  await expect(page.getByRole("button", { name: `Search: ${query}` })).toBeVisible();
+}
+
+/**
  * Open the directory's "Filters" bottom sheet, where the AUB-61 redesign hosts
  * the server-side sort control + taxonomy filter (the mobile header surfaces the
  * search + quick chips instead). Waits for the route to be ready first so the
