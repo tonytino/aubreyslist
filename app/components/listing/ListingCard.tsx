@@ -1,9 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
+import type { ComponentProps } from "react";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { Badge } from "~/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
+import { cn } from "~/lib/utils";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
 
 /**
@@ -89,6 +92,30 @@ const FRESHNESS = {
 } as const;
 
 /**
+ * A focusable, attributed community pill — the shared shell for the save-count and
+ * Google-rating pills, each wrapped in a supplementary ADR-007 tooltip.
+ *
+ * Extracted so the `tabIndex={0}` that makes the pill a keyboard-reachable
+ * `TooltipTrigger` arrives via PROP SPREAD rather than as a literal on a raw
+ * `<span>` — the same component indirection the shadcn `Badge` uses (see
+ * ModerationQueue), which keeps the deliberate a11y affordance without tripping
+ * Biome's non-interactive-`tabIndex` heuristic. Callers pass the accent `className`
+ * plus `data-testid`, and the pill stays a NON-safety signal (ADR-007) — its
+ * meaning always lives in the visible text it wraps, never in the tooltip alone.
+ */
+function AttributedPill({ className, ...props }: ComponentProps<"span">) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-chip px-2 py-1 text-caption font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+/**
  * One scannable browse-list card (issue #33, AUB-61 redesign).
  *
  * A PROP-DRIVEN, CLIENT-SAFE presentational card bound to a {@link RestaurantCardVM}.
@@ -113,10 +140,11 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
   return (
     // Stretched-link pattern: a relatively-positioned card SHELL holds the Link
     // (which stretches an `after:` overlay across the whole card, so clicking
-    // anywhere navigates — one large tap target) AND the Heart button as a
-    // SIBLING of the Link, raised above the overlay with `relative z-10` so it
-    // stays independently focusable/clickable. The button is NOT a descendant of
-    // the anchor — valid HTML, no interactive-nesting a11y defect.
+    // anywhere navigates — one large tap target) AND, as SIBLINGS of the Link
+    // raised above the overlay with `absolute … z-10`, the Heart button and the
+    // attributed pills (save-count + Google rating) cluster. Keeping those
+    // focusable/interactive triggers OUT of the anchor is what lets the pills be
+    // real tooltip triggers — valid HTML, no interactive-nesting a11y defect.
     <div className="group relative overflow-hidden rounded-card border border-border bg-card text-card-foreground shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand-ring hover:shadow-md focus-within:border-brand-ring">
       <Link
         to="/listings/$id"
@@ -145,39 +173,12 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
 
         {/* Body */}
         <div className="flex flex-col gap-1 px-4 pb-4 pt-3">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-display text-card-title font-bold text-foreground">{vm.name}</h3>
-
-            {/* Attributed community pills — same ADR-007 treatment as the Google
-                rating: colour + text label, NEVER a safety verdict, and kept in the
-                TITLE row (never adjacent to the SafetySignal row below). */}
-            <div className="flex shrink-0 items-center gap-1.5">
-              {/* Public save-count — ATTRIBUTED ("saves"), hidden at 0. A distinct
-                  accent (lavender) from the safety-state colours (ADR-007). */}
-              {vm.saveCount && vm.saveCount > 0 ? (
-                <span
-                  data-testid="save-count"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-accent-lavender/50 px-2 py-1 text-caption font-semibold text-foreground"
-                >
-                  <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                  <span>{vm.saveCount}</span>
-                  <span className="font-normal text-muted-foreground">saves</span>
-                </span>
-              ) : null}
-
-              {/* External Google Places rating — ATTRIBUTED, never a safety score (ADR-007). */}
-              {vm.googleRating ? (
-                <span
-                  data-testid="google-rating"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-accent-peach/50 px-2 py-1 text-caption font-semibold text-foreground"
-                >
-                  <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                  <span>{vm.googleRating.value.toFixed(1)}</span>
-                  <span className="font-normal text-muted-foreground">Google</span>
-                </span>
-              ) : null}
-            </div>
-          </div>
+          {/* The attributed pills cluster is a SIBLING of this Link (see below),
+              overlaid at the top-right, so the name gets right-padding clearance so
+              a long name never collides with (or slides under) the pills. */}
+          <h3 className="pr-24 font-display text-card-title font-bold text-foreground">
+            {vm.name}
+          </h3>
 
           <p className="text-body-sm text-muted-foreground">
             {vm.address}
@@ -239,6 +240,60 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           )}
         </div>
       </Link>
+
+      {/* Attributed community pills (save-count + external Google rating). LIFTED
+          OUT of the Link to be a SIBLING of it (like FavoriteButton), so each pill
+          can be a real TOOLTIP TRIGGER without nesting interactive/focusable
+          content inside the <a>. Overlaid at the top-right of the card BODY —
+          aligned with the name row — and raised above the stretched-link overlay
+          with `absolute … z-10` so hover/focus reaches the pills. The stretched
+          `after:inset-0` overlay still covers the whole card, so the tile stays ONE
+          tap target; the pills simply sit above it.
+
+          ADR-007: these are EXTERNAL / community signals, explicitly attributed,
+          and are NEVER a safety verdict — all safety meaning stays in SafetySignal
+          (in the body, a separate row). Each pill's meaning lives in its visible
+          text ("saves" / "Google"), so the tooltip is only supplementary. */}
+      {(vm.saveCount && vm.saveCount > 0) || vm.googleRating ? (
+        <div className="absolute right-4 top-[170px] z-10 flex items-center gap-1.5">
+          {/* Public save-count — ATTRIBUTED ("saves"), hidden at 0. A distinct
+              accent (lavender) from the safety-state colours (ADR-007). */}
+          {vm.saveCount && vm.saveCount > 0 ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AttributedPill
+                  data-testid="save-count"
+                  tabIndex={0}
+                  className="bg-accent-lavender/50"
+                >
+                  <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                  <span>{vm.saveCount}</span>
+                  <span className="font-normal text-muted-foreground">saves</span>
+                </AttributedPill>
+              </TooltipTrigger>
+              <TooltipContent>Community saves — not a safety score.</TooltipContent>
+            </Tooltip>
+          ) : null}
+
+          {/* External Google Places rating — ATTRIBUTED, never a safety score (ADR-007). */}
+          {vm.googleRating ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AttributedPill
+                  data-testid="google-rating"
+                  tabIndex={0}
+                  className="bg-accent-peach/50"
+                >
+                  <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                  <span>{vm.googleRating.value.toFixed(1)}</span>
+                  <span className="font-normal text-muted-foreground">Google</span>
+                </AttributedPill>
+              </TooltipTrigger>
+              <TooltipContent>Google rating — not an Aubrey's List safety score.</TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Save/heart affordance (F6, AUB-125). A SIBLING of the Link (not a
           descendant — a <button> inside an <a> is invalid HTML), raised above the
