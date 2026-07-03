@@ -47,6 +47,10 @@ const h = vi.hoisted(() => {
     subqueryWhere: undefined as unknown,
     /** The WHERE predicate handed to the incidents query (#41 visibility). */
     incidentWhere: undefined as unknown,
+    /** Rows returned by the bot-suggestion existence query (AUB-193). */
+    suggestionRows: [] as Array<Record<string, unknown>>,
+    /** The WHERE predicate handed to the bot-suggestion query (visibility). */
+    suggestionWhere: undefined as unknown,
     /** Public per-listing save counts returned by the (mocked) favorites layer. */
     favoriteCounts: new Map<string, number>(),
     /** The listing ids passed to `getFavoriteCounts` (asserted batched, not N+1). */
@@ -124,6 +128,13 @@ const h = vi.hoisted(() => {
   });
   const incidentFromMock = vi.fn(() => ({ where: incidentWhereMock }));
 
+  // The bot-suggestion existence chain (AUB-193): select(proj).from().where()
+  const suggestionWhereMock = vi.fn((predicate?: unknown) => {
+    state.suggestionWhere = predicate;
+    return Promise.resolve(state.suggestionRows);
+  });
+  const suggestionFromMock = vi.fn(() => ({ where: suggestionWhereMock }));
+
   // The count chain: select({ total }).from().where()  (awaited)
   const countWhereMock = vi.fn((predicate?: unknown) => {
     state.countWhere = predicate;
@@ -132,14 +143,16 @@ const h = vi.hoisted(() => {
   const countFromMock = vi.fn(() => ({ where: countWhereMock }));
 
   // Route each query to the right chain by its select() projection:
-  //  - { listing }              → page listings (joined to the trust subquery)
-  //  - { total }                → count
-  //  - has `occurredOn`         → incidents
-  //  - otherwise (claim cols)   → celiac aggregate / trust subquery
+  //  - { listing }               → page listings (joined to the trust subquery)
+  //  - { total }                 → count
+  //  - has `occurredOn`          → incidents
+  //  - has `suggestedListingId`  → bot-suggestion existence (AUB-193)
+  //  - otherwise (claim cols)    → celiac aggregate / trust subquery
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
     if (projection && "listing" in projection) return { from: pageFromMock };
     if (projection && "total" in projection) return { from: countFromMock };
     if (projection && "occurredOn" in projection) return { from: incidentFromMock };
+    if (projection && "suggestedListingId" in projection) return { from: suggestionFromMock };
     return { from: celiacFromMock };
   });
 
@@ -198,6 +211,8 @@ beforeEach(() => {
   state.aggWhere = undefined;
   state.subqueryWhere = undefined;
   state.incidentWhere = undefined;
+  state.suggestionRows = [];
+  state.suggestionWhere = undefined;
   state.favoriteCounts = new Map();
   state.favoriteCountIds = undefined;
   state.viewerFavoriteIds = [];
@@ -301,6 +316,39 @@ describe("getBrowseListings", () => {
     const result = await getBrowseListings(baseInput, NOW);
 
     expect(result.cards[0]?.glance.safetyState).toBeNull();
+  });
+
+  it("flags suggestedByBot for a listing whose only bot suggestion is non-celiac (AUB-193)", async () => {
+    state.pageListings = [{ id: "l1", name: "Seeded Spot", address: "5 Main St" }];
+    state.total = 1;
+    state.celiacRows = []; // no celiac claim — the bot suggested only other attributes
+    state.suggestionRows = [{ suggestedListingId: "l1" }];
+
+    const result = await getBrowseListings(baseInput, NOW);
+
+    expect(result.cards[0]?.glance.safetyState).toBeNull();
+    expect(result.cards[0]?.glance.suggestedByBot).toBe(true);
+  });
+
+  it("keeps suggestedByBot false once real celiac evidence exists, despite a live suggestion", async () => {
+    state.pageListings = [{ id: "l1", name: "Voted Spot", address: "6 Main St" }];
+    state.total = 1;
+    state.celiacRows = [
+      {
+        listingId: "l1",
+        claimId: "c1",
+        lastConfirmedAt: new Date("2026-06-20T00:00:00Z"),
+        confirmCount: "3",
+        disputeCount: "0",
+        contributors: "3",
+      },
+    ];
+    state.suggestionRows = [{ suggestedListingId: "l1" }];
+
+    const result = await getBrowseListings(baseInput, NOW);
+
+    expect(result.cards[0]?.glance.safetyState).toBe("celiac-safe");
+    expect(result.cards[0]?.glance.suggestedByBot).toBe(false);
   });
 
   it("flags a recent incident regardless of confirmations", async () => {
@@ -980,6 +1028,14 @@ describe("browse visibility filtering (#41)", () => {
     // always does ("recent harm is never buried").
     expect(renderArg(state.incidentWhere)).toContain("moderation_status");
     expect(dialect.sqlToQuery(state.incidentWhere as SQL).params).toContain("visible");
+
+    // The bot-suggestion existence check (AUB-193) counts only VISIBLE claims
+    // with a live `suggested_by`, so a hidden/removed suggested claim can never
+    // drive the "Suggested by Aubrey's Bot" chip.
+    expect(renderArg(state.suggestionWhere)).toContain("moderation_status");
+    expect(renderArg(state.suggestionWhere)).toContain("suggested_by");
+    expect(renderArg(state.suggestionWhere)).toContain("is not null");
+    expect(dialect.sqlToQuery(state.suggestionWhere as SQL).params).toContain("visible");
   });
 
   it("recomputes the recent-incident flag from VISIBLE incidents only — none survive → no flag", async () => {

@@ -333,6 +333,57 @@ describe("RestaurantCard", () => {
     expect(await screen.findByText("Verified 3d ago")).toBeInTheDocument();
   });
 
+  it("reserves the meta-row space with an invisible placeholder when freshness AND evidence are absent (AUB-194)", async () => {
+    // A seeded/bot-suggested VM has no freshness cue and no evidence counts, but
+    // its card must keep the same body height as a fully-attested card — the
+    // meta row always renders, swapping in an invisible height-reserving line.
+    renderCard({ safetyState: null, suggestedByBot: true });
+    await screen.findByText("Suggested by Aubrey's Bot");
+
+    const metaRow = screen.getByTestId("card-meta-row");
+    expect(metaRow).toBeInTheDocument();
+    const placeholder = screen.getByTestId("card-meta-placeholder");
+    expect(metaRow).toContainElement(placeholder);
+    // Hidden from paint AND the accessibility tree, but still occupying layout —
+    // `invisible` (visibility: hidden) keeps the box, unlike `hidden`.
+    expect(placeholder).toHaveClass("invisible");
+    expect(placeholder).toHaveAttribute("aria-hidden", "true");
+    // The reserved row keeps the same vertical rhythm as the real one (top
+    // margin + padding), with a transparent border so no stray divider shows.
+    expect(metaRow).toHaveClass("mt-3", "pt-3", "border-t", "border-transparent");
+  });
+
+  it("renders the REAL meta row (no placeholder) when freshness or evidence is present", async () => {
+    renderCard({
+      freshness: { kind: "fresh", label: "Verified 3d ago" },
+      evidence: { confirmations: 2, contributors: 3 },
+    });
+    expect(await screen.findByText("Verified 3d ago")).toBeInTheDocument();
+    expect(screen.getByText("2 confirmations · 3 neighbors")).toBeInTheDocument();
+
+    const metaRow = screen.getByTestId("card-meta-row");
+    // The real row draws its divider; the invisible placeholder is not rendered.
+    expect(metaRow).toHaveClass("border-border");
+    expect(screen.queryByTestId("card-meta-placeholder")).not.toBeInTheDocument();
+    // Same vertical-rhythm classes as the reserved variant, so both render the
+    // same row height in a grid.
+    expect(metaRow).toHaveClass("mt-3", "pt-3", "border-t");
+  });
+
+  it("stretches to fill its grid cell so cards equalize within a row (AUB-194)", async () => {
+    renderCard();
+    const link = await screen.findByRole("link");
+    // The card shell (the link's parent) is a full-height flex column; the BODY
+    // (the link's sibling, not the media-only link itself) stretches with
+    // flex-1, so the mt-auto meta row pins to the bottom.
+    const shell = link.parentElement as HTMLElement;
+    expect(shell.className).toContain("h-full");
+    expect(shell.className).toContain("flex-col");
+    const body = screen.getByTestId("card-meta-row").closest("div.flex-1") as HTMLElement;
+    expect(body).not.toBeNull();
+    expect(body.className).toContain("flex-col");
+  });
+
   it("renders the accent placeholder tile when no photoUrl is given", async () => {
     renderCard({ photoUrl: null });
     expect(await screen.findByText("Food photo")).toBeInTheDocument();

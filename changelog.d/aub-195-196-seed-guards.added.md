@@ -1,0 +1,2 @@
+- `[manual]` `pnpm db:verify` post-migrate guard: fails loudly when the migration journal and a database's applied-migrations history diverge (the silent-skip hazard that left the seed PR's preview DB without the `favorites` table); wired after every CI/workflow migrate step (AUB-195).
+- `[manual]` Standing E2E coverage for seeded listings: badge shown on non-celiac-suggested seeded cards and seeded detail pages render (AUB-196).

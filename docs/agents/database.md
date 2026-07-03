@@ -57,8 +57,68 @@ await db.delete(posts).where(eq(posts.id, "1"));
 - `db` is **server-only**. Never import it in components, hooks, or any file that runs in the browser.
 - **Never create or alter tables directly in the database** (e.g. the Neon SQL editor/console). All schema changes go through `db/schema.ts` + `pnpm db:generate` / `pnpm db:migrate`. Hand-written DDL causes drift between the DB and migrations.
 - Never edit files in `db/migrations/` manually.
+- **Never renumber or re-timestamp a migration that any long-lived database may
+  have already applied** — see the section below. Regenerate a fresh migration
+  instead.
 - Always export `$inferSelect` and `$inferInsert` types alongside new tables.
 - Use `pnpm db:studio` to inspect the database visually during development.
+
+## Never renumber an applied migration (`pnpm db:verify`, AUB-195)
+
+**Decision rule: once a migration may have been applied to ANY long-lived
+database — the persistent CI Neon branch, a PR's preview branch, or prod —
+never rename, renumber, or re-timestamp it. If its DDL needs to reach a
+database that missed it, run `pnpm db:generate` and ship a FRESH migration.**
+
+Why: drizzle's migrator (both `drizzle-kit migrate` / `pnpm db:migrate` and the
+programmatic `migrate()` the integration tests call — they share one core)
+applies only the journal entries whose `when` timestamp is **strictly greater
+than the last applied row's timestamp** in its bookkeeping table
+(`drizzle.__drizzle_migrations`). It does **not** check each entry
+individually. So if a journal edit ever leaves an unapplied entry with a
+`when` ≤ some already-applied timestamp, that migration is **silently skipped
+forever** — and `pnpm db:migrate` still exits 0.
+
+This happened for real: a PR renumbered `0003_lame_carnage` →
+`0004_classy_runaways` (keeping its timestamp) so the CI branch, which had
+applied old-0003, would treat it as applied. But the PR's *preview* branch had
+also applied old-0003 — so its recorded "last applied" timestamp exceeded the
+`when` of the (genuinely new to it) `0003_amazing_meteorite`, drizzle skipped
+it, the migrate step reported success, and the preview app broke with
+`relation "favorites" does not exist`.
+
+The guard: **`pnpm db:verify`** (`scripts/verify-migrations.ts`) checks that
+every entry in `db/migrations/meta/_journal.json` has a matching applied row in
+`drizzle.__drizzle_migrations` (matched by the same sha256-of-file-content hash
+the migrator records; rows are claimed 1:1) and exits non-zero naming each
+missing tag. Divergence handling:
+
+- **Extra applied rows** (renamed-away history a DB already ran): info only.
+- **DRIFTED, allowlisted**: a hash mismatch whose entry claims an applied row
+  at its exact recorded `when` means the DB ran a *since-edited version* of
+  that journal slot. The bookkeeping table stores no tags, so benign drift is
+  structurally indistinguishable from a renumbered-and-edited migration whose
+  new SQL never ran — therefore drift is tolerated (warning) **only** for tags
+  a human has verified and listed in `KNOWN_DRIFTED_TAGS` in the script
+  (currently `0002_old_tigra`, whose post-apply hand-edit changed no DDL).
+- **DRIFT, not allowlisted**: fails the run. Verify what actually ran, ship a
+  fresh migration if DDL is missing, and only then allowlist the tag if the
+  difference is provably benign.
+- **MISSING** (no row at the entry's `when` at all — the true silent-skip, the
+  favorites incident): always fails.
+
+Note the limits of the neighbouring CI checks: "migrations in sync with schema"
+only proves the *committed migration files* match `db/schema.ts` (it re-runs
+`db:generate` and diffs the repo) — it never inspects a live database, so it
+cannot tell whether a long-lived DB's actual tables match the files. `db:verify`
+is the only live-DB check, and it compares bookkeeping history, not
+`information_schema` — which is why non-allowlisted drift fails instead of
+trusting any other check to catch a stale schema. It runs in
+CI **immediately after every `pnpm db:migrate`** — `ci.yml` (`db-migrate` job),
+`migrate.yml`, `migrate-preview.yml`, and `seed-prod.yml` — so a journal/DB
+divergence fails the workflow instead of surfacing as a runtime 500. You can
+also run it by hand against any environment:
+`DATABASE_URL='<connection-string>' pnpm db:verify`.
 
 ## Environment
 
@@ -226,9 +286,12 @@ away from the seed so `pnpm db:seed` is **API-free**:
   then seeds, using only the `PROD_DATABASE_URL` Actions secret (the seed is
   API-free — no Places key needed), and skips-with-a-warning if it is unset.
   Re-runnable from the Actions tab.
-- **CI (E2E branch):** intentionally **not** auto-seeded — the E2E fixtures
-  (`tests/e2e/fixtures.ts`) own their state via per-run tokens + cleanup, and a
-  pre-seeded directory would risk flaky count/empty-state assertions.
+- **CI (E2E branch):** seeded **only** by `tests/e2e/seeded-listings.spec.ts`
+  (AUB-196), which runs the idempotent `seedListings` core so the curated baked
+  set is standing data on the persistent branch. Everything else keeps the
+  original rule: the E2E fixtures (`tests/e2e/fixtures.ts`) own their state via
+  per-run tokens + cleanup, and no spec may assume an empty directory or fixed
+  row counts (see the curated-seed carve-out in `docs/agents/testing.md`).
 
 The testable core is {@link seedListings} with its DB injected (it takes baked
 data, no resolver); the Places capture lives in {@link refreshSeedData} with its

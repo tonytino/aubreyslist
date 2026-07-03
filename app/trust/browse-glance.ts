@@ -63,11 +63,13 @@ export interface ListingTrustGlance {
    */
   freshness: Freshness | null;
   /**
-   * True when the headline celiac claim was SUGGESTED by the curator bot
-   * ("Aubrey's Bot", AUB-31) and has no real evidence yet — the card shows a
-   * "Suggested by Aubrey's Bot" chip in place of the bare "Not yet attested"
-   * empty state. Provenance, not a verdict: only ever true alongside a `null`
-   * `safetyState` (no community evidence), so it can never overstate safety.
+   * True when this listing carries at least one live curator-bot suggestion
+   * ("Aubrey's Bot", AUB-31/AUB-193) — the headline celiac claim's `suggested`
+   * flag OR any other visible bot-suggested claim — and there is no real celiac
+   * evidence yet. The card then shows a "Suggested by Aubrey's Bot" chip in
+   * place of the bare "Not yet attested" empty state. Provenance, not a
+   * verdict: only ever true alongside a `null` `safetyState` (no community
+   * evidence), so it can never overstate safety.
    */
   suggestedByBot: boolean;
 }
@@ -84,6 +86,13 @@ export interface ListingTrustGlance {
  * `recentIncidentAt` is the most recent in-window incident's instant (or `null`);
  * `hasRecentIncident` is derived from it so the two can never disagree, and the
  * freshness cue phrases the incident from its own recency.
+ *
+ * `hasVisibleBotSuggestion` (AUB-193) is whether ANY of the listing's visible
+ * claims — not just the headline celiac one — still carries a live curator-bot
+ * suggestion (`suggested_by IS NOT NULL`). It is batched server-side (see
+ * `buildBrowseCards`) and threaded in as a plain boolean so this module stays
+ * pure and db-free. It feeds ONLY `suggestedByBot`, and is still gated on "no
+ * real celiac evidence" here, so the chip can never sit beside a real verdict.
  */
 export function deriveListingTrustGlance(
   celiacAggregate:
@@ -94,7 +103,8 @@ export function deriveListingTrustGlance(
   contributors: number,
   recentIncidentAt: Date | null,
   now: Date = new Date(),
-  stalenessMonths: number = DEFAULT_STALENESS_MONTHS
+  stalenessMonths: number = DEFAULT_STALENESS_MONTHS,
+  hasVisibleBotSuggestion = false
 ): ListingTrustGlance {
   const lastConfirmedAt = celiacAggregate?.lastConfirmedAt ?? null;
   const hasEvidence =
@@ -114,6 +124,10 @@ export function deriveListingTrustGlance(
     freshness: formatFreshness(lastConfirmedAt, recentIncidentAt, now, stalenessMonths),
     // Provenance only, and gated on "no real evidence" so it can never sit beside
     // a real verdict — the first community vote clears the suggestion server-side.
-    suggestedByBot: (celiacAggregate?.suggested ?? false) && !hasEvidence,
+    // ANY live, visible bot suggestion counts (AUB-193), not just the headline
+    // celiac claim's: a seeded listing whose bot labels are all non-celiac still
+    // shows its provenance instead of a bare "Not yet attested".
+    suggestedByBot:
+      ((celiacAggregate?.suggested ?? false) || hasVisibleBotSuggestion) && !hasEvidence,
   };
 }

@@ -1,0 +1,2 @@
+- `[manual]` Directory cards now show the "Suggested by Aubrey's Bot" badge for every listing with a live curator-bot suggestion, not only when the celiac attribute was suggested (AUB-193).
+- `[manual]` Directory cards render at a consistent height: the freshness/evidence meta-row space is reserved when absent and cards stretch to fill their grid row (AUB-194).

@@ -66,6 +66,15 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
 
+      # Guard against drizzle's silent skip (AUB-195): verify every journal
+      # entry is actually recorded as applied before seeding — the seed writes
+      # to tables a silently-skipped migration may never have created.
+      - name: Verify applied migrations
+        if: steps.cfg.outputs.enabled == 'true'
+        run: pnpm db:verify
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+
       - name: Seed Denver listings
         if: steps.cfg.outputs.enabled == 'true'
         run: pnpm db:seed
