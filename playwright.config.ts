@@ -34,7 +34,13 @@ export default defineConfig({
   ],
   webServer: {
     command: "pnpm dev",
-    url: "http://localhost:3000",
+    // Readiness probe: the DB-FREE `/api/health` endpoint, NOT `/`. `/` is now the
+    // Denver directory (the home page), which needs a live DATABASE_URL and 500s
+    // without one — so probing `/` would make the always-on, DB-free a11y lane
+    // (`--project=a11y`) time out waiting for a "ready" server it will never see.
+    // `/api/health` is served by the Hono handoff with no database, so it reports
+    // readiness identically whether or not a DB is configured.
+    url: "http://localhost:3000/api/health",
     reuseExistingServer: !process.env.CI,
     stdout: "ignore",
     stderr: "pipe",
