@@ -127,3 +127,43 @@ The script reads `DATABASE_URL` through the validated `getEnv()` accessor (never
 raw `process.env`) and runs via `node --experimental-strip-types` plus a small
 dependency-free alias loader (`scripts/register-aliases.mjs`) — no `tsx`/`ts-node`
 dependency is added. See `scripts/seed-admin.ts`.
+
+## Seeding Denver listings (`pnpm db:seed`, AUB-31)
+
+Seeds the directory with a curated set of real Denver-metro gluten-free / celiac
+spots (`scripts/seed-data.ts`) so it has density before real users arrive. Each
+entry is resolved to a **real Google Place ID + coordinates** via Places Text
+Search (biased to Union Station, hard-capped at a 25-mile radius), then inserted
+with one or more GF-attribute "labels" **suggested by a curator bot**.
+
+- **Command:** `pnpm db:seed` — needs `DATABASE_URL` **and** `GOOGLE_PLACES_API_KEY`
+  (both read via `getEnv()`). Anything the API can't resolve, or that falls
+  outside 25 miles, is skipped and logged, never guessed.
+- **Curator bot:** a single `users` row (`Aubrey's Bot`, email `bot@aubreyslist.app`,
+  role `user`) keyed on a **non-numeric sentinel `google_sub`** (`seed:aubreys-bot`)
+  a real Google login can never produce — so it never collides with a real account
+  on `google_sub`/`email` and is safe to seed in **every** environment, including
+  production. (Contrast `db:seed-admin`, which must never insert a real-email row —
+  see above.)
+- **Suggestions, not votes:** a seeded label sets `claims.suggested_by = <bot id>`
+  (NOT an attestation), so it shows a "Suggested by Aubrey's Bot" badge, stays out
+  of the confirm/dispute counts (ADR-007), and is cleared automatically by the
+  first real `castVote` on that claim.
+- **Idempotent:** listings dedup on the unique Place ID; a claim is only suggested
+  when its `(listing, attribute)` slot doesn't already exist, so a slot a real user
+  has engaged with is never re-suggested. Re-run freely as you curate the data.
+
+### Per-environment
+
+- **Local / dev:** `pnpm db:seed` against your `.env` `DATABASE_URL`.
+- **Production:** run the **"Seed production database"** GitHub Action
+  (`.github/workflows/seed-prod.yml`, `workflow_dispatch`). It applies migrations
+  then seeds, using the `PROD_DATABASE_URL` and `GOOGLE_PLACES_API_KEY` Actions
+  secrets, and skips-with-a-warning if either is unset. Re-runnable from the
+  Actions tab.
+- **CI (E2E branch):** intentionally **not** auto-seeded — the E2E fixtures
+  (`tests/e2e/fixtures.ts`) own their state via per-run tokens + cleanup, and a
+  pre-seeded directory would risk flaky count/empty-state assertions.
+
+The testable core is {@link seedListings} with its DB + Places resolver injected;
+the CLI shell wires the real ones. See `scripts/seed.ts` / `scripts/seed-data.ts`.

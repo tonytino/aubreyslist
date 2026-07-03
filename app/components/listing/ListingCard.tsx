@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Check, Clock, Heart, Star, TriangleAlert, Users } from "lucide-react";
+import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
 import { Badge } from "~/components/ui/badge";
 import type { Listing } from "~/db/schema";
@@ -35,6 +35,12 @@ export interface RestaurantCardVM {
   distanceLabel?: string;
   /** The headline safety verdict, or `null` for the honest "Not yet attested" chip. */
   safetyState: SafetyState | null;
+  /**
+   * True when the headline celiac claim is a curator-bot suggestion (AUB-31) with
+   * no real evidence yet — the empty state reads "Suggested by Aubrey's Bot"
+   * instead of "Not yet attested". Only meaningful when `safetyState === null`.
+   */
+  suggestedByBot: boolean;
   /** A recent "got glutened" report flags the card regardless of confirmations. */
   hasRecentIncident: boolean;
   /** Freshness/recency cue, e.g. `{ kind: "fresh", label: "Verified 3d ago" }`. */
@@ -154,6 +160,17 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {vm.safetyState ? (
               <SafetySignal state={vm.safetyState} />
+            ) : vm.suggestedByBot ? (
+              // Curator-bot suggestion (AUB-31): a seeded starter label, NOT a
+              // verdict. Meaning is in text + icon (never colour alone) and clears
+              // the moment a real user attests. Distinct from "Not yet attested".
+              <Badge
+                variant="outline"
+                className="gap-1.5 border-accent-lavender bg-accent-lavender/30 px-2.5 py-1 text-body-sm font-medium text-foreground"
+              >
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                Suggested by Aubrey's Bot
+              </Badge>
             ) : (
               // Honest empty state: no celiac claim / no attestation evidence yet.
               // Plain text label — meaning never rests on colour (styling.md).
@@ -286,6 +303,7 @@ export function listingToCardVM(
     name: listing.name,
     address: listing.address,
     safetyState: glance.safetyState,
+    suggestedByBot: glance.suggestedByBot,
     hasRecentIncident: glance.hasRecentIncident,
     accent: accentForId(listing.id),
     // Already-derived on the server (batched query set); mapped straight through.

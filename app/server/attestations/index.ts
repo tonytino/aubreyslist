@@ -94,6 +94,15 @@ export interface ClaimAggregate {
   confirmCount: number;
   disputeCount: number;
   lastConfirmedAt: Date | null;
+  /**
+   * True when this claim was SUGGESTED by the curator bot ("Aubrey's Bot",
+   * AUB-31) and no real user has attested it yet — i.e. `claims.suggestedBy` is
+   * non-null. A suggestion is NOT community evidence: it never contributes to
+   * `confirmCount`/`disputeCount` (there is no attestation row) and is cleared the
+   * moment a real user votes. Drives the "Suggested by Aubrey's Bot" badge only;
+   * the honest trust roll-up (ADR-007) is unaffected.
+   */
+  suggested: boolean;
 }
 
 /**
@@ -129,6 +138,7 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
       moderationStatus: claims.moderationStatus,
       listingModerationStatus: listings.moderationStatus,
       lastConfirmedAt: claims.lastConfirmedAt,
+      suggestedBy: claims.suggestedBy,
     })
     .from(claims)
     .innerJoin(listings, eq(listings.id, claims.listingId))
@@ -141,7 +151,13 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
     claimRow.moderationStatus !== "visible" ||
     claimRow.listingModerationStatus !== "visible"
   ) {
-    return { claimId: input.claimId, confirmCount: 0, disputeCount: 0, lastConfirmedAt: null };
+    return {
+      claimId: input.claimId,
+      confirmCount: 0,
+      disputeCount: 0,
+      lastConfirmedAt: null,
+      suggested: false,
+    };
   }
 
   // Visible claim: one grouped scan for the confirm/dispute counts.
@@ -163,6 +179,10 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
     confirmCount,
     disputeCount,
     lastConfirmedAt: claimRow.lastConfirmedAt ?? null,
+    // A suggestion is provenance, not a vote (ADR-007): surfaced as a flag only.
+    // `Boolean(...)` treats a null/absent FK as "not suggested" (a real user id is
+    // always a non-empty string).
+    suggested: Boolean(claimRow.suggestedBy),
   };
 }
 
@@ -184,7 +204,8 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
  */
 async function recomputeLastConfirmedAt(
   db: ReturnType<typeof getDb>,
-  claimId: string
+  claimId: string,
+  options: { clearSuggestion?: boolean } = {}
 ): Promise<void> {
   const rows = await db
     .select({ lastConfirmedAt: max(attestations.updatedAt) })
@@ -194,9 +215,17 @@ async function recomputeLastConfirmedAt(
   // `max()` over zero rows yields null — exactly the "no confirms" recency.
   const lastConfirmedAt = rows[0]?.lastConfirmedAt ?? null;
 
+  // A real community attestation supersedes any curator-bot suggestion on this
+  // claim (AUB-31): folded into this SAME update so a vote still issues exactly
+  // one `UPDATE claims` (recency + suggestion-clear together). `clearSuggestion`
+  // is only ever set on the vote path — a retract must not touch provenance.
   await db
     .update(claims)
-    .set({ lastConfirmedAt, updatedAt: new Date() })
+    .set({
+      lastConfirmedAt,
+      updatedAt: new Date(),
+      ...(options.clearSuggestion ? { suggestedBy: null } : {}),
+    })
     .where(eq(claims.id, claimId));
 }
 
@@ -283,12 +312,14 @@ export async function castVote(input: VoteInput): Promise<void> {
     });
 
   // Recency always tracks the surviving confirms — a confirm refreshes it, a
-  // flip to dispute drops the withdrawn confirmation (ADR-007). Note: neon-http
-  // has no interactive transaction, so these statements are not atomic; a crash
-  // between the attestation upsert and this recompute would leave recency briefly
-  // stale, but it is self-healing — the next vote/retract on the claim re-settles
-  // it from the visible confirms, and the counts are always derived live.
-  await recomputeLastConfirmedAt(db, claimId);
+  // flip to dispute drops the withdrawn confirmation (ADR-007). `clearSuggestion`
+  // also wipes any curator-bot suggestion on this claim (AUB-31), so real evidence
+  // supersedes the "Suggested by Aubrey's Bot" badge — done in the SAME update.
+  // Note: neon-http has no interactive transaction, so these statements are not
+  // atomic; a crash between the attestation upsert and this recompute would leave
+  // recency briefly stale, but it is self-healing — the next vote/retract on the
+  // claim re-settles it from the visible confirms, and the counts are always live.
+  await recomputeLastConfirmedAt(db, claimId, { clearSuggestion: true });
 }
 
 /**

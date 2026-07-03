@@ -30,6 +30,7 @@ const baseVm: RestaurantCardVM = {
   name: "Acme Gluten-Free",
   address: "123 Main St, Denver, CO",
   safetyState: "celiac-safe",
+  suggestedByBot: false,
   hasRecentIncident: false,
   accent: "lavender",
 };
@@ -121,6 +122,20 @@ describe("RestaurantCard", () => {
     expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
   });
 
+  it("shows the 'Suggested by Aubrey's Bot' chip in place of Not-yet-attested when bot-suggested (AUB-31)", async () => {
+    renderCard({ safetyState: null, suggestedByBot: true });
+    expect(await screen.findByText("Suggested by Aubrey's Bot")).toBeInTheDocument();
+    // The suggestion REPLACES the bare empty state — never a fabricated verdict.
+    expect(screen.queryByText("Not yet attested")).not.toBeInTheDocument();
+    expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
+  });
+
+  it("never shows the bot chip once a real verdict exists (suggestion is superseded)", async () => {
+    renderCard({ safetyState: "celiac-safe", suggestedByBot: false });
+    expect(await screen.findByText("Celiac-safe")).toBeInTheDocument();
+    expect(screen.queryByText("Suggested by Aubrey's Bot")).not.toBeInTheDocument();
+  });
+
   it("shows the recent-incident warning when a recent incident exists", async () => {
     renderCard({ safetyState: "celiac-safe", hasRecentIncident: true });
     expect(await screen.findByText("Celiac-safe")).toBeInTheDocument();
@@ -181,6 +196,7 @@ describe("ListingCard (mapping wrapper)", () => {
   /** A fully-derived glance; overrides tweak individual fields per test. */
   const baseGlance: ListingTrustGlance = {
     safetyState: "celiac-safe",
+    suggestedByBot: false,
     hasRecentIncident: false,
     evidence: null,
     freshness: null,

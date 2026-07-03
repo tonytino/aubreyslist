@@ -34,6 +34,40 @@ describe("ClaimTrustSummaryRow", () => {
     expect(screen.queryByText(/confirm \//)).not.toBeInTheDocument();
   });
 
+  it("shows the 'Suggested by Aubrey's Bot' badge for a bot-suggested claim (AUB-31)", () => {
+    render(
+      <ClaimTrustSummaryRow
+        attribute="dedicated_fryer"
+        aggregate={{ confirmCount: 0, disputeCount: 0, lastConfirmedAt: null, suggested: true }}
+        now={NOW}
+      />
+    );
+    // Meaning is in text (never icon/colour alone), and it replaces — not
+    // supplements — the bare empty state.
+    expect(screen.getByText("Suggested by Aubrey's Bot")).toBeInTheDocument();
+    expect(screen.queryByText("No confirmations or disputes yet")).not.toBeInTheDocument();
+    // A suggestion is not evidence: no fabricated count.
+    expect(screen.queryByText(/confirm \//)).not.toBeInTheDocument();
+  });
+
+  it("suppresses the suggestion badge once the claim has real evidence", () => {
+    render(
+      <ClaimTrustSummaryRow
+        attribute="dedicated_fryer"
+        aggregate={{
+          confirmCount: 2,
+          disputeCount: 0,
+          lastConfirmedAt: ago(1 * WEEK),
+          suggested: true,
+        }}
+        now={NOW}
+      />
+    );
+    // Real votes win — the badge never sits beside a real count.
+    expect(screen.queryByText("Suggested by Aubrey's Bot")).not.toBeInTheDocument();
+    expect(screen.getByText("2 confirm / 0 dispute")).toBeInTheDocument();
+  });
+
   it("surfaces a text 'Needs update' cue for an aged confirmation (not colour alone)", () => {
     render(
       <ClaimTrustSummaryRow

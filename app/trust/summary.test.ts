@@ -178,7 +178,37 @@ describe("summarizeClaim", () => {
       recencyLabel: "last confirmed 3 weeks ago",
       hasEvidence: true,
       stale: false,
+      suggested: false,
     });
+  });
+
+  it("surfaces the curator-bot `suggested` flag when there is no real evidence (AUB-31)", () => {
+    const summary = summarizeClaim(
+      "dedicated_fryer",
+      { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null, suggested: true },
+      NOW
+    );
+    expect(summary.suggested).toBe(true);
+    expect(summary.hasEvidence).toBe(false);
+  });
+
+  it("suppresses `suggested` once real evidence exists — a vote supersedes the bot", () => {
+    const summary = summarizeClaim(
+      "dedicated_fryer",
+      { confirmCount: 1, disputeCount: 0, lastConfirmedAt: ago(WEEK), suggested: true },
+      NOW
+    );
+    expect(summary.suggested).toBe(false);
+    expect(summary.hasEvidence).toBe(true);
+  });
+
+  it("defaults `suggested` to false when the aggregate omits the flag", () => {
+    const summary = summarizeClaim(
+      "dedicated_fryer",
+      { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null },
+      NOW
+    );
+    expect(summary.suggested).toBe(false);
   });
 
   it("flags an old confirmation as stale", () => {

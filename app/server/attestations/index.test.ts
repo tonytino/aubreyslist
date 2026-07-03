@@ -35,6 +35,8 @@ const h = vi.hoisted(() => {
           moderationStatus?: "visible" | "hidden" | "removed";
           listingModerationStatus?: "visible" | "hidden" | "removed";
           lastConfirmedAt: Date | null;
+          // Curator-bot suggestion provenance (AUB-31); absent/null ⇒ not suggested.
+          suggestedBy?: string | null;
         }
     >,
     // The recompute helper's `select().from().where()` resolves directly (no
@@ -270,6 +272,40 @@ describe("castVote — lazy claim creation + one vote per user (#150)", () => {
   });
 });
 
+describe("castVote — curator-bot suggestion supersession (AUB-31)", () => {
+  it("clears the claim's suggestedBy (in the SAME update) when a real user attests", async () => {
+    state.maxRows = [{ lastConfirmedAt: new Date("2026-06-10T00:00:00Z") }];
+
+    await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "confirm" });
+
+    // A real vote supersedes any bot suggestion: the recency recompute's single
+    // UPDATE also nulls suggestedBy — no extra round-trip.
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    const set = state.lastUpdateSet as { suggestedBy?: string | null };
+    expect(set.suggestedBy).toBeNull();
+  });
+
+  it("also clears the suggestion on a DISPUTE (any real attestation supersedes it)", async () => {
+    state.maxRows = [];
+
+    await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "dispute" });
+
+    const set = state.lastUpdateSet as { suggestedBy?: string | null };
+    expect(set.suggestedBy).toBeNull();
+  });
+
+  it("retract does NOT touch provenance — only a real vote supersedes a suggestion", async () => {
+    // A claim exists so the retract runs its recompute update, but that update
+    // must NOT carry suggestedBy (a retract is not an attestation of the label).
+    state.maxRows = [];
+
+    await retractVote({ listingId: "listing-1", attribute: "dedicated_fryer" });
+
+    const set = state.lastUpdateSet as Record<string, unknown>;
+    expect("suggestedBy" in set).toBe(false);
+  });
+});
+
 describe("castVote — lastConfirmedAt maintenance (recomputed from confirms)", () => {
   it("sets lastConfirmedAt to the newest surviving confirm on a confirm", async () => {
     // After the upsert there is one confirm row; its updatedAt is the recency.
@@ -408,7 +444,26 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       confirmCount: 8,
       disputeCount: 1,
       lastConfirmedAt: when,
+      suggested: false,
     });
+  });
+
+  it("reports suggested:true for a bot-suggested claim with no votes yet (AUB-31)", async () => {
+    state.groupByRows = [];
+    state.limitRows = [
+      {
+        moderationStatus: "visible",
+        listingModerationStatus: "visible",
+        lastConfirmedAt: null,
+        suggestedBy: "aubreys-bot",
+      },
+    ];
+
+    const agg = await getClaimAggregate({ claimId: "claim-suggested" });
+
+    expect(agg.suggested).toBe(true);
+    expect(agg.confirmCount).toBe(0);
+    expect(agg.disputeCount).toBe(0);
   });
 
   it("returns zero counts and null recency for a claim with no attestations", async () => {
@@ -424,6 +479,7 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       confirmCount: 0,
       disputeCount: 0,
       lastConfirmedAt: null,
+      suggested: false,
     });
   });
 
@@ -475,6 +531,7 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       confirmCount: 0,
       disputeCount: 0,
       lastConfirmedAt: null,
+      suggested: false,
     });
     // No attestation scan happened — the visibility gate short-circuited first.
     expect(h.groupByMock).not.toHaveBeenCalled();
@@ -497,6 +554,7 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       confirmCount: 0,
       disputeCount: 0,
       lastConfirmedAt: null,
+      suggested: false,
     });
   });
 
@@ -526,6 +584,7 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       confirmCount: 0,
       disputeCount: 0,
       lastConfirmedAt: null,
+      suggested: false,
     });
     // The parent-visibility gate short-circuited BEFORE scanning attestations.
     expect(h.groupByMock).not.toHaveBeenCalled();
@@ -550,6 +609,7 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       confirmCount: 0,
       disputeCount: 0,
       lastConfirmedAt: null,
+      suggested: false,
     });
   });
 });

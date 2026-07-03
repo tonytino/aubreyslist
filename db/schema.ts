@@ -140,6 +140,16 @@ export const claims = pgTable(
       .references(() => listings.id, { onDelete: "cascade" }),
     attribute: claimAttribute("attribute").notNull(),
     lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
+    // Curator-seed provenance (AUB-31): non-null ⇒ this claim was SUGGESTED by a
+    // seed/curator user ("Aubrey's Bot") and is pending community confirmation —
+    // it is NOT community evidence, so it is deliberately kept OUT of the
+    // confirm/dispute counts (there is no attestation row) and surfaced only as a
+    // "Suggested by Aubrey's Bot" badge (ADR-007: the honest counts never treat a
+    // suggestion as a vote). Cleared to NULL the moment a real user attests the
+    // claim (`castVote`), so a bot suggestion never lingers over real evidence.
+    // `set null` on the referenced user's deletion keeps the claim; it simply
+    // loses its suggestion provenance.
+    suggestedBy: text("suggested_by").references(() => users.id, { onDelete: "set null" }),
     // Moderation state (#41). Default `visible`; public reads filter to visible.
     moderationStatus: moderationStatus("moderation_status").notNull().default("visible"),
     createdAt: createdAt(),

@@ -1,3 +1,5 @@
+import { Sparkles } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { ClaimAttribute } from "~/db/schema";
 import type { ClaimAggregate } from "~/server/attestations";
 import { type ClaimTrustSummary, claimAttributeDescription, summarizeClaim } from "~/trust/summary";
@@ -5,8 +7,14 @@ import { type ClaimTrustSummary, claimAttributeDescription, summarizeClaim } fro
 interface ClaimTrustSummaryProps {
   /** The claim's attribute (its taxonomy slot — drives the label). */
   attribute: ClaimAttribute;
-  /** The claim's aggregate — visible confirm/dispute counts + recency. */
-  aggregate: Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt">;
+  /**
+   * The claim's aggregate — visible confirm/dispute counts + recency, plus the
+   * optional curator-bot `suggested` flag (AUB-31). `suggested` is optional so a
+   * bare `{confirm,dispute,lastConfirmed}` Pick still type-checks; when true (and
+   * there is no real evidence) the row shows the "Suggested by Aubrey's Bot" badge.
+   */
+  aggregate: Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt"> &
+    Partial<Pick<ClaimAggregate, "suggested">>;
   /**
    * "Now" override, for deterministic tests. Defaults to the current time so
    * the recency phrase ("last confirmed 3 weeks ago") is relative to render.
@@ -63,6 +71,20 @@ export function ClaimTrustSummaryRow({
             </>
           ) : null}
         </p>
+      ) : summary.suggested ? (
+        // Curator-bot suggestion (AUB-31): a starter label seeded by "Aubrey's
+        // Bot" from public info, NOT community evidence. The meaning is carried in
+        // text (never icon/colour alone — styling.md), and the tooltip names the
+        // source. It clears the instant a real user confirms or disputes below.
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-chip bg-accent-lavender/40 px-2 py-1 text-caption font-semibold text-foreground">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Suggested by Aubrey's Bot</span>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Suggested by Aubrey's Bot</TooltipContent>
+        </Tooltip>
       ) : (
         // Honest empty state: a claim exists but no one has attested yet. We
         // never fabricate a verdict (a celiac could be hurt) — domain.md.
