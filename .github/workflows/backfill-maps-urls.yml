@@ -22,8 +22,10 @@ on:
 permissions:
   contents: read
 
-# Never let two backfills (or a backfill + seed/migration) race; share the
-# production-write group with the seed workflow.
+# Never let two backfills — or a backfill + seed — race: this shares the
+# `seed-production` concurrency group with the seed workflow (which also runs
+# migrations inside it). Note the standalone migrate workflow uses its own
+# group, so it is NOT serialized against this one.
 concurrency:
   group: seed-production
   cancel-in-progress: false

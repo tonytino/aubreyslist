@@ -35,6 +35,13 @@ type BackfillDb = ReturnType<typeof getDb>;
 /** The legacy, no-longer-resolvable link prefix this backfill exists to purge. */
 export const LEGACY_MAPS_URL_PREFIX = "https://www.google.com/maps/place/?q=place_id:";
 
+/**
+ * The prefix as a LIKE pattern: `_` is a single-char wildcard in LIKE, so the
+ * two underscores in `place_id` must be escaped to match only the literal
+ * prefix (Postgres' default escape character is `\`).
+ */
+export const LEGACY_MAPS_URL_LIKE_PATTERN = `${LEGACY_MAPS_URL_PREFIX.replaceAll("_", "\\_")}%`;
+
 /** Dependencies for {@link backfillMapsUrls}; the CLI supplies the real ones. */
 export interface BackfillMapsUrlsDeps {
   db: BackfillDb;
@@ -79,7 +86,7 @@ export async function backfillMapsUrls(
       address: listings.address,
     })
     .from(listings)
-    .where(like(listings.mapsUrl, `${LEGACY_MAPS_URL_PREFIX}%`));
+    .where(like(listings.mapsUrl, LEGACY_MAPS_URL_LIKE_PATTERN));
 
   const result: BackfillMapsUrlsResult = { updated: 0, skippedNoPlaceId: 0 };
 

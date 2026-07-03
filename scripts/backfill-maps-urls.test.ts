@@ -1,7 +1,9 @@
+import { like } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { listings } from "~/db/schema";
 import {
   type BackfillMapsUrlsResult,
+  LEGACY_MAPS_URL_LIKE_PATTERN,
   LEGACY_MAPS_URL_PREFIX,
   backfillMapsUrls,
 } from "./backfill-maps-urls";
@@ -23,13 +25,15 @@ interface LegacyRow {
 
 function makeFakeDb(legacyRows: LegacyRow[]) {
   const updates: Array<{ table: unknown; set: Record<string, unknown> }> = [];
+  const selectWheres: unknown[] = [];
 
   const db = {
     select() {
       return {
         from(table: unknown) {
           return {
-            where() {
+            where(condition: unknown) {
+              selectWheres.push(condition);
               return Promise.resolve(table === listings ? legacyRows : []);
             },
           };
@@ -47,7 +51,11 @@ function makeFakeDb(legacyRows: LegacyRow[]) {
   };
 
   // The core only uses this narrow surface; cast through unknown (test-only).
-  return { db: db as unknown as Parameters<typeof backfillMapsUrls>[0]["db"], updates };
+  return {
+    db: db as unknown as Parameters<typeof backfillMapsUrls>[0]["db"],
+    updates,
+    selectWheres,
+  };
 }
 
 const legacy = (over: Partial<LegacyRow> = {}): LegacyRow => ({
@@ -59,6 +67,17 @@ const legacy = (over: Partial<LegacyRow> = {}): LegacyRow => ({
 });
 
 describe("backfillMapsUrls", () => {
+  it("selects only rows matching the literal legacy prefix (LIKE `_` wildcards escaped)", async () => {
+    const { db, selectWheres } = makeFakeDb([]);
+
+    await backfillMapsUrls({ db });
+
+    // The pattern escapes both `_` in `place_id` so LIKE matches the prefix
+    // literally, and the WHERE is exactly that LIKE on listings.mapsUrl.
+    expect(LEGACY_MAPS_URL_LIKE_PATTERN).toBe("https://www.google.com/maps/place/?q=place\\_id:%");
+    expect(selectWheres).toEqual([like(listings.mapsUrl, LEGACY_MAPS_URL_LIKE_PATTERN)]);
+  });
+
   it("rewrites a legacy row to the documented Maps URLs API format from its own columns", async () => {
     const { db, updates } = makeFakeDb([legacy()]);
 
