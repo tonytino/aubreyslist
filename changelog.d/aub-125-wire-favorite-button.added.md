@@ -1,0 +1,1 @@
+- `[manual]` The heart on browse cards is now live — replaced the previously-inert "Save this spot" button with the real `FavoriteButton`, and wired the same into the map carousel (as a sibling overlay, not a nested button), so saving works from every browse surface.

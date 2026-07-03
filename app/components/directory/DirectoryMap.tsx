@@ -2,6 +2,7 @@ import { Clock, Leaf, LocateFixed, ShieldCheck, TriangleAlert } from "lucide-rea
 import type { LucideIcon } from "lucide-react";
 import { type SafetyState, safetyLabel } from "~/components/SafetySignal";
 import { projectToMap } from "~/components/directory/map-projection";
+import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 
 /**
@@ -145,44 +146,55 @@ export function DirectoryMap({
           const selected = vm.id === selectedId;
           const ChipIcon = style.Icon;
           return (
-            <button
-              key={vm.id}
-              type="button"
-              aria-pressed={selected}
-              aria-label={`${vm.name} — ${style.label}`}
-              onClick={() => onSelect(vm.id)}
-              className={`flex w-[236px] shrink-0 overflow-hidden rounded-card border bg-surface text-left shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
-                selected ? "border-2 border-brand" : "border border-border"
-              }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`w-[78px] shrink-0 ${
-                  vm.accent === "peach"
-                    ? "bg-accent-peach"
-                    : vm.accent === "mint"
-                      ? "bg-accent-mint"
-                      : vm.accent === "sky"
-                        ? "bg-accent-sky"
-                        : "bg-accent-lavender"
+            // Positioned wrapper so the heart is a SIBLING overlay of the mini-card
+            // action (F6, AUB-125) — NOT nested inside it. Nesting a <button>
+            // (FavoriteButton) inside the mini-card <button> would be invalid HTML +
+            // nested-interactive a11y defect. The wrapper carries the fixed
+            // carousel-entry width; the mini-card button fills it, and FavoriteButton
+            // is raised over it (`absolute … z-10`). The carousel's own opaque
+            // `bg-background` band + z-10 stacking (documented above) still keep low
+            // pins behind the whole band, so nothing here weakens that invariant.
+            <div key={vm.id} className="relative w-[236px] shrink-0">
+              <button
+                type="button"
+                aria-pressed={selected}
+                aria-label={`${vm.name} — ${style.label}`}
+                onClick={() => onSelect(vm.id)}
+                className={`flex w-full overflow-hidden rounded-card border bg-surface text-left shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
+                  selected ? "border-2 border-brand" : "border border-border"
                 }`}
-              />
-              <span className="min-w-0 flex-1 px-3 py-2.5">
-                <span className="block truncate font-display text-body-sm font-bold text-foreground">
-                  {vm.name}
-                </span>
-                <span className="mt-0.5 block truncate text-caption text-muted-foreground">
-                  {vm.address}
-                  {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
-                </span>
+              >
                 <span
-                  className={`mt-2 inline-flex items-center gap-1.5 rounded-chip px-2.5 py-1 text-caption font-semibold text-white ${style.fill}`}
-                >
-                  <ChipIcon className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
-                  <span>{style.label}</span>
+                  aria-hidden="true"
+                  className={`w-[78px] shrink-0 ${
+                    vm.accent === "peach"
+                      ? "bg-accent-peach"
+                      : vm.accent === "mint"
+                        ? "bg-accent-mint"
+                        : vm.accent === "sky"
+                          ? "bg-accent-sky"
+                          : "bg-accent-lavender"
+                  }`}
+                />
+                <span className="min-w-0 flex-1 px-3 py-2.5 pr-12">
+                  <span className="block truncate font-display text-body-sm font-bold text-foreground">
+                    {vm.name}
+                  </span>
+                  <span className="mt-0.5 block truncate text-caption text-muted-foreground">
+                    {vm.address}
+                    {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
+                  </span>
+                  <span
+                    className={`mt-2 inline-flex items-center gap-1.5 rounded-chip px-2.5 py-1 text-caption font-semibold text-white ${style.fill}`}
+                  >
+                    <ChipIcon className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
+                    <span>{style.label}</span>
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+
+              <FavoriteButton listingId={vm.id} listingName={vm.name} />
+            </div>
           );
         })}
       </div>

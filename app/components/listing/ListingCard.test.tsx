@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   RouterProvider,
   createMemoryHistory,
@@ -7,10 +8,21 @@ import {
 } from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { currentUserQuery } from "~/auth/current-user-query";
 import type { Listing } from "~/db/schema";
+import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
 import { ListingCard, RestaurantCard, type RestaurantCardVM, listingToCardVM } from "./ListingCard";
+
+// The card now embeds the FavoriteButton island (F6, AUB-125), which imports the
+// `favorites.fn` server seam. That seam transitively pulls in the db-touching
+// implementation, so — exactly as FavoriteButton.test.tsx does — we mock it out;
+// these tests only assert the heart RENDERS in the card, not its write behaviour.
+vi.mock("~/server/favorites/favorites.fn", () => ({
+  favoriteListing: vi.fn(() => Promise.resolve()),
+  unfavoriteListing: vi.fn(() => Promise.resolve()),
+}));
 
 /**
  * Tests for the browse-list card (#33, AUB-61 redesign). Covers the trust-glance
@@ -66,9 +78,19 @@ function renderInRouter(element: ReactNode) {
     routeTree: rootRoute.addChildren([browseRoute, detailRoute]),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
+  // The embedded FavoriteButton reads the prefetched favorites + current-user
+  // suspense queries; seed both (anonymous, no favorites) so it renders its empty
+  // "Save …" heart synchronously without hitting the mocked server fns.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient.setQueryData(favoriteIdsQuery.queryKey, []);
+  queryClient.setQueryData(currentUserQuery.queryKey, null);
   // The concrete router type doesn't match the provider's generic default; this
   // is a test-only structural mismatch, safe to assert through unknown.
-  render(<RouterProvider router={router as unknown as never} />);
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router as unknown as never} />
+    </QueryClientProvider>
+  );
 }
 
 function renderCard(overrides: Partial<RestaurantCardVM> = {}) {
@@ -93,13 +115,15 @@ describe("RestaurantCard", () => {
     expect(link).toHaveAttribute("href", "/listings/listing-1");
   });
 
-  it("renders the save button as a sibling of the link, not nested in the anchor", async () => {
+  it("renders the FavoriteButton as a sibling of the link, not nested in the anchor", async () => {
     renderCard();
-    // The stretched-link pattern keeps a valid DOM: the <button> must NOT be a
+    // The dead heart is now the wired FavoriteButton island (F6, AUB-125); its
+    // accessible name is derived from the listing name ("Save <name>"). The
+    // stretched-link pattern keeps a valid DOM: the <button> must NOT be a
     // descendant of the <a> (a button inside an anchor is invalid HTML + an a11y
     // defect). Both remain independently present.
     const link = await screen.findByRole("link");
-    const saveButton = screen.getByRole("button", { name: "Save this spot" });
+    const saveButton = screen.getByRole("button", { name: "Save Acme Gluten-Free" });
     expect(saveButton).toBeInTheDocument();
     expect(link).not.toContainElement(saveButton);
     expect(saveButton).not.toContainElement(link);
