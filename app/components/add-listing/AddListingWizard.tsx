@@ -257,13 +257,13 @@ function SuccessScreen({
           can attest them any time from the listing.
         </p>
       ) : null}
-      <div className="flex w-full flex-col gap-2">
-        <Button asChild className="w-full">
+      <div className="flex w-full flex-col gap-2 sm:flex-row">
+        <Button asChild className="w-full sm:flex-1">
           <Link to="/listings/$id" params={{ id: listingId }}>
             View your listing
           </Link>
         </Button>
-        <Button variant="outline" type="button" onClick={onReset} className="w-full">
+        <Button variant="outline" type="button" onClick={onReset} className="w-full sm:flex-1">
           Add another listing
         </Button>
       </div>
