@@ -22,6 +22,22 @@ itself, never a reused context. Adversarial independence is the point.
 
 ---
 
+## Choosing a model per subagent
+
+**The Orchestrator deliberately picks each subagent's model per task, using its
+own judgment.** This is a standing owner expectation — apply it without being
+asked. Model names change; think in tiers:
+
+| Tier | Use for |
+| --- | --- |
+| Smallest/fastest (e.g. Haiku) | Mechanical scans, greps, bulk enumeration. |
+| Mid (e.g. Sonnet) | Routine, well-specified searches and edits. |
+| Most capable available (the session's default model or better) | Writing user-facing copy or docs, adversarial review, anything requiring judgment or ambiguity resolution. |
+
+When unsure, default to inheriting the session model.
+
+---
+
 ## The Loop
 
 1. **Dispatch.** The Orchestrator decomposes the task and sends a **Worker**
