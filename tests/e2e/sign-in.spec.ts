@@ -49,10 +49,12 @@ test.describe("mocked Google sign-in", () => {
       header.getByRole("button", { name: `Account menu for ${user.name}` })
     ).toBeVisible();
 
-    // A gated surface now renders its authenticated form, not the sign-in prompt.
+    // A gated surface now renders its authenticated intake wizard, not the
+    // sign-in prompt. Step 0's manual finder ("Restaurant name" field) is
+    // server-rendered, so this holds without waiting on hydration.
     await page.goto("/listings/new");
     await expect(page.getByRole("heading", { name: "Add a restaurant" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Sign in to add a restaurant" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Add listing" })).toBeVisible();
+    await expect(page.getByLabel("Restaurant name")).toBeVisible();
   });
 });

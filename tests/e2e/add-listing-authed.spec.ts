@@ -4,13 +4,15 @@ import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
 import { waitForHydration } from "./helpers";
 
 /**
- * Add a listing as a signed-in user (issue #45).
+ * Add a listing as a signed-in user (issue #45, wizard rework AUB-132).
  *
  * The existing `add-listing.spec.ts` covers the ANONYMOUS gate (sign-in prompt).
- * This spec covers the authenticated happy path end-to-end: with intake forced
- * to `manual` (the deterministic, Places-key-free mode — default is `places`,
- * ADR-008) and a sealed session cookie, fill the manual intake form and assert
- * the route navigates to the new listing's detail page showing the entered name.
+ * This spec covers the authenticated happy path end-to-end through the 7-step
+ * claim wizard: with intake forced to `manual` (the deterministic, Places-key-
+ * free mode — default is `places`, ADR-008) and a sealed session cookie, find
+ * the place manually, skip every claim (skip writes nothing; the create still
+ * succeeds), submit, then follow the success screen's "View your listing" and
+ * assert it lands on the new listing's detail page showing the entered name.
  *
  * Manual intake is the simplest deterministic mode — `places` would require the
  * Google Places provider. Self-skips without the CI E2E DB / session secret.
@@ -44,31 +46,46 @@ test.describe("add a listing (authenticated, manual intake)", () => {
     createdName = name;
 
     await page.goto("/listings/new");
-    // Hydration must finish before interacting: the form's onChange handlers and
-    // the controlled-state `disabled` gate on the submit button aren't wired
-    // until the client bundle runs (see waitForHydration). The submit button is
-    // `disabled` until React's `canSubmit` is true, so we additionally gate on it
-    // being ENABLED below — proof every field's onChange registered — before the
-    // click, so we never fire a no-op click into a not-yet-interactive form (the
-    // earlier flake) and never rely on a retry.
+    // Hydration must finish before interacting: the manual finder's onChange
+    // handlers and the `disabled` gate on "Use this place" aren't wired until the
+    // client bundle runs (see waitForHydration). We additionally gate on the
+    // button being ENABLED below — proof every field's onChange registered —
+    // before clicking, so we never fire a no-op click into a not-yet-interactive
+    // form and never rely on a retry.
     await waitForHydration(page);
 
     await expect(page.getByRole("heading", { name: "Add a restaurant" })).toBeVisible();
 
+    // Step 0 — find the place via the manual finder, then collect it.
     await page.getByLabel("Restaurant name").fill(name);
     await page.getByLabel("Address").fill("42 Gluten-Free Ave, Denver, CO");
     await page.getByLabel("Latitude").fill("39.7392");
     await page.getByLabel("Longitude").fill("-104.9903");
 
-    // Only enabled once all four controlled fields have registered (canSubmit) —
-    // deterministic readiness gate for the submit, replacing reliance on retries.
-    const submit = page.getByRole("button", { name: "Add listing" });
-    await expect(submit).toBeEnabled();
-    await submit.click();
+    const useThisPlace = page.getByRole("button", { name: "Use this place" });
+    await expect(useThisPlace).toBeEnabled();
+    await useThisPlace.click();
 
-    // On success the route navigates to the listing-detail page for the new row
-    // (a real id, not back on /listings/new), and the detail page shows what we
-    // entered — the unique name proves it routed to OUR newly-created listing.
+    // Selected-place confirmation card → Continue into the claim steps.
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // Steps 1–5 — skip every attribute. Skip writes nothing (first-class), and
+    // the create must still succeed with all five left "Not yet attested".
+    for (let index = 0; index < 5; index += 1) {
+      await page.getByRole("button", { name: /Skip — I'm not sure/ }).click();
+    }
+
+    // Review → submit. We never auto-redirect: the wizard ends on a success
+    // screen, from which the contributor chooses to view the new listing.
+    await page.getByRole("button", { name: "Submit listing" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Listing added — thanks for contributing" })
+    ).toBeVisible();
+    await page.getByRole("link", { name: "View your listing" }).click();
+
+    // Lands on the listing-detail page for the new row (a real id, not back on
+    // /listings/new), and the detail page shows what we entered — the unique name
+    // proves it routed to OUR newly-created listing.
     await expect(page).not.toHaveURL(/\/listings\/new$/);
     await expect(page).toHaveURL(/\/listings\/[^/]+$/);
     await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
