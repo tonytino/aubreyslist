@@ -8,7 +8,7 @@ import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
-import { SafetyLegend } from "~/components/listing/SafetyLegend";
+import { SafetyBadges } from "~/components/listing/SafetyBadges";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -307,8 +307,12 @@ function ListingDetail() {
         <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
       ) : null}
 
-      {/* Safety legend — a quiet wrapping key of the four signals, no heading. */}
-      <SafetyLegend />
+      {/* Safety status badges (owner feedback): only the signals that actually
+          apply to THIS listing — the headline celiac-safe/gluten-friendly/stale
+          state (when attested) plus the incident badge (when recent), never the
+          full four-state set regardless of relevance. Renders nothing when
+          neither applies. */}
+      <SafetyBadges state={safetyState} hasRecentIncident={recentIncident !== null} />
 
       {/* Primary action: deep-link to Google Maps (ADR-009 — no embedded map).
           Both hrefs are guarded by `isHttpUrl` so only http(s) links ever reach

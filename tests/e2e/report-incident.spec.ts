@@ -19,12 +19,12 @@ import { waitForHydration } from "./helpers";
  * query after submit, the component re-renders and the banner appears LIVE — no
  * reload needed. We assert the banner's distinctive USER-VISIBLE warning text
  * (with a generous timeout to absorb the post-invalidation refetch), which is
- * what genuinely proves "a recent report flags the summary". The banner's
- * accessibility (its `role="region"` + `aria-label="Recent incident warning"`)
- * is already guarded by `RecentIncidentBanner.test.tsx`, so the E2E need not
- * re-assert the role — and the section's accessible-name resolves differently in
- * the live full-page DOM than in jsdom, so the visible-text assertion is also
- * the robust one here.
+ * what genuinely proves "a recent report flags the summary". The banner is an
+ * `<output>` polite live region (implicit `role="status"`, named by
+ * `aria-label="Recent incident warning"`), and the pill/badge assertions below
+ * are ROLE-SCOPED to that name because two identical "Recent incident" chips
+ * exist on the page (the banner pill + the SafetyBadges row chip) — an
+ * unscoped text locator would trip Playwright's strict mode.
  *
  * (The data-layer guarantee that `occurredOn` round-trips as a `YYYY-MM-DD`
  * string so `findRecentIncident` actually flags it — the real bug behind an
@@ -94,6 +94,26 @@ test.describe("report an incident", () => {
     // warning appears LIVE (no reload). Generous timeout to absorb the refetch.
     // This proves "a recent report flags the summary" via the user-facing text.
     await expect(bannerText).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/Recent incident ·/)).toBeVisible();
+    // The pill is a single-line "Recent incident" label (the relative recency
+    // now lives in the body sentence asserted above via `bannerText`) — see
+    // RecentIncidentBanner's mobile-wrap fix. Scoped to the banner's live
+    // region because the SafetyBadges row below also renders an identical
+    // "Recent incident" chip once the incident lands — an unscoped exact-text
+    // locator would match both and trip Playwright's strict mode. The exact
+    // match stays so the old interpolated "Recent incident · N days ago" pill
+    // text can never regress.
+    await expect(
+      page
+        .getByRole("status", { name: "Recent incident warning" })
+        .getByText("Recent incident", { exact: true })
+    ).toBeVisible();
+    // The same fresh report also lights up the SafetyBadges status row (its
+    // own incident chip, scoped via the labelled group) — the second surface
+    // that "a recent report flags the listing".
+    await expect(
+      page
+        .getByRole("group", { name: "Safety status" })
+        .getByText("Recent incident", { exact: true })
+    ).toBeVisible();
   });
 });
