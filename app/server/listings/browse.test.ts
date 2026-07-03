@@ -144,6 +144,7 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({ select: h.selectMock }),
 }));
 
+import { formatFreshness } from "~/trust/browse-card-format";
 import {
   DEFAULT_STALENESS_MONTHS,
   deriveHeadlineSafetyState,
@@ -1021,6 +1022,171 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
       expect(sqlTier, `${c.label}: SQL tier vs headline state ${String(headline)}`).toBe(
         stateToTier[String(headline)]
       );
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Quick filter (AUB-135) — composition + glance-spec equivalence
+// ---------------------------------------------------------------------------
+
+/**
+ * Faithful JS mirrors of the correlated `quick` predicates in `./quick-filter.ts`,
+ * kept tiny and literal so they can't drift from the SQL. Their exact SQL rendering
+ * (strict `>`, `<=`, `>=` cutoff, `not exists` incident window) is pinned
+ * structurally in `quick-filter.test.ts`; here we prove that same boolean logic
+ * lands on the SAME row the DISPLAYED glance shows — so a `quick` filter can never
+ * surface a listing whose card reads differently (ADR-007).
+ */
+function quickCeliacMatches(
+  confirms: number,
+  disputes: number,
+  lastConfirmedAt: Date | null,
+  cutoff: Date
+): boolean {
+  const hasEvidence = confirms + disputes > 0;
+  const confirmsLead = confirms > disputes;
+  const fresh = lastConfirmedAt === null || lastConfirmedAt.getTime() >= cutoff.getTime();
+  return hasEvidence && confirmsLead && fresh;
+}
+function quickFriendlyMatches(confirms: number, disputes: number): boolean {
+  return confirms + disputes > 0 && confirms <= disputes;
+}
+function quickRecentMatches(
+  lastConfirmedAt: Date | null,
+  cutoff: Date,
+  recentIncidentAt: Date | null
+): boolean {
+  const freshConfirmation =
+    lastConfirmedAt !== null && lastConfirmedAt.getTime() >= cutoff.getTime();
+  return freshConfirmation && recentIncidentAt === null;
+}
+
+describe("quick filter composition (AUB-135)", () => {
+  it("AND-folds the quick predicate into BOTH the page and count WHERE (honest total)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, quick: "celiac" }, NOW);
+
+    const pageWhere = renderArg(state.pageWhere);
+    const countWhere = renderArg(state.countWhere);
+    expect(pageWhere).toContain("exists");
+    // The SAME predicate constrains the page and the count, so the total honestly
+    // reflects the filter (no fetch-then-filter).
+    expect(countWhere).toBe(pageWhere);
+  });
+
+  it("applies NO quick constraint when no chip is active", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput }, NOW);
+
+    // Only the visibility predicate — no correlated EXISTS from a quick filter.
+    expect(renderArg(state.pageWhere)).not.toContain("exists");
+  });
+
+  // NOTE: one `getBrowseListings` call per test — the mock's leftJoin call-counter
+  // (trust subquery vs celiac aggregate) only resets in `beforeEach`.
+  it("friendly encodes the contested (confirms <= disputes) direction", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, quick: "friendly" }, NOW);
+
+    expect(renderArg(state.pageWhere)).toContain("<=");
+  });
+
+  it("recent adds a NOT EXISTS recent-incident window", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, quick: "recent" }, NOW);
+
+    const recentWhere = renderArg(state.pageWhere);
+    expect(recentWhere).toContain("not exists");
+    expect(recentWhere).toContain("occurred_on");
+  });
+
+  it("composes (AND) with the taxonomy filter and search", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      { ...baseInput, quick: "celiac", attrs: ["dedicated_fryer"], q: "taco" },
+      NOW
+    );
+
+    const composed = renderArg(state.pageWhere);
+    expect(composed).toContain("ilike"); // search
+    expect(composed.match(/exists/g)?.length ?? 0).toBeGreaterThanOrEqual(2); // taxonomy + quick
+  });
+});
+
+describe("quick filter ↔ glance spec equivalence (AUB-135)", () => {
+  // DO NOT WEAKEN. Each quick token must select EXACTLY the rows whose displayed
+  // glance matches — `celiac`→"celiac-safe", `friendly`→"gluten-friendly",
+  // `recent`→freshness "fresh". We drive the same evidence shapes the trust-tier
+  // suite uses and assert the quick predicate's boolean ⟺ the pure glance reading.
+  const MONTH = 30 * 24 * 60 * 60 * 1000;
+  const cutoff = stalenessCutoff(NOW, DEFAULT_STALENESS_MONTHS);
+  const ago = (ms: number) => new Date(NOW.getTime() - ms);
+
+  const evidence: Array<{
+    label: string;
+    confirms: number;
+    disputes: number;
+    lastConfirmedAt: Date | null;
+  }> = [
+    { label: "fresh confirm-majority", confirms: 8, disputes: 1, lastConfirmedAt: ago(3 * MONTH) },
+    {
+      label: "confirm-majority stale",
+      confirms: 30,
+      disputes: 0,
+      lastConfirmedAt: ago(24 * MONTH),
+    },
+    { label: "tie", confirms: 2, disputes: 2, lastConfirmedAt: ago(1 * MONTH) },
+    { label: "dispute-majority", confirms: 1, disputes: 10, lastConfirmedAt: ago(1 * MONTH) },
+    { label: "dispute-only", confirms: 0, disputes: 4, lastConfirmedAt: null },
+    { label: "no evidence", confirms: 0, disputes: 0, lastConfirmedAt: null },
+  ];
+
+  it("celiac ⟺ safetyState 'celiac-safe' and friendly ⟺ 'gluten-friendly'", () => {
+    for (const c of evidence) {
+      const headline = deriveHeadlineSafetyState(
+        { confirmCount: c.confirms, disputeCount: c.disputes, lastConfirmedAt: c.lastConfirmedAt },
+        NOW,
+        DEFAULT_STALENESS_MONTHS
+      );
+      expect(
+        quickCeliacMatches(c.confirms, c.disputes, c.lastConfirmedAt, cutoff),
+        `${c.label}: celiac vs headline`
+      ).toBe(headline === "celiac-safe");
+      expect(quickFriendlyMatches(c.confirms, c.disputes), `${c.label}: friendly vs headline`).toBe(
+        headline === "gluten-friendly"
+      );
+    }
+  });
+
+  it("recent ⟺ freshness.kind 'fresh' (within-window confirmation, no recent incident)", () => {
+    const recencyCases: Array<{ lastConfirmedAt: Date | null; recentIncidentAt: Date | null }> = [
+      { lastConfirmedAt: ago(1 * MONTH), recentIncidentAt: null }, // fresh, no incident → fresh
+      { lastConfirmedAt: ago(1 * MONTH), recentIncidentAt: ago(2 * 24 * 60 * 60 * 1000) }, // incident outranks
+      { lastConfirmedAt: ago(24 * MONTH), recentIncidentAt: null }, // stale confirmation → not fresh
+      { lastConfirmedAt: null, recentIncidentAt: null }, // never confirmed → no cue
+    ];
+    for (const c of recencyCases) {
+      const freshness = formatFreshness(
+        c.lastConfirmedAt,
+        c.recentIncidentAt,
+        NOW,
+        DEFAULT_STALENESS_MONTHS
+      );
+      expect(
+        quickRecentMatches(c.lastConfirmedAt, cutoff, c.recentIncidentAt),
+        `lastConfirmed=${String(c.lastConfirmedAt)} incident=${String(c.recentIncidentAt)}`
+      ).toBe(freshness?.kind === "fresh");
     }
   });
 });

@@ -85,6 +85,17 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({ q: "x".repeat(257) }).q).toBe("");
   });
 
+  it("parses a valid quick filter and drops garbage / absence to undefined", () => {
+    expect(browseSearchSchema.parse({ quick: "celiac" }).quick).toBe("celiac");
+    expect(browseSearchSchema.parse({ quick: "friendly" }).quick).toBe("friendly");
+    expect(browseSearchSchema.parse({ quick: "recent" }).quick).toBe("recent");
+    // Unknown token / wrong type degrades to absent (no chip), never throws.
+    expect(browseSearchSchema.parse({ quick: "bogus" }).quick).toBeUndefined();
+    expect(browseSearchSchema.parse({ quick: 42 }).quick).toBeUndefined();
+    // Omitted → absent, so it carries no default and is stripped from the URL.
+    expect(browseSearchSchema.parse({}).quick).toBeUndefined();
+  });
+
   it("coerces radius to a valid option, falling back to the default", () => {
     // An on-list radius passes through the transform unchanged...
     expect(browseSearchSchema.parse({ radius: 5 }).radius).toBe(5);
