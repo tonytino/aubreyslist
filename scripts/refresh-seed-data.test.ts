@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { type ResolvedPlace, refreshSeedData } from "./refresh-seed-data";
+import { type ResolvedPlace, refreshSeedData, runCli } from "./refresh-seed-data";
 import type { SeedSource } from "./seed-sources";
 
 /**
@@ -82,5 +82,23 @@ describe("refreshSeedData", () => {
       googleRating: null,
       googleRatingCount: null,
     });
+  });
+});
+
+describe("runCli", () => {
+  it("refuses to overwrite the bake (exit 1, no write) when every source fails to resolve", async () => {
+    // A resolver that returns null for everything simulates a bad/expired/quota'd
+    // key: the guard must fail loudly BEFORE writeFileSync, so a green refresh can
+    // never wipe the committed seed data to `[]`.
+    const resolvePlace = vi.fn(async () => null);
+    const error = vi.fn();
+
+    const code = await runCli(
+      { sources: [source(), source({ query: "Second" })], resolvePlace },
+      { log: vi.fn(), error }
+    );
+
+    expect(code).toBe(1);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("refusing to overwrite"));
   });
 });

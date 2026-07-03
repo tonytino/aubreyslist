@@ -125,12 +125,15 @@ export async function seedListings(
         .where(eq(listings.placeId, entry.placeId))
         .limit(1);
       listingId = existing[0]?.id;
-      result.listingsExisting += 1;
     }
 
     if (listingId === undefined) {
+      // A conflict we somehow can't read back — count it once, as skipped only.
       result.skipped.push({ query: entry.name, reason: "listing-upsert-failed" });
       continue;
+    }
+    if (inserted[0]?.id === undefined) {
+      result.listingsExisting += 1;
     }
 
     // Suggest each label. `onConflictDoNothing` on the (listing, attribute) unique

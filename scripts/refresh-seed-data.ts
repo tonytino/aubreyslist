@@ -214,11 +214,23 @@ export async function runCli(
         return makePlacesResolver(apiKey, (m) => log.log(m));
       })();
 
+    const sources = deps?.sources ?? SEED_SOURCES;
     const result = await refreshSeedData({
-      sources: deps?.sources ?? SEED_SOURCES,
+      sources,
       resolvePlace,
       log: deps?.log ?? ((m) => log.log(m)),
     });
+
+    // Guard against a wholesale failure silently wiping the committed bake: if we
+    // had sources but resolved NOTHING (e.g. a bad/expired/quota'd API key makes
+    // every Places call fail — the resolver returns null, not throws), do NOT
+    // overwrite `seed-listings.generated.json` with `[]`. Fail loudly instead so a
+    // green "refresh" can never blow away good data.
+    if (sources.length > 0 && result.listings.length === 0) {
+      throw new Error(
+        `Refresh resolved 0 of ${sources.length} sources — refusing to overwrite the baked seed data with an empty set. Check GOOGLE_PLACES_API_KEY (auth/quota) and re-run.`
+      );
+    }
 
     writeFileSync(OUTPUT_URL, `${JSON.stringify(result.listings, null, 2)}\n`);
 
