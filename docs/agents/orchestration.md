@@ -55,6 +55,7 @@ The Reviewer must adversarially probe each of these:
 | **Test honesty**           | No skipped, weakened, or missing tests for new code; `pnpm preflight` must pass.                     |
 | **Scope creep**            | Unrequested changes, gold-plating, drive-by edits outside the spec.                                  |
 | **Documentation drift**    | Docs that no longer match the code/behavior the change introduced.                                  |
+| **URL-state hygiene**      | Shareable/restorable UI state (filters, sort, search, page, tab) kept in `useState` instead of the URL; default params leaking into the querystring; a client-only param wrongly added to `loaderDeps` (spurious refetch) or a server param not resetting `page`. See `docs/agents/url-state.md`. |
 
 ---
 

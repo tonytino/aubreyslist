@@ -13,22 +13,55 @@
 
 import { z } from "zod";
 import { DEFAULT_RADIUS_MILES, parseRadiusMiles } from "~/listings/distance";
+import { QUICK_FILTER_VALUES, type QuickFilterValue } from "~/listings/quick";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 
+/**
+ * The canonical DEFAULT value of every browse search param that carries one.
+ *
+ * SINGLE SOURCE OF TRUTH, load-bearing in two places that MUST agree:
+ *  1. the `browseSearchSchema` `.catch()/.default()` below (what a missing/garbage
+ *     param degrades to), and
+ *  2. the route's `stripSearchParams(BROWSE_SEARCH_DEFAULTS)` middleware
+ *     (`app/routes/index.tsx`), which drops any outbound param whose value deeply
+ *     equals its default — so the URL never carries redundant `?page=1&sort=alpha&
+ *     radius=25` noise at rest.
+ *
+ * Because `stripSearchParams` compares against these EXACT values, the two must
+ * never drift; `browse-search.test.ts` asserts this map equals
+ * `browseSearchSchema.parse({})` (minus the always-optional `lat`/`lng`). `lat`/
+ * `lng` are omitted deliberately — they are `.optional().catch(undefined)`, so
+ * they are already absent from the URL when unset and need no strip entry.
+ */
+export const BROWSE_SEARCH_DEFAULTS = {
+  page: 1,
+  attrs: "",
+  q: "",
+  sort: DEFAULT_BROWSE_SORT,
+  radius: DEFAULT_RADIUS_MILES,
+  // SERVER-SIDE "Saved" filter (AUB-129 / F11): defaults to off, so a bare visit
+  // never carries `?saved=` and `stripSearchParams` drops it at rest. `quick`
+  // carries NO default (absence = no chip), so — like `lat`/`lng` — it is not in
+  // this strip map; only params WITH a default belong here.
+  saved: false,
+} as const;
+
 export const browseSearchSchema = z.object({
-  page: z.number().int().min(1).catch(1),
+  page: z.number().int().min(1).catch(BROWSE_SEARCH_DEFAULTS.page),
   /** Comma-separated taxonomy attributes (#35); defaults to "" (no filter). */
-  attrs: z.string().catch("").default(""),
+  attrs: z.string().catch(BROWSE_SEARCH_DEFAULTS.attrs).default(BROWSE_SEARCH_DEFAULTS.attrs),
   // Free-text search over name + address (#34). URL-driven like page/attrs/sort so
   // the search is SERVER-COMPLETE (covers ALL listings, not just the loaded page),
   // linkable/shareable, and back/forward-correct. Empty string → no text
   // constraint. Bounded to the server's accepted length; garbage degrades to "".
-  q: z.string().max(256).catch("").default(""),
+  q: z.string().max(256).catch(BROWSE_SEARCH_DEFAULTS.q).default(BROWSE_SEARCH_DEFAULTS.q),
   // `?sort=` mirrors the `?page=` URL-param pattern (#36): linkable, back/forward
   // works. A plain enum (NOT a `.transform()`) so the value round-trips cleanly
   // when the router re-serializes search state on navigation; unknown/garbage
   // tokens degrade to the stable alphabetical default via `.catch`.
-  sort: z.enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]]).catch(DEFAULT_BROWSE_SORT),
+  sort: z
+    .enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]])
+    .catch(BROWSE_SEARCH_DEFAULTS.sort),
   // The user's location for the "near me" distance sort (#37), kept in the URL
   // (so a distance-sorted view is linkable/back-forwardable like the rest).
   lat: z.number().finite().min(-90).max(90).optional().catch(undefined),
@@ -42,8 +75,8 @@ export const browseSearchSchema = z.object({
   radius: z
     .number()
     .transform((value) => parseRadiusMiles(value))
-    .catch(DEFAULT_RADIUS_MILES)
-    .default(DEFAULT_RADIUS_MILES),
+    .catch(BROWSE_SEARCH_DEFAULTS.radius)
+    .default(BROWSE_SEARCH_DEFAULTS.radius),
   // SERVER-SIDE "Saved" filter (AUB-129 / F11): `?saved=1` (or `?saved=true`)
   // switches the directory to the signed-in viewer's favorites, driven
   // server-side so pagination + the honest total cover the FULL favorites set.
@@ -53,6 +86,16 @@ export const browseSearchSchema = z.object({
   saved: z
     .union([z.boolean(), z.number(), z.string()])
     .transform((value) => value === true || value === 1 || value === "1" || value === "true")
-    .catch(false)
-    .default(false),
+    .catch(BROWSE_SEARCH_DEFAULTS.saved)
+    .default(BROWSE_SEARCH_DEFAULTS.saved),
+  // Prebuilt quick filter (#AUB-135): ONE mutually-exclusive server-side filter
+  // (celiac-safe / gluten-friendly / recently-verified). It carries NO default —
+  // absence means "no quick filter", so it is naturally omitted from the URL when
+  // unset (no `stripSearchParams` entry needed) and a garbage token degrades to
+  // absent via `.catch`. URL-driven like the rest so an applied chip is linkable,
+  // shareable, and back/forward-correct.
+  quick: z
+    .enum(QUICK_FILTER_VALUES as unknown as [QuickFilterValue, ...QuickFilterValue[]])
+    .optional()
+    .catch(undefined),
 });

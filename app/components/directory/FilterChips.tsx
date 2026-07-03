@@ -5,7 +5,6 @@ import type * as React from "react";
 import { useState } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { SearchChip } from "~/components/directory/SearchChip";
-import type { QuickFilter } from "~/components/directory/filtering";
 import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -25,6 +24,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "~/components/ui/sheet";
+import type { QuickFilter } from "~/listings/quick";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 
 /**
@@ -36,10 +36,10 @@ import type { ClaimAttribute } from "~/listings/taxonomy";
  *     community consensus per attribute) — untouched by this redesign; the chip
  *     is purely a new entry point to it, and its badge surfaces the active count.
  *   - **Quick chips** (Celiac-safe / Gluten-friendly / Recently verified) are
- *     CLIENT-side filters over the already-loaded page and are MUTUALLY EXCLUSIVE
- *     (a single {@link QuickFilter} value), matching the bundle. They are real
- *     `<button>`s carrying `aria-pressed` so the toggle state is announced —
- *     never colour alone.
+ *     URL-driven, SERVER-side filters (`?quick=`, AUB-135) and are MUTUALLY
+ *     EXCLUSIVE (a single {@link QuickFilter} value). They are real `<button>`s
+ *     carrying `aria-pressed` so the toggle state is announced — never colour
+ *     alone.
  *
  * SEARCH-AS-CHIP (user feedback #5): the free-text search now leads the row as a
  * {@link SearchChip} (replacing the old standalone search field above the chips).
@@ -228,7 +228,7 @@ export function FilterChips({
         </SheetContent>
       </Sheet>
 
-      {/* Mutually-exclusive quick chips (client-side, over the loaded page). */}
+      {/* Mutually-exclusive quick chips (server-side, URL-driven via `?quick=`). */}
       {QUICK_CHIPS.map(({ value, label, Icon }) => {
         const active = quick === value;
         return (

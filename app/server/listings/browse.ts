@@ -11,6 +11,7 @@ import {
 } from "~/db/schema";
 import { BROWSE_PAGE_SIZE, MAX_PAGE_SIZE } from "~/listings/browse-params";
 import { type Coords, EARTH_RADIUS_KM, milesToKm } from "~/listings/distance";
+import { QUICK_FILTER_VALUES, type QuickFilterValue } from "~/listings/quick";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
 import { getFavoriteCounts, getViewerFavoriteIds } from "~/server/favorites/index";
@@ -19,6 +20,7 @@ import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/brows
 import { findRecentIncident, toCalendarDayString } from "~/trust/incident-recency";
 import { DEFAULT_STALENESS_MONTHS, stalenessCutoff } from "~/trust/summary";
 import { buildBrowseWhere } from "./filter";
+import { buildQuickFilterPredicate } from "./quick-filter";
 import { buildSearchPredicate } from "./search";
 
 /**
@@ -110,6 +112,18 @@ export const browseListingsInputSchema = z.object({
    * user-agnostic — it must never be shared/edge/CDN-cached. See `./browse.fn.ts`.
    */
   savedOnly: z.boolean().default(false),
+  /**
+   * Prebuilt "quick" filter (AUB-135): one mutually-exclusive constraint on the
+   * DISPLAYED safety glance — `celiac` (celiac-safe), `friendly` (gluten-friendly),
+   * or `recent` (freshly verified, no recent incident). Applied server-side as a
+   * correlated predicate AND-folded into the SAME `where` as search/taxonomy/radius,
+   * so the page, total, and pagination all reflect it (see `./quick-filter.ts`).
+   * Omitted → no quick constraint. COMPOSES with `attrs` (AND) and is orthogonal to
+   * `sort` (which only reorders).
+   */
+  quick: z
+    .enum(QUICK_FILTER_VALUES as unknown as [QuickFilterValue, ...QuickFilterValue[]])
+    .optional(),
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
@@ -207,22 +221,31 @@ export async function getBrowseListings(
     savedPredicate = inArray(listings.id, favoriteIds);
   }
 
-  // Compose visibility (#41) with the search/filter (#34/#35), the radius
-  // filter (feedback #7), and the saved filter (F11). `and(...)` drops
-  // `undefined` terms, so a missing search/filter, a missing/incomplete radius,
-  // or an inactive saved filter simply contributes nothing.
+  // Resolve the staleness window ONCE, up front: it is the boundary BOTH the quick
+  // filter's freshness predicate (below) and the trust sort's ORDER BY use, so the
+  // SQL "fresh"/"stale" edge matches the displayed glance EXACTLY (no drift).
+  const resolvedStalenessMonths = stalenessMonths ?? DEFAULT_STALENESS_MONTHS;
+
+  // Prebuilt quick filter (AUB-135): a correlated predicate over the DISPLAYED
+  // safety glance (celiac-safe / gluten-friendly / freshly-verified). Undefined
+  // when no chip is active. AND-folded into the SHARED `where` below so it
+  // constrains the page query AND the count query — the total honestly reflects it.
+  const quickPredicate = buildQuickFilterPredicate(input.quick, now, resolvedStalenessMonths);
+
+  // Compose visibility (#41) with the search/filter (#34/#35), the radius filter
+  // (feedback #7), the saved filter (F11), and the quick filter (AUB-135).
+  // `and(...)` drops `undefined` terms, so any inactive constraint simply
+  // contributes nothing.
   const where =
-    searchAndFilter || radiusPredicate || savedPredicate
-      ? and(visibleListing, searchAndFilter, radiusPredicate, savedPredicate)
+    searchAndFilter || radiusPredicate || savedPredicate || quickPredicate
+      ? and(visibleListing, searchAndFilter, radiusPredicate, savedPredicate, quickPredicate)
       : visibleListing;
 
   // The ORDER BY (#36). Search/filter live in the WHERE above; sort only touches
   // the ORDER BY, so the three compose cleanly. The trust sort joins a per-listing
   // celiac-trust subquery and ranks by the SAME displayed safety tier (confirm/
   // dispute counts + `lastConfirmedAt` staleness), a roll-up of visible evidence,
-  // NOT an opaque score (ADR-007). Resolve the staleness window ONCE so the SQL
-  // "stale" boundary matches the boundary the displayed glance uses (below).
-  const resolvedStalenessMonths = stalenessMonths ?? DEFAULT_STALENESS_MONTHS;
+  // NOT an opaque score (ADR-007).
   const trust = celiacTrustSubquery();
   // Distance sort needs a COMPLETE coordinate pair; a half-pair (or none) means
   // we can't compute distance, so `buildOrderBy` falls back to the default order.

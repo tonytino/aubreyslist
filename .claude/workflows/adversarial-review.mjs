@@ -97,7 +97,8 @@ const reviewerPrompt = (item, round) =>
   `- Trust-model invariants: ADR-007 (transparent evidence, no hidden scoring) and ADR-008 (intake/dedup) must hold.\n` +
   `- Test honesty: no skipped/weakened/missing tests for new code; \`pnpm preflight\` must pass (run it if in doubt).\n` +
   `- Scope creep: unrequested changes, gold-plating, drive-by edits.\n` +
-  `- Documentation drift: docs that no longer match the changed behavior.\n\n` +
+  `- Documentation drift: docs that no longer match the changed behavior.\n` +
+  `- URL-state hygiene: shareable UI state (filters/sort/search/page/tab) kept in useState instead of the URL; defaults leaking into the querystring; a client-only param wrongly added to loaderDeps or a server param not resetting page (docs/agents/url-state.md).\n\n` +
   `Return the structured verdict. Set overall=SHIP ONLY when no blocker/major finding stands ` +
   `CONFIRMED or PLAUSIBLE; otherwise CHANGES_REQUESTED. Default to skepticism: if a real risk is ` +
   `plausible but unproven, mark it PLAUSIBLE rather than dropping it.`

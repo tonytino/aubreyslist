@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_RADIUS_MILES } from "~/listings/distance";
 import { DEFAULT_BROWSE_SORT } from "~/listings/sort";
-import { browseSearchSchema } from "./browse-search";
+import { BROWSE_SEARCH_DEFAULTS, browseSearchSchema } from "./browse-search";
 
 /**
  * Unit tests for the shared browse/directory search-param schema. This schema is
@@ -24,6 +24,17 @@ describe("browseSearchSchema", () => {
       radius: DEFAULT_RADIUS_MILES,
       saved: false,
     });
+  });
+
+  it("keeps BROWSE_SEARCH_DEFAULTS in lockstep with the schema's parsed defaults", () => {
+    // LOAD-BEARING invariant: the route's `stripSearchParams(BROWSE_SEARCH_DEFAULTS)`
+    // middleware drops any outbound param whose value deeply EQUALS its default. If
+    // this map ever drifts from what the schema actually fills for a bare visit, the
+    // URL would either leak a default (map value too low) or strip a real value (map
+    // value wrong). `lat`/`lng` are the only params with no default (always-optional,
+    // absent when unset), so they are excluded from the strip map by design.
+    const { lat: _lat, lng: _lng, ...parsedDefaults } = browseSearchSchema.parse({});
+    expect(parsedDefaults).toEqual(BROWSE_SEARCH_DEFAULTS);
   });
 
   it("passes a fully-specified, valid search through unchanged", () => {
@@ -75,6 +86,17 @@ describe("browseSearchSchema", () => {
   it("truncates nothing but rejects an over-long free-text query to empty", () => {
     expect(browseSearchSchema.parse({ q: "gluten free" }).q).toBe("gluten free");
     expect(browseSearchSchema.parse({ q: "x".repeat(257) }).q).toBe("");
+  });
+
+  it("parses a valid quick filter and drops garbage / absence to undefined", () => {
+    expect(browseSearchSchema.parse({ quick: "celiac" }).quick).toBe("celiac");
+    expect(browseSearchSchema.parse({ quick: "friendly" }).quick).toBe("friendly");
+    expect(browseSearchSchema.parse({ quick: "recent" }).quick).toBe("recent");
+    // Unknown token / wrong type degrades to absent (no chip), never throws.
+    expect(browseSearchSchema.parse({ quick: "bogus" }).quick).toBeUndefined();
+    expect(browseSearchSchema.parse({ quick: 42 }).quick).toBeUndefined();
+    // Omitted → absent, so it carries no default and is stripped from the URL.
+    expect(browseSearchSchema.parse({}).quick).toBeUndefined();
   });
 
   it("coerces radius to a valid option, falling back to the default", () => {
