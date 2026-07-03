@@ -1,10 +1,8 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { ManualIntakeForm } from "~/components/add-listing/ManualIntakeForm";
-import { PlacesIntakeForm } from "~/components/add-listing/PlacesIntakeForm";
+import { AddListingWizard } from "~/components/add-listing/AddListingWizard";
 import { Button } from "~/components/ui/button";
 import { canonicalLink, pageSeoMeta } from "~/lib/seo";
-import type { CreateListingResult } from "~/listings/create-input";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { type IntakeMode, getSetting } from "~/server/settings";
 
@@ -48,35 +46,18 @@ export const Route = createFileRoute("/listings/new")({
 
 function AddListing() {
   const { intakeMode, isSignedIn } = Route.useLoaderData();
-  const navigate = useNavigate();
-
-  /**
-   * On a successful write, route to the listing detail page. A places-mode
-   * duplicate resolves to the existing listing (`created: false`) and we route
-   * there just the same — the user lands on the restaurant they were adding,
-   * which is the graceful "already listed" path (ADR-008 / issue #25).
-   */
-  const handleCreated = (result: CreateListingResult) => {
-    navigate({ to: "/listings/$id", params: { id: result.listing.id } });
-  };
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-section px-4 py-10 text-foreground sm:px-6">
+    <main className="mx-auto flex w-full max-w-2xl flex-col gap-section px-4 py-10 text-foreground sm:px-6">
       <header className="flex flex-col gap-2">
         <h1 className="text-headline font-bold tracking-tight">Add a restaurant</h1>
         <p className="text-body text-muted-foreground">
-          Help the community find gluten-free-safe places. Add a restaurant below — you can attest
-          to how safe it is once it's listed.
+          Help the community find gluten-free-safe places. Add a restaurant, then attest to how safe
+          it is as you go — skip anything you're not sure of.
         </p>
       </header>
 
-      {!isSignedIn ? (
-        <SignInPrompt />
-      ) : intakeMode === "places" ? (
-        <PlacesIntakeForm onCreated={handleCreated} />
-      ) : (
-        <ManualIntakeForm onCreated={handleCreated} />
-      )}
+      {isSignedIn ? <AddListingWizard intakeMode={intakeMode} /> : <SignInPrompt />}
     </main>
   );
 }
