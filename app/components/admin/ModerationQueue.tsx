@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import {
   dismissFlagAction,
   hideContentAction,
@@ -424,14 +425,31 @@ function ActionIcon({ children }: { children: ReactNode }) {
   );
 }
 
-/** Target-type chip: icon SHAPE + visible TEXT label (never colour alone). */
+/** Supplementary explainer copy for each flag target type (tooltip only). */
+const TARGET_TOOLTIP: Record<QueueTargetType, string> = {
+  listing: "A flagged restaurant listing.",
+  claim: "A flagged community claim about a listing's gluten-free attributes.",
+  incident: 'A flagged "got glutened here" incident report.',
+};
+
+/**
+ * Target-type chip: icon SHAPE + visible TEXT label (never colour alone), with a
+ * supplementary `Tooltip` naming what kind of thing was flagged. `tabIndex={0}`
+ * makes the chip reachable on keyboard focus as well as hover; the label already
+ * carries the meaning, so the tooltip is purely supplementary.
+ */
 function TargetChip({ type }: { type: QueueTargetType }) {
   const config = TARGET_CONFIG[type];
   return (
-    <Badge variant="secondary">
-      {config.icon}
-      <span>{config.label}</span>
-    </Badge>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="secondary" tabIndex={0}>
+          {config.icon}
+          <span>{config.label}</span>
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>{TARGET_TOOLTIP[type]}</TooltipContent>
+    </Tooltip>
   );
 }
 
