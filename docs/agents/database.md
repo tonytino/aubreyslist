@@ -229,3 +229,23 @@ The testable core is {@link seedListings} with its DB injected (it takes baked
 data, no resolver); the Places capture lives in {@link refreshSeedData} with its
 resolver injected. See `scripts/seed.ts`, `scripts/refresh-seed-data.ts`,
 `scripts/seed-sources.ts`, and `scripts/seed-data.ts`.
+
+## Backfilling listing maps URLs (`pnpm db:backfill:maps-urls`)
+
+Listings created before the Maps-link fix stored `maps_url` in the legacy
+`https://www.google.com/maps/place/?q=place_id:…` format, which Google Maps no
+longer resolves. `pnpm db:backfill:maps-urls` (`scripts/backfill-maps-urls.ts`)
+rewrites exactly those rows to the documented Maps URLs API format
+(`/maps/search/?api=1&query=<name address>&query_place_id=<place id>`) using
+columns already on each row — **API-free**, needs only `DATABASE_URL`, and
+idempotent (a rewritten row never matches the legacy prefix again). Rows in the
+legacy format with no Place ID are reported and left untouched, never guessed.
+
+- **Local / dev:** `pnpm db:backfill:maps-urls` against your `.env` `DATABASE_URL`.
+- **Production:** run the **"Backfill production maps URLs"** GitHub Action
+  (`.github/workflows/backfill-maps-urls.yml`, `workflow_dispatch`) — uses the
+  `PROD_DATABASE_URL` secret and skips-with-a-warning if it is unset.
+
+New listings don't need it: the Places provider now stores Google's own share
+link (`googleMapsUri` from Place Details) and only falls back to the built
+Maps URLs API link when that field is absent.

@@ -108,7 +108,7 @@ export async function seedListings(
         address: entry.address,
         lat: entry.lat,
         lng: entry.lng,
-        mapsUrl: buildMapsUrl(entry.placeId),
+        mapsUrl: buildMapsUrl(entry.placeId, `${entry.name} ${entry.address}`),
         menuUrl: entry.menuUrl ?? null,
       })
       .onConflictDoNothing({ target: listings.placeId })
@@ -157,14 +157,17 @@ export async function seedListings(
 }
 
 /**
- * The canonical Google Maps deep-link for a Place ID. Mirrors
- * `buildMapsUrl` in `app/server/places.ts` — inlined here (one line) so the CLI
- * never imports that module, which registers `createServerFn` entry points at
- * import time (a client/server transport concern that doesn't belong in a Node
- * script).
+ * The Google Maps deep-link for a Place ID, via the documented Maps URLs API
+ * (Place ID resolved directly; `query` is the required human-readable
+ * fallback). Mirrors `buildMapsUrl` in `app/server/places.ts` — inlined here
+ * (one line) so the CLI never imports that module, which registers
+ * `createServerFn` entry points at import time (a client/server transport
+ * concern that doesn't belong in a Node script).
  */
-function buildMapsUrl(placeId: string): string {
-  return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`;
+function buildMapsUrl(placeId: string, query: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    query
+  )}&query_place_id=${encodeURIComponent(placeId)}`;
 }
 
 /**

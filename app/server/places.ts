@@ -60,7 +60,11 @@ const DETAILS_URL_BASE = "https://places.googleapis.com/v1/places";
 
 // Field mask for place details — request only what we persist on a listing.
 // `id` is the canonical Place ID; the rest map onto `listings` columns.
-const DETAILS_FIELD_MASK = "id,displayName,formattedAddress,location";
+// `googleMapsUri` is Google's own share link for the place (what the Maps
+// "Share" button produces) — the most reliable `mapsUrl` we can store. It is
+// billed in the same (Pro) SKU tier as `displayName`, so requesting it does not
+// change the cost of this call.
+const DETAILS_FIELD_MASK = "id,displayName,formattedAddress,location,googleMapsUri";
 
 /** App-settings key whose value selects the active intake mode (ADR-008). */
 const INTAKE_MODE_KEY = "intake_mode";
@@ -69,9 +73,22 @@ const INTAKE_MODE_KEY = "intake_mode";
 // Result types — typed, friendly, and never leaking the key or raw upstream errors
 // ---------------------------------------------------------------------------
 
-/** Build the canonical Google Maps deep-link for a Place ID. */
-export function buildMapsUrl(placeId: string): string {
-  return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`;
+/**
+ * Build a Google Maps deep-link for a Place ID using the documented Maps URLs
+ * API (`/maps/search/?api=1&query=…&query_place_id=…`). Maps resolves the Place
+ * ID directly and falls back to the human-readable `query` (name + address)
+ * only if the ID can no longer be found. The URLs API requires `query` to be
+ * present whenever `query_place_id` is used.
+ *
+ * Used as the fallback when Place Details doesn't return `googleMapsUri`
+ * (Google's own share link, which we prefer). The previous format here —
+ * `/maps/place/?q=place_id:…` — was never a documented URL and Google Maps
+ * stopped resolving it, which broke every stored listing link.
+ */
+export function buildMapsUrl(placeId: string, query: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    query
+  )}&query_place_id=${encodeURIComponent(placeId)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +158,7 @@ const detailsResponseSchema = z.object({
   displayName: z.object({ text: z.string() }).optional(),
   formattedAddress: z.string().optional(),
   location: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
+  googleMapsUri: z.string().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -265,16 +283,23 @@ export async function runPlaceDetails(
     };
   }
 
-  const { id, displayName, formattedAddress, location } = parsed.data;
+  const { id, displayName, formattedAddress, location, googleMapsUri } = parsed.data;
+  const name = displayName?.text ?? "";
+  // Prefer Google's own share link; the listing-detail page only renders
+  // http(s) URLs (#90), so guard the scheme before trusting the upstream value.
+  const mapsUrl =
+    googleMapsUri?.startsWith("https://") === true
+      ? googleMapsUri
+      : buildMapsUrl(id, `${name} ${formattedAddress}`.trim());
   return {
     ok: true,
     data: {
       placeId: id,
-      name: displayName?.text ?? "",
+      name,
       formattedAddress,
       lat: location.latitude,
       lng: location.longitude,
-      mapsUrl: buildMapsUrl(id),
+      mapsUrl,
     },
   };
 }
