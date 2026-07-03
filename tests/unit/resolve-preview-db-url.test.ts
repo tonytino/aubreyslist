@@ -148,4 +148,25 @@ describe("resolvePreviewConnectionUri", () => {
       })
     ).rejects.toThrow(/NEON_PROJECT_ID/);
   });
+
+  it("rethrows an auto-detect API failure (e.g. 400 from an org-scoped key) with the NEON_PROJECT_ID fix", async () => {
+    // `GET /projects` 400s (org-scoped key) → not in the routes map, so mockFetch 404s;
+    // simulate the 400 directly.
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      json: async () => ({}),
+    }));
+
+    await expect(
+      resolvePreviewConnectionUri({
+        apiKey: "key",
+        branchName: "preview/x",
+        fetchImpl,
+        sleep: async () => {},
+        log: silentLog,
+      })
+    ).rejects.toThrow(/NEON_PROJECT_ID/);
+  });
 });

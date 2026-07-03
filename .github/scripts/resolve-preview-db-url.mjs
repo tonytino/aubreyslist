@@ -29,17 +29,35 @@ async function neonGet(apiKey, path, fetchImpl) {
   return res.json();
 }
 
-/** Resolve the project id: use the provided one, else the account's sole project. */
+/** Guidance appended to every project-resolution failure — the one-line fix. */
+const SET_PROJECT_ID =
+  "Set the NEON_PROJECT_ID repo secret (Neon console → your project → Settings, " +
+  "or the project ID in its dashboard URL).";
+
+/**
+ * Resolve the project id: use the provided one, else the account's sole project.
+ *
+ * Auto-detection calls `GET /projects`, which fails for an ORGANIZATION-scoped API
+ * key (it returns 400 without an `org_id`) — so any failure here rethrows with the
+ * actionable "set NEON_PROJECT_ID" fix rather than a raw HTTP error. Passing
+ * NEON_PROJECT_ID skips this call entirely and works with any key type.
+ */
 async function resolveProjectId(apiKey, projectId, fetchImpl) {
   if (projectId) return projectId;
-  const { projects } = await neonGet(apiKey, "/projects", fetchImpl);
+
+  let projects;
+  try {
+    ({ projects } = await neonGet(apiKey, "/projects", fetchImpl));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not auto-detect the Neon project (${detail}). ${SET_PROJECT_ID}`);
+  }
+
   if (!projects || projects.length === 0) {
-    throw new Error("No Neon projects found for this API key — set NEON_PROJECT_ID.");
+    throw new Error(`No Neon projects found for this API key. ${SET_PROJECT_ID}`);
   }
   if (projects.length > 1) {
-    throw new Error(
-      `Neon API key has ${projects.length} projects — set NEON_PROJECT_ID to disambiguate.`
-    );
+    throw new Error(`This Neon API key has ${projects.length} projects. ${SET_PROJECT_ID}`);
   }
   return projects[0].id;
 }
