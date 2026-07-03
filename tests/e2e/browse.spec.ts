@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { openBrowseFilters } from "./helpers";
+import { openBrowseFilters, waitForBrowseReady } from "./helpers";
 
 /**
  * Smoke test for the browse/directory route (#33, AUB-61 redesign). Open to
@@ -47,6 +47,36 @@ test("/listings redirect preserves search params", async ({ page }) => {
   await expect(page).not.toHaveURL(/\/listings/);
   await expect(page).toHaveURL(/page=2/);
   await expect(page).toHaveURL(/sort=trust/);
+});
+
+/**
+ * Prebuilt quick filter (AUB-135). A quick chip is now a URL-driven, server-side
+ * filter, so applying it writes `?quick=` and it survives a full reload / shared
+ * link — the bug this fixes was that the chip lived in local state and vanished on
+ * rerender. DB-agnostic: we assert the URL + the chip's pressed state, not results.
+ */
+test("a quick chip persists in the URL and across a reload", async ({ page }) => {
+  await page.goto("/");
+  await waitForBrowseReady(page);
+
+  const celiac = page.getByRole("button", { name: "Celiac-safe" });
+  await celiac.click();
+  await expect(page).toHaveURL(/[?&]quick=celiac/);
+  await expect(celiac).toHaveAttribute("aria-pressed", "true");
+
+  // The real test: reload the page. The chip must come back active from the URL
+  // (it is derived from `?quick=`, not held in client state that a reload discards).
+  await page.reload();
+  await waitForBrowseReady(page);
+  await expect(page).toHaveURL(/[?&]quick=celiac/);
+  await expect(page.getByRole("button", { name: "Celiac-safe" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+
+  // Toggling it off clears the param (no default → stripped) — a clean URL again.
+  await page.getByRole("button", { name: "Celiac-safe" }).click();
+  await expect(page).not.toHaveURL(/quick=/);
 });
 
 /**

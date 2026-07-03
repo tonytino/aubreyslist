@@ -1,0 +1,111 @@
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { describe, expect, it } from "vitest";
+import { DEFAULT_STALENESS_MONTHS } from "~/trust/summary";
+import { buildQuickFilterPredicate } from "./quick-filter";
+
+/**
+ * Unit tests for the prebuilt quick-filter SQL predicate (AUB-135).
+ *
+ * The classification RULES themselves are unit-tested as pure functions in
+ * `app/trust/summary.test.ts` (`deriveHeadlineSafetyState`) and the freshness
+ * formatter. Here we assert the SQL EXPRESSION of those rules — that each token
+ * becomes a correlated subquery over `listings.id` and, critically, that the
+ * trust-relevant BOUNDARIES (strict `>` for celiac-safe, `<=` for gluten-friendly,
+ * the staleness cutoff, and the recent-incident window) are encoded faithfully so a
+ * weakening regression fails here. No live database (docs/agents/testing.md).
+ */
+
+const NOW = new Date("2026-06-28T00:00:00Z");
+const dialect = new PgDialect();
+function render(node: SQL): { sql: string; lower: string; params: unknown[] } {
+  const query = dialect.sqlToQuery(node);
+  return { sql: query.sql, lower: query.sql.toLowerCase(), params: query.params };
+}
+
+describe("buildQuickFilterPredicate", () => {
+  it("returns undefined when no quick filter is active", () => {
+    expect(buildQuickFilterPredicate(undefined, NOW, DEFAULT_STALENESS_MONTHS)).toBeUndefined();
+    expect(buildQuickFilterPredicate(null, NOW, DEFAULT_STALENESS_MONTHS)).toBeUndefined();
+  });
+
+  describe("celiac (safetyState === 'celiac-safe')", () => {
+    it("is a correlated EXISTS over the visible celiac claim, confirms > disputes AND fresh", () => {
+      const predicate = buildQuickFilterPredicate("celiac", NOW, DEFAULT_STALENESS_MONTHS);
+      expect(predicate).toBeDefined();
+      const { lower, params } = render(predicate as SQL);
+
+      expect(lower).toContain("exists");
+      expect(lower).toContain('from "claims"');
+      expect(lower).toContain('left join "attestations"');
+      expect(lower).toContain("group by");
+      expect(lower).toContain("having");
+      expect(lower).toContain("'confirm'");
+      expect(lower).toContain("'dispute'");
+      // Visibility (#41) + the single headline attribute, bound as params.
+      expect(lower).toContain("moderation_status");
+      expect(params).toContain("visible");
+      expect(params).toContain("celiac_safe_vs_gluten_friendly");
+      // Freshness cutoff is bound as a Date param (staleness boundary).
+      expect(params.some((p) => p instanceof Date)).toBe(true);
+    });
+
+    it("LOCK: uses a STRICT confirms > disputes (a tie is contested, never celiac-safe)", () => {
+      const { lower } = render(
+        buildQuickFilterPredicate("celiac", NOW, DEFAULT_STALENESS_MONTHS) as SQL
+      );
+      // The strict `> ` compares the confirm tally (left) to the dispute tally (right).
+      const gtIndex = lower.indexOf(" > ");
+      expect(gtIndex).toBeGreaterThan(-1);
+      expect(lower.indexOf("'confirm'")).toBeLessThan(gtIndex);
+      expect(lower.lastIndexOf("'dispute'")).toBeGreaterThan(gtIndex);
+      // Fresh is INCLUSIVE (`>=` the cutoff), matching `isStale`'s edge rule, and a
+      // null lastConfirmedAt is treated as fresh (not stale).
+      expect(lower).toContain(">=");
+      expect(lower).toContain("is null");
+    });
+  });
+
+  describe("friendly (safetyState === 'gluten-friendly')", () => {
+    it("LOCK: has evidence AND confirms <= disputes (contested / dispute-majority)", () => {
+      const predicate = buildQuickFilterPredicate("friendly", NOW, DEFAULT_STALENESS_MONTHS);
+      const { lower, params } = render(predicate as SQL);
+
+      expect(lower).toContain("exists");
+      expect(lower).toContain("having");
+      // hasEvidence: at least one attestation.
+      expect(lower).toContain("> 0");
+      // The direction lock: disputes tie or outnumber confirms → gluten-friendly.
+      expect(lower).toContain("<=");
+      expect(params).toContain("celiac_safe_vs_gluten_friendly");
+      expect(params).toContain("visible");
+    });
+  });
+
+  describe("recent (freshness.kind === 'fresh')", () => {
+    it("requires a fresh confirmation AND no recent visible incident", () => {
+      const predicate = buildQuickFilterPredicate("recent", NOW, DEFAULT_STALENESS_MONTHS);
+      const { lower, params } = render(predicate as SQL);
+
+      // A within-window confirmation: non-null lastConfirmedAt on/after the cutoff.
+      expect(lower).toContain("exists");
+      expect(lower).toContain("is not null");
+      expect(lower).toContain(">=");
+      expect(params.some((p) => p instanceof Date)).toBe(true);
+
+      // The incident cue outranks freshness → NOT EXISTS a recent visible incident.
+      expect(lower).toContain("not exists");
+      expect(lower).toContain('from "incidents"');
+      expect(lower).toContain("occurred_on");
+      expect(lower).toContain("moderation_status");
+
+      // The recency window is expressed as UTC calendar-date bounds (params), NOT
+      // `current_date`, so it is deterministic against the injected `now`.
+      const dateParams = params.filter(
+        (p): p is string => typeof p === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p)
+      );
+      expect(dateParams).toContain("2026-06-28"); // today (UTC)
+      expect(dateParams).toContain("2026-03-30"); // today − 90 days (UTC)
+    });
+  });
+});
