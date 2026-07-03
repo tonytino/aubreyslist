@@ -94,6 +94,41 @@ describe("verifyMigrations (core)", () => {
     expect(result.extraApplied).toEqual([{ hash: renamedAway.hash, createdAt: renamedAway.when }]);
   });
 
+  it("downgrades a hash mismatch WITH a timestamp match to DRIFTED (warn, not fail)", async () => {
+    // The persistent-CI-branch shape: 0002_old_tigra was applied as a draft,
+    // then the file was hand-edited (the documented DELETE prepend) — the
+    // recorded hash never matches the current file, but a row exists at the
+    // entry's `when`, so the migrator DID run that journal slot.
+    const editedAfterApply = JOURNAL[2] as JournalMigration;
+    const applied = appliedFor(JOURNAL).map((row) =>
+      row.createdAt === editedAfterApply.when ? { ...row, hash: "0".repeat(64) } : row
+    );
+    const result = await verifyMigrations(JOURNAL, { execute: fakeExecutor(applied) });
+
+    expect(result.ok).toBe(true);
+    expect(result.missing).toEqual([]);
+    expect(result.drifted.map((d) => d.tag)).toEqual(["0002_old_tigra"]);
+    // The timestamp-matched row is the drifted entry's counterpart, not "extra".
+    expect(result.extraApplied).toEqual([]);
+  });
+
+  it("still FAILS when an unmatched entry has no applied row at its `when` either", async () => {
+    // Drift tolerance must not swallow the real hazard: a skipped migration
+    // leaves NO row at its journal timestamp at all.
+    const applied = appliedFor(JOURNAL.filter((e) => e.tag !== "0003_amazing_meteorite"));
+    // Add drift on another entry to prove the two classifications coexist.
+    const withDrift = applied.map((row) =>
+      row.createdAt === (JOURNAL[2] as JournalMigration).when
+        ? { ...row, hash: "f".repeat(64) }
+        : row
+    );
+    const result = await verifyMigrations(JOURNAL, { execute: fakeExecutor(withDrift) });
+
+    expect(result.ok).toBe(false);
+    expect(result.missing.map((m) => m.tag)).toEqual(["0003_amazing_meteorite"]);
+    expect(result.drifted.map((d) => d.tag)).toEqual(["0002_old_tigra"]);
+  });
+
   it("matches by HASH, not timestamp — a re-timestamped but identical file still matches", async () => {
     // Renumbering that PRESERVES content keeps the sha256, so an applied row
     // recorded under a different `created_at` still satisfies the journal.
@@ -162,6 +197,20 @@ describe("runCli (shell)", () => {
 
     expect(code).toBe(0);
     expect(lines.join("\n")).toContain("tolerated");
+  });
+
+  it("exits 0 with a warn line naming each DRIFTED tag", async () => {
+    const { log, lines } = collectingLog();
+    const drifted = JOURNAL[2] as JournalMigration;
+    const applied = appliedFor(JOURNAL).map((row) =>
+      row.createdAt === drifted.when ? { ...row, hash: "0".repeat(64) } : row
+    );
+    const code = await runCli({ journal: JOURNAL, execute: fakeExecutor(applied) }, log);
+
+    expect(code).toBe(0);
+    const output = lines.join("\n");
+    expect(output).toContain("DRIFTED  0002_old_tigra");
+    expect(output).toContain("OK: all 4 journal migration(s) are applied");
   });
 
   it("exits 1 when the bookkeeping table is missing but the journal is not empty", async () => {

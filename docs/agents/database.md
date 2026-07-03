@@ -90,8 +90,15 @@ it, the migrate step reported success, and the preview app broke with
 The guard: **`pnpm db:verify`** (`scripts/verify-migrations.ts`) checks that
 every entry in `db/migrations/meta/_journal.json` has a matching applied row in
 `drizzle.__drizzle_migrations` (matched by the same sha256-of-file-content hash
-the migrator records) and exits non-zero naming each missing tag. Extra applied
-rows (renamed-away history a DB already ran) are tolerated as info. It runs in
+the migrator records) and exits non-zero naming each missing tag. Two kinds of
+history divergence are tolerated, not failed: extra applied rows (renamed-away
+history a DB already ran) are info, and a hash mismatch whose row still exists
+at the entry's recorded `when` is a **DRIFTED** warning — the DB ran a
+since-edited version of that file (e.g. the persistent CI branch applied a
+draft of `0002_old_tigra` before its documented hand-edit), so the journal slot
+was genuinely executed and the "migrations in sync with schema" check guards
+the schema itself. Only a journal entry with **no row at all** — the true
+silent-skip — fails the run. It runs in
 CI **immediately after every `pnpm db:migrate`** — `ci.yml` (`db-migrate` job),
 `migrate.yml`, `migrate-preview.yml`, and `seed-prod.yml` — so a journal/DB
 divergence fails the workflow instead of surfacing as a runtime 500. You can
