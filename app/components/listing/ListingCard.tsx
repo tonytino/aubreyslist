@@ -1,9 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
+import type { ComponentProps } from "react";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { Badge } from "~/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
+import { cn } from "~/lib/utils";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
 
 /**
@@ -89,6 +92,31 @@ const FRESHNESS = {
 } as const;
 
 /**
+ * An attributed community pill — the shared shell for the save-count and
+ * Google-rating pills, each wrapped in a supplementary ADR-007 tooltip.
+ *
+ * A real, non-submitting `<button type="button">`: a legitimately-focusable
+ * `TooltipTrigger` (fires on hover AND keyboard focus) with proper interactive
+ * semantics, rather than a `tabIndex`-hacked `<span>`. Tailwind's preflight already
+ * strips native button chrome (transparent background, zero border), so the pill's
+ * own utility classes fully define its look. Callers pass the accent `className`
+ * plus `data-testid`; the pill stays a NON-safety signal (ADR-007) — its meaning
+ * always lives in the visible text it wraps, never in the tooltip alone.
+ */
+function AttributedPill({ className, type = "button", ...props }: ComponentProps<"button">) {
+  return (
+    <button
+      type={type}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-chip px-2 py-1 text-caption font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+/**
  * One scannable browse-list card (issue #33, AUB-61 redesign).
  *
  * A PROP-DRIVEN, CLIENT-SAFE presentational card bound to a {@link RestaurantCardVM}.
@@ -111,17 +139,23 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
   const freshness = vm.freshness ? FRESHNESS[vm.freshness.kind] : null;
 
   return (
-    // Stretched-link pattern: a relatively-positioned card SHELL holds the Link
-    // (which stretches an `after:` overlay across the whole card, so clicking
-    // anywhere navigates — one large tap target) AND the Heart button as a
-    // SIBLING of the Link, raised above the overlay with `relative z-10` so it
-    // stays independently focusable/clickable. The button is NOT a descendant of
-    // the anchor — valid HTML, no interactive-nesting a11y defect.
+    // Overlay stretched-link pattern: a relatively-positioned card SHELL holds the
+    // Link, whose visible content is only the MEDIA but whose `after:inset-0`
+    // overlay (resolved against the shell) stretches clickability across the WHOLE
+    // card — so the tile stays ONE tap target. The BODY (name, pills, safety, meta)
+    // is a SIBLING of the Link in NORMAL FLOW, not a descendant of the anchor, so
+    // the pills can be real interactive tooltip triggers. Non-interactive text
+    // (name, address) sits BELOW the overlay so clicking it still navigates;
+    // interactive siblings (pills, Heart) are raised above it with `relative z-10`.
+    // No interactive/focusable element is nested inside the <a> — valid HTML.
     <div className="group relative overflow-hidden rounded-card border border-border bg-card text-card-foreground shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand-ring hover:shadow-md focus-within:border-brand-ring">
+      {/* The anchor wraps only the media; the h3 is no longer inside it, so the
+          link takes its accessible name from `aria-label`. */}
       <Link
         to="/listings/$id"
         params={{ id: vm.id }}
-        className="block rounded-card after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+        aria-label={vm.name}
+        className="block after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
       >
         {/* Photo area — a real <img> when available, else the accent placeholder tile. */}
         <div className="relative h-[158px] overflow-hidden">
@@ -142,103 +176,122 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             </div>
           )}
         </div>
+      </Link>
 
-        {/* Body */}
-        <div className="flex flex-col gap-1 px-4 pb-4 pt-3">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-display text-card-title font-bold text-foreground">{vm.name}</h3>
+      {/* Body — a SIBLING of the Link (NOT nested in the anchor). */}
+      <div className="flex flex-col gap-1 px-4 pb-4 pt-3">
+        {/* Title row: name (left, below the overlay so it stays click-to-navigate)
+            + the attributed pills cluster (right). Both live in ONE flex row, so
+            they REFLOW side-by-side and a long name can never slide under the pills
+            (no absolute overlay, no magic offsets). */}
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="min-w-0 break-words font-display text-card-title font-bold text-foreground">
+            {vm.name}
+          </h3>
 
-            {/* Attributed community pills — same ADR-007 treatment as the Google
-                rating: colour + text label, NEVER a safety verdict, and kept in the
-                TITLE row (never adjacent to the SafetySignal row below). */}
-            <div className="flex shrink-0 items-center gap-1.5">
+          {/* Attributed community pills (save-count + external Google rating). In
+              flow in the title row, but raised above the stretched-link overlay
+              with `relative z-10` so hover/focus reaches them — the ONLY reason
+              they can be real tooltip triggers is that they are NOT descendants of
+              the <a>. ADR-007: EXTERNAL / community signals, explicitly attributed,
+              NEVER a safety verdict — all safety meaning stays in SafetySignal (a
+              separate row below). Each pill's meaning lives in its visible text
+              ("saves" / "Google"); the tooltip is only supplementary. */}
+          {(vm.saveCount && vm.saveCount > 0) || vm.googleRating ? (
+            <div className="relative z-10 flex shrink-0 items-center gap-1.5">
               {/* Public save-count — ATTRIBUTED ("saves"), hidden at 0. A distinct
                   accent (lavender) from the safety-state colours (ADR-007). */}
               {vm.saveCount && vm.saveCount > 0 ? (
-                <span
-                  data-testid="save-count"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-accent-lavender/50 px-2 py-1 text-caption font-semibold text-foreground"
-                >
-                  <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                  <span>{vm.saveCount}</span>
-                  <span className="font-normal text-muted-foreground">saves</span>
-                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AttributedPill data-testid="save-count" className="bg-accent-lavender/50">
+                      <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                      <span>{vm.saveCount}</span>
+                      <span className="font-normal text-muted-foreground">saves</span>
+                    </AttributedPill>
+                  </TooltipTrigger>
+                  <TooltipContent>Community saves — not a safety score.</TooltipContent>
+                </Tooltip>
               ) : null}
 
               {/* External Google Places rating — ATTRIBUTED, never a safety score (ADR-007). */}
               {vm.googleRating ? (
-                <span
-                  data-testid="google-rating"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-accent-peach/50 px-2 py-1 text-caption font-semibold text-foreground"
-                >
-                  <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                  <span>{vm.googleRating.value.toFixed(1)}</span>
-                  <span className="font-normal text-muted-foreground">Google</span>
-                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AttributedPill data-testid="google-rating" className="bg-accent-peach/50">
+                      <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                      <span>{vm.googleRating.value.toFixed(1)}</span>
+                      <span className="font-normal text-muted-foreground">Google</span>
+                    </AttributedPill>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Google rating — not an Aubrey's List safety score.
+                  </TooltipContent>
+                </Tooltip>
               ) : null}
             </div>
-          </div>
+          ) : null}
+        </div>
 
-          <p className="text-body-sm text-muted-foreground">
-            {vm.address}
-            {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
-          </p>
+        <p className="text-body-sm text-muted-foreground">
+          {vm.address}
+          {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
+        </p>
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {vm.safetyState ? (
-              <SafetySignal state={vm.safetyState} />
-            ) : vm.suggestedByBot ? (
-              // Curator-bot suggestion (AUB-31): a seeded starter label, NOT a
-              // verdict. Meaning is in text + icon (never colour alone) and clears
-              // the moment a real user attests. Distinct from "Not yet attested".
-              <Badge
-                variant="outline"
-                className="gap-1.5 border-accent-lavender bg-accent-lavender/30 px-2.5 py-1 text-body-sm font-medium text-foreground"
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {vm.safetyState ? (
+            <SafetySignal state={vm.safetyState} />
+          ) : vm.suggestedByBot ? (
+            // Curator-bot suggestion (AUB-31): a seeded starter label, NOT a
+            // verdict. Meaning is in text + icon (never colour alone) and clears
+            // the moment a real user attests. Distinct from "Not yet attested".
+            <Badge
+              variant="outline"
+              className="gap-1.5 border-accent-lavender bg-accent-lavender/30 px-2.5 py-1 text-body-sm font-medium text-foreground"
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Suggested by Aubrey's Bot
+            </Badge>
+          ) : (
+            // Honest empty state: no celiac claim / no attestation evidence yet.
+            // Plain text label — meaning never rests on colour (styling.md).
+            <Badge
+              variant="outline"
+              className="border-dashed px-2.5 py-1 text-body-sm font-medium text-muted-foreground"
+            >
+              Not yet attested
+            </Badge>
+          )}
+
+          {/* Recent harm flags the card regardless of older confirmations. */}
+          {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
+        </div>
+
+        {/* Meta row — freshness cue (left) + evidence counts (right). */}
+        {(freshness || vm.evidence) && (
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-caption">
+            {freshness && vm.freshness ? (
+              <span
+                className={`inline-flex items-center gap-1.5 font-semibold ${freshness.className}`}
               >
-                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                Suggested by Aubrey's Bot
-              </Badge>
+                <freshness.Icon className="h-4 w-4" aria-hidden="true" />
+                <span>{vm.freshness.label}</span>
+              </span>
             ) : (
-              // Honest empty state: no celiac claim / no attestation evidence yet.
-              // Plain text label — meaning never rests on colour (styling.md).
-              <Badge
-                variant="outline"
-                className="border-dashed px-2.5 py-1 text-body-sm font-medium text-muted-foreground"
-              >
-                Not yet attested
-              </Badge>
+              <span />
             )}
 
-            {/* Recent harm flags the card regardless of older confirmations. */}
-            {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
+            {vm.evidence ? (
+              <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground">
+                <Users className="h-4 w-4" aria-hidden="true" />
+                <span>
+                  {vm.evidence.confirmations} confirmations · {vm.evidence.contributors} neighbors
+                </span>
+              </span>
+            ) : null}
           </div>
-
-          {/* Meta row — freshness cue (left) + evidence counts (right). */}
-          {(freshness || vm.evidence) && (
-            <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-caption">
-              {freshness && vm.freshness ? (
-                <span
-                  className={`inline-flex items-center gap-1.5 font-semibold ${freshness.className}`}
-                >
-                  <freshness.Icon className="h-4 w-4" aria-hidden="true" />
-                  <span>{vm.freshness.label}</span>
-                </span>
-              ) : (
-                <span />
-              )}
-
-              {vm.evidence ? (
-                <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground">
-                  <Users className="h-4 w-4" aria-hidden="true" />
-                  <span>
-                    {vm.evidence.confirmations} confirmations · {vm.evidence.contributors} neighbors
-                  </span>
-                </span>
-              ) : null}
-            </div>
-          )}
-        </div>
-      </Link>
+        )}
+      </div>
 
       {/* Save/heart affordance (F6, AUB-125). A SIBLING of the Link (not a
           descendant — a <button> inside an <a> is invalid HTML), raised above the

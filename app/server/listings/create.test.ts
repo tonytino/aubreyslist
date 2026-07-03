@@ -412,18 +412,27 @@ describe("runCreateListing — manual mode", () => {
     expect(insertMock).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects a manual submission while intake is in places mode", async () => {
+  it("accepts a manual submission while intake is in places mode (manual is always a fallback)", async () => {
+    // Manual is a first-class fallback in EVERY mode (ADR-008 amendment): the
+    // wizard's "Enter manually instead" path must still write while Places is the
+    // active intake. The manual path never calls the Places provider.
     getSettingMock.mockResolvedValue("places");
+    const created = listingRow({ placeId: null });
+    returningResult = [created];
 
-    await expect(
-      runCreateListing({
-        mode: "manual",
-        name: "Corner Cafe",
-        address: "1 Main St, Denver",
-        lat: 39.74,
-        lng: -104.99,
-      })
-    ).rejects.toThrow(/places/i);
+    const result = await runCreateListing({
+      mode: "manual",
+      name: "Corner Cafe",
+      address: "1 Main St, Denver",
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    expect(result).toEqual({ listing: created, created: true });
+    expect(runPlaceDetailsMock).not.toHaveBeenCalled();
+    expect(insertMock).toHaveBeenCalledTimes(1);
+    const inserted = valuesMock.mock.calls[0]?.[0];
+    expect(inserted?.placeId).toBeNull();
   });
 });
 

@@ -2,25 +2,25 @@ name: Mutation testing
 
 # Mutation testing on the trust-critical modules (issue #187, part of #178).
 # Diff-coverage proves changed lines EXECUTE; this proves the tests would CATCH
-# a bug. It is scoped to the highest-stakes pure logic, so we only run it when
-# one of those modules actually changes (the `paths` filter below) — plus a
-# manual trigger for ad-hoc runs and ratchet checks. Stryker exits non-zero when
-# the mutation score drops below `thresholds.break` in stryker.conf.json, which
+# a bug. It is scoped to the highest-stakes pure logic, so the expensive Stryker
+# run only happens when one of those modules actually changes — plus a manual
+# trigger for ad-hoc runs and ratchet checks. Stryker exits non-zero when the
+# mutation score drops below `thresholds.break` in stryker.conf.json, which
 # hard-fails this job.
+#
+# The relevance check lives INSIDE the job (the `relevance` step) rather than as
+# a trigger-level `paths` filter. This check is required by the branch ruleset,
+# and a path-filtered workflow never reports on PRs outside its paths — leaving
+# the required check stuck "Expected" and blocking the merge of every unrelated
+# PR. Running always and no-op'ing with success keeps the gate enforceable.
 on:
   pull_request:
-    paths:
-      - "app/trust/**"
-      - "app/server/listings/dedup.ts"
-      - "app/server/rate-limit/**"
-      # Re-run when the gate itself or its inputs change.
-      - "stryker.conf.json"
-      - ".github/workflows/mutation.yml"
   workflow_dispatch:
 
-# Least privilege: this workflow only needs to read the repo.
+# Least privilege: reads the repo; lists the PR's changed files.
 permissions:
   contents: read
+  pull-requests: read
 
 # Cancel superseded runs on the same ref (e.g. rapid pushes to a PR).
 concurrency:
@@ -33,20 +33,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Decide whether this PR touches trust-critical logic (or the gate's own
+      # inputs). When it doesn't, every later step is skipped and the job still
+      # reports success — see the header comment for why this is not a trigger
+      # `paths` filter. `workflow_dispatch` runs always execute the full suite.
+      - name: Check whether trust-critical paths changed
+        id: relevance
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Retry the listing: a transient API failure must not fail (or worse,
+          # silently pass) this required check.
+          files=""
+          for attempt in 1 2 3; do
+            if files=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename'); then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "::error::Could not list the PR's changed files after 3 attempts."
+              exit 1
+            fi
+            sleep 10
+          done
+          # The files endpoint caps at 3000 entries. A PR that large gets the
+          # full run rather than risking a silently skipped gate.
+          if [ "$(echo "$files" | wc -l)" -ge 3000 ] \
+            || echo "$files" | grep -qE '^(app/trust/|app/server/listings/dedup\.ts$|app/server/rate-limit/|stryker\.conf\.json$|\.github/workflows/mutation\.yml$)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "No trust-critical files changed — skipping mutation tests and reporting success."
+          fi
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: github.event_name != 'pull_request' || steps.relevance.outputs.relevant == 'true'
 
       # pnpm version comes from `packageManager` in package.json
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        if: github.event_name != 'pull_request' || steps.relevance.outputs.relevant == 'true'
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        if: github.event_name != 'pull_request' || steps.relevance.outputs.relevant == 'true'
         with:
           node-version-file: .nvmrc
           cache: "pnpm"
 
       - name: Install dependencies
+        if: github.event_name != 'pull_request' || steps.relevance.outputs.relevant == 'true'
         run: pnpm install --frozen-lockfile
 
       # Runs `stryker run` (stryker.conf.json). Exits non-zero — and so fails
       # this job — when the mutation score falls below `thresholds.break`.
       - name: Mutation tests
+        if: github.event_name != 'pull_request' || steps.relevance.outputs.relevant == 'true'
         run: pnpm test:mutation

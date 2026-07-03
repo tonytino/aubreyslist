@@ -1,0 +1,1 @@
+- `[manual]` Fixed the add-a-listing wizard's "Enter manually instead" fallback failing on submit while Google Places intake was enabled — manual entry is now always accepted, while disabling Places (budget/rate-limit degradation) still blocks Places-backed writes.

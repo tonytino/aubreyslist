@@ -17,6 +17,7 @@ const place = (over: Partial<ResolvedPlace> = {}): ResolvedPlace => ({
   lng: -104.99,
   googleRating: 4.8,
   googleRatingCount: 120,
+  googleMapsUri: "https://maps.google.com/?cid=98765",
   ...over,
 });
 
@@ -45,6 +46,7 @@ describe("refreshSeedData", () => {
         menuUrl: "https://example.com/menu",
         googleRating: 4.8,
         googleRatingCount: 120,
+        googleMapsUri: "https://maps.google.com/?cid=98765",
       },
     ]);
   });
@@ -60,7 +62,7 @@ describe("refreshSeedData", () => {
     ]);
   });
 
-  it("defaults a missing menuUrl and missing rating to null on the baked entry", async () => {
+  it("defaults a missing menuUrl, rating, and maps link to null on the baked entry", async () => {
     // A resolver + source that omit the optional fields entirely.
     const bareResolved: ResolvedPlace = {
       placeId: "place-1",
@@ -81,6 +83,7 @@ describe("refreshSeedData", () => {
       menuUrl: null,
       googleRating: null,
       googleRatingCount: null,
+      googleMapsUri: null,
     });
   });
 });

@@ -61,9 +61,12 @@ function buildReturnTo(listingId: string): string {
  * `useEffect`/`useState` fetch.
  *
  * SIGNED-IN: an OPTIMISTIC toggle — the `["favorites"]` cache flips immediately
- * on click; a failed write rolls back to the pre-click snapshot and surfaces an
- * error toast; `onSettled` re-invalidates so the cache reconciles with the
- * server. The button is disabled while the write is in flight.
+ * on click; a successful write confirms with a direction-aware success toast
+ * (favorited vs unfavorited, read from the mutation variable — not the
+ * post-invalidation cache); a failed write rolls back to the pre-click snapshot
+ * and surfaces an error toast; `onSettled` re-invalidates so the cache
+ * reconciles with the server. The button is disabled while the write is in
+ * flight.
  *
  * ANONYMOUS: NO write is attempted. The click opens a Radix dialog explaining
  * favorites with a "Sign in" action linking to Google OAuth, carrying a
@@ -106,6 +109,13 @@ export function FavoriteButton({ listingId, listingName, className }: FavoriteBu
         return ids.filter((id) => id !== listingId);
       });
       return { previous };
+    },
+    onSuccess: (_data, nextFavorited) => {
+      // Direction comes from the mutation variable, not post-invalidation cache
+      // state — the cache has already been flipped optimistically by the time
+      // this runs, so reading it back would be redundant (and fragile if a
+      // concurrent invalidation lands first).
+      toast.success(nextFavorited ? "Saved to your spots" : "Removed from your saved spots");
     },
     onError: (_error, _nextFavorited, context) => {
       // Roll back to the pre-click snapshot and tell the diner it didn't stick.

@@ -65,8 +65,16 @@ afterEach(() => {
 });
 
 describe("buildMapsUrl", () => {
-  it("builds a place_id deep-link", () => {
-    expect(buildMapsUrl("ChIJ_abc")).toBe("https://www.google.com/maps/place/?q=place_id:ChIJ_abc");
+  it("builds a documented Maps URLs API link with the query and the Place ID", () => {
+    expect(buildMapsUrl("ChIJ_abc", "Aubrey's Cafe 123 Main St")).toBe(
+      "https://www.google.com/maps/search/?api=1&query=Aubrey's%20Cafe%20123%20Main%20St&query_place_id=ChIJ_abc"
+    );
+  });
+
+  it("URL-encodes both the query and the Place ID", () => {
+    const url = buildMapsUrl("ChIJ+&?", "a & b");
+    expect(url).toContain("query=a%20%26%20b");
+    expect(url).toContain("query_place_id=ChIJ%2B%26%3F");
   });
 });
 
@@ -159,17 +167,61 @@ describe("runPlaceDetails", () => {
       formattedAddress: "123 Main St, Denver, CO",
       lat: 39.7392,
       lng: -104.9903,
-      mapsUrl: "https://www.google.com/maps/place/?q=place_id:ChIJ_target",
+      mapsUrl: buildMapsUrl("ChIJ_target", "Aubrey's Cafe 123 Main St, Denver, CO"),
     });
 
     // Place ID is the dedup key and the Maps deep-link is derived from it.
     expect(result.data.placeId).toBe("ChIJ_target");
-    expect(result.data.mapsUrl).toContain("place_id:ChIJ_target");
+    expect(result.data.mapsUrl).toContain("query_place_id=ChIJ_target");
 
     const [url, init] = fetchSpy.mock.calls[0] ?? [];
     expect(url).toBe("https://places.googleapis.com/v1/places/ChIJ_target");
     expect(init.headers["X-Goog-Api-Key"]).toBe("test-key");
     expect(init.headers["X-Goog-FieldMask"]).toContain("location");
+    // The share link must be requested, or Google never returns it.
+    expect(init.headers["X-Goog-FieldMask"]).toContain("googleMapsUri");
+  });
+
+  it("prefers Google's own share link (googleMapsUri) when present", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce({
+        id: "ChIJ_target",
+        displayName: { text: "Aubrey's Cafe" },
+        formattedAddress: "123 Main St, Denver, CO",
+        location: { latitude: 39.7392, longitude: -104.9903 },
+        googleMapsUri: "https://maps.google.com/?cid=12345",
+      })
+    );
+
+    const result = await runPlaceDetails({ placeId: "ChIJ_target" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.data.mapsUrl).toBe("https://maps.google.com/?cid=12345");
+  });
+
+  it("falls back to the built link when googleMapsUri is not https", async () => {
+    // The detail page only renders http(s) links (#90) — never trust an
+    // unexpected upstream scheme into a stored URL.
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce({
+        id: "ChIJ_target",
+        displayName: { text: "Aubrey's Cafe" },
+        formattedAddress: "123 Main St, Denver, CO",
+        location: { latitude: 39.7392, longitude: -104.9903 },
+        googleMapsUri: "javascript:alert(1)",
+      })
+    );
+
+    const result = await runPlaceDetails({ placeId: "ChIJ_target" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.data.mapsUrl).toBe(
+      buildMapsUrl("ChIJ_target", "Aubrey's Cafe 123 Main St, Denver, CO")
+    );
   });
 
   it("short-circuits with intake_disabled when mode is manual (no fetch)", async () => {
