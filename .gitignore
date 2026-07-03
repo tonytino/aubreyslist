@@ -36,3 +36,4 @@ app.config.timestamp_*
 .claude/*
 !.claude/skills/
 !.claude/workflows/
+!.claude/settings.json
