@@ -46,7 +46,7 @@ export function RecentIncidentBanner({ occurredOn, nowMs }: RecentIncidentBanner
     <output
       aria-live="polite"
       aria-label="Recent incident warning"
-      className="flex flex-col gap-2 rounded-card border border-incident/30 bg-incident-soft p-gutter sm:flex-row sm:items-center sm:gap-3"
+      className="flex flex-col gap-2 rounded-card border border-incident/30 border-l-4 border-l-incident bg-incident-soft p-gutter sm:flex-row sm:items-center sm:gap-3"
     >
       <SafetySignal
         state="incident"

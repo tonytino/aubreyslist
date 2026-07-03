@@ -2,6 +2,14 @@ import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { submitFlag } from "~/server/flags/flags.fn";
 
 /**
@@ -26,8 +34,24 @@ export type FlagTarget =
  * Reusable / drop-in: takes only the target descriptor + the signed-in flag, so
  * the listing-detail, claim, and incident surfaces all reuse it unchanged.
  */
-export function FlagControl(props: FlagTarget & { isSignedIn: boolean; label?: string }) {
-  const { isSignedIn, label } = props;
+export function FlagControl(
+  props: FlagTarget & {
+    isSignedIn: boolean;
+    label?: string;
+    /**
+     * `"inline"` (default) renders the small text "Flag" trigger that expands
+     * into the reason form in place — used on claim/incident rows and anywhere
+     * a text affordance fits. `"icon"` (AUB-131) renders a compact icon button +
+     * tooltip whose reason form opens in a portaled dialog instead, so it can
+     * live in tight spots (the listing hero's overlay) without the form
+     * overflowing. Both share the same login gate + `submitFlag` write.
+     */
+    variant?: "inline" | "icon";
+    /** Classes for the `"icon"` variant's trigger button (e.g. the hero's circular chip). */
+    triggerClassName?: string;
+  }
+) {
+  const { isSignedIn, label, variant = "inline", triggerClassName } = props;
   // Narrow the exclusive-arc descriptor without leaking the extra props.
   const targetData: FlagTarget =
     props.target === "listing"
@@ -61,29 +85,15 @@ export function FlagControl(props: FlagTarget & { isSignedIn: boolean; label?: s
   const accessibleLabel = label ?? "Flag this content";
   const canSubmit = reason.trim() !== "" && !flag.isPending;
 
-  if (flag.isSuccess && !isOpen) {
-    return (
-      <output className="inline-flex items-center gap-1.5 text-caption text-muted-foreground">
-        <FlagIcon />
-        Reported. Thanks — a moderator will review it.
-      </output>
-    );
-  }
+  const closeAndReset = () => {
+    setIsOpen(false);
+    setReason("");
+  };
 
-  if (!isOpen) {
-    return (
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
-      >
-        <FlagIcon />
-        <span>{label ?? "Flag"}</span>
-      </button>
-    );
-  }
-
-  return (
+  // The reason-capture form, shared by BOTH presentations. In `"inline"` it
+  // renders in place; in `"icon"` it is portaled inside a dialog. Submit/cancel
+  // manage `isOpen`, so it closes the dialog too.
+  const reasonForm = (
     <form
       aria-label={accessibleLabel}
       className="flex flex-col gap-2 rounded-card border border-border bg-muted p-3"
@@ -129,16 +139,71 @@ export function FlagControl(props: FlagTarget & { isSignedIn: boolean; label?: s
           size="sm"
           variant="outline"
           disabled={flag.isPending}
-          onClick={() => {
-            setIsOpen(false);
-            setReason("");
-          }}
+          onClick={closeAndReset}
         >
           Cancel
         </Button>
       </div>
     </form>
   );
+
+  // Icon presentation (AUB-131): a compact icon button + tooltip; the reason form
+  // opens in a portaled dialog so it never overflows a tight host (the hero).
+  if (variant === "icon") {
+    return (
+      <>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={accessibleLabel}
+              onClick={() => setIsOpen(true)}
+              className={triggerClassName}
+            >
+              <FlagIcon />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{label ?? "Flag"}</TooltipContent>
+        </Tooltip>
+        <Dialog open={isOpen} onOpenChange={(open) => (open ? setIsOpen(true) : closeAndReset())}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{accessibleLabel}</DialogTitle>
+              <DialogDescription>
+                Tell a moderator why — inappropriate, spam, or wrong information. It enters the
+                moderation queue for review.
+              </DialogDescription>
+            </DialogHeader>
+            {reasonForm}
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
+  if (flag.isSuccess && !isOpen) {
+    return (
+      <output className="inline-flex items-center gap-1.5 text-caption text-muted-foreground">
+        <FlagIcon />
+        Reported. Thanks — a moderator will review it.
+      </output>
+    );
+  }
+
+  if (!isOpen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="inline-flex items-center gap-1.5 text-caption font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+      >
+        <FlagIcon />
+        <span>{label ?? "Flag"}</span>
+      </button>
+    );
+  }
+
+  return reasonForm;
 }
 
 /** Decorative flag glyph — the adjacent text label carries the meaning. */

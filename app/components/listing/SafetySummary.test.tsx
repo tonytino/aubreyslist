@@ -38,4 +38,20 @@ describe("SafetySummary", () => {
     render(<SafetySummary state={null} />);
     expect(screen.getByRole("heading", { name: /gluten-free safety/i })).toBeInTheDocument();
   });
+
+  it("keeps the accessible region + heading and the verdict in the hero variant", () => {
+    render(<SafetySummary state="celiac-safe" variant="hero" />);
+    // The accessible "Gluten-free safety" region name is stable across the
+    // redesign — the heading is visually hidden in the hero, not removed.
+    expect(screen.getByRole("region", { name: /gluten-free safety/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /gluten-free safety/i })).toBeInTheDocument();
+    // The headline cue still renders with its colour + icon + label.
+    expect(screen.getByText("Celiac-safe")).toBeInTheDocument();
+  });
+
+  it("keeps the honest empty state untouched in the hero variant", () => {
+    render(<SafetySummary state={null} variant="hero" />);
+    expect(screen.getByText("Not yet attested")).toBeInTheDocument();
+    expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
+  });
 });

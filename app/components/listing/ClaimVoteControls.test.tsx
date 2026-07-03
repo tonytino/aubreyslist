@@ -90,6 +90,29 @@ describe("ClaimVoteControls", () => {
     });
   });
 
+  it("iconises confirm/dispute and maps the pressed vote to the safety-colour fills (AUB-131)", () => {
+    renderWithQuery(
+      <ClaimVoteControls
+        listingId="listing-1"
+        attribute="dedicated_fryer"
+        claimId="claim-1"
+        viewerVote="confirm"
+        isSignedIn={true}
+      />
+    );
+    const confirm = screen.getByRole("button", { name: "Confirm" });
+    const dispute = screen.getByRole("button", { name: "Dispute" });
+    // Each control carries a lucide glyph alongside its text label (never icon-only).
+    expect(confirm.querySelector("svg")).not.toBeNull();
+    expect(dispute.querySelector("svg")).not.toBeNull();
+    // The viewer's own confirm is filled with the celiac-safe colour; the
+    // unpressed dispute is not filled with the incident colour.
+    expect(confirm).toHaveAttribute("aria-pressed", "true");
+    expect(confirm.className).toContain("bg-celiac-safe");
+    expect(dispute).toHaveAttribute("aria-pressed", "false");
+    expect(dispute.className).not.toContain("bg-incident");
+  });
+
   it("retracts the viewer's own vote by (listingId, attribute) and invalidates the roll-up", async () => {
     const queryClient = renderWithQuery(
       <ClaimVoteControls

@@ -93,8 +93,10 @@ describe("CommunityClaims", () => {
 
     // One row per taxonomy attribute — no "coming soon" dead-end.
     expect(screen.getAllByRole("listitem")).toHaveLength(TAXONOMY.length);
-    // A zero-vote attribute shows its honest empty state, never a fabricated rating.
-    expect(screen.getAllByText("No confirmations or disputes yet").length).toBe(TAXONOMY.length);
+    // A zero-vote attribute shows its honest empty state (AUB-131: "Not yet
+    // attested — no confirmations or disputes yet"), never a fabricated rating.
+    expect(screen.getAllByText(/no confirmations or disputes yet/).length).toBe(TAXONOMY.length);
+    expect(screen.getAllByText("Not yet attested").length).toBe(TAXONOMY.length);
     // Every attribute is attestable: confirm/dispute controls on each row.
     expect(screen.getAllByRole("button", { name: "Confirm" })).toHaveLength(TAXONOMY.length);
     expect(screen.getAllByRole("button", { name: "Dispute" })).toHaveLength(TAXONOMY.length);
