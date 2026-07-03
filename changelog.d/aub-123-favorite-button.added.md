@@ -1,0 +1,1 @@
+- `[manual]` Added the `FavoriteButton` client island: an optimistic heart (instant add/remove with cache flip, rollback + toast on error, disabled while pending), accessible (`aria-pressed` + "Save"/"Saved — remove" label flip + non-colour `fill-current` cue). Anonymous clicks open a sign-in dialog carrying a `?save=<listingId>` return marker instead of writing.
