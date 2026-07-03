@@ -1,38 +1,12 @@
 import { MapPin, Search, ShieldCheck } from "lucide-react";
 
 /**
- * The directory's non-list content states (AUB-61, Phase 2b): loading skeletons,
- * the first-run empty state, and the no-results state. The route renders EXACTLY
- * ONE of these (or the list) at a time, per the bundle.
+ * The directory's non-list content states (AUB-61, Phase 2b): the first-run empty
+ * state and the no-results state. The route renders EXACTLY ONE of these (or the
+ * list) at a time. (Loading skeletons were retired when the quick chips became a
+ * server-side filter — AUB-135 — so filtering pends via the loader like every
+ * other server param, with no artificial shimmer.)
  */
-
-/** Shimmer block: a sliding-gradient fill via the `animate-shimmer` utility. */
-const SHIMMER =
-  "animate-shimmer rounded-md bg-[linear-gradient(90deg,var(--color-muted),color-mix(in_oklch,var(--color-muted),white_45%),var(--color-muted))] [background-size:200%_100%]";
-
-/**
- * Loading skeletons — four shimmer cards, shown for the bundle's ~430ms filter
- * shimmer window. The shimmer animation is gated behind `prefers-reduced-motion`
- * in `app.css` (the sliding gradient holds still for opted-out users; the shape
- * still reads as "loading"). The bar widths are constants, so they are plain
- * Tailwind arbitrary utilities (`w-[62%]` …) — no inline styles here.
- */
-export function LoadingSkeletons() {
-  return (
-    <ul aria-hidden="true" className="flex flex-col gap-3.5">
-      {[0, 1, 2, 3].map((i) => (
-        <li key={i} className="overflow-hidden rounded-card border border-border bg-card shadow-sm">
-          <div className={`h-[150px] ${SHIMMER} rounded-none`} />
-          <div className="flex flex-col gap-2.5 px-4 py-4">
-            <div className={`h-4 w-[62%] ${SHIMMER}`} />
-            <div className={`h-3 w-[44%] ${SHIMMER}`} />
-            <div className={`mt-1 h-6 w-[38%] ${SHIMMER}`} />
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /** Shared centred layout for the empty / no-results messages. */
 function CenteredState({
