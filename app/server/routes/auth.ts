@@ -9,6 +9,11 @@ import {
   generateRandomToken,
 } from "../auth/google";
 import {
+  isPreviewLoginEnabled,
+  resolvePreviewUser,
+  verifyPreviewSecret,
+} from "../auth/preview-login";
+import {
   SESSION_COOKIE_NAME,
   SESSION_COOKIE_OPTIONS,
   SESSION_MAX_AGE_SECONDS,
@@ -175,6 +180,39 @@ export const authRoutes = new Hono()
     // in; default to the home page when no valid `returnTo` was stashed.
     const requestUrl = new URL(c.req.url);
     const returnTo = validateReturnTo(returnToCookie, requestUrl.origin);
+    return c.redirect(new URL(returnTo, requestUrl).toString());
+  })
+
+  // Preview-only dev-login (AUB-138): mint a session WITHOUT Google so a tester
+  // can sign in on a Vercel per-deployment preview URL (where OAuth's
+  // exact-match redirect URIs can't be registered). Prod-inert + double-gated:
+  //   1. 404 unless `isPreviewLoginEnabled()` (not Vercel production + a secret
+  //      is provisioned) — invisible in production.
+  //   2. 401 unless the caller presents the correct `PREVIEW_LOGIN_SECRET`
+  //      (constant-time compared).
+  // On success it writes the SAME sealed session cookie as the OAuth callback
+  // and lands on a `validateReturnTo`-checked path (never an open redirect).
+  .get("/dev-login", async (c) => {
+    if (!isPreviewLoginEnabled()) {
+      throw new HTTPException(404, { message: "Not Found" });
+    }
+
+    const secret = c.req.query("secret") ?? c.req.header("x-preview-login-secret");
+    if (!verifyPreviewSecret(secret)) {
+      throw new HTTPException(401, { message: "Invalid preview login secret" });
+    }
+
+    const user = await resolvePreviewUser(c.req.query("email"));
+
+    const sessionValue = await createSessionCookieValue(user.id);
+    setCookie(c, SESSION_COOKIE_NAME, sessionValue, {
+      ...SESSION_COOKIE_OPTIONS,
+      secure: cookieSecure(),
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    });
+
+    const requestUrl = new URL(c.req.url);
+    const returnTo = validateReturnTo(c.req.query("returnTo"), requestUrl.origin);
     return c.redirect(new URL(returnTo, requestUrl).toString());
   })
 
