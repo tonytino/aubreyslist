@@ -161,6 +161,62 @@ cookie's `Secure` flag is gated on `NODE_ENV=production`, so local
 `state`-based redirect proxy enables auth on *any* preview URL, at the cost of an
 auth-proxy code path.
 
+### Preview dev-login (test auth on any preview without Google) — AUB-138
+
+Rather than registering each branch's callback URL with Google, a **prod-inert,
+double-gated** endpoint can mint a session cookie **without Google**, so you can
+sign in on *any* preview deployment (including per-deployment hash URLs):
+
+    GET https://<preview-url>/api/auth/dev-login?secret=<PREVIEW_LOGIN_SECRET>
+
+Optional query params: `?email=<addr>` (defaults to
+`preview-tester@aubreyslist.test`) and `?returnTo=/favorites` (validated
+same-origin; falls back to `/`). The secret may also be sent as an
+`x-preview-login-secret` header instead of `?secret=`.
+
+**Prefer the header for anything beyond throwaway testing.** A `?secret=…` query
+string lands in Vercel/proxy access logs and the browser's history, so the
+shared secret can leak there. For repeated use, send it as the
+`x-preview-login-secret` request header (e.g. `curl -H 'x-preview-login-secret:
+…'`) rather than in the URL.
+
+**Local dev-login:** set `VERCEL_ENV=development` in your `.env` (the endpoint is
+fail-closed and stays disabled when `VERCEL_ENV` is unset). Otherwise just use
+real Google on `http://localhost:3000`, whose callback is already registered.
+
+**Setup (once):**
+
+1. Generate a secret: `openssl rand -base64 32`.
+2. In **Vercel → Project → Settings → Environment Variables**, add
+   `PREVIEW_LOGIN_SECRET` scoped to **Preview only** — **NEVER** tick
+   Production. (The endpoint 404s in production regardless, but keep the secret
+   out of prod scope entirely.)
+3. `VERCEL_ENV` is **auto-provided** by Vercel on every deployment (`preview` on
+   previews, `production` on the prod domain) — you don't set it.
+
+**Guarantees:**
+
+- **404 in production (fail-closed).** The first gate is an explicit allowlist:
+  the route is enabled only when `VERCEL_ENV` is `preview` or `development`
+  *and* `PREVIEW_LOGIN_SECRET` is provisioned. In production — and on any unset
+  or unrecognized `VERCEL_ENV` — the route is invisible.
+- **401 without the secret.** The second gate constant-time compares the
+  supplied secret against `PREVIEW_LOGIN_SECRET`.
+- **No privilege escalation / no impersonation.** Dev-login can only ever sign
+  in as a `preview:`-namespaced account. Because preview DBs are Neon branches
+  of production (and thus contain real admins), the endpoint **refuses any email
+  that resolves to a real/OAuth account** (`google_sub` not prefixed `preview:`)
+  with a `403` — minting no cookie and inserting nothing. It only ever
+  creates/reuses `preview:<email>` rows, whose role is the DB default `user`
+  (and role is always re-read from the DB anyway, so a minted cookie can never
+  elevate).
+
+**Neon-branch-DB caveat:** the endpoint upserts a `preview-tester@…` row into
+whatever database the preview points at. Point previews at a **Neon branch DB**
+(not the production branch) so this synthetic user never lands in production
+data. See `docs/setup/provisioning.md` DATABASE_URL provisioning and the Neon
+branching setup.
+
 ---
 
 ## Where this plugs into the build
