@@ -15,16 +15,21 @@ name: Migrate & seed preview database
 # so it needs no Google Places key — only the resolved preview DB URL. It is
 # idempotent (dedup on Place ID) and a graceful no-op when the baked file is empty.
 #
-# Only runs when the schema/migrations actually change (paths filter) — non-schema
-# PRs need no preview migration. Skips gracefully (a warning, not a failure) when
-# the Neon secrets are absent (e.g. fork PRs, where secrets are withheld) or when
-# the preview branch doesn't exist yet.
+# Only runs when the schema/migrations OR the baked seed data actually change (paths
+# filter) — an unrelated PR needs no preview migration/seed. Skips gracefully (a
+# warning, not a failure) when the Neon secrets are absent (e.g. fork PRs, where
+# secrets are withheld) or when the preview branch doesn't exist yet.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "db/migrations/**"
       - "db/schema.ts"
+      # Re-run the seed when the baked data (or the seed itself) changes, so a fresh
+      # bake populates the preview even on a PR that touches no schema/migration.
+      - "scripts/seed-listings.generated.json"
+      - "scripts/seed.ts"
+      - "scripts/seed-data.ts"
       - ".github/workflows/migrate-preview.yml"
       - ".github/scripts/resolve-preview-db-url.mjs"
 
