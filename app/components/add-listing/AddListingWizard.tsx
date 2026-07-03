@@ -25,8 +25,8 @@ import { ReviewStep } from "./ReviewStep";
  *   1‑5      one step per {@link CLAIM_ATTRIBUTES} attribute — confirm / dispute / skip
  *   6        review & submit
  *
- * Deferring the create (unlike `PlacesIntakeForm`/`ManualIntakeForm`, which write
- * on their own submit) lets the user attest as they go and commit once. On Submit
+ * Deferring the create (rather than writing on a single-page form's own submit)
+ * lets the user attest as they go and commit once. On Submit
  * we create the listing, then fire a `submitVote` for every attribute the user
  * actually answered — **skip / untouched writes NOTHING**, so a celiac reading the
  * listing later sees an honest "Not yet attested" gap rather than a fabricated
@@ -233,10 +233,10 @@ function SuccessScreen({
   return (
     <section
       aria-labelledby="wizard-success-heading"
-      className="flex flex-col items-start gap-4 rounded-card border border-border bg-card p-gutter text-card-foreground"
+      className="flex flex-col items-center gap-4 rounded-card border border-border bg-card p-gutter text-center text-card-foreground"
     >
-      <span className="inline-flex size-12 items-center justify-center rounded-full bg-celiac-safe-soft text-celiac-safe">
-        <CircleCheck aria-hidden="true" className="size-7 shrink-0" strokeWidth={2.25} />
+      <span className="inline-flex size-16 items-center justify-center rounded-full bg-celiac-safe-soft text-celiac-safe">
+        <CircleCheck aria-hidden="true" className="size-9 shrink-0" strokeWidth={2.25} />
       </span>
       <div className="flex flex-col gap-1">
         <h2 id="wizard-success-heading" className="text-title font-semibold">
@@ -252,18 +252,18 @@ function SuccessScreen({
         )}
       </div>
       {unattestedCount > 0 ? (
-        <p className="text-body-sm text-muted-foreground">
+        <p className="w-full rounded-card border border-border bg-muted/40 p-card text-body-sm text-muted-foreground">
           {unattestedCount} of {CLAIM_ATTRIBUTES.length} attributes stayed "Not yet attested" — you
           can attest them any time from the listing.
         </p>
       ) : null}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button asChild>
+      <div className="flex w-full flex-col gap-2">
+        <Button asChild className="w-full">
           <Link to="/listings/$id" params={{ id: listingId }}>
             View your listing
           </Link>
         </Button>
-        <Button variant="outline" type="button" onClick={onReset}>
+        <Button variant="outline" type="button" onClick={onReset} className="w-full">
           Add another listing
         </Button>
       </div>
@@ -273,7 +273,7 @@ function SuccessScreen({
 
 /**
  * Renders the submit error. A blocked-duplicate error (issue #25) is special-
- * cased exactly like `ManualIntakeForm`: {@link parseDuplicateListingError}
+ * cased: {@link parseDuplicateListingError}
  * recovers the existing listing's id from the message marker (custom error fields
  * don't survive the server-fn RPC boundary), so we render a link to the listing
  * that already exists rather than just stating that it does.

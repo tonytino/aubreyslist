@@ -1,0 +1,1 @@
+- `[manual]` Polished the add-a-listing wizard's success screen to match the approved design (centered layout, larger confirmation badge, a clearer "Not yet attested" note, and stacked full-width actions) and softened the claim **Dispute** button from an alarming red to a neutral treatment (it records "gluten-friendly", not an unsafe state).
