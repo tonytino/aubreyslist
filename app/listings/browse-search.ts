@@ -38,7 +38,12 @@ export const BROWSE_SEARCH_DEFAULTS = {
   q: "",
   sort: DEFAULT_BROWSE_SORT,
   radius: DEFAULT_RADIUS_MILES,
+  // Prebuilt quick filters (AUB-135/AUB-140): a comma-set string like `attrs`,
+  // defaulting to "" (no quick filter) so `stripSearchParams` drops it at rest.
   quick: "",
+  // SERVER-SIDE "Saved" filter (AUB-129 / F11): defaults to off, so a bare visit
+  // never carries `?saved=` and `stripSearchParams` drops it at rest.
+  saved: false,
 } as const;
 
 export const browseSearchSchema = z.object({
@@ -78,4 +83,15 @@ export const browseSearchSchema = z.object({
   // the schema stays a plain string. Defaults to "" (no quick filter), which
   // `stripSearchParams` drops from the URL at rest; garbage degrades to "".
   quick: z.string().catch(BROWSE_SEARCH_DEFAULTS.quick).default(BROWSE_SEARCH_DEFAULTS.quick),
+  // SERVER-SIDE "Saved" filter (AUB-129 / F11): `?saved=1` (or `?saved=true`)
+  // switches the directory to the signed-in viewer's favorites, driven
+  // server-side so pagination + the honest total cover the FULL favorites set.
+  // URL-driven like the rest so a saved view is linkable/back-forwardable.
+  // Coerced from the router's parsed value (boolean `true`, numeric `1`, or the
+  // string forms) to a plain boolean; anything else degrades to `false`.
+  saved: z
+    .union([z.boolean(), z.number(), z.string()])
+    .transform((value) => value === true || value === 1 || value === "1" || value === "true")
+    .catch(BROWSE_SEARCH_DEFAULTS.saved)
+    .default(BROWSE_SEARCH_DEFAULTS.saved),
 });

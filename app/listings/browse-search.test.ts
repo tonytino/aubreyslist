@@ -23,6 +23,7 @@ describe("browseSearchSchema", () => {
       lng: undefined,
       radius: DEFAULT_RADIUS_MILES,
       quick: "",
+      saved: false,
     });
   });
 
@@ -48,6 +49,7 @@ describe("browseSearchSchema", () => {
         lng: -104.9903,
         radius: 10,
         quick: "celiac,recent",
+        saved: true,
       })
     ).toEqual({
       page: 3,
@@ -58,6 +60,7 @@ describe("browseSearchSchema", () => {
       lng: -104.9903,
       radius: 10,
       quick: "celiac,recent",
+      saved: true,
     });
   });
 

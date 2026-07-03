@@ -1,0 +1,1 @@
+- `[manual]` Added the client `favoriteIdsQuery` (`["favorites"]`, backed by the `fetchViewerFavoriteIds` server fn) resolved per-request from the session and prefetched in the root loader — anonymous visitors resolve to `[]` with no DB hit, so every heart can read its saved state on first paint.
