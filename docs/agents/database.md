@@ -81,8 +81,30 @@ author is ever a blocker for a schema change.
   warning instead of failing.
 - **Manual fallback** (one-off): `DATABASE_URL='<prod-connection-string>' pnpm db:migrate`.
 
-The CI **test** database (the `ci` Neon branch) is migrated separately inside the
-E2E job in `ci.yml`; the two never share a connection string.
+The CI **test** database (the `ci` Neon branch) is migrated once, up front, by the
+dedicated `db-migrate` job in `ci.yml` that the `integration-e2e` and `diff-coverage`
+jobs `needs:` — so a brand-new migration is applied and recorded serially, before the
+parallel integration suites (which each call `migrate()`) can race to apply it. The
+prod and CI branches never share a connection string.
+
+## Preview migrations (`migrate-preview.yml`, AUB-139)
+
+The Neon↔Vercel integration forks each PR's **preview** database branch
+(`preview/<git-branch>`) from **production**, and prod isn't migrated until the PR
+merges — so without help, a schema-changing PR's preview 500s (the deployed preview
+code queries a column/table the preview DB doesn't have yet).
+
+`.github/workflows/migrate-preview.yml` closes that gap: on a `pull_request` that
+changes `db/schema.ts` or `db/migrations/**`, it resolves the preview branch's Neon
+connection URI via the Neon API (`.github/scripts/resolve-preview-db-url.mjs`) and
+runs `pnpm db:migrate` against it, so the preview matches the PR's schema.
+
+- **Secrets:** `NEON_API_KEY` (required) and `NEON_PROJECT_ID` (optional — the
+  resolver auto-detects a sole project). Absent → the workflow skips with a warning
+  (also the case for fork PRs, where secrets are withheld).
+- **Timing:** the branch lookup retries, since Vercel may still be creating the
+  preview branch right after a first deploy; if it never appears the migrate step
+  skips (a later push re-runs it). Idempotent — safe to re-run.
 
 ## Seeding the first admin (`pnpm db:seed-admin`)
 
