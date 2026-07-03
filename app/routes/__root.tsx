@@ -15,6 +15,7 @@ import { SiteHeader } from "~/components/SiteHeader";
 import { Button } from "~/components/ui/button";
 import { Toaster } from "~/components/ui/sonner";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
+import { PendingFavoriteHandler } from "~/favorites/use-pending-favorite";
 import { defaultSeoMeta, jsonLdScript, siteJsonLd } from "~/lib/seo";
 // Import the stylesheet as a bundled URL so the bundler emits a hashed asset
 // and rewrites the href. Referencing the source path ("/app/styles/app.css")
@@ -91,6 +92,9 @@ function RootComponent() {
         <AppShell>
           <Outlet />
         </AppShell>
+        {/* Headless: auto-saves a pending `?save=<id>` favorite after sign-in
+            (AUB-124 / F8b). Runs inside the router + query providers. */}
+        <PendingFavoriteHandler />
         <Toaster />
         <Scripts />
         <Analytics />
