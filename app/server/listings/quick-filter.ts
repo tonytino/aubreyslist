@@ -1,6 +1,6 @@
 import { type SQL, and, eq, sql } from "drizzle-orm";
 import { type ClaimAttribute, attestations, claims, incidents, listings } from "~/db/schema";
-import type { QuickFilter } from "~/listings/quick";
+import { QUICK_FILTER_VALUES, type QuickFilterValue } from "~/listings/quick";
 import { RECENT_INCIDENT_WINDOW_DAYS, todayUtcMidnight } from "~/trust/incident-recency";
 import { stalenessCutoff } from "~/trust/summary";
 
@@ -24,11 +24,13 @@ import { stalenessCutoff } from "~/trust/summary";
  * recent-incident boundaries the card and the "trust" sort use. `quick-filter.test.ts`
  * pins these boundaries against a weakening regression.
  *
- * Built as ONE correlated subquery over `listings.id` (mirroring the taxonomy
- * filter in `./filter.ts`), returned as a plain `SQL` so the caller AND-folds it
- * into the SHARED browse `where` — applying it to the page query AND the count
- * query alike, so `total`/`hasMore` stay honest under the filter (no fetch-then-
- * filter). Returns `undefined` when no quick filter is active (no constraint).
+ * Each token is a self-contained correlated subquery over `listings.id` (mirroring
+ * the taxonomy filter in `./filter.ts`). A faceted selection (AUB-140) AND-composes
+ * the active tokens' subqueries — narrowing to listings that match EVERY selected
+ * facet (e.g. celiac-safe AND recently-verified). The result is a plain `SQL` the
+ * caller AND-folds into the SHARED browse `where` — applying to the page query AND
+ * the count query alike, so `total`/`hasMore` stay honest under the filter (no
+ * fetch-then-filter). Returns `undefined` when no quick filter is active.
  *
  * Server-only: references DB tables to build SQL; imported by `./browse.ts` only.
  * The pure classification RULES live in the client-safe `app/trust/*` modules;
@@ -144,27 +146,45 @@ function utcDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-/**
- * Build the correlated `quick`-filter predicate, or `undefined` when no quick
- * filter is active (drizzle then applies no constraint, so the caller can
- * `and(...)`-fold it safely). `now`/`stalenessMonths` are threaded from the loader
- * so the freshness/staleness boundary matches the displayed glance exactly.
- */
-export function buildQuickFilterPredicate(
-  quick: QuickFilter | undefined,
-  now: Date,
-  stalenessMonths: number
-): SQL | undefined {
-  if (!quick) {
-    return undefined;
-  }
-  const cutoff = stalenessCutoff(now, stalenessMonths);
-  switch (quick) {
+/** The correlated `exists` predicate for a single quick token. */
+function quickTokenPredicate(token: QuickFilterValue, cutoff: Date, now: Date): SQL {
+  switch (token) {
     case "celiac":
       return celiacSafeExists(cutoff);
     case "friendly":
       return glutenFriendlyExists();
     case "recent":
       return recentExists(cutoff, now);
+    default: {
+      const exhaustive: never = token;
+      return exhaustive;
+    }
   }
+}
+
+/**
+ * Build the `quick`-filter predicate for a faceted selection, or `undefined` when
+ * the selection is empty (drizzle then applies no constraint, so the caller can
+ * `and(...)`-fold it safely). The active tokens' correlated subqueries are
+ * AND-composed, so the result matches listings satisfying EVERY selected facet.
+ * `now`/`stalenessMonths` are threaded from the loader so the freshness/staleness
+ * boundary matches the displayed glance exactly.
+ *
+ * Tokens are applied in canonical `QUICK_FILTER_VALUES` order (not the incoming
+ * array's order) so the composed SQL text is stable; a single-token selection
+ * returns the bare subquery (byte-identical to the pre-AUB-140 single-select form).
+ */
+export function buildQuickFilterPredicate(
+  quick: readonly QuickFilterValue[],
+  now: Date,
+  stalenessMonths: number
+): SQL | undefined {
+  if (quick.length === 0) {
+    return undefined;
+  }
+  const cutoff = stalenessCutoff(now, stalenessMonths);
+  const predicates = QUICK_FILTER_VALUES.filter((token) => quick.includes(token)).map((token) =>
+    quickTokenPredicate(token, cutoff, now)
+  );
+  return predicates.length === 1 ? predicates[0] : (and(...predicates) as SQL);
 }

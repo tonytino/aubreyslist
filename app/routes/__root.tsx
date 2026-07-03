@@ -11,9 +11,12 @@ import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { useEffect } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
+import { previewLoginEnabledQuery } from "~/auth/preview-login-query";
 import { SiteHeader } from "~/components/SiteHeader";
 import { Button } from "~/components/ui/button";
 import { Toaster } from "~/components/ui/sonner";
+import { favoriteIdsQuery } from "~/favorites/favorites-query";
+import { PendingFavoriteHandler } from "~/favorites/use-pending-favorite";
 import { defaultSeoMeta, jsonLdScript, siteJsonLd } from "~/lib/seo";
 // Import the stylesheet as a bundled URL so the bundler emits a hashed asset
 // and rewrites the href. Referencing the source path ("/app/styles/app.css")
@@ -53,8 +56,16 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     scripts: [jsonLdScript(siteJsonLd())],
   }),
   loader: async ({ context }) => {
-    // Prefetch on the server so the header hydrates with the right auth state.
-    await context.queryClient.ensureQueryData(currentUserQuery);
+    // Prefetch on the server so the header hydrates with the right auth state,
+    // and the viewer's favorited ids so favorite controls hydrate marked without
+    // a client round-trip (anonymous viewers short-circuit to `[]`, no DB hit).
+    await Promise.all([
+      context.queryClient.ensureQueryData(currentUserQuery),
+      context.queryClient.ensureQueryData(favoriteIdsQuery),
+      // Whether to show the preview-only "Dev sign-in" affordance in the header
+      // (prod-inert: resolves false in production, so nothing renders there).
+      context.queryClient.ensureQueryData(previewLoginEnabledQuery),
+    ]);
   },
   component: RootComponent,
   notFoundComponent: NotFound,
@@ -85,6 +96,9 @@ function RootComponent() {
         <AppShell>
           <Outlet />
         </AppShell>
+        {/* Headless: auto-saves a pending `?save=<id>` favorite after sign-in
+            (AUB-124 / F8b). Runs inside the router + query providers. */}
+        <PendingFavoriteHandler />
         <Toaster />
         <Scripts />
         <Analytics />

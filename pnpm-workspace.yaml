@@ -1,0 +1,50 @@
+# pnpm settings (pnpm-workspace.yaml is the config home in pnpm 10+).
+#
+# Supply-chain hardening — see https://pnpm.io/supply-chain-security
+#
+# minimumReleaseAge: quarantine newly published versions for 7 days
+#   (10080 minutes) before pnpm will install them, INCLUDING transitive deps.
+#   A version that is yanked or found compromised shortly after publish is not
+#   pulled in during the window. This mirrors the `cooldown: default-days: 7`
+#   in .github/dependabot.yml so both paths — deliberate Dependabot PRs and
+#   plain `pnpm install` resolution — honor the same publish-then-attack window.
+#   (pnpm 11 defaults this to 1 day; pinned to 7 days here to match Dependabot.)
+#
+# blockExoticSubdeps: only DIRECT dependencies may use exotic sources (git
+#   repositories, tarball URLs). Transitive deps must resolve from the registry,
+#   closing the vector where a registry package points a subdep at an
+#   unscanned github/tarball reference. (pnpm 11 defaults this to true; pinned
+#   explicitly so the posture survives a future default change.)
+minimumReleaseAge: 10080
+blockExoticSubdeps: true
+
+# Dependency version pins. Moved here from the package.json `pnpm.overrides`
+# field, which pnpm 11 no longer reads (see https://pnpm.io/settings). Several
+# of these are security floors (shell-quote, h3, tar, ws, qs, brace-expansion),
+# so keeping them effective is part of the same supply-chain posture.
+overrides:
+  shell-quote: "^1.8.4"
+  h3: "^1.15.9"
+  nitropack: "^2.13.4"
+  tar: "^7.5.16"
+  ws: "^8.21.0"
+  brace-expansion@5: "5.0.6"
+  "@babel/core": "^7.29.6"
+  qs: "^6.15.2"
+  diff: "^8.0.3"
+  "@esbuild-kit/core-utils>esbuild": "^0.25.0"
+  tsx>esbuild: "^0.28.1"
+
+# Dependency install/build scripts are NOT run by default in pnpm 10+ (a change
+# from pnpm 9, which ran every dependency's scripts unconditionally). Only the
+# packages set to `true` here may run postinstall/build scripts — an explicit
+# allowlist that shrinks install-time attack surface. Each needs its script for
+# a real reason: esbuild / @parcel/watcher / @sentry/cli fetch or compile a
+# native binary, @biomejs/biome downloads its platform binary, lefthook installs
+# git hooks. Refresh candidates with `pnpm approve-builds`.
+allowBuilds:
+  "@biomejs/biome": true
+  "@parcel/watcher": true
+  "@sentry/cli": true
+  esbuild: true
+  lefthook: true

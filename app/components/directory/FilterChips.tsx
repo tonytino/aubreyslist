@@ -1,9 +1,21 @@
-import { Check, Funnel, Leaf, ShieldCheck } from "lucide-react";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { Check, Funnel, Heart, Leaf, ShieldCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type * as React from "react";
+import { useState } from "react";
+import { currentUserQuery } from "~/auth/current-user-query";
 import { SearchChip } from "~/components/directory/SearchChip";
 import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
@@ -12,7 +24,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "~/components/ui/sheet";
-import type { QuickFilter } from "~/listings/quick";
+import type { QuickFilterValue } from "~/listings/quick";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 
 /**
@@ -24,10 +36,12 @@ import type { ClaimAttribute } from "~/listings/taxonomy";
  *     community consensus per attribute) — untouched by this redesign; the chip
  *     is purely a new entry point to it, and its badge surfaces the active count.
  *   - **Quick chips** (Celiac-safe / Gluten-friendly / Recently verified) are
- *     URL-driven, SERVER-side filters (`?quick=`, AUB-135) and are MUTUALLY
- *     EXCLUSIVE (a single {@link QuickFilter} value). They are real `<button>`s
- *     carrying `aria-pressed` so the toggle state is announced — never colour
- *     alone.
+ *     URL-driven, SERVER-side filters (`?quick=`, AUB-135/AUB-140) forming a faceted
+ *     SET: the `safety` pair (celiac / friendly) is mutually exclusive, while
+ *     `recent` toggles additively. Exclusivity is enforced by the parent's
+ *     `applyQuickToggle` reducer — this component just renders whatever set it's
+ *     handed and reports each click via `onQuickToggle`. They are real `<button>`s
+ *     carrying `aria-pressed` so the toggle state is announced — never colour alone.
  *
  * SEARCH-AS-CHIP (user feedback #5): the free-text search now leads the row as a
  * {@link SearchChip} (replacing the old standalone search field above the chips).
@@ -40,7 +54,7 @@ import type { ClaimAttribute } from "~/listings/taxonomy";
  */
 
 interface QuickChipDef {
-  value: Exclude<QuickFilter, null>;
+  value: QuickFilterValue;
   label: string;
   Icon: LucideIcon;
 }
@@ -60,25 +74,120 @@ function chipClasses(active: boolean): string {
     : `${base} border-border bg-surface text-foreground hover:bg-brand-soft`;
 }
 
+/**
+ * Build the relative post-sign-in `returnTo` for an anonymous "Saved" click: the
+ * CURRENT path with `?saved=1` set, so the OAuth callback lands the diner back on
+ * the directory already switched into their saved view. A RELATIVE path only
+ * (the server's `validateReturnTo` rejects anything else); SSR-safe via the
+ * `typeof window` guard (the chip hydrates before any anonymous click).
+ */
+function buildSavedReturnTo(): string {
+  if (typeof window === "undefined") {
+    return "/?saved=1";
+  }
+  const { pathname, search } = window.location;
+  const params = new URLSearchParams(search);
+  params.set("saved", "1");
+  return `${pathname}?${params.toString()}`;
+}
+
+/**
+ * The sign-in-gated "Saved" chip (AUB-129 / F11). Signed-in → toggles the
+ * server-side `?saved=1` mode via `onToggle`. Anonymous → opens the SAME kind of
+ * Radix sign-in dialog as {@link FavoriteButton} (no toggle, no server call), so
+ * an anonymous viewer can never trigger a `savedOnly` request.
+ *
+ * Signed-in state comes from the root-prefetched {@link currentUserQuery} via
+ * `useSuspenseQuery` (the repo convention), so it renders correctly on first
+ * paint. CLIENT-SAFE: imports only `currentUserQuery` + `ui/dialog`, never
+ * `~/server/*`/`~/db`.
+ */
+function SavedChip({ saved, onToggle }: { saved: boolean; onToggle: () => void }) {
+  const { data: currentUser } = useSuspenseQuery(currentUserQuery);
+  const [signInOpen, setSignInOpen] = useState(false);
+
+  const isSignedIn = currentUser != null;
+  // The saved MODE is only active for a signed-in viewer; an anonymous viewer is
+  // never "pressed" (colour is never the sole cue — `aria-pressed` announces it).
+  const active = isSignedIn && saved;
+
+  const handleClick = () => {
+    if (!isSignedIn) {
+      // Anonymous: NO navigation — explain saved spots and offer sign-in.
+      setSignInOpen(true);
+      return;
+    }
+    onToggle();
+  };
+
+  const signInHref = `/api/auth/google?returnTo=${encodeURIComponent(buildSavedReturnTo())}`;
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-pressed={active}
+        onClick={handleClick}
+        className={chipClasses(active)}
+      >
+        <Heart
+          className={`size-4 ${active ? "fill-current" : ""}`}
+          strokeWidth={2.25}
+          aria-hidden="true"
+        />
+        <span>Saved</span>
+      </button>
+
+      <Dialog open={signInOpen} onOpenChange={setSignInOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sign in to see your saved spots</DialogTitle>
+            <DialogDescription>
+              Favorites let you keep a personal list of gluten-free spots you trust. Sign in to save
+              spots and filter the directory to just your saved places.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button asChild>
+              <a href={signInHref}>Sign in</a>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function FilterChips({
   attrs,
   onToggleAttr,
   onClearAttrs,
   quick,
-  onQuickChange,
+  onQuickToggle,
   search,
   onSearchChange,
+  saved,
+  onSavedToggle,
   sheetExtras,
 }: {
   attrs: ClaimAttribute[];
   onToggleAttr: (attribute: ClaimAttribute) => void;
   onClearAttrs: () => void;
-  quick: QuickFilter;
-  onQuickChange: (next: QuickFilter) => void;
+  /** The active quick-filter set (URL-derived). A chip is pressed iff it's a member. */
+  quick: QuickFilterValue[];
+  /** Report a chip click; the parent's `applyQuickToggle` computes the next set. */
+  onQuickToggle: (value: QuickFilterValue) => void;
   /** Current free-text search value (the route mirrors it to `?q=`, debounced). */
   search: string;
   /** Report a search change straight through — the route debounces it to the URL. */
   onSearchChange: (next: string) => void;
+  /** Whether the server-side "Saved" filter (F11) is active (`?saved=1`). */
+  saved: boolean;
+  /**
+   * Toggle the server-side "Saved" filter. Called ONLY for a signed-in viewer —
+   * the chip's own auth gate opens a sign-in dialog for anonymous clicks instead.
+   */
+  onSavedToggle: () => void;
   /**
    * Extra controls rendered inside the Filters sheet, below the taxonomy filter —
    * the route passes the server-side sort control + pagination here so those
@@ -92,6 +201,9 @@ export function FilterChips({
       {/* Search leads the row as a chip (user feedback #5) — controlled by the
           route, which debounces it into the URL `?q=`. */}
       <SearchChip value={search} onChange={onSearchChange} />
+
+      {/* Sign-in-gated "Saved" chip — the server-side favorites filter (F11). */}
+      <SavedChip saved={saved} onToggle={onSavedToggle} />
 
       {/* Filters → the real server-side taxonomy filter, in a bottom sheet. */}
       <Sheet>
@@ -120,15 +232,16 @@ export function FilterChips({
         </SheetContent>
       </Sheet>
 
-      {/* Mutually-exclusive quick chips (server-side, URL-driven via `?quick=`). */}
+      {/* Faceted quick chips (server-side, URL-driven via `?quick=`). Membership in
+          the active set = pressed; the parent reducer enforces safety exclusivity. */}
       {QUICK_CHIPS.map(({ value, label, Icon }) => {
-        const active = quick === value;
+        const active = quick.includes(value);
         return (
           <button
             key={value}
             type="button"
             aria-pressed={active}
-            onClick={() => onQuickChange(active ? null : value)}
+            onClick={() => onQuickToggle(value)}
             className={chipClasses(active)}
           >
             <Icon className="size-4" strokeWidth={2.25} aria-hidden="true" />

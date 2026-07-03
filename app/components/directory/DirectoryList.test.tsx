@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   RouterProvider,
   createMemoryHistory,
@@ -7,9 +8,18 @@ import {
 } from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
+import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { DirectoryList } from "./DirectoryList";
+
+// Each card now embeds the FavoriteButton island (F6, AUB-125), which imports the
+// db-touching `favorites.fn` seam; mock it out (as FavoriteButton.test.tsx does).
+vi.mock("~/server/favorites/favorites.fn", () => ({
+  favoriteListing: vi.fn(() => Promise.resolve()),
+  unfavoriteListing: vi.fn(() => Promise.resolve()),
+}));
 
 /**
  * Tests for the List view (AUB-61). Covers that every view-model renders as a
@@ -55,7 +65,16 @@ function renderInRouter(element: ReactNode) {
     routeTree: rootRoute.addChildren([browseRoute, detailRoute]),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
-  render(<RouterProvider router={router as unknown as never} />);
+  // Seed the favorites + current-user suspense queries the embedded FavoriteButton
+  // reads (anonymous, no favorites) so each card's heart renders synchronously.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient.setQueryData(favoriteIdsQuery.queryKey, []);
+  queryClient.setQueryData(currentUserQuery.queryKey, null);
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router as unknown as never} />
+    </QueryClientProvider>
+  );
 }
 
 describe("DirectoryList", () => {

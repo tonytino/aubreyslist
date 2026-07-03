@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import type { AttestationValue, ClaimAttribute } from "~/db/schema";
 import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
@@ -81,24 +82,41 @@ export function ClaimVoteControls({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
+        {/* Iconised confirm/dispute (AUB-131). The PRESSED state maps to the
+            celiac-safe (confirm) / incident (dispute) fills so the viewer's own
+            vote reads as the same colour language as the rest of the page; the
+            lucide check/x shape + the visible text label keep the meaning off
+            colour alone. Server calls are unchanged. */}
         <Button
           type="button"
           size="sm"
-          variant={viewerVote === "confirm" ? "default" : "outline"}
+          variant="outline"
           aria-pressed={viewerVote === "confirm"}
           disabled={busy}
           onClick={() => vote.mutate("confirm")}
+          className={
+            viewerVote === "confirm"
+              ? "border-celiac-safe bg-celiac-safe text-celiac-safe-foreground hover:bg-celiac-safe/90 hover:text-celiac-safe-foreground"
+              : undefined
+          }
         >
+          <Check aria-hidden="true" className="size-4" />
           Confirm
         </Button>
         <Button
           type="button"
           size="sm"
-          variant={viewerVote === "dispute" ? "destructive" : "outline"}
+          variant="outline"
           aria-pressed={viewerVote === "dispute"}
           disabled={busy}
           onClick={() => vote.mutate("dispute")}
+          className={
+            viewerVote === "dispute"
+              ? "border-incident bg-incident text-incident-foreground hover:bg-incident/90 hover:text-incident-foreground"
+              : undefined
+          }
         >
+          <X aria-hidden="true" className="size-4" />
           Dispute
         </Button>
         {viewerVote !== null ? (

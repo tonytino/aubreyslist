@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Info, Menu, Plus, Search } from "lucide-react";
 import type { ComponentType } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
+import { previewLoginEnabledQuery } from "~/auth/preview-login-query";
 import { ThemeToggle } from "~/components/ThemeToggle";
 import { UserMenu } from "~/components/UserMenu";
 import { Wordmark } from "~/components/Wordmark";
@@ -52,6 +53,7 @@ const NAV_ITEMS: readonly NavItem[] = [
  */
 export function SiteHeader() {
   const { data: user } = useSuspenseQuery(currentUserQuery);
+  const { data: previewLoginEnabled } = useSuspenseQuery(previewLoginEnabledQuery);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background">
@@ -91,7 +93,7 @@ export function SiteHeader() {
         {/* Right: theme toggle + account menu / sign-in. */}
         <div className="flex items-center justify-self-end gap-1 sm:gap-2">
           <ThemeToggle />
-          <UserMenu user={user} />
+          <UserMenu user={user} previewLoginEnabled={previewLoginEnabled} />
         </div>
       </div>
     </header>

@@ -22,6 +22,8 @@ describe("browseSearchSchema", () => {
       lat: undefined,
       lng: undefined,
       radius: DEFAULT_RADIUS_MILES,
+      quick: "",
+      saved: false,
     });
   });
 
@@ -46,6 +48,8 @@ describe("browseSearchSchema", () => {
         lat: 39.7392,
         lng: -104.9903,
         radius: 10,
+        quick: "celiac,recent",
+        saved: true,
       })
     ).toEqual({
       page: 3,
@@ -55,6 +59,8 @@ describe("browseSearchSchema", () => {
       lat: 39.7392,
       lng: -104.9903,
       radius: 10,
+      quick: "celiac,recent",
+      saved: true,
     });
   });
 
@@ -85,15 +91,15 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({ q: "x".repeat(257) }).q).toBe("");
   });
 
-  it("parses a valid quick filter and drops garbage / absence to undefined", () => {
-    expect(browseSearchSchema.parse({ quick: "celiac" }).quick).toBe("celiac");
-    expect(browseSearchSchema.parse({ quick: "friendly" }).quick).toBe("friendly");
-    expect(browseSearchSchema.parse({ quick: "recent" }).quick).toBe("recent");
-    // Unknown token / wrong type degrades to absent (no chip), never throws.
-    expect(browseSearchSchema.parse({ quick: "bogus" }).quick).toBeUndefined();
-    expect(browseSearchSchema.parse({ quick: 42 }).quick).toBeUndefined();
-    // Omitted → absent, so it carries no default and is stripped from the URL.
-    expect(browseSearchSchema.parse({}).quick).toBeUndefined();
+  it("stores the raw quick comma-string (validation/collapse deferred to parseQuick)", () => {
+    // Like `attrs`, the schema keeps the raw string; `parseQuick` (tested in
+    // quick.test.ts) does the vocabulary validation, de-dupe, and safety-group
+    // collapse. So the schema only guards the TYPE (string), degrading a non-string
+    // to "" and defaulting an omitted param to "" (so it's stripped from the URL).
+    expect(browseSearchSchema.parse({ quick: "celiac,recent" }).quick).toBe("celiac,recent");
+    expect(browseSearchSchema.parse({ quick: "bogus" }).quick).toBe("bogus"); // raw passthrough
+    expect(browseSearchSchema.parse({ quick: 42 }).quick).toBe(""); // non-string → catch
+    expect(browseSearchSchema.parse({}).quick).toBe(""); // default
   });
 
   it("coerces radius to a valid option, falling back to the default", () => {

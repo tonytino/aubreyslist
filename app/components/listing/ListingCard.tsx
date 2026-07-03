@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
+import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { Badge } from "~/components/ui/badge";
 import type { Listing } from "~/db/schema";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
@@ -54,6 +55,14 @@ export interface RestaurantCardVM {
    * when present — never styled or labelled as a safety/celiac score (ADR-007).
    */
   googleRating?: { value: number; count: number } | null;
+  /**
+   * OPTIONAL public, user-agnostic count of people who have saved this listing.
+   * Rendered as an ATTRIBUTED "saves" pill only when > 0 (hidden at 0, matching
+   * how `googleRating` hides when absent). Like `googleRating`, it is a community
+   * signal, NOT a safety/celiac verdict (ADR-007) — all safety meaning stays in
+   * {@link SafetySignal}, so this pill NEVER sits in the safety-signal row.
+   */
+  saveCount?: number;
   /** A real food photo when available; otherwise the placeholder tile is shown. */
   photoUrl?: string | null;
 }
@@ -139,17 +148,35 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-display text-card-title font-bold text-foreground">{vm.name}</h3>
 
-            {/* External Google Places rating — ATTRIBUTED, never a safety score (ADR-007). */}
-            {vm.googleRating ? (
-              <span
-                data-testid="google-rating"
-                className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-accent-peach/50 px-2 py-1 text-caption font-semibold text-foreground"
-              >
-                <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                <span>{vm.googleRating.value.toFixed(1)}</span>
-                <span className="font-normal text-muted-foreground">Google</span>
-              </span>
-            ) : null}
+            {/* Attributed community pills — same ADR-007 treatment as the Google
+                rating: colour + text label, NEVER a safety verdict, and kept in the
+                TITLE row (never adjacent to the SafetySignal row below). */}
+            <div className="flex shrink-0 items-center gap-1.5">
+              {/* Public save-count — ATTRIBUTED ("saves"), hidden at 0. A distinct
+                  accent (lavender) from the safety-state colours (ADR-007). */}
+              {vm.saveCount && vm.saveCount > 0 ? (
+                <span
+                  data-testid="save-count"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-accent-lavender/50 px-2 py-1 text-caption font-semibold text-foreground"
+                >
+                  <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                  <span>{vm.saveCount}</span>
+                  <span className="font-normal text-muted-foreground">saves</span>
+                </span>
+              ) : null}
+
+              {/* External Google Places rating — ATTRIBUTED, never a safety score (ADR-007). */}
+              {vm.googleRating ? (
+                <span
+                  data-testid="google-rating"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-chip bg-accent-peach/50 px-2 py-1 text-caption font-semibold text-foreground"
+                >
+                  <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                  <span>{vm.googleRating.value.toFixed(1)}</span>
+                  <span className="font-normal text-muted-foreground">Google</span>
+                </span>
+              ) : null}
+            </div>
           </div>
 
           <p className="text-body-sm text-muted-foreground">
@@ -213,17 +240,13 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
         </div>
       </Link>
 
-      {/* Save/heart affordance — present but not wired (Phase 2). A SIBLING of the
-          Link (not a descendant — a <button> inside an <a> is invalid HTML), raised
-          above the stretched-link overlay with `relative z-10` so it stays
-          independently focusable/clickable. */}
-      <button
-        type="button"
-        aria-label="Save this spot"
-        className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand"
-      >
-        <Heart className="h-4 w-4" aria-hidden="true" />
-      </button>
+      {/* Save/heart affordance (F6, AUB-125). A SIBLING of the Link (not a
+          descendant — a <button> inside an <a> is invalid HTML), raised above the
+          stretched-link overlay with `absolute … z-10` so it stays independently
+          focusable/clickable. FavoriteButton reproduces the previous inert heart's
+          exact top-right position/classes and reads `["favorites"]` itself, so the
+          VM stays per-user-free. */}
+      <FavoriteButton listingId={vm.id} listingName={vm.name} />
     </div>
   );
 }
@@ -296,7 +319,8 @@ interface ListingCardProps {
 export function listingToCardVM(
   listing: Listing,
   glance: ListingTrustGlance,
-  distanceLabel?: string | undefined
+  distanceLabel?: string | undefined,
+  saveCount?: number | undefined
 ): RestaurantCardVM {
   return {
     id: listing.id,
@@ -312,6 +336,11 @@ export function listingToCardVM(
     ...(glance.evidence ? { evidence: glance.evidence } : {}),
     ...(glance.freshness ? { freshness: glance.freshness } : {}),
     ...(distanceLabel !== undefined ? { distanceLabel } : {}),
+    // The public save-count is OPTIONAL and trailing so callers that don't have
+    // it (e.g. the map carousel) still compile and simply render no pill. Spread
+    // in only when provided so the prop stays truly absent under
+    // `exactOptionalPropertyTypes`.
+    ...(saveCount !== undefined ? { saveCount } : {}),
   };
 }
 

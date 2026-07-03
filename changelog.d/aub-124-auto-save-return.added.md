@@ -1,0 +1,1 @@
+- `[manual]` After signing in from a heart click, the pending favorite auto-completes: on return the client reads the `?save=<listingId>` marker, saves the listing exactly once (module-level one-shot guard), strips the marker from the URL via `replaceState`, and refreshes the viewer's favorites.

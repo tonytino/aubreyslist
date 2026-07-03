@@ -36,6 +36,24 @@ export const envSchema = z.object({
     .min(32, "SESSION_SECRET must be at least 32 characters")
     .optional()
     .describe("Session signing secret; at least 32 chars (openssl rand -base64 32)."),
+
+  // Vercel injects this at runtime on every deployment: `production` on the
+  // production domain, `preview` on preview deployments, `development` for
+  // `vercel dev`. Absent locally. Used to keep the preview-only dev-login
+  // endpoint prod-inert (see app/server/auth/preview-login.ts, AUB-138).
+  VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
+
+  // Human-provisioned secret (safe:human, Bucket 1). Gates the preview-only
+  // dev-login endpoint that mints a session WITHOUT Google — a workaround for
+  // Google OAuth's exact-match redirect URIs on per-deployment preview URLs.
+  // Provision **Preview-scoped only** in Vercel (NEVER Production); generate
+  // with `openssl rand -base64 32`. Min 32 chars so it can't be brute-forced.
+  // Optional everywhere (absent → the endpoint is disabled). See AUB-138.
+  PREVIEW_LOGIN_SECRET: z
+    .string()
+    .min(32, "PREVIEW_LOGIN_SECRET must be at least 32 characters")
+    .optional()
+    .describe("Preview-only dev-login secret; at least 32 chars (openssl rand -base64 32)."),
 });
 
 /** Validated environment shape. */

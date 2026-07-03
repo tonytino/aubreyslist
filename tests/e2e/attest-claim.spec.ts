@@ -53,8 +53,9 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
     await waitForHydration(page);
 
     // Before voting: the full taxonomy renders (no "Coming soon" dead-end) and
-    // the headline cue is the honest empty state.
-    const claimsSection = page.getByRole("region", { name: "Community claims" });
+    // the headline cue is the honest empty state. The claims now live in the
+    // default-open "Community claims" tab panel (AUB-131 tabbed evidence panel).
+    const claimsSection = page.getByRole("tabpanel", { name: /Community claims/ });
     // Exact match: the row label is "Celiac-safe" (issue #175); the row's
     // confirm/dispute clarifier copy also contains "celiac-safe" lower-cased.
     await expect(claimsSection.getByText("Celiac-safe", { exact: true })).toBeVisible();

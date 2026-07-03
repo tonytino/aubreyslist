@@ -1,0 +1,1 @@
+- `[manual]` Refactored the browse pipeline: extracted the ADR-007 trust-glance card derivation into a server-only `buildBrowseCards` helper (distance-label logic stays in `getBrowseListings`) so upcoming favorites reads render byte-identical cards. No observable behavior change — locked by a golden regression test.

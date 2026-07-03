@@ -83,6 +83,29 @@
   --color-incident-soft: oklch(0.95 0.04 25);
 
   /* ----------------------------------------------------------------------- */
+  /* Incident SEVERITY ramp (AUB-131) — a yellow→orange→red scale for the     */
+  /* reporter-rated severity of an incident (Mild / Moderate / Severe).       */
+  /*                                                                          */
+  /* This is deliberately SEPARATE from the safety states above: severity is  */
+  /* NOT a safety signal, it grades how bad ONE report was. Like the safety   */
+  /* tokens it is ALWAYS paired with an icon + text label in the UI           */
+  /* (IncidentReports SeverityTag) — colour never stands alone. The strong    */
+  /* tokens carry the tag's text/icon/border; the -soft tokens are the fill.  */
+  /*                                                                          */
+  /* WCAG AA verified (>= 4.5:1) in BOTH themes: the strong tokens clear AA   */
+  /* on white AND on their light -soft fills (~5.8–7.2:1). The strong tokens  */
+  /* are NOT re-pointed in dark mode; the -soft fills are kept LIGHT there     */
+  /* (same rule as the safety softs) so the dark strong text stays legible    */
+  /* (~5.5:1). See docs/agents/styling.md → Dark Mode.                        */
+  /* ----------------------------------------------------------------------- */
+  --color-severity-mild: oklch(0.47 0.11 92); /* yellow — lowest */
+  --color-severity-mild-soft: oklch(0.95 0.06 95);
+  --color-severity-moderate: oklch(0.47 0.15 55); /* orange — middle */
+  --color-severity-moderate-soft: oklch(0.95 0.08 62);
+  --color-severity-severe: oklch(0.48 0.2 25); /* red — highest */
+  --color-severity-severe-soft: oklch(0.95 0.04 25);
+
+  /* ----------------------------------------------------------------------- */
   /* Type scale — mobile-first, fluid-friendly. Backs `text-*` utilities.     */
   /* ----------------------------------------------------------------------- */
   --text-caption: 0.75rem; /* 12px */
@@ -255,4 +278,12 @@
   --color-gluten-friendly-soft: oklch(0.9 0.08 80);
   --color-stale-soft: oklch(0.9 0.03 255);
   --color-incident-soft: oklch(0.9 0.06 25);
+
+  /* Severity -soft fills (AUB-131) — kept LIGHT in dark mode for the same
+     reason as the safety softs: the SeverityTag draws its text in the strong
+     severity colour (L~0.47–0.48), so the fill must stay light for that text to
+     clear AA. Dark strong text on these light fills gives ~5.5:1 (AA). */
+  --color-severity-mild-soft: oklch(0.93 0.07 95);
+  --color-severity-moderate-soft: oklch(0.93 0.08 62);
+  --color-severity-severe-soft: oklch(0.92 0.05 25);
 }

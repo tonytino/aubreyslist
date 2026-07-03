@@ -1,0 +1,1 @@
+- `[manual]` Gave the gluten-friendly safety state the brand ear-of-wheat-with-a-strike glyph (replacing the leaf), and added supplementary hover/focus tooltips with centralized per-state copy to the safety-signal legend, the style guide, and admin status badges. Colour + icon + text label remain the primary signal; tooltips never carry meaning alone.

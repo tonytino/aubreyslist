@@ -188,6 +188,31 @@ export const attestations = pgTable(
 );
 
 /**
+ * A user's favorite (bookmark) of a listing. A create-or-delete edge: a user
+ * favorites a listing (one row) and unfavorites by deleting it — the row is
+ * never mutated, so there is NO `updatedAt`. One favorite per user per listing,
+ * enforced by the unique constraint.
+ */
+export const favorites = pgTable(
+  "favorites",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    listingId: text("listing_id")
+      .notNull()
+      .references(() => listings.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("favorites_user_listing_unique").on(t.userId, t.listingId),
+    index("favorites_user_idx").on(t.userId),
+    index("favorites_listing_idx").on(t.listingId),
+  ]
+);
+
+/**
  * A "got glutened here" report on a listing. `occurredOn` is required; severity
  * and note are optional. Carries `updatedAt` because users may edit/retract
  * their own incidents (domain.md, Roles).
@@ -328,6 +353,9 @@ export type NewClaim = typeof claims.$inferInsert;
 
 export type Attestation = typeof attestations.$inferSelect;
 export type NewAttestation = typeof attestations.$inferInsert;
+
+export type Favorite = typeof favorites.$inferSelect;
+export type NewFavorite = typeof favorites.$inferInsert;
 
 export type Incident = typeof incidents.$inferSelect;
 export type NewIncident = typeof incidents.$inferInsert;

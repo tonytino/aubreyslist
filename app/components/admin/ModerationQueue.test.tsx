@@ -162,6 +162,32 @@ describe("ModerationQueue", () => {
     expect(screen.getByText("Got glutened")).toBeInTheDocument();
   });
 
+  it("wraps the target-type chip in a Tooltip whose explainer opens on focus (AUB-133)", async () => {
+    renderQueue({
+      access: "granted",
+      items: [
+        item({
+          target: { type: "listing", id: "listing-1", label: "Some Cafe", listingId: "listing-1" },
+        }),
+      ],
+    });
+
+    // The chip's own TEXT label carries the meaning; the tooltip is supplementary
+    // and reachable on keyboard focus (the Badge trigger is `tabIndex=0`). The
+    // target label ("Some Cafe") differs from the type label so "Listing" is the
+    // chip alone.
+    const chip = (await screen.findByText("Listing")).closest(
+      "[data-slot='tooltip-trigger']"
+    ) as HTMLElement;
+    expect(chip).toHaveAttribute("tabindex", "0");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    fireEvent.focus(chip);
+
+    const tip = await screen.findByRole("tooltip");
+    expect(tip).toHaveTextContent(/flagged restaurant listing/i);
+  });
+
   it("renders the Dismiss / Hide / Remove action controls (icon + text label) (#41)", async () => {
     renderQueue({ access: "granted", items: [item({})] });
 

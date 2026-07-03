@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Utensils } from "lucide-react";
-import { SAFETY_STATES, SafetySignal } from "~/components/SafetySignal";
+import { SAFETY_STATES, SAFETY_TOOLTIP, SafetySignal } from "~/components/SafetySignal";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 import { claimAttributeLabel } from "~/trust/summary";
 
@@ -113,7 +114,16 @@ function AboutPage() {
             a headline verdict, so it is intentionally omitted here. */}
         <div className="flex flex-wrap items-center gap-2">
           {SAFETY_STATES.filter((state) => state !== "stale").map((state) => (
-            <SafetySignal key={state} state={state} />
+            // The chip is the tooltip TRIGGER (colour + icon + label already carry
+            // the meaning); the tooltip adds the same centralized SAFETY_TOOLTIP
+            // explainer this legend is the copy source for. `tabIndex={0}` makes
+            // it reachable on keyboard focus as well as hover.
+            <Tooltip key={state}>
+              <TooltipTrigger asChild>
+                <SafetySignal state={state} tabIndex={0} />
+              </TooltipTrigger>
+              <TooltipContent>{SAFETY_TOOLTIP[state]}</TooltipContent>
+            </Tooltip>
           ))}
           {/* An example GF taxonomy attribute (domain.md) — matches the
               SafetySignal chip geometry but in a NEUTRAL tone so it never reads

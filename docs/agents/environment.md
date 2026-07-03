@@ -12,6 +12,8 @@ All environment variables are validated with Zod in `app/env.ts`. Validation run
 | `GOOGLE_CLIENT_SECRET`  | Optional* | human (#14)    | Google OAuth client secret. Promoted to required by #15. |
 | `GOOGLE_PLACES_API_KEY` | Optional* | human (#21)    | Server-side Places key (ADR-008). Promoted to required by #22. |
 | `SESSION_SECRET`        | Optional* | human (#14)    | Random string for session signing, **min 32 chars** (`openssl rand -base64 32`). Promoted to required by #15. |
+| `VERCEL_ENV`            | Optional  | runtime        | Auto-set by Vercel: `production` \| `preview` \| `development`; absent locally. Preview dev-login is **fail-closed** — enabled only for `preview`/`development` (set `VERCEL_ENV=development` in `.env` for local dev-login); unset/`production`/other → disabled (AUB-138). |
+| `PREVIEW_LOGIN_SECRET`  | Optional* | human (AUB-138) | Gates the preview-only dev-login endpoint, **min 32 chars** (`openssl rand -base64 32`). Provision **Preview-scoped only** in Vercel, NEVER Production. Absent → endpoint disabled. |
 
 \* The human-provisioned secrets are declared `optional()` for now so
 `pnpm preflight` / CI stay green while they're unprovisioned. The auth (#15) and

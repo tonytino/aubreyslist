@@ -1,0 +1,1 @@
+- `[manual]` Added a favorite heart to the listing detail page header, reflecting and toggling the viewer's saved state.

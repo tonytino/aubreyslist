@@ -1,17 +1,24 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound, stripSearchParams } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { MapPin } from "lucide-react";
+import { CircleCheck, MapPin, Menu, Users } from "lucide-react";
 import { z } from "zod";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
+import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
+import { SafetyLegend } from "~/components/listing/SafetyLegend";
 import { SafetySummary } from "~/components/listing/SafetySummary";
-import { TrustPlaceholder } from "~/components/listing/TrustPlaceholder";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader } from "~/components/ui/card";
+import { Card, CardContent } from "~/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { absoluteUrl, canonicalLink, jsonLdScript, pageSeoMeta } from "~/lib/seo";
+import {
+  LISTING_DETAIL_SEARCH_DEFAULTS,
+  type ListingDetailTab,
+  listingDetailSearchSchema,
+} from "~/listings/listing-detail-search";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
@@ -19,7 +26,7 @@ import { fetchListing } from "~/server/listings/get-listing.fn";
 import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
 import { findRecentIncident } from "~/trust/incident-recency";
-import { deriveHeadlineSafetyState } from "~/trust/summary";
+import { deriveHeadlineSafetyState, formatRelativeTime } from "~/trust/summary";
 
 /**
  * Server-only loader for a listing's claims WITH their aggregates (confirm/
@@ -72,6 +79,11 @@ function claimsQueryOptions(listingId: string) {
 }
 
 export const Route = createFileRoute("/listings/$id")({
+  // Which evidence tab is open is shareable/restorable state, so it lives in the
+  // URL as a validated `?tab=` param (Hard Rule → "selected tab"). The default
+  // tab is stripped from the bar so a bare listing URL stays clean.
+  validateSearch: listingDetailSearchSchema,
+  search: { middlewares: [stripSearchParams(LISTING_DETAIL_SEARCH_DEFAULTS)] },
   loader: async ({ params: { id }, context }) => {
     const [listing, viewerId] = await Promise.all([
       fetchListing({ data: { id } }),
@@ -137,11 +149,23 @@ export const Route = createFileRoute("/listings/$id")({
   notFoundComponent: ListingNotFound,
 });
 
+/**
+ * Circular icon-button chrome for the hero media overlay (favorite + flag). A
+ * translucent dark chip with a light border so white glyphs stay AA-legible over
+ * the brand gradient + scrim. Motion is limited to a colour transition, disabled
+ * under prefers-reduced-motion.
+ */
+const HERO_ICON_BUTTON =
+  "inline-flex size-10 items-center justify-center rounded-full border border-white/40 bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-0 motion-reduce:transition-none [&_svg]:size-5";
+
 function ListingDetail() {
   const { listing, viewerId, stalenessMonths, nowMs } = Route.useLoaderData();
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
   const { data: claims } = useSuspenseQuery(claimsQueryOptions(listing.id));
   const now = new Date(nowMs);
+  const isSignedIn = viewerId !== null;
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
   const recentIncident = findRecentIncident(incidents, now);
 
@@ -156,38 +180,138 @@ function ListingDetail() {
     ? deriveHeadlineSafetyState(headlineClaim, now, stalenessMonths)
     : null;
 
+  // At-a-glance metadata mirrored from the browse card, derived ONLY from data
+  // already in hand (the headline claim's aggregate). HONEST: an item is omitted
+  // rather than fabricated when its value isn't available — "Verified …" only when
+  // there is a real last-confirmed timestamp, "N confirmations" only when > 0. A
+  // distinct-contributor count is not loaded on this route, so it is omitted
+  // entirely rather than invented.
+  const verifiedRelative = headlineClaim
+    ? formatRelativeTime(headlineClaim.lastConfirmedAt, now)
+    : null;
+  const confirmations = headlineClaim?.confirmCount ?? 0;
+
+  const claimsCount = claims.length;
+  const incidentsCount = incidents.length;
+
+  const handleTabChange = (value: string) => {
+    // Tab is client-only view state — it changes no server input, so we only
+    // rewrite the `?tab=` param and never touch loaderDeps or reset a page index.
+    navigate({ search: (prev) => ({ ...prev, tab: value as ListingDetailTab }) });
+  };
+
   return (
-    <article className="mx-auto flex w-full max-w-3xl flex-col gap-section bg-background px-4 py-10 text-foreground sm:px-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-headline font-bold tracking-tight">{listing.name}</h1>
-        <p className="text-body text-muted-foreground">{listing.address}</p>
-        {/* Flag this listing as inappropriate/spam/wrong (#39). Login-gated; the
-            control renders nothing for anonymous viewers and the server
-            re-gates regardless. */}
-        <FlagControl
-          target="listing"
-          listingId={listing.id}
-          isSignedIn={viewerId !== null}
-          label="Flag listing"
-        />
+    <article className="mx-auto flex w-full max-w-3xl flex-col gap-section bg-background px-4 py-6 text-foreground sm:px-6 sm:py-8">
+      {/* ============================================================ HERO */}
+      <header className="relative overflow-hidden rounded-card border border-border bg-surface shadow-sm">
+        {/* Brand-tinted gradient media band (real photo slot later). Decorative
+            pastel blobs layer over a brand gradient; a bottom scrim keeps the
+            overlaid white name/address AA-legible. All Tailwind utilities — no
+            inline styles. */}
+        <div className="relative aspect-[16/9] bg-gradient-to-br from-brand to-brand-strong sm:aspect-[21/9]">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[radial-gradient(120%_90%_at_12%_18%,var(--color-accent-peach),transparent_55%)]"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[radial-gradient(110%_90%_at_88%_12%,var(--color-accent-mint),transparent_50%)]"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-[radial-gradient(130%_120%_at_78%_96%,var(--color-accent-sky),transparent_55%)]"
+          />
+          {/* Placeholder label for the eventual food photo. */}
+          <div aria-hidden="true" className="absolute inset-0 grid place-items-center">
+            <span className="font-mono text-caption font-semibold uppercase tracking-[0.28em] text-white/80">
+              Food photo
+            </span>
+          </div>
+          {/* Bottom scrim for text contrast. */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent"
+          />
+
+          {/* Top-right circular icon actions: favorite (wired) + flag. */}
+          <div className="absolute right-3 top-3 z-30 flex gap-2">
+            {/* Save/favorite affordance (F7, AUB-126) — the shipped, wired island.
+                Reads `["favorites"]` + `currentUserQuery` itself (both prefetched at
+                the root), so it needs no loader wiring and handles its own anon
+                (dialog) vs signed-in (optimistic toggle) behaviour. Styled with the
+                hero overlay chrome so it matches the sibling flag icon button. */}
+            <FavoriteButton
+              listingId={listing.id}
+              listingName={listing.name}
+              className={HERO_ICON_BUTTON}
+            />
+            {/* Flag this listing (#39) as an icon + tooltip. FlagControl keeps its
+                login gate (renders nothing when anonymous) and the server re-gates
+                regardless; the reason form opens in a portaled dialog. */}
+            <FlagControl
+              target="listing"
+              listingId={listing.id}
+              isSignedIn={isSignedIn}
+              label="Flag listing"
+              variant="icon"
+              triggerClassName={HERO_ICON_BUTTON}
+            />
+          </div>
+
+          {/* Name + address overlaid on the scrim (white text, AA via scrim). */}
+          <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-1 p-card">
+            <h1 className="font-display text-headline font-bold tracking-tight text-white [text-shadow:0_1px_12px_rgba(0,0,0,0.55)] sm:text-display">
+              {listing.name}
+            </h1>
+            <span className="inline-flex items-center gap-1.5 text-body-sm text-white/95 [text-shadow:0_1px_10px_rgba(0,0,0,0.6)]">
+              <MapPin aria-hidden="true" className="size-4 shrink-0" />
+              {listing.address}
+            </span>
+          </div>
+        </div>
+
+        {/* Solid bar below the media: the headline safety cue at hero scale +
+            the at-a-glance metadata strip mirrored from the browse card. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-card">
+          <SafetySummary state={safetyState} variant="hero" />
+          {verifiedRelative || confirmations > 0 ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-muted-foreground">
+              {verifiedRelative ? (
+                <span className="inline-flex items-center gap-1.5 font-medium">
+                  <CircleCheck aria-hidden="true" className="size-4 text-celiac-safe" />
+                  Verified {verifiedRelative}
+                </span>
+              ) : null}
+              {confirmations > 0 ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Users aria-hidden="true" className="size-4" />
+                  {confirmations} confirmation{confirmations === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </header>
 
       {/* Recent harm is surfaced first and never buried by older confirmations
-          (ADR-007, domain.md → Trust Model). Reusable for the #33 list-card signal. */}
+          (ADR-007). It STAYS above the tabs — never hidden behind a tab. */}
       {recentIncident ? (
         <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
       ) : null}
 
-      {/* Headline celiac-safe vs gluten-friendly cue, derived from visible evidence (#29). */}
-      <SafetySummary state={safetyState} />
+      {/* Safety legend — a quiet wrapping key of the four signals, no heading. */}
+      <SafetyLegend />
 
       {/* Primary action: deep-link to Google Maps (ADR-009 — no embedded map).
           Both hrefs are guarded by `isHttpUrl` so only http(s) links ever reach
-          an anchor — defence-in-depth against a dangerous-scheme URL (#90). The
-          mapsUrl is app-generated (lower risk) but the sink is guarded too. */}
-      <section aria-label="Links" className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          an anchor — defence-in-depth against a dangerous-scheme URL (#90). Full-
+          width on mobile, side-by-side from 480px. */}
+      <section
+        aria-label="Links"
+        className="flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-center"
+      >
         {isHttpUrl(listing.mapsUrl) ? (
-          <Button asChild size="lg">
+          <Button asChild size="lg" className="w-full min-[480px]:w-auto">
             <a href={listing.mapsUrl} target="_blank" rel="noreferrer noopener">
               <MapPin aria-hidden className="h-4 w-4" />
               Open in Google Maps
@@ -196,56 +320,71 @@ function ListingDetail() {
         ) : null}
 
         {isHttpUrl(listing.menuUrl) ? (
-          <Button asChild size="lg" variant="outline">
+          <Button asChild size="lg" variant="outline" className="w-full min-[480px]:w-auto">
             <a href={listing.menuUrl} target="_blank" rel="noreferrer noopener">
+              <Menu aria-hidden className="h-4 w-4" />
               View menu
             </a>
           </Button>
         ) : null}
       </section>
 
-      {/* EPIC 4 slots — honest empty states, never fake data. */}
-      {/* Community claims ALWAYS render the full fixed taxonomy as attestable
-          (#150): each attribute shows its visible confirm/dispute counts +
-          recency (honest empty state for zero votes — never a fabricated
-          rating, ADR-007) and the viewer's confirm/dispute controls, so a
-          signed-in user can begin attesting ANY attribute even on a listing
-          with no claims yet (the claim is created lazily on first vote). No more
-          "coming soon" dead-end. */}
-      {/* Keep the landmark as a real <section> (a bare Card is a <div> and gets
-          no implicit region role from aria-labelledby alone — and Biome's
-          useSemanticElements forbids role="region"). The Card stays inside for
-          styling; the heading lives in CardHeader. Mirrors AdminSection. */}
-      <section aria-labelledby="community-claims-heading">
+      {/* Tabbed evidence panel (AUB-131): Community claims + Incident reports in
+          one card. The active tab is URL-backed (`?tab=`) so it is shareable and
+          survives refresh/back-forward. The shadcn Tabs primitive handles
+          role=tab/tabpanel + arrow-key roving focus. Community claims ALWAYS
+          render the full fixed taxonomy as attestable (#150), with honest empty
+          states — never fabricated data. */}
+      <section aria-label="Community evidence">
         <Card>
-          <CardHeader>
-            <h2 id="community-claims-heading" className="text-title">
-              Community claims
-            </h2>
-            <CardDescription>
-              What the community has confirmed or disputed about this restaurant. Each summary is a
-              roll-up of the visible attestations below it — never a hidden score. Sign in to
-              confirm or dispute any attribute.
-            </CardDescription>
-          </CardHeader>
           <CardContent>
-            <CommunityClaims
-              listingId={listing.id}
-              claims={claims}
-              viewerId={viewerId}
-              now={now}
-              stalenessMonths={stalenessMonths}
-            />
+            <Tabs value={tab} onValueChange={handleTabChange}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="claims">
+                  Community claims
+                  <span className="ml-1.5 rounded-chip bg-muted px-1.5 text-caption font-semibold text-muted-foreground">
+                    {claimsCount}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="incidents">
+                  Incident reports
+                  <span className="ml-1.5 rounded-chip bg-muted px-1.5 text-caption font-semibold text-muted-foreground">
+                    {incidentsCount}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="claims" className="pt-4">
+                <p className="mb-3 text-body-sm text-muted-foreground">
+                  What the community has confirmed or disputed about this restaurant. Each summary
+                  is a roll-up of the visible attestations below it — never a hidden score. Sign in
+                  to confirm or dispute any attribute.
+                </p>
+                <CommunityClaims
+                  listingId={listing.id}
+                  claims={claims}
+                  viewerId={viewerId}
+                  now={now}
+                  stalenessMonths={stalenessMonths}
+                />
+              </TabsContent>
+
+              <TabsContent value="incidents" className="pt-4">
+                <p className="mb-3 text-body-sm text-muted-foreground">
+                  Recent glutened reports, most recent first. Recent ones flag the listing at the
+                  top of the page regardless of older confirmations.
+                </p>
+                <IncidentReports
+                  listingId={listing.id}
+                  incidents={incidents}
+                  viewerId={viewerId}
+                  now={now}
+                />
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </section>
-
-      <TrustPlaceholder
-        title="Incident reports"
-        description="Recent “got glutened here” reports are shown here, most recent first. Recent ones flag the listing at the top of the page regardless of older confirmations."
-      >
-        <IncidentReports listingId={listing.id} incidents={incidents} viewerId={viewerId} />
-      </TrustPlaceholder>
     </article>
   );
 }
