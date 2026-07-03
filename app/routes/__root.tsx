@@ -11,6 +11,7 @@ import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { useEffect } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
+import { previewLoginEnabledQuery } from "~/auth/preview-login-query";
 import { SiteHeader } from "~/components/SiteHeader";
 import { Button } from "~/components/ui/button";
 import { Toaster } from "~/components/ui/sonner";
@@ -61,6 +62,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     await Promise.all([
       context.queryClient.ensureQueryData(currentUserQuery),
       context.queryClient.ensureQueryData(favoriteIdsQuery),
+      // Whether to show the preview-only "Dev sign-in" affordance in the header
+      // (prod-inert: resolves false in production, so nothing renders there).
+      context.queryClient.ensureQueryData(previewLoginEnabledQuery),
     ]);
   },
   component: RootComponent,

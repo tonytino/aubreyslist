@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import {
@@ -10,6 +11,7 @@ import {
 } from "../auth/google";
 import {
   isPreviewLoginEnabled,
+  renderDevLoginPage,
   resolvePreviewUser,
   verifyPreviewSecret,
 } from "../auth/preview-login";
@@ -109,6 +111,30 @@ function callbackUrl(requestUrl: string): string {
   return new URL("/api/auth/callback/google", requestUrl).toString();
 }
 
+/**
+ * Resolve the preview tester (creating/reusing a `preview:`-namespaced user, or
+ * throwing 403 for a real account), write the SAME sealed session cookie the
+ * OAuth callback writes, and redirect to the already-validated `returnTo`.
+ * Shared by the GET (`?secret=`) and POST (form body) dev-login paths, called
+ * only AFTER the gate + secret check pass.
+ */
+async function completeDevLogin(
+  c: Context,
+  email: string | undefined,
+  returnTo: string
+): Promise<Response> {
+  const user = await resolvePreviewUser(email);
+
+  const sessionValue = await createSessionCookieValue(user.id);
+  setCookie(c, SESSION_COOKIE_NAME, sessionValue, {
+    ...SESSION_COOKIE_OPTIONS,
+    secure: cookieSecure(),
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+
+  return c.redirect(new URL(returnTo, c.req.url).toString());
+}
+
 export const authRoutes = new Hono()
   // Initiate sign-in: stash state + PKCE verifier, redirect to Google.
   .get("/google", async (c) => {
@@ -192,28 +218,61 @@ export const authRoutes = new Hono()
   //      (constant-time compared).
   // On success it writes the SAME sealed session cookie as the OAuth callback
   // and lands on a `validateReturnTo`-checked path (never an open redirect).
+  //
+  // Two ways in, same gates:
+  //   - GET with no secret → serve an HTML sign-in FORM (below), so the tester
+  //     enters the secret in a POST body rather than the URL (keeps it out of
+  //     history/logs). This is what the header "Dev sign-in" link opens.
+  //   - GET/POST with a secret (`?secret=`, `x-preview-login-secret` header, or
+  //     the form's POST body) → verify + sign in. The query form stays for
+  //     curl/e2e/bookmarked callers.
   .get("/dev-login", async (c) => {
     if (!isPreviewLoginEnabled()) {
       throw new HTTPException(404, { message: "Not Found" });
     }
 
+    const requestUrl = new URL(c.req.url);
+    const returnTo = validateReturnTo(c.req.query("returnTo"), requestUrl.origin);
     const secret = c.req.query("secret") ?? c.req.header("x-preview-login-secret");
+
+    // No secret on a GET → render the form so it can be POSTed in the body.
+    if (secret === undefined) {
+      return c.html(renderDevLoginPage({ returnTo, email: c.req.query("email") }));
+    }
+
     if (!verifyPreviewSecret(secret)) {
       throw new HTTPException(401, { message: "Invalid preview login secret" });
     }
 
-    const user = await resolvePreviewUser(c.req.query("email"));
+    return completeDevLogin(c, c.req.query("email"), returnTo);
+  })
 
-    const sessionValue = await createSessionCookieValue(user.id);
-    setCookie(c, SESSION_COOKIE_NAME, sessionValue, {
-      ...SESSION_COOKIE_OPTIONS,
-      secure: cookieSecure(),
-      maxAge: SESSION_MAX_AGE_SECONDS,
-    });
+  // Form POST from the sign-in page: the secret arrives in the body, never the
+  // URL. On a bad secret we re-render the form with an inline error (nicer than
+  // a bare 401 page) but keep the 401 status so scripted callers still see it.
+  .post("/dev-login", async (c) => {
+    if (!isPreviewLoginEnabled()) {
+      throw new HTTPException(404, { message: "Not Found" });
+    }
 
-    const requestUrl = new URL(c.req.url);
-    const returnTo = validateReturnTo(c.req.query("returnTo"), requestUrl.origin);
-    return c.redirect(new URL(returnTo, requestUrl).toString());
+    const body = await c.req.parseBody();
+    const secret = typeof body.secret === "string" ? body.secret : undefined;
+    const email = typeof body.email === "string" ? body.email : undefined;
+    const returnToInput = typeof body.returnTo === "string" ? body.returnTo : undefined;
+    const returnTo = validateReturnTo(returnToInput, new URL(c.req.url).origin);
+
+    if (!verifyPreviewSecret(secret)) {
+      return c.html(
+        renderDevLoginPage({
+          returnTo,
+          email,
+          error: "That secret didn't match. Please try again.",
+        }),
+        401
+      );
+    }
+
+    return completeDevLogin(c, email, returnTo);
   })
 
   // Sign-out: drop the session cookie.

@@ -139,3 +139,111 @@ export async function resolvePreviewUser(email?: string): Promise<User> {
   }
   return created;
 }
+
+/** Escape a string for safe interpolation into HTML text or an attribute. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export interface DevLoginPageOptions {
+  /** Same-origin path to land on after sign-in — already `validateReturnTo`-checked. */
+  returnTo: string;
+  /** Prefill for the optional email field (echoed back after a failed submit). */
+  email?: string | undefined;
+  /** Inline error banner text, shown when a prior submit was rejected. */
+  error?: string | undefined;
+}
+
+/**
+ * Render the self-contained HTML sign-in form served by `GET /api/auth/dev-login`
+ * on a preview deployment. The secret is typed here and submitted in the POST
+ * **body**, so it never lands in the URL, browser history, or the server/access
+ * logs — unlike the `?secret=` query form (kept for scripted/e2e callers).
+ *
+ * Fully inline (no external assets, so it renders even before the app bundle
+ * loads) and only ever reachable when {@link isPreviewLoginEnabled}: the route
+ * 404s this page in production. `noindex` keeps preview URLs out of search
+ * engines. All reflected values ({@link DevLoginPageOptions.returnTo | returnTo},
+ * {@link DevLoginPageOptions.email | email}) are HTML-escaped.
+ */
+export function renderDevLoginPage(options: DevLoginPageOptions): string {
+  const returnTo = escapeHtml(options.returnTo);
+  const email = escapeHtml(options.email ?? "");
+  const errorBanner = options.error
+    ? `<p class="error" role="alert">${escapeHtml(options.error)}</p>`
+    : "";
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Preview dev sign-in · Aubrey's List</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    padding: 1.5rem;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #f8fafc; color: #0f172a;
+  }
+  main {
+    width: 100%; max-width: 26rem; background: #fff;
+    border: 1px solid #e2e8f0; border-radius: 0.75rem;
+    padding: 1.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  h1 { margin: 0 0 0.5rem; font-size: 1.25rem; }
+  .hint { margin: 0 0 1.25rem; font-size: 0.875rem; line-height: 1.5; color: #475569; }
+  code { background: #f1f5f9; padding: 0.1em 0.35em; border-radius: 0.25rem; font-size: 0.85em; }
+  form { display: flex; flex-direction: column; gap: 0.35rem; }
+  label { font-size: 0.8125rem; font-weight: 600; margin-top: 0.75rem; }
+  label span { font-weight: 400; color: #64748b; }
+  input {
+    padding: 0.6rem 0.7rem; font-size: 0.95rem; border: 1px solid #cbd5e1;
+    border-radius: 0.5rem; background: #fff; color: inherit;
+  }
+  input:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; border-color: #2563eb; }
+  button {
+    margin-top: 1.25rem; padding: 0.65rem 1rem; font-size: 0.95rem; font-weight: 600;
+    color: #fff; background: #2563eb; border: none; border-radius: 0.5rem; cursor: pointer;
+  }
+  button:hover { background: #1d4ed8; }
+  .error {
+    margin: 0 0 1rem; padding: 0.6rem 0.75rem; font-size: 0.875rem;
+    color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; border-radius: 0.5rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0f172a; color: #e2e8f0; }
+    main { background: #1e293b; border-color: #334155; box-shadow: none; }
+    .hint { color: #94a3b8; }
+    code { background: #334155; }
+    label span { color: #94a3b8; }
+    input { background: #0f172a; border-color: #475569; }
+    .error { color: #fca5a5; background: #450a0a; border-color: #7f1d1d; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Preview dev sign-in</h1>
+  <p class="hint">Preview-only. Enter the <code>PREVIEW_LOGIN_SECRET</code> to sign in as a non-privileged preview tester — no Google needed. This page does not exist in production.</p>
+  ${errorBanner}
+  <form method="post" action="/api/auth/dev-login">
+    <label for="secret">Preview login secret</label>
+    <input id="secret" name="secret" type="password" autocomplete="off" autofocus required>
+    <label for="email">Tester email <span>(optional)</span></label>
+    <input id="email" name="email" type="email" autocomplete="off" placeholder="preview-tester@aubreyslist.test" value="${email}">
+    <input type="hidden" name="returnTo" value="${returnTo}">
+    <button type="submit">Sign in</button>
+  </form>
+</main>
+</body>
+</html>`;
+}

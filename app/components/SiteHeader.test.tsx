@@ -9,6 +9,7 @@ import {
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
+import { previewLoginEnabledQuery } from "~/auth/preview-login-query";
 import { SiteHeader } from "./SiteHeader";
 
 /**
@@ -32,6 +33,7 @@ function renderHeader() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // Seed the cache so useSuspenseQuery resolves without invoking the server fn.
   queryClient.setQueryData(currentUserQuery.queryKey, null);
+  queryClient.setQueryData(previewLoginEnabledQuery.queryKey, false);
 
   const rootRoute = createRootRoute({
     component: () => (

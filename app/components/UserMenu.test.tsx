@@ -28,9 +28,9 @@ beforeAll(() => {
   }
 });
 
-function renderMenu(user: SessionUser | null) {
+function renderMenu(user: SessionUser | null, previewLoginEnabled = false) {
   const rootRoute = createRootRoute({
-    component: () => <UserMenu user={user} />,
+    component: () => <UserMenu user={user} previewLoginEnabled={previewLoginEnabled} />,
   });
   // Link targets must exist in the tree for `Link` to resolve (the signed-in menu
   // links to /favorites and, for moderator+, /admin).
@@ -130,5 +130,32 @@ describe("UserMenu", () => {
     const cta = await screen.findByRole("link", { name: "Log in" });
     expect(cta).toHaveAttribute("href", "/api/auth/google");
     expect(screen.queryByRole("button", { name: /Account menu/ })).not.toBeInTheDocument();
+  });
+
+  it("hides the preview Dev sign-in link by default (production)", async () => {
+    renderMenu(null);
+
+    await screen.findByRole("link", { name: "Log in" });
+    expect(screen.queryByRole("link", { name: /Dev sign-in/ })).not.toBeInTheDocument();
+  });
+
+  it("shows a Dev sign-in link to the dev-login route when preview login is enabled", async () => {
+    renderMenu(null, true);
+
+    const devLink = await screen.findByRole("link", { name: /Dev sign-in/ });
+    expect(devLink).toHaveAttribute("href", "/api/auth/dev-login");
+    // The real Google Log in stays available alongside it.
+    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute(
+      "href",
+      "/api/auth/google"
+    );
+  });
+
+  it("does not show the Dev sign-in link to a signed-in user", async () => {
+    const user: SessionUser = { ...baseUser, role: "user" };
+    renderMenu(user, true);
+    await openMenu(user);
+
+    expect(screen.queryByRole("link", { name: /Dev sign-in/ })).not.toBeInTheDocument();
   });
 });

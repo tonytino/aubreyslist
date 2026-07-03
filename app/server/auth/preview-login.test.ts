@@ -42,9 +42,8 @@ const db = {
 };
 vi.mock("~/db/client", () => ({ getDb: () => db }));
 
-const { isPreviewLoginEnabled, verifyPreviewSecret, resolvePreviewUser } = await import(
-  "./preview-login"
-);
+const { isPreviewLoginEnabled, verifyPreviewSecret, resolvePreviewUser, renderDevLoginPage } =
+  await import("./preview-login");
 const { SESSION_COOKIE_NAME, readSessionCookieValue } = await import("./session");
 const { authRoutes } = await import("../routes/auth");
 
@@ -220,9 +219,22 @@ describe("GET /dev-login (route)", () => {
     expect(db.insert).not.toHaveBeenCalled();
   });
 
-  it("returns 401 with a missing secret (no Set-Cookie)", async () => {
+  it("serves the HTML sign-in form (no secret) instead of signing in", async () => {
     const res = await authRoutes.request("http://localhost/dev-login");
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain('<form method="post" action="/api/auth/dev-login">');
+    expect(html).toContain('name="secret"');
+    // The form does NOT sign anyone in — no session cookie, no DB write.
+    expect(res.headers.getSetCookie()).toHaveLength(0);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it("404s the form (not the login) when disabled — invisible in production", async () => {
+    env.VERCEL_ENV = "production";
+    const res = await authRoutes.request("http://localhost/dev-login");
+    expect(res.status).toBe(404);
     expect(res.headers.getSetCookie()).toHaveLength(0);
   });
 
@@ -306,5 +318,101 @@ describe("GET /dev-login (route)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("http://localhost/favorites");
+  });
+});
+
+describe("POST /dev-login (form submit)", () => {
+  /** Build a form-encoded POST request to the dev-login route. */
+  function formPost(fields: Record<string, string>): Request {
+    return new Request("http://localhost/dev-login", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(fields).toString(),
+    });
+  }
+
+  it("404s when disabled — no cookie, no DB write", async () => {
+    env.VERCEL_ENV = "production";
+    const res = await authRoutes.request(formPost({ secret: PREVIEW_SECRET }));
+    expect(res.status).toBe(404);
+    expect(res.headers.getSetCookie()).toHaveLength(0);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it("re-renders the form with a 401 + inline error on a wrong secret (no cookie)", async () => {
+    const res = await authRoutes.request(formPost({ secret: "nope" }));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('<form method="post"');
+    expect(res.headers.getSetCookie()).toHaveLength(0);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it("mints a verifiable session from the body secret and redirects", async () => {
+    findFirst.mockResolvedValue({
+      id: "posted-user",
+      googleSub: "preview:preview-tester@aubreyslist.test",
+      role: "user",
+    });
+
+    const res = await authRoutes.request(
+      formPost({ secret: PREVIEW_SECRET, returnTo: "/favorites" })
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("http://localhost/favorites");
+    const cookies = parseSetCookies(res);
+    const sessionCookie = cookies.get(SESSION_COOKIE_NAME);
+    expect(sessionCookie).toBeTruthy();
+    const payload = await readSessionCookieValue(decodeURIComponent(sessionCookie ?? ""));
+    expect(payload?.userId).toBe("posted-user");
+  });
+
+  it("rejects an open-redirect returnTo from the body back to /", async () => {
+    findFirst.mockResolvedValue({
+      id: "u",
+      googleSub: "preview:preview-tester@aubreyslist.test",
+      role: "user",
+    });
+
+    const res = await authRoutes.request(
+      formPost({ secret: PREVIEW_SECRET, returnTo: "//evil.com" })
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("http://localhost/");
+  });
+});
+
+describe("renderDevLoginPage", () => {
+  it("renders a POST form with a password secret field and no prefilled secret", () => {
+    const html = renderDevLoginPage({ returnTo: "/" });
+    expect(html).toContain('<form method="post" action="/api/auth/dev-login">');
+    expect(html).toContain('name="secret"');
+    expect(html).toContain('type="password"');
+    // The secret is NEVER echoed into the page.
+    expect(html).not.toContain(PREVIEW_SECRET);
+  });
+
+  it("is noindex so preview URLs stay out of search engines", () => {
+    expect(renderDevLoginPage({ returnTo: "/" })).toContain('name="robots"');
+  });
+
+  it("HTML-escapes the reflected returnTo and email (no attribute breakout)", () => {
+    const html = renderDevLoginPage({
+      returnTo: '/"><script>alert(1)</script>',
+      email: '"><img src=x onerror=alert(1)>',
+    });
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("shows the inline error banner only when an error is given", () => {
+    expect(renderDevLoginPage({ returnTo: "/" })).not.toContain('role="alert"');
+    expect(renderDevLoginPage({ returnTo: "/", error: "Nope" })).toContain('role="alert"');
+    expect(renderDevLoginPage({ returnTo: "/", error: "Nope" })).toContain("Nope");
   });
 });

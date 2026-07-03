@@ -165,7 +165,16 @@ auth-proxy code path.
 
 Rather than registering each branch's callback URL with Google, a **prod-inert,
 double-gated** endpoint can mint a session cookie **without Google**, so you can
-sign in on *any* preview deployment (including per-deployment hash URLs):
+sign in on *any* preview deployment (including per-deployment hash URLs).
+
+**Easiest — the header "Dev sign-in" link.** On a preview, the header shows a
+**"Dev sign-in"** link (beside "Log in") that opens a small form at
+`/api/auth/dev-login`; paste the `PREVIEW_LOGIN_SECRET`, submit, and you're
+signed in as the preview tester. The secret travels in the POST body, so it
+never lands in the URL, browser history, or access logs. This link and form are
+gated by the same check as the endpoint — invisible / 404 in production.
+
+**Scripted / curl.** The query form still works for automation:
 
     GET https://<preview-url>/api/auth/dev-login?secret=<PREVIEW_LOGIN_SECRET>
 
@@ -174,9 +183,10 @@ Optional query params: `?email=<addr>` (defaults to
 same-origin; falls back to `/`). The secret may also be sent as an
 `x-preview-login-secret` header instead of `?secret=`.
 
-**Prefer the header for anything beyond throwaway testing.** A `?secret=…` query
-string lands in Vercel/proxy access logs and the browser's history, so the
-shared secret can leak there. For repeated use, send it as the
+**Prefer the form or the header for anything beyond throwaway testing.** A
+`?secret=…` query string lands in Vercel/proxy access logs and the browser's
+history, so the shared secret can leak there. For repeated use, use the
+in-browser form (body-submitted) or send the secret as the
 `x-preview-login-secret` request header (e.g. `curl -H 'x-preview-login-secret:
 …'`) rather than in the URL.
 
