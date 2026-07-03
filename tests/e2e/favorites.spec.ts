@@ -99,7 +99,9 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
     // (3) The "Saved" filter (server-side `?saved=1`). Click the sign-in-gated
     // chip (exact name "Saved" — never the cards' "Saved — remove …" hearts).
     await page.getByRole("button", { name: "Saved", exact: true }).click();
-    await expect(page).toHaveURL(/saved=1/);
+    // The app serializes the boolean search param as `saved=true` (TanStack Router);
+    // a hand-typed `?saved=1` also works (the schema coerces both) — accept either.
+    await expect(page).toHaveURL(/[?&]saved=(?:1|true)\b/);
 
     // The saved view contains EXACTLY the favorited listing (its card links to the
     // detail page) and EXCLUDES the unsaved one (scoped to its unique name).
