@@ -1,0 +1,1 @@
+- `[manual]` Richer site metadata: per-page titles/descriptions/canonical URLs, rounded-out Open Graph + Twitter Card tags, and site-level JSON-LD (WebSite + Organization) so shared links unfurl with brand, title, and description.

@@ -11,6 +11,7 @@ import { SafetySummary } from "~/components/listing/SafetySummary";
 import { TrustPlaceholder } from "~/components/listing/TrustPlaceholder";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "~/components/ui/card";
+import { absoluteUrl, canonicalLink, jsonLdScript, pageSeoMeta } from "~/lib/seo";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
@@ -95,6 +96,42 @@ export const Route = createFileRoute("/listings/$id")({
     // recency window + relative phrasing use the same instant on SSR and after
     // hydration — no banner flicker or off-by-one at day/window edges.
     return { listing, viewerId, stalenessMonths, nowMs: Date.now() };
+  },
+  // Per-listing SEO + social unfurl — the high-value share case (a specific
+  // restaurant). Guarded: on a 404 the loader throws `notFound()` and never
+  // returns, so `loaderData` is undefined here — fall back to the root defaults.
+  // Uses ONLY fields the listing actually has (name, address, geo, mapsUrl) — no
+  // invented ratings/prices/phone. The `Restaurant` JSON-LD is honest structured
+  // data serialized via `jsonLdScript` (escapes `<`).
+  head: ({ loaderData }) => {
+    const listing = loaderData?.listing;
+    if (!listing) {
+      return {};
+    }
+    const path = `/listings/${listing.id}`;
+    return {
+      meta: pageSeoMeta({
+        title: `${listing.name} · Aubrey's List`,
+        description: `${listing.name} — ${listing.address}. See what the Aubrey's List community has attested about how safe it is for gluten-free and celiac diners.`,
+        path,
+      }),
+      links: [canonicalLink(path)],
+      scripts: [
+        jsonLdScript({
+          "@context": "https://schema.org",
+          "@type": "Restaurant",
+          name: listing.name,
+          address: listing.address,
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: listing.lat,
+            longitude: listing.lng,
+          },
+          url: absoluteUrl(path),
+          ...(isHttpUrl(listing.mapsUrl) ? { hasMap: listing.mapsUrl } : {}),
+        }),
+      ],
+    };
   },
   component: ListingDetail,
   notFoundComponent: ListingNotFound,
