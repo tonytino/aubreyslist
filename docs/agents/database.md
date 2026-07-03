@@ -90,15 +90,30 @@ it, the migrate step reported success, and the preview app broke with
 The guard: **`pnpm db:verify`** (`scripts/verify-migrations.ts`) checks that
 every entry in `db/migrations/meta/_journal.json` has a matching applied row in
 `drizzle.__drizzle_migrations` (matched by the same sha256-of-file-content hash
-the migrator records) and exits non-zero naming each missing tag. Two kinds of
-history divergence are tolerated, not failed: extra applied rows (renamed-away
-history a DB already ran) are info, and a hash mismatch whose row still exists
-at the entry's recorded `when` is a **DRIFTED** warning — the DB ran a
-since-edited version of that file (e.g. the persistent CI branch applied a
-draft of `0002_old_tigra` before its documented hand-edit), so the journal slot
-was genuinely executed and the "migrations in sync with schema" check guards
-the schema itself. Only a journal entry with **no row at all** — the true
-silent-skip — fails the run. It runs in
+the migrator records; rows are claimed 1:1) and exits non-zero naming each
+missing tag. Divergence handling:
+
+- **Extra applied rows** (renamed-away history a DB already ran): info only.
+- **DRIFTED, allowlisted**: a hash mismatch whose entry claims an applied row
+  at its exact recorded `when` means the DB ran a *since-edited version* of
+  that journal slot. The bookkeeping table stores no tags, so benign drift is
+  structurally indistinguishable from a renumbered-and-edited migration whose
+  new SQL never ran — therefore drift is tolerated (warning) **only** for tags
+  a human has verified and listed in `KNOWN_DRIFTED_TAGS` in the script
+  (currently `0002_old_tigra`, whose post-apply hand-edit changed no DDL).
+- **DRIFT, not allowlisted**: fails the run. Verify what actually ran, ship a
+  fresh migration if DDL is missing, and only then allowlist the tag if the
+  difference is provably benign.
+- **MISSING** (no row at the entry's `when` at all — the true silent-skip, the
+  favorites incident): always fails.
+
+Note the limits of the neighbouring CI checks: "migrations in sync with schema"
+only proves the *committed migration files* match `db/schema.ts` (it re-runs
+`db:generate` and diffs the repo) — it never inspects a live database, so it
+cannot tell whether a long-lived DB's actual tables match the files. `db:verify`
+is the only live-DB check, and it compares bookkeeping history, not
+`information_schema` — which is why non-allowlisted drift fails instead of
+trusting any other check to catch a stale schema. It runs in
 CI **immediately after every `pnpm db:migrate`** — `ci.yml` (`db-migrate` job),
 `migrate.yml`, `migrate-preview.yml`, and `seed-prod.yml` — so a journal/DB
 divergence fails the workflow instead of surfacing as a runtime 500. You can

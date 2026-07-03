@@ -20,13 +20,20 @@
  * failing that, by the recorded journal timestamp (`created_at` stores the
  * journal `when`, not a wall clock):
  *  - Hash match → applied, OK.
- *  - No hash match but an applied row exists AT THE ENTRY'S `when` → DRIFTED:
- *    the DB ran a since-edited version of that migration (e.g. the persistent
- *    CI branch applied a draft of `0002_old_tigra` before its documented
- *    hand-edit). The migrator DID run a migration in that journal slot, so this
- *    is a WARNING, not a failure — schema correctness is separately guarded by
- *    the "migrations in sync with schema" CI check.
+ *  - No hash match but an UNCLAIMED applied row exists AT THE ENTRY'S `when` →
+ *    DRIFTED: the migrator ran SOME content in that journal slot, but not the
+ *    current file's. The bookkeeping table stores only (hash, created_at) — no
+ *    tags — so benign drift (a documented hand-edit landing after a DB applied
+ *    a draft, e.g. `0002_old_tigra`) is STRUCTURALLY INDISTINGUISHABLE from
+ *    harmful drift (a migration renumbered AND content-edited while keeping its
+ *    timestamp, whose new SQL never ran). Therefore drift is tolerated ONLY for
+ *    tags a human has verified and listed in {@link KNOWN_DRIFTED_TAGS}; any
+ *    OTHER drifted tag FAILS the run until it is either fixed with a fresh
+ *    migration or explicitly allowlisted.
  *  - Neither → MISSING: the silent-skip hazard → exit 1, naming each tag.
+ * Applied rows are CLAIMED 1:1 (first by hash, then one row per drifted entry's
+ * `when`), so a single row can never simultaneously back a drifted entry and
+ * hide a truly-missing one, and duplicate-timestamp rows aren't swept together.
  * EXTRA applied rows (e.g. an old migration that was later renamed away but had
  * already been applied) are reported as info, never a failure — history a DB
  * has is allowed to be a superset of the current journal.
@@ -64,6 +71,20 @@ import { getDb } from "~/db/client";
  */
 export const MIGRATIONS_TABLE_QUALIFIED = "drizzle.__drizzle_migrations";
 
+/**
+ * Tags whose applied-hash drift has been HUMAN-VERIFIED as benign, so the check
+ * reports them as a warning instead of failing. Add a tag here ONLY after
+ * confirming why the long-lived DBs' recorded hash differs from the committed
+ * file AND that the difference cannot leave any DB's schema stale.
+ *
+ * - `0002_old_tigra`: the persistent CI Neon branch applied a draft of this
+ *   migration before its documented hand-edit (the prepended data-purge DELETE
+ *   — see the header comment in `db/migrations/0002_old_tigra.sql`). The edit
+ *   changed no DDL, so every DB's schema is identical whether or not the
+ *   DELETE ran; the recorded draft hash simply predates the final file.
+ */
+export const KNOWN_DRIFTED_TAGS: ReadonlySet<string> = new Set(["0002_old_tigra"]);
+
 /** One journal entry paired with the hash drizzle would record for it. */
 export interface JournalMigration {
   /** The migration tag, e.g. `0003_amazing_meteorite`. */
@@ -90,6 +111,8 @@ export type SqlExecutor = (query: SQL) => Promise<{ rows: Record<string, unknown
 /** Dependencies for {@link verifyMigrations}; the CLI supplies the real ones. */
 export interface VerifyMigrationsDeps {
   execute: SqlExecutor;
+  /** Human-verified benign-drift tags; defaults to {@link KNOWN_DRIFTED_TAGS}. */
+  allowedDriftTags?: ReadonlySet<string>;
 }
 
 /** What a verification run found, for the CLI shell to report. */
@@ -101,11 +124,17 @@ export interface VerifyMigrationsResult {
   /** Journal entries with NO matching applied row — the silent-skip hazard. */
   missing: JournalMigration[];
   /**
-   * Journal entries whose hash matches no applied row but whose `when` DOES
-   * match an applied row's recorded timestamp: the DB ran a since-edited
-   * version of the file. A WARNING, never a failure.
+   * ALLOWLISTED entries whose hash matches no applied row but whose `when`
+   * claimed an applied row's recorded timestamp: human-verified benign drift
+   * (the DB ran a since-edited version of the file). A WARNING, not a failure.
    */
   drifted: JournalMigration[];
+  /**
+   * Drift-shaped entries NOT in the allowlist. Indistinguishable from a
+   * renumbered-and-edited migration whose new SQL never ran, so these FAIL the
+   * run until a human either ships a fresh migration or allowlists the tag.
+   */
+  unexpectedDrift: JournalMigration[];
   /** Applied rows matching no current journal entry — INFO only, never a failure. */
   extraApplied: AppliedMigrationRow[];
   /** Total applied rows found in the bookkeeping table. */
@@ -143,15 +172,15 @@ export function readJournalMigrations(migrationsFolder: string): JournalMigratio
  * Core check, dependency-injected: compare the journal against the database's
  * applied-migrations history.
  *
- * - Every journal entry must match an applied row BY HASH; failing that, an
- *   applied row AT THE SAME recorded `when` downgrades it to `drifted` (the DB
- *   ran a since-edited version of the file — warn, don't fail). Only an entry
- *   with NEITHER goes to `missing` and flips the result to not-ok: a genuinely
- *   skipped migration (the favorites incident) leaves no row at its `when`.
- * - Applied rows with no journal counterpart go to `extraApplied` (info only) —
- *   a long-lived DB legitimately carries history for since-renamed tags. Rows
- *   that timestamp-matched a drifted entry are that entry's counterpart, not
- *   extra.
+ * - Every journal entry must match an applied row BY HASH; failing that, it may
+ *   CLAIM one still-unclaimed applied row at its exact `when` — allowlisted tags
+ *   become `drifted` (warn), all others `unexpectedDrift` (fail). An entry with
+ *   neither goes to `missing` (fail): a genuinely skipped migration (the
+ *   favorites incident) leaves no row at its `when` at all.
+ * - Rows are claimed 1:1 (hash matches first, then one row per drift claim), so
+ *   a single row can't back two entries and duplicate-timestamp rows aren't
+ *   swept together. Unclaimed rows go to `extraApplied` (info only) — a
+ *   long-lived DB legitimately carries history for since-renamed tags.
  * - A missing bookkeeping table means NOTHING was ever applied here: every
  *   journal entry is missing (unless the journal is empty too).
  */
@@ -159,7 +188,7 @@ export async function verifyMigrations(
   journal: JournalMigration[],
   deps: VerifyMigrationsDeps
 ): Promise<VerifyMigrationsResult> {
-  const { execute } = deps;
+  const { execute, allowedDriftTags = KNOWN_DRIFTED_TAGS } = deps;
 
   // `to_regclass` returns NULL (instead of erroring) for a missing relation, so
   // a never-migrated database is reported cleanly rather than as a query crash.
@@ -174,6 +203,7 @@ export async function verifyMigrations(
       bookkeepingTableExists: false,
       missing: [...journal],
       drifted: [],
+      unexpectedDrift: [],
       extraApplied: [],
       appliedCount: 0,
     };
@@ -188,26 +218,49 @@ export async function verifyMigrations(
     createdAt: Number(row.created_at),
   }));
 
-  const appliedHashes = new Set(applied.map((row) => row.hash));
-  const appliedWhens = new Set(applied.map((row) => row.createdAt));
+  // Claim applied rows 1:1. Pass 1: hash matches (a row backs at most one
+  // journal entry). Pass 2: each still-unmatched entry may claim ONE unclaimed
+  // row at its exact `when` — drift. Whatever remains unclaimed is extra.
+  const unclaimed = applied.map((row) => ({ row, claimed: false }));
   const journalHashes = new Set(journal.map((entry) => entry.hash));
 
-  const unmatched = journal.filter((entry) => !appliedHashes.has(entry.hash));
-  // A row at the entry's recorded `when` means the migrator DID run a migration
-  // in that journal slot — the file was just edited afterwards (drift), which
-  // is a warning. No row at all is the genuine silent-skip failure.
-  const drifted = unmatched.filter((entry) => appliedWhens.has(entry.when));
-  const missing = unmatched.filter((entry) => !appliedWhens.has(entry.when));
-  const driftedWhens = new Set(drifted.map((entry) => entry.when));
-  const extraApplied = applied.filter(
-    (row) => !journalHashes.has(row.hash) && !driftedWhens.has(row.createdAt)
-  );
+  const unmatched: JournalMigration[] = [];
+  for (const entry of journal) {
+    const byHash = unclaimed.find((slot) => !slot.claimed && slot.row.hash === entry.hash);
+    if (byHash) {
+      byHash.claimed = true;
+    } else {
+      unmatched.push(entry);
+    }
+  }
+
+  const drifted: JournalMigration[] = [];
+  const unexpectedDrift: JournalMigration[] = [];
+  const missing: JournalMigration[] = [];
+  for (const entry of unmatched) {
+    const byWhen = unclaimed.find((slot) => !slot.claimed && slot.row.createdAt === entry.when);
+    if (!byWhen) {
+      // No row ever landed in this journal slot — the genuine silent skip.
+      missing.push(entry);
+      continue;
+    }
+    byWhen.claimed = true;
+    // SOME content ran at this slot, but not the current file's. Only a
+    // human-verified allowlisted tag is benign; anything else could be a
+    // renumbered-and-edited migration whose new SQL never ran.
+    (allowedDriftTags.has(entry.tag) ? drifted : unexpectedDrift).push(entry);
+  }
+
+  const extraApplied = unclaimed
+    .filter((slot) => !slot.claimed && !journalHashes.has(slot.row.hash))
+    .map((slot) => slot.row);
 
   return {
-    ok: missing.length === 0,
+    ok: missing.length === 0 && unexpectedDrift.length === 0,
     bookkeepingTableExists: true,
     missing,
     drifted,
+    unexpectedDrift,
     extraApplied,
     appliedCount: applied.length,
   };
@@ -268,12 +321,11 @@ export async function runCli(
     }
 
     if (result.drifted.length > 0) {
-      // Warning only: the migrator ran a migration at this journal slot, but the
-      // file's content has changed since (e.g. a documented hand-edit landing
-      // after a long-lived DB applied a draft). Schema correctness is separately
-      // guarded by the "migrations in sync with schema" CI check.
+      // Warning only for ALLOWLISTED tags: the migrator ran a (since-edited)
+      // version of this journal slot and a human has verified the difference is
+      // benign — see KNOWN_DRIFTED_TAGS for the per-tag justification.
       log.log(
-        `warn: ${result.drifted.length} journal migration(s) were applied with a DIFFERENT content hash (file edited after apply) — tolerated:`
+        `warn: ${result.drifted.length} journal migration(s) were applied with a DIFFERENT content hash (allowlisted, human-verified benign drift) — tolerated:`
       );
       for (const entry of result.drifted) {
         log.log(`  DRIFTED  ${entry.tag} (when=${entry.when}, journal sha256=${entry.hash})`);
@@ -281,15 +333,28 @@ export async function runCli(
     }
 
     if (!result.ok) {
-      log.error(
-        `FAIL: ${result.missing.length} journal migration(s) have NO matching applied row in ${MIGRATIONS_TABLE_QUALIFIED}:`
-      );
-      for (const entry of result.missing) {
-        log.error(`  MISSING  ${entry.tag} (when=${entry.when}, sha256=${entry.hash})`);
+      if (result.missing.length > 0) {
+        log.error(
+          `FAIL: ${result.missing.length} journal migration(s) have NO matching applied row in ${MIGRATIONS_TABLE_QUALIFIED}:`
+        );
+        for (const entry of result.missing) {
+          log.error(`  MISSING  ${entry.tag} (when=${entry.when}, sha256=${entry.hash})`);
+        }
+        log.error(
+          "This is drizzle's silent-skip hazard: the migrator only applies journal entries whose `when` is greater than the last applied row's timestamp, so a renumbered/re-timestamped migration can be skipped forever while `db:migrate` reports success. Fix by generating a FRESH migration for the missing DDL (never renumber an applied one) — see docs/agents/database.md."
+        );
       }
-      log.error(
-        "This is drizzle's silent-skip hazard: the migrator only applies journal entries whose `when` is greater than the last applied row's timestamp, so a renumbered/re-timestamped migration can be skipped forever while `db:migrate` reports success. Fix by generating a FRESH migration for the missing DDL (never renumber an applied one) — see docs/agents/database.md."
-      );
+      if (result.unexpectedDrift.length > 0) {
+        log.error(
+          `FAIL: ${result.unexpectedDrift.length} journal migration(s) were applied with a DIFFERENT content hash and are NOT allowlisted:`
+        );
+        for (const entry of result.unexpectedDrift) {
+          log.error(`  DRIFT  ${entry.tag} (when=${entry.when}, journal sha256=${entry.hash})`);
+        }
+        log.error(
+          "A row exists at this entry's journal timestamp, but its recorded hash doesn't match the committed file — this database ran DIFFERENT content in that slot (an edited-after-apply file, or a renumbered-and-edited migration whose new SQL never ran here). Verify which, ship a FRESH migration if any DDL is actually missing, and only then (if provably benign) add the tag to KNOWN_DRIFTED_TAGS in scripts/verify-migrations.ts — see docs/agents/database.md."
+        );
+      }
       return 1;
     }
 

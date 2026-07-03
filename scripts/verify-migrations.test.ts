@@ -94,11 +94,12 @@ describe("verifyMigrations (core)", () => {
     expect(result.extraApplied).toEqual([{ hash: renamedAway.hash, createdAt: renamedAway.when }]);
   });
 
-  it("downgrades a hash mismatch WITH a timestamp match to DRIFTED (warn, not fail)", async () => {
+  it("downgrades an ALLOWLISTED hash mismatch WITH a timestamp match to DRIFTED (warn, not fail)", async () => {
     // The persistent-CI-branch shape: 0002_old_tigra was applied as a draft,
     // then the file was hand-edited (the documented DELETE prepend) — the
     // recorded hash never matches the current file, but a row exists at the
-    // entry's `when`, so the migrator DID run that journal slot.
+    // entry's `when`, so the migrator DID run that journal slot. The tag is in
+    // KNOWN_DRIFTED_TAGS (human-verified benign), so it warns instead of fails.
     const editedAfterApply = JOURNAL[2] as JournalMigration;
     const applied = appliedFor(JOURNAL).map((row) =>
       row.createdAt === editedAfterApply.when ? { ...row, hash: "0".repeat(64) } : row
@@ -107,16 +108,41 @@ describe("verifyMigrations (core)", () => {
 
     expect(result.ok).toBe(true);
     expect(result.missing).toEqual([]);
+    expect(result.unexpectedDrift).toEqual([]);
     expect(result.drifted.map((d) => d.tag)).toEqual(["0002_old_tigra"]);
-    // The timestamp-matched row is the drifted entry's counterpart, not "extra".
+    // The timestamp-claimed row is the drifted entry's counterpart, not "extra".
     expect(result.extraApplied).toEqual([]);
   });
 
-  it("still FAILS when an unmatched entry has no applied row at its `when` either", async () => {
+  it("FAILS on drift for a tag that is NOT allowlisted (renumber+edit keeping the timestamp)", async () => {
+    // The reviewer-raised hazard: 0003_lame_carnage was applied (hash H_old,
+    // created_at=T), then renumbered to 0004 AND content-edited while KEEPING
+    // timestamp T. The new entry's SQL never ran here, yet the old row sits at
+    // its exact `when`. Bookkeeping stores no tags, so this is structurally
+    // identical to benign drift — it must FAIL unless a human allowlists it.
+    const renamedAndEdited: JournalMigration = {
+      tag: "0004_classy_runaways",
+      when: 1_783_057_253_835,
+      hash: hashMigrationSql("ALTER TABLE claims ADD COLUMN suggested_by text; -- EDITED"),
+    };
+    const oldRow = {
+      hash: hashMigrationSql("old lame_carnage content"),
+      createdAt: 1_783_057_253_835,
+    };
+    const result = await verifyMigrations([...JOURNAL, renamedAndEdited], {
+      execute: fakeExecutor([...appliedFor(JOURNAL), oldRow]),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.unexpectedDrift.map((d) => d.tag)).toEqual(["0004_classy_runaways"]);
+    expect(result.missing).toEqual([]);
+  });
+
+  it("still FAILS as MISSING when an unmatched entry has no applied row at its `when` either", async () => {
     // Drift tolerance must not swallow the real hazard: a skipped migration
     // leaves NO row at its journal timestamp at all.
     const applied = appliedFor(JOURNAL.filter((e) => e.tag !== "0003_amazing_meteorite"));
-    // Add drift on another entry to prove the two classifications coexist.
+    // Add allowlisted drift on 0002 to prove the classifications coexist.
     const withDrift = applied.map((row) =>
       row.createdAt === (JOURNAL[2] as JournalMigration).when
         ? { ...row, hash: "f".repeat(64) }
@@ -127,6 +153,28 @@ describe("verifyMigrations (core)", () => {
     expect(result.ok).toBe(false);
     expect(result.missing.map((m) => m.tag)).toEqual(["0003_amazing_meteorite"]);
     expect(result.drifted.map((d) => d.tag)).toEqual(["0002_old_tigra"]);
+  });
+
+  it("claims rows 1:1 — duplicate-timestamp rows are not swept out of extraApplied together", async () => {
+    // Two applied rows share created_at=T: one legitimately backs the drifted
+    // 0002 entry; the other is unrelated renamed-away history. Only ONE row is
+    // claimed by the drift; the duplicate must still surface as extra.
+    const editedAfterApply = JOURNAL[2] as JournalMigration;
+    const duplicate = {
+      hash: hashMigrationSql("unrelated history"),
+      createdAt: editedAfterApply.when,
+    };
+    const applied = [
+      ...appliedFor(JOURNAL).map((row) =>
+        row.createdAt === editedAfterApply.when ? { ...row, hash: "0".repeat(64) } : row
+      ),
+      duplicate,
+    ];
+    const result = await verifyMigrations(JOURNAL, { execute: fakeExecutor(applied) });
+
+    expect(result.ok).toBe(true);
+    expect(result.drifted.map((d) => d.tag)).toEqual(["0002_old_tigra"]);
+    expect(result.extraApplied).toHaveLength(1);
   });
 
   it("matches by HASH, not timestamp — a re-timestamped but identical file still matches", async () => {
@@ -199,7 +247,7 @@ describe("runCli (shell)", () => {
     expect(lines.join("\n")).toContain("tolerated");
   });
 
-  it("exits 0 with a warn line naming each DRIFTED tag", async () => {
+  it("exits 0 with a warn line naming each ALLOWLISTED drifted tag", async () => {
     const { log, lines } = collectingLog();
     const drifted = JOURNAL[2] as JournalMigration;
     const applied = appliedFor(JOURNAL).map((row) =>
@@ -211,6 +259,25 @@ describe("runCli (shell)", () => {
     const output = lines.join("\n");
     expect(output).toContain("DRIFTED  0002_old_tigra");
     expect(output).toContain("OK: all 4 journal migration(s) are applied");
+  });
+
+  it("exits 1 naming the tag on NON-allowlisted drift", async () => {
+    const { log, errors } = collectingLog();
+    const edited: JournalMigration = {
+      tag: "0004_classy_runaways",
+      when: 1_783_057_253_835,
+      hash: hashMigrationSql("edited content that never ran"),
+    };
+    const oldRow = { hash: hashMigrationSql("old content"), createdAt: edited.when };
+    const code = await runCli(
+      { journal: [...JOURNAL, edited], execute: fakeExecutor([...appliedFor(JOURNAL), oldRow]) },
+      log
+    );
+
+    expect(code).toBe(1);
+    const output = errors.join("\n");
+    expect(output).toContain("DRIFT  0004_classy_runaways");
+    expect(output).toContain("NOT allowlisted");
   });
 
   it("exits 1 when the bookkeeping table is missing but the journal is not empty", async () => {
