@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { MapPin } from "lucide-react";
 import { z } from "zod";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
+import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
@@ -158,7 +159,11 @@ function ListingDetail() {
 
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-section bg-background px-4 py-10 text-foreground sm:px-6">
-      <header className="flex flex-col gap-2">
+      {/* `relative` anchors the FavoriteButton's `absolute right-3 top-3` heart
+          to the header's top-right corner (mirrors the browse card's container),
+          so the save affordance sits in the hero header rather than overlaying an
+          image. The title/address flow beneath it with `pr-12` clearance. */}
+      <header className="relative flex flex-col gap-2 pr-12">
         <h1 className="text-headline font-bold tracking-tight">{listing.name}</h1>
         <p className="text-body text-muted-foreground">{listing.address}</p>
         {/* Flag this listing as inappropriate/spam/wrong (#39). Login-gated; the
@@ -170,6 +175,11 @@ function ListingDetail() {
           isSignedIn={viewerId !== null}
           label="Flag listing"
         />
+        {/* Save/heart affordance (F7, AUB-126). Reads `["favorites"]` +
+            `currentUserQuery` itself (both prefetched at the root), so it needs no
+            loader wiring and handles its own anon (dialog) vs signed-in
+            (optimistic toggle) behaviour. */}
+        <FavoriteButton listingId={listing.id} listingName={listing.name} />
       </header>
 
       {/* Recent harm is surfaced first and never buried by older confirmations
