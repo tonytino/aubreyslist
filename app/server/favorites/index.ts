@@ -1,10 +1,11 @@
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { getDb } from "~/db/client";
 import { favorites, listings } from "~/db/schema";
 import type { FavoriteInput } from "~/listings/favorite-input";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { requireCurrentUser } from "~/server/auth/guards";
+import { type BrowseListingCard, buildBrowseCards } from "~/server/listings/browse";
 import { enforceWriteLimit } from "~/server/rate-limit";
 
 /**
@@ -115,6 +116,67 @@ export async function getViewerFavoriteIds(): Promise<string[]> {
     .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")));
 
   return rows.map((row) => row.listingId);
+}
+
+/**
+ * The current viewer's favorited listings as ready-to-render browse cards (issue
+ * AUB-127 / F9) — the data behind the `/favorites` page.
+ *
+ * Anonymous callers have no favorites: we return `[]` WITHOUT touching the DB
+ * (reads stay open, nothing to look up). For a signed-in user we INNER JOIN
+ * `listings` and filter to `moderationStatus = "visible"` (so a favorite whose
+ * listing was later hidden/removed is excluded), ordered by `favorites.createdAt
+ * DESC` — most-recently-saved first.
+ *
+ * The resulting listings run through the SHARED, distance-agnostic
+ * {@link buildBrowseCards} so each card's trust glance is byte-identical to the
+ * browse page (same celiac aggregate + recent-incident derivation). We then
+ * attach the public save-count aggregate ({@link getFavoriteCounts}) for those
+ * ids — batched alongside the glance (NO N+1) — so the save-count pill renders on
+ * `/favorites` exactly as it does on browse. No distance is computed (favorites
+ * have no distance origin), so `distanceLabel` stays absent.
+ *
+ * v1 loads the FULL favorite set unbounded — favorites lists are small.
+ *
+ * SERVER-ONLY: drives the db client + `buildBrowseCards`; the route/query reach it
+ * only through the client-safe `favorites.fn` seam.
+ */
+export async function getViewerFavorites(
+  now: Date,
+  stalenessMonths: number
+): Promise<BrowseListingCard[]> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return [];
+  }
+
+  const db = getDb();
+
+  // The viewer's favorited listings, visibility-gated and newest-saved first.
+  const rows = await db
+    .select({ listing: listings })
+    .from(favorites)
+    .innerJoin(listings, eq(listings.id, favorites.listingId))
+    .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")))
+    .orderBy(desc(favorites.createdAt));
+
+  const viewerListings = rows.map((row) => row.listing);
+  const listingIds = viewerListings.map((listing) => listing.id);
+
+  // Build the trust cores through the SAME helper the browse page uses (so the
+  // glance matches byte-for-byte), and batch the public save-counts alongside it
+  // (one grouped query, NO N+1) — mirroring how getBrowseListings assembles a card.
+  const [baseCards, favoriteCounts] = await Promise.all([
+    buildBrowseCards(viewerListings, now, stalenessMonths),
+    getFavoriteCounts(listingIds),
+  ]);
+
+  // Attach the save-count (defaulting to 0 for a listing absent from the grouped
+  // aggregate). No distance origin here, so `distanceLabel` is intentionally absent.
+  return baseCards.map((card) => ({
+    ...card,
+    favoriteCount: favoriteCounts.get(card.listing.id) ?? 0,
+  }));
 }
 
 /**

@@ -24,6 +24,8 @@ const h = vi.hoisted(() => {
     limitRows: [] as Array<{ moderationStatus: "visible" | "hidden" | "removed" }>,
     // The terminal `.where()` (no limit/groupBy) backs getViewerFavoriteIds.
     viewerRows: [] as Array<{ listingId: string }>,
+    // The `.orderBy()` chain backs getViewerFavorites (rows projected as { listing }).
+    favoriteListingRows: [] as Array<{ listing: { id: string } }>,
     // The `.groupBy()` chain backs getFavoriteCounts.
     groupByRows: [] as Array<{ listingId: string; n: number }>,
     lastInsertValues: undefined as unknown,
@@ -33,17 +35,20 @@ const h = vi.hoisted(() => {
 
   const limitMock = vi.fn(() => Promise.resolve(state.limitRows));
   const groupByMock = vi.fn(() => Promise.resolve(state.groupByRows));
+  const orderByMock = vi.fn(() => Promise.resolve(state.favoriteListingRows));
   // `.where()` is shared by all reads/deletes. It resolves to the viewer rows
   // (so `await select().from().innerJoin().where()` works for getViewerFavoriteIds),
-  // with `.limit()` (listing lookup) and `.groupBy()` (counts) attached for the
-  // reads that chain further.
+  // with `.limit()` (listing lookup), `.groupBy()` (counts), and `.orderBy()`
+  // (getViewerFavorites) attached for the reads that chain further.
   const selectWhereMock = vi.fn(() => {
     const result = Promise.resolve(state.viewerRows) as Promise<Array<{ listingId: string }>> & {
       limit: typeof limitMock;
       groupBy: typeof groupByMock;
+      orderBy: typeof orderByMock;
     };
     result.limit = limitMock;
     result.groupBy = groupByMock;
+    result.orderBy = orderByMock;
     return result;
   });
   const innerJoinMock = vi.fn(() => ({ where: selectWhereMock }));
@@ -78,10 +83,19 @@ const h = vi.hoisted(() => {
   // assert each write entry point meters the authenticated user.
   const enforceWriteLimitMock = vi.fn((_userId?: string) => Promise.resolve());
 
+  // `buildBrowseCards` is the SHARED, server-only card builder getViewerFavorites
+  // reuses. We mock it to echo the listings it receives as trust cores (a neutral
+  // glance), so we can assert getViewerFavorites orders + attaches counts without
+  // pulling the real (db-backed) glance derivation into this unit test.
+  const buildBrowseCardsMock = vi.fn((listings: Array<{ id: string }>) =>
+    Promise.resolve(listings.map((listing) => ({ listing, glance: {} })))
+  );
+
   return {
     state,
     limitMock,
     groupByMock,
+    orderByMock,
     innerJoinMock,
     selectMock,
     insertMock,
@@ -92,6 +106,7 @@ const h = vi.hoisted(() => {
     requireCurrentUserMock,
     getCurrentUserMock,
     enforceWriteLimitMock,
+    buildBrowseCardsMock,
   };
 });
 
@@ -115,7 +130,17 @@ vi.mock("~/server/rate-limit", () => ({
   enforceWriteLimit: h.enforceWriteLimitMock,
 }));
 
-import { addFavorite, getFavoriteCounts, getViewerFavoriteIds, removeFavorite } from "./index";
+vi.mock("~/server/listings/browse", () => ({
+  buildBrowseCards: h.buildBrowseCardsMock,
+}));
+
+import {
+  addFavorite,
+  getFavoriteCounts,
+  getViewerFavoriteIds,
+  getViewerFavorites,
+  removeFavorite,
+} from "./index";
 
 const {
   state,
@@ -131,6 +156,7 @@ beforeEach(() => {
   // Default: a found, visible listing so the addFavorite happy path works.
   state.limitRows = [{ moderationStatus: "visible" }];
   state.viewerRows = [];
+  state.favoriteListingRows = [];
   state.groupByRows = [];
   state.lastInsertValues = undefined;
   state.lastDoNothingArgs = undefined;
@@ -286,6 +312,52 @@ describe("getViewerFavoriteIds — viewer-scoped, visibility-filtered", () => {
 
     expect(ids).toEqual([]);
     expect(selectMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getViewerFavorites — viewer cards, newest-saved first", () => {
+  it("returns [] for an anonymous viewer WITHOUT hitting the DB or building cards", async () => {
+    state.signedIn = false;
+
+    const cards = await getViewerFavorites(new Date(), 6);
+
+    expect(cards).toEqual([]);
+    expect(selectMock).not.toHaveBeenCalled();
+    expect(h.buildBrowseCardsMock).not.toHaveBeenCalled();
+  });
+
+  it("builds cards via buildBrowseCards and attaches the public save-count per listing", async () => {
+    state.favoriteListingRows = [
+      { listing: { id: "listing-1" } },
+      { listing: { id: "listing-2" } },
+    ];
+    // listing-1 has 5 saves; listing-2 is absent from the aggregate → defaults to 0.
+    state.groupByRows = [{ listingId: "listing-1", n: 5 }];
+
+    const now = new Date("2026-07-03T00:00:00Z");
+    const cards = await getViewerFavorites(now, 6);
+
+    // Reuses the SHARED builder with the viewer's listings + the SAME now/window.
+    expect(h.buildBrowseCardsMock).toHaveBeenCalledWith(
+      [{ id: "listing-1" }, { id: "listing-2" }],
+      now,
+      6
+    );
+    // Order is preserved from the query's `favorites.createdAt DESC` ordering.
+    expect(h.orderByMock).toHaveBeenCalledTimes(1);
+    expect(cards.map((c) => c.listing.id)).toEqual(["listing-1", "listing-2"]);
+    expect(cards[0]?.favoriteCount).toBe(5);
+    expect(cards[1]?.favoriteCount).toBe(0);
+  });
+
+  it("returns [] (no cards) when the viewer has no visible favorites", async () => {
+    state.favoriteListingRows = [];
+
+    const cards = await getViewerFavorites(new Date(), 6);
+
+    expect(cards).toEqual([]);
+    // buildBrowseCards short-circuits an empty set; no counts query is needed.
+    expect(h.buildBrowseCardsMock).toHaveBeenCalledWith([], expect.any(Date), 6);
   });
 });
 

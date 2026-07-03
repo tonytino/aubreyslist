@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { LogIn, LogOut, ShieldCheck, User } from "lucide-react";
+import { Heart, LogIn, LogOut, ShieldCheck, User } from "lucide-react";
 import type { SessionUser } from "~/auth/current-user-query";
 import { Button } from "~/components/ui/button";
 import {
@@ -75,6 +75,16 @@ export function UserMenu({ user }: UserMenuProps) {
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+
+        {/* The viewer's saved spots (AUB-127 / F9) — signed-in only, since
+            favorites are viewer-scoped. Navigation only; the page re-derives the
+            viewer from the session server-side. */}
+        <DropdownMenuItem asChild>
+          <Link to="/favorites">
+            <Heart aria-hidden className="h-4 w-4" />
+            Favorites
+          </Link>
+        </DropdownMenuItem>
 
         {/* Link to /admin for moderator+ — the route is RBAC-gated and shows
             role-appropriate sections (admins: roles + settings + queue;
