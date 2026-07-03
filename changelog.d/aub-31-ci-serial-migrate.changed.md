@@ -1,0 +1,1 @@
+- `[manual]` CI: apply Drizzle migrations once via a dedicated serialized `db-migrate` job that the `integration-e2e` and `diff-coverage` jobs depend on, instead of letting the parallel integration suites race to apply a brand-new migration against the shared persistent CI Neon branch (which failed with `column … already exists`).

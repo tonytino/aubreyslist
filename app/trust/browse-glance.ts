@@ -62,6 +62,14 @@ export interface ListingTrustGlance {
    * nothing honest to show (no incident and no confirmation timestamp).
    */
   freshness: Freshness | null;
+  /**
+   * True when the headline celiac claim was SUGGESTED by the curator bot
+   * ("Aubrey's Bot", AUB-31) and has no real evidence yet — the card shows a
+   * "Suggested by Aubrey's Bot" chip in place of the bare "Not yet attested"
+   * empty state. Provenance, not a verdict: only ever true alongside a `null`
+   * `safetyState` (no community evidence), so it can never overstate safety.
+   */
+  suggestedByBot: boolean;
 }
 
 /**
@@ -79,7 +87,8 @@ export interface ListingTrustGlance {
  */
 export function deriveListingTrustGlance(
   celiacAggregate:
-    | Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt">
+    | (Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt"> &
+        Partial<Pick<ClaimAggregate, "suggested">>)
     | null
     | undefined,
   contributors: number,
@@ -103,5 +112,8 @@ export function deriveListingTrustGlance(
     // never "0 confirmations".
     evidence: hasEvidence ? { confirmations: celiacAggregate.confirmCount, contributors } : null,
     freshness: formatFreshness(lastConfirmedAt, recentIncidentAt, now, stalenessMonths),
+    // Provenance only, and gated on "no real evidence" so it can never sit beside
+    // a real verdict — the first community vote clears the suggestion server-side.
+    suggestedByBot: (celiacAggregate?.suggested ?? false) && !hasEvidence,
   };
 }

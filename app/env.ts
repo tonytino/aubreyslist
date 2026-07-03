@@ -80,6 +80,30 @@ export function parseEnv(source: Record<string, string | undefined> = process.en
   return parsed.data;
 }
 
+/**
+ * Validate and return ONLY the Google Places API key, independent of the rest of
+ * the env schema. The seed-data refresh CLI (`scripts/refresh-seed-data.ts`) needs
+ * just this key and never opens a database connection, so it must not be forced to
+ * provide `DATABASE_URL` (which the full {@link getEnv} requires). This still reads
+ * `process.env` only here in `app/env.ts` and still validates what it reads.
+ *
+ * @throws {Error} If `GOOGLE_PLACES_API_KEY` is missing or empty.
+ */
+export function getPlacesApiKey(): string {
+  const parsed = z
+    .string()
+    .min(1, "GOOGLE_PLACES_API_KEY is required")
+    .safeParse(process.env.GOOGLE_PLACES_API_KEY);
+  if (!parsed.success) {
+    throw new Error(
+      `Invalid environment variables:\n  - GOOGLE_PLACES_API_KEY: ${parsed.error.issues
+        .map((issue) => issue.message)
+        .join(", ")}`
+    );
+  }
+  return parsed.data;
+}
+
 let cached: Env | undefined;
 
 /**

@@ -622,6 +622,10 @@ async function getCeliacAggregatesByListing(
       listingId: claims.listingId,
       claimId: claims.id,
       lastConfirmedAt: claims.lastConfirmedAt,
+      // Curator-bot suggestion provenance (AUB-31) for the headline celiac claim,
+      // so a seeded-but-unvoted listing can show "Suggested by Aubrey's Bot" on
+      // its card instead of a bare "Not yet attested". Not a vote — never counted.
+      suggestedBy: claims.suggestedBy,
       confirmCount: sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`,
       disputeCount: sql<number>`count(*) filter (where ${attestations.value} = 'dispute')`,
       // Distinct people who attested this claim either way — the "N neighbors"
@@ -637,7 +641,7 @@ async function getCeliacAggregatesByListing(
     .where(
       sql`${claims.listingId} in ${listingIds} and ${claims.attribute} = 'celiac_safe_vs_gluten_friendly' and ${claims.moderationStatus} = 'visible'`
     )
-    .groupBy(claims.listingId, claims.id, claims.lastConfirmedAt);
+    .groupBy(claims.listingId, claims.id, claims.lastConfirmedAt, claims.suggestedBy);
 
   const byListing = new Map<string, CeliacAggregateWithContributors>();
   for (const row of rows) {
@@ -647,6 +651,7 @@ async function getCeliacAggregatesByListing(
         lastConfirmedAt: row.lastConfirmedAt,
         confirmCount: Number(row.confirmCount),
         disputeCount: Number(row.disputeCount),
+        suggested: Boolean(row.suggestedBy),
       },
       contributors: Number(row.contributors),
     });

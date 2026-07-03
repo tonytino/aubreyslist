@@ -32,6 +32,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed-admin": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/seed-admin.ts",
+    "db:seed": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/seed.ts",
+    "db:seed:refresh": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/refresh-seed-data.ts",
     "postinstall": "tsr generate",
     "prepare": "lefthook install"
   },

@@ -115,6 +115,7 @@ describe("getListingClaimAggregates — full taxonomy, attestable (#150)", () =>
       lastConfirmedAt: when,
       confirmCount: 8,
       disputeCount: 1,
+      suggested: false,
       viewerVote: null,
     });
   });

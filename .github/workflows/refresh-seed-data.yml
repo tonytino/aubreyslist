@@ -1,0 +1,80 @@
+name: Refresh seed data
+
+# Re-bakes the Denver seed listings (AUB-31) by resolving the human-curated
+# `SEED_SOURCES` (`scripts/seed-sources.ts`) against the Google Places API and
+# committing the regenerated `scripts/seed-listings.generated.json` back to the
+# branch this workflow is run from.
+#
+# This is the ONE step that spends Places API calls (~one per curated source). Run
+# it from the Actions tab ("Run workflow") whenever you curate the source list or
+# add a newly-captured field — NOT on every seed. The committed JSON is what the
+# API-free `pnpm db:seed` (local, preview, prod) inserts, so seeding itself never
+# touches Places.
+#
+# Skips gracefully (a warning, not a failure) if GOOGLE_PLACES_API_KEY is unset.
+on:
+  workflow_dispatch: {}
+
+# Needs write access to push the regenerated baked JSON back to the branch.
+permissions:
+  contents: write
+
+# Never let two refreshes race a push to the same branch.
+concurrency:
+  group: refresh-seed-data-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Re-bake seed listings
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Check out the branch the workflow was dispatched from so we can commit
+          # the regenerated JSON straight back onto it.
+          ref: ${{ github.ref_name }}
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The `secrets` context isn't allowed in step-level `if`, so detect the key
+      # here and gate the refresh on this output.
+      - name: Check for Places API key
+        id: cfg
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+        run: |
+          if [ -z "$GOOGLE_PLACES_API_KEY" ]; then
+            echo "::warning::GOOGLE_PLACES_API_KEY is not set — skipping seed-data refresh."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Re-bake seed listings from Google Places
+        if: steps.cfg.outputs.enabled == 'true'
+        run: pnpm db:seed:refresh
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+
+      - name: Commit the regenerated baked JSON
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          if git diff --quiet -- scripts/seed-listings.generated.json; then
+            echo "No change to scripts/seed-listings.generated.json — nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/seed-listings.generated.json
+          git commit -m "chore: refresh baked Denver seed data (AUB-31)"
+          git push origin HEAD:${{ github.ref_name }}

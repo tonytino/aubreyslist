@@ -37,6 +37,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Visual identity, design language, briefing Claude Design | `docs/agents/design.md` |
 | Styling, Tailwind, CSS                        | `docs/agents/styling.md`      |
 | Environment variables                         | `docs/agents/environment.md`  |
+| Secrets for manual local commands (1Password) | `docs/agents/local-secrets.md` |
 | Dependencies, versioning, overrides           | `docs/agents/dependencies.md` |
 | Tooling: lint, format, preflight, hooks       | `docs/agents/tooling.md`      |
 | Error monitoring / Sentry config, prod errors | `docs/agents/observability.md` |

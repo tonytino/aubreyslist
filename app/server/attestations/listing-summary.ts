@@ -105,6 +105,9 @@ export async function getListingClaimAggregates(
       claimId: claims.id,
       attribute: claims.attribute,
       lastConfirmedAt: claims.lastConfirmedAt,
+      // Curator-bot suggestion provenance (AUB-31): non-null ⇒ show the
+      // "Suggested by Aubrey's Bot" badge. Not a vote — never folded into counts.
+      suggestedBy: claims.suggestedBy,
       // Conditional counts over the joined attestations — derived purely from
       // the visible rows; COUNT-style sums coalesce to 0 when there are none.
       confirmCount: sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`,
@@ -127,14 +130,20 @@ export async function getListingClaimAggregates(
         eq(listings.moderationStatus, "visible")
       )
     )
-    .groupBy(claims.id, claims.attribute, claims.lastConfirmedAt);
+    .groupBy(claims.id, claims.attribute, claims.lastConfirmedAt, claims.suggestedBy);
 
   // Index the existing claim rows by attribute so we can merge them onto the
   // full taxonomy below. `count(...)` arrives as a string/number depending on
   // the driver; coerce to a plain number so the typed surface is honest.
   const byAttribute = new Map<
     ClaimAttribute,
-    { claimId: string; lastConfirmedAt: Date | null; confirmCount: number; disputeCount: number }
+    {
+      claimId: string;
+      lastConfirmedAt: Date | null;
+      confirmCount: number;
+      disputeCount: number;
+      suggested: boolean;
+    }
   >();
   for (const row of rows) {
     byAttribute.set(row.attribute, {
@@ -142,6 +151,7 @@ export async function getListingClaimAggregates(
       lastConfirmedAt: row.lastConfirmedAt,
       confirmCount: Number(row.confirmCount),
       disputeCount: Number(row.disputeCount),
+      suggested: Boolean(row.suggestedBy),
     });
   }
 
@@ -187,6 +197,7 @@ export async function getListingClaimAggregates(
         lastConfirmedAt: null,
         confirmCount: 0,
         disputeCount: 0,
+        suggested: false,
         viewerVote: null,
       };
     }
@@ -196,6 +207,7 @@ export async function getListingClaimAggregates(
       lastConfirmedAt: existing.lastConfirmedAt,
       confirmCount: existing.confirmCount,
       disputeCount: existing.disputeCount,
+      suggested: existing.suggested,
       viewerVote: viewerVotes.get(existing.claimId) ?? null,
     };
   });

@@ -235,6 +235,14 @@ export interface ClaimTrustSummary {
   hasEvidence: boolean;
   /** True when a past confirmation is older than the staleness window. */
   stale: boolean;
+  /**
+   * True when this claim was SUGGESTED by the curator bot ("Aubrey's Bot") and no
+   * real user has attested it yet. Drives the "Suggested by Aubrey's Bot" badge.
+   * A suggestion is provenance, not evidence (ADR-007): it is mutually exclusive
+   * with `hasEvidence` in practice — the first real vote clears the suggestion —
+   * so the row shows the badge instead of the empty state, never a fake count.
+   */
+  suggested: boolean;
 }
 
 /**
@@ -243,10 +251,12 @@ export interface ClaimTrustSummary {
  */
 export function summarizeClaim(
   attribute: ClaimAttribute,
-  aggregate: Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt">,
+  aggregate: Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt"> &
+    Partial<Pick<ClaimAggregate, "suggested">>,
   now: Date = new Date(),
   stalenessMonths: number = DEFAULT_STALENESS_MONTHS
 ): ClaimTrustSummary {
+  const evidence = hasEvidence(aggregate);
   return {
     attribute,
     label: claimAttributeLabel(attribute),
@@ -254,8 +264,13 @@ export function summarizeClaim(
     disputeCount: aggregate.disputeCount,
     countsLabel: formatVoteCounts(aggregate),
     recencyLabel: formatLastConfirmed(aggregate.lastConfirmedAt, now),
-    hasEvidence: hasEvidence(aggregate),
+    hasEvidence: evidence,
     stale: isStale(aggregate.lastConfirmedAt, now, stalenessMonths),
+    // A suggestion only "shows" while there's no real evidence; the first real
+    // vote clears `suggestedBy` server-side, but guard here too so a badge can
+    // never sit beside real counts. `suggested` is optional on the input so
+    // callers with a bare {confirm,dispute,lastConfirmed} Pick stay valid.
+    suggested: (aggregate.suggested ?? false) && !evidence,
   };
 }
 

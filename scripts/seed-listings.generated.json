@@ -1,0 +1,655 @@
+[
+  {
+    "placeId": "ChIJ590fGACBa4cRwDJffogky8Q",
+    "name": "Moore. Cafe and Bakery",
+    "address": "3331 N Downing St, Denver, CO 80205",
+    "lat": 39.763211299999995,
+    "lng": -104.9735206,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.moorebreadbakery.com/",
+    "googleRating": 4.7,
+    "googleRatingCount": 352
+  },
+  {
+    "placeId": "ChIJne2CUpV4bIcRSvSqmViM3po",
+    "name": "Just BE Kitchen - Lohi",
+    "address": "2364 15th St, Denver, CO 80202",
+    "lat": 39.7561111,
+    "lng": -105.0091111,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.justbekitchen.com/",
+    "googleRating": 4.3,
+    "googleRatingCount": 1024
+  },
+  {
+    "placeId": "ChIJHwY1Up2Ha4cR94zZ0UAlxQc",
+    "name": "Vital Root",
+    "address": "3915 Tennyson St, Denver, CO 80212",
+    "lat": 39.771426399999996,
+    "lng": -105.0443229,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_fryer",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://ediblebeats.com/restaurants/vital-root/",
+    "googleRating": 4.6,
+    "googleRatingCount": 1558
+  },
+  {
+    "placeId": "ChIJjZR2K2p5bIcRqjONTQcYJ_g",
+    "name": "Rivers and Roads Coffee",
+    "address": "2539 Bruce Randolph Ave, Denver, CO 80205",
+    "lat": 39.7647228,
+    "lng": -104.9564247,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.riversandroadscoffee.com/",
+    "googleRating": 4.7,
+    "googleRatingCount": 942
+  },
+  {
+    "placeId": "ChIJodsM_Np4bIcRjCJ1PxPx4ww",
+    "name": "Whole Nectar Smoothie Bar",
+    "address": "1125 17th St Bldg B, Denver, CO 80202",
+    "lat": 39.7494576,
+    "lng": -104.99466849999999,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 100
+  },
+  {
+    "placeId": "ChIJ765SZYFPjCcRvK_ewPKJUBk",
+    "name": "Green Bus Cafe",
+    "address": "1426 E 22nd Ave, Denver, CO 80205",
+    "lat": 39.7493043,
+    "lng": -104.9701224,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.greenbuscafe.com/locations-menus",
+    "googleRating": 4.9,
+    "googleRatingCount": 264
+  },
+  {
+    "placeId": "ChIJ7Thv9ex4bIcRxmBwgpDbGqI",
+    "name": "Quiero Arepas",
+    "address": "3200 N Pecos St #202, Denver, CO 80211",
+    "lat": 39.762246,
+    "lng": -105.006119,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://quieroarepas.com/",
+    "googleRating": 4.5,
+    "googleRatingCount": 970
+  },
+  {
+    "placeId": "ChIJWRZ6EgB5bIcRVQjOgbT5vnM",
+    "name": "Teocalli Cocina Lo Hi",
+    "address": "1575 Boulder St, Denver, CO 80211",
+    "lat": 39.759240999999996,
+    "lng": -105.01092849999999,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://www.teocallicocina.com/",
+    "googleRating": 4.7,
+    "googleRatingCount": 152
+  },
+  {
+    "placeId": "ChIJubj2G5R_bIcRoVM99DkIv_g",
+    "name": "Sweet Izzy",
+    "address": "3003 E 3rd Ave, Denver, CO 80206",
+    "lat": 39.7210957,
+    "lng": -104.95199699999999,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://www.sweetizzy.co/",
+    "googleRating": 4.9,
+    "googleRatingCount": 261
+  },
+  {
+    "placeId": "ChIJXy2jztV_a4cR730rb1ulrYs",
+    "name": "Wave The Grain Bakery- Littleton",
+    "address": "8996 W Bowles Ave Unit T1, Littleton, CO 80123",
+    "lat": 39.6081212,
+    "lng": -105.0986001,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://wavethegrain.com/",
+    "googleRating": 4.2,
+    "googleRatingCount": 149
+  },
+  {
+    "placeId": "ChIJVU1dRoF9bIcRi_Nu1iPwpEw",
+    "name": "Blue Hummingbird GF Foods (formerly Deby's Gluten Free Inc.).",
+    "address": "2369 S Trenton Way, Denver, CO 80231",
+    "lat": 39.6735452,
+    "lng": -104.89732479999999,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://bluehummingbirdfoods.com/",
+    "googleRating": 4.8,
+    "googleRatingCount": 561
+  },
+  {
+    "placeId": "ChIJuZkMQkyPa4cRxHmthLTn6XE",
+    "name": "Gluten Free Things, Inc.",
+    "address": "11651 W 64th Ave Ste A6, Arvada, CO 80004",
+    "lat": 39.8138198,
+    "lng": -105.1304943,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://glutenfreethings.com/",
+    "googleRating": 4.3,
+    "googleRatingCount": 125
+  },
+  {
+    "placeId": "ChIJb_neEMKLa4cRifxdcKHzrVM",
+    "name": "Crestone Bakery, LLC",
+    "address": "12037 N Pecos St, Westminster, CO 80234",
+    "lat": 39.9149386,
+    "lng": -105.0076897,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://crestonebakery.com/",
+    "googleRating": 4.8,
+    "googleRatingCount": 190
+  },
+  {
+    "placeId": "ChIJL8MFhSyGa4cROLKc73H8OfA",
+    "name": "Rheinlander Bakery",
+    "address": "5721 Olde Wadsworth Blvd, Arvada, CO 80002",
+    "lat": 39.8007839,
+    "lng": -105.0815944,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.rheinlanderbakery.com/",
+    "googleRating": 4.7,
+    "googleRatingCount": 2068
+  },
+  {
+    "placeId": "ChIJ1TjixqWaa4cRxgvnONu4xq0",
+    "name": "Holidaily Brewing Company",
+    "address": "801 Brickyard Cir, Golden, CO 80403",
+    "lat": 39.7803676,
+    "lng": -105.2328209,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly"
+    ],
+    "menuUrl": "https://holidailybrewing.com/",
+    "googleRating": 4.8,
+    "googleRatingCount": 468
+  },
+  {
+    "placeId": "ChIJIZUhsx95bIcRtNtK5_f-dM8",
+    "name": "Stem Ciders RiNo - Taproom & Eatery",
+    "address": "3040 Blake St #101, Denver, CO 80205",
+    "lat": 39.7641691,
+    "lng": -104.9813152,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly"
+    ],
+    "menuUrl": "https://www.stemciders.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 896
+  },
+  {
+    "placeId": "ChIJ___vFfd4bIcRkBeGs3seozQ",
+    "name": "Waldschänke Ciders & Coffee",
+    "address": "4100 Jason St, Denver, CO 80211",
+    "lat": 39.7731922,
+    "lng": -104.9990363,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly"
+    ],
+    "menuUrl": "https://waldschankeciders.com/",
+    "googleRating": 4.9,
+    "googleRatingCount": 520
+  },
+  {
+    "placeId": "ChIJtw49mQR5bIcRX0hv-6R5mTQ",
+    "name": "Acova",
+    "address": "3651 Navajo St, Denver, CO 80211",
+    "lat": 39.7677844,
+    "lng": -105.0042601,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_fryer",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://acovarestaurant.com/menu/",
+    "googleRating": 4.6,
+    "googleRatingCount": 2011
+  },
+  {
+    "placeId": "ChIJye0NlZh4bIcROyIMFikvpLA",
+    "name": "Federal Bar and Grill",
+    "address": "2544 Federal Blvd, Denver, CO 80211",
+    "lat": 39.7545092,
+    "lng": -105.0250102,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_fryer",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.thefedbar.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 1264
+  },
+  {
+    "placeId": "ChIJ-7zPnax_bIcRAdvr0yO8YYU",
+    "name": "GB Fish & Chips",
+    "address": "1311 S Broadway, Denver, CO 80210",
+    "lat": 39.692625,
+    "lng": -104.987715,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_fryer",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://gbfishandchips.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 3054
+  },
+  {
+    "placeId": "ChIJUROBm954bIcR2teEUh215JA",
+    "name": "Marco's Coal Fired | Ballpark",
+    "address": "2129 Larimer St, Denver, CO 80205",
+    "lat": 39.7545109,
+    "lng": -104.99098529999999,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://www.marcoscfp.com/gluten-free",
+    "googleRating": 4.5,
+    "googleRatingCount": 2105
+  },
+  {
+    "placeId": "ChIJm5csC9p4bIcRDhpgwqiuxNc",
+    "name": "Panzano",
+    "address": "909 17th St, Denver, CO 80202",
+    "lat": 39.7477933,
+    "lng": -104.9928419,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://panzano-denver.com/menu",
+    "googleRating": 4.5,
+    "googleRatingCount": 1728
+  },
+  {
+    "placeId": "ChIJx4R6OfZ9bIcR0EdzYQMb4UM",
+    "name": "Chook Charcoal Chicken",
+    "address": "4340 E 8th Ave, Denver, CO 80220",
+    "lat": 39.7291192,
+    "lng": -104.93619369999999,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.chookchicken.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 446
+  },
+  {
+    "placeId": "ChIJuzy63zCEa4cR4tavzhxBZQQ",
+    "name": "Abrusci's Fire & Vine",
+    "address": "2200 Youngfield St, Lakewood, CO 80215",
+    "lat": 39.7505989,
+    "lng": -105.1421203,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.7,
+    "googleRatingCount": 7697
+  },
+  {
+    "placeId": "ChIJxwrSM9V5bIcR_sjnF6Djx30",
+    "name": "The Post Chicken & Beer",
+    "address": "1575 Boulder St, Denver, CO 80211",
+    "lat": 39.75922,
+    "lng": -105.01099099999999,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.2,
+    "googleRatingCount": 291
+  },
+  {
+    "placeId": "ChIJryMpWsJ4bIcRNqs4uhiRZHM",
+    "name": "Birdcall",
+    "address": "1701 Wewatta St, Denver, CO 80202",
+    "lat": 39.7544665,
+    "lng": -105.0013755,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.eatbirdcall.com/",
+    "googleRating": 4.4,
+    "googleRatingCount": 656
+  },
+  {
+    "placeId": "ChIJxXYVUex4bIcRTFk4-JexDO8",
+    "name": "Root Down",
+    "address": "1600 W 33rd Ave, Denver, CO 80211",
+    "lat": 39.7630779,
+    "lng": -105.0056166,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 3530
+  },
+  {
+    "placeId": "ChIJF4sShZR4bIcRZCQ8ZRvoh_c",
+    "name": "Linger",
+    "address": "2030 W 30th Ave, Denver, CO 80211",
+    "lat": 39.7595235,
+    "lng": -105.011411,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://lingerdenver.com/",
+    "googleRating": 4.5,
+    "googleRatingCount": 5574
+  },
+  {
+    "placeId": "ChIJr5ZR3Ut-bIcRYB_l40mWfbs",
+    "name": "Park Burger",
+    "address": "1890 S Pearl St, Denver, CO 80210",
+    "lat": 39.68229410000001,
+    "lng": -104.9803117,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.parkburger.com/menu/",
+    "googleRating": 4.5,
+    "googleRatingCount": 2210
+  },
+  {
+    "placeId": "ChIJnfj6dJGHbIcR-rztqXYJnOQ",
+    "name": "Zig Zag Smokin' Burger",
+    "address": "9220 E Arapahoe Rd, Greenwood Village, CO 80112",
+    "lat": 39.5946249,
+    "lng": -104.8817042,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.larkburger.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 2394
+  },
+  {
+    "placeId": "ChIJp7AixB1_bIcRxfN15A6sRn8",
+    "name": "Illegal Pete's - South Broadway",
+    "address": "270 S Broadway, Denver, CO 80209",
+    "lat": 39.711746999999995,
+    "lng": -104.98709720000001,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://illegalpetes.com/",
+    "googleRating": 4.5,
+    "googleRatingCount": 3059
+  },
+  {
+    "placeId": "ChIJ1bxRZqt_bIcRULsVKQ_FC5c",
+    "name": "Adelitas Cocina Y Cantina",
+    "address": "1294 S Broadway, Denver, CO 80210",
+    "lat": 39.6933128,
+    "lng": -104.9871874,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://adelitasco.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 3923
+  },
+  {
+    "placeId": "ChIJ6a-FcfyHbIcR8diaxZZ-vQI",
+    "name": "Desert Donuts",
+    "address": "8501 E Arapahoe Rd c, Greenwood Village, CO 80112",
+    "lat": 39.5956167,
+    "lng": -104.89297859999999,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.7,
+    "googleRatingCount": 443
+  },
+  {
+    "placeId": "ChIJh5CRUXuHa4cR6gH1P0MAGEo",
+    "name": "Blue Pan Pizza",
+    "address": "3934 W 32nd Ave, Denver, CO 80212",
+    "lat": 39.7620502,
+    "lng": -105.03896689999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://bluepandenver.com/menu/",
+    "googleRating": 4.6,
+    "googleRatingCount": 2192
+  },
+  {
+    "placeId": "ChIJMV00Vmd7bIcRBt-HuMHoXWg",
+    "name": "Cattivella",
+    "address": "10195 E 29th Dr #110, Denver, CO 80238",
+    "lat": 39.759590599999996,
+    "lng": -104.86878639999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.cattivelladenver.com/menu",
+    "googleRating": 4.5,
+    "googleRatingCount": 1418
+  },
+  {
+    "placeId": "ChIJQ7enbZd-bIcRFOBJUZRfnm4",
+    "name": "Mici Italian",
+    "address": "727 Colorado Blvd, Denver, CO 80206",
+    "lat": 39.7279653,
+    "lng": -104.9411421,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.miciitalian.com/",
+    "googleRating": 4.4,
+    "googleRatingCount": 555
+  },
+  {
+    "placeId": "ChIJW2P3hZZ-bIcRG1zokTjEWdQ",
+    "name": "North Italia",
+    "address": "190 Clayton Ln, Denver, CO 80206",
+    "lat": 39.7192109,
+    "lng": -104.9556118,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.northitalia.com/",
+    "googleRating": 4.5,
+    "googleRatingCount": 2533
+  },
+  {
+    "placeId": "ChIJxz3k85Z-bIcRQcAPJ0SZzO4",
+    "name": "True Food Kitchen",
+    "address": "2800 E 2nd Ave Unit 101, Denver, CO 80206",
+    "lat": 39.7192778,
+    "lng": -104.9542128,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.truefoodkitchen.com/locations/denver/",
+    "googleRating": 4.6,
+    "googleRatingCount": 4260
+  },
+  {
+    "placeId": "ChIJAexs4PiIa4cRYHRp5qqymJQ",
+    "name": "Beau Jo's Arvada",
+    "address": "7525 W 53rd Ave, Arvada, CO 80002",
+    "lat": 39.7931077,
+    "lng": -105.0788031,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://www.beaujos.com/menu/",
+    "googleRating": 4.4,
+    "googleRatingCount": 4250
+  },
+  {
+    "placeId": "ChIJL2TJFlJ-bIcRENgfRp3uELQ",
+    "name": "Sushi Den",
+    "address": "1487 S Pearl St, Denver, CO 80210",
+    "lat": 39.689578,
+    "lng": -104.9808419,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.sushiden.net/",
+    "googleRating": 4.7,
+    "googleRatingCount": 5297
+  },
+  {
+    "placeId": "ChIJe0sEeD9_bIcRylnzzjqW9g4",
+    "name": "Phatt Matt's",
+    "address": "2231 S Broadway, Denver, CO 80210",
+    "lat": 39.676263299999995,
+    "lng": -104.987821,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://phattmatts.com/",
+    "googleRating": 4.9,
+    "googleRatingCount": 389
+  },
+  {
+    "placeId": "ChIJGxOubQ1_bIcRTD2drN2rwG4",
+    "name": "Dough Counter Pizza",
+    "address": "2466 S Colorado Blvd Unit 101, Denver, CO 80222",
+    "lat": 39.671602799999995,
+    "lng": -104.9402059,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.doughcounter.com/gluten-free",
+    "googleRating": 4.6,
+    "googleRatingCount": 412
+  },
+  {
+    "placeId": "ChIJn3GgDMN4bIcR0V-dyxWKihw",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "1701 Wynkoop St Ste 100, Denver, CO 80202",
+    "lat": 39.752729699999996,
+    "lng": -105.0007957,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.snoozeeatery.com/",
+    "googleRating": 4.5,
+    "googleRatingCount": 3601
+  },
+  {
+    "placeId": "ChIJkxXZw9Kaa4cRIjAmZ1vf0iY",
+    "name": "Gold Mine Cupcakes",
+    "address": "700 12th St #130, Golden, CO 80401",
+    "lat": 39.75599,
+    "lng": -105.22069800000001,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.goldminecupcakes.com/",
+    "googleRating": 4.9,
+    "googleRatingCount": 252
+  },
+  {
+    "placeId": "ChIJAQAMx-tzbIcRdICykNMjWM0",
+    "name": "Bella Macaron & Coffee Shop",
+    "address": "12910 Zuni St, Westminster, CO 80234",
+    "lat": 39.9305241,
+    "lng": -105.0144096,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.bellamacaron.com/",
+    "googleRating": 4.8,
+    "googleRatingCount": 271
+  },
+  {
+    "placeId": "ChIJv3XJR5uAbIcRsc2x1txb34I",
+    "name": "Aung's Bangkok Cafe",
+    "address": "1225 E Hampden Ave, Englewood, CO 80113",
+    "lat": 39.6534228,
+    "lng": -104.97318020000002,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://aungsbangkokcafe.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 1032
+  }
+]

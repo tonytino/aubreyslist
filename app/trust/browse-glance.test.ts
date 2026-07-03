@@ -32,6 +32,45 @@ describe("deriveListingTrustGlance", () => {
     expect(glance.evidence).toBeNull();
   });
 
+  it("flags suggestedByBot for a bot-suggested celiac claim with no votes (AUB-31)", () => {
+    const glance = deriveListingTrustGlance(
+      { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null, suggested: true },
+      0,
+      null,
+      NOW
+    );
+    // Provenance only — no fabricated verdict, and it never sits beside evidence.
+    expect(glance.suggestedByBot).toBe(true);
+    expect(glance.safetyState).toBeNull();
+    expect(glance.evidence).toBeNull();
+  });
+
+  it("does NOT flag suggestedByBot once the celiac claim has real evidence", () => {
+    const glance = deriveListingTrustGlance(
+      {
+        confirmCount: 2,
+        disputeCount: 0,
+        lastConfirmedAt: new Date("2026-06-25T00:00:00Z"),
+        suggested: true,
+      },
+      2,
+      null,
+      NOW
+    );
+    expect(glance.suggestedByBot).toBe(false);
+    expect(glance.safetyState).toBe("celiac-safe");
+  });
+
+  it("defaults suggestedByBot to false when the aggregate omits the flag", () => {
+    const glance = deriveListingTrustGlance(
+      { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null },
+      0,
+      null,
+      NOW
+    );
+    expect(glance.suggestedByBot).toBe(false);
+  });
+
   it("derives celiac-safe + fresh cue + evidence counts when confirms lead and fresh", () => {
     const glance = deriveListingTrustGlance(
       { confirmCount: 8, disputeCount: 1, lastConfirmedAt: new Date("2026-06-25T00:00:00Z") },

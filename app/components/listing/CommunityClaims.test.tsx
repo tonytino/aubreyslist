@@ -28,6 +28,7 @@ const claim = (overrides: Partial<ListingClaimAggregate>): ListingClaimAggregate
   confirmCount: 0,
   disputeCount: 0,
   lastConfirmedAt: null,
+  suggested: false,
   viewerVote: null,
   ...overrides,
 });

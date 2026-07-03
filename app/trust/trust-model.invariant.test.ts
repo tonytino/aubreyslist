@@ -92,9 +92,12 @@ describe("INVARIANT 1 — no secret scoring (summary is a pure function of visib
   });
 
   it("derives EVERY summary field from the visible aggregate — no opaque field", () => {
-    // The summary must carry nothing a user can't reconstruct from the visible
-    // confirm/dispute counts + recency. We pin the exact field set so an added
-    // field (e.g. a hidden weighted score) forces this invariant to be revisited.
+    // The summary must carry nothing a user can't reconstruct from VISIBLE
+    // evidence: the confirm/dispute counts + recency, plus `suggested` — the
+    // curator-bot provenance surfaced as the "Suggested by Aubrey's Bot" badge
+    // (AUB-31), which is visible and explainable, never a hidden weighted score.
+    // We pin the exact field set so an added field (e.g. a secret score) forces
+    // this invariant to be revisited.
     const summary: ClaimTrustSummary = summarizeClaim(
       "dedicated_fryer",
       aggregate(8, 1, new Date(NOW.getTime() - 21 * DAY_MS)),
@@ -111,6 +114,7 @@ describe("INVARIANT 1 — no secret scoring (summary is a pure function of visib
         "label",
         "recencyLabel",
         "stale",
+        "suggested",
       ].sort()
     );
 
@@ -128,10 +132,12 @@ describe("INVARIANT 1 — no secret scoring (summary is a pure function of visib
     // claimIds ⇒ identical derived signal.
     const agg1: ClaimAggregate = {
       claimId: "claim-aaaa",
+      suggested: false,
       ...aggregate(5, 2, new Date(NOW.getTime() - 10 * DAY_MS)),
     };
     const agg2: ClaimAggregate = {
       claimId: "claim-zzzz",
+      suggested: false,
       ...aggregate(5, 2, new Date(NOW.getTime() - 10 * DAY_MS)),
     };
 

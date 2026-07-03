@@ -1,0 +1,108 @@
+name: Migrate & seed preview database
+
+# Applies pending Drizzle migrations to a PR's Vercel **preview** database branch
+# (AUB-139) and seeds it with the curated Denver listings (AUB-31), so
+# schema-changing PRs are testable in preview — with density — instead of 500-ing.
+#
+# Why this exists: the Neon↔Vercel integration forks each preview DB branch
+# (`preview/<git-branch>`) from PRODUCTION, but prod isn't migrated until the PR
+# merges (`migrate.yml` runs on push to `main`). So the deployed preview runs the
+# PR's new code against a schema that lacks the PR's new column/table. This job
+# closes that gap by migrating the preview branch itself, then seeding it.
+#
+# The seed is FREE here: `pnpm db:seed` inserts the BAKED data committed in
+# `scripts/seed-listings.generated.json` (captured once by `pnpm db:seed:refresh`),
+# so it needs no Google Places key — only the resolved preview DB URL. It is
+# idempotent (dedup on Place ID) and a graceful no-op when the baked file is empty.
+#
+# Only runs when the schema/migrations OR the baked seed data actually change (paths
+# filter) — an unrelated PR needs no preview migration/seed. Skips gracefully (a
+# warning, not a failure) when the Neon secrets are absent (e.g. fork PRs, where
+# secrets are withheld) or when the preview branch doesn't exist yet.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "db/migrations/**"
+      - "db/schema.ts"
+      # Re-run the seed when the baked data (or the seed itself) changes, so a fresh
+      # bake populates the preview even on a PR that touches no schema/migration.
+      - "scripts/seed-listings.generated.json"
+      - "scripts/seed.ts"
+      - "scripts/seed-data.ts"
+      - ".github/workflows/migrate-preview.yml"
+      - ".github/scripts/resolve-preview-db-url.mjs"
+
+# Least privilege: only reads the repo; the Neon key + DB URL are secrets.
+permissions:
+  contents: read
+
+# One preview migration per branch at a time (drizzle-kit migrate is idempotent,
+# but serialize to avoid two runs racing the same branch — same class of race the
+# CI `db-migrate` job prevents on the shared CI branch).
+concurrency:
+  group: migrate-preview-${{ github.head_ref }}
+  cancel-in-progress: false
+
+jobs:
+  migrate-preview:
+    name: Apply migrations to the preview branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The `secrets` context isn't allowed in step-level `if`, so detect the Neon
+      # secret here and gate later steps on this output. NEON_PROJECT_ID is
+      # optional — the resolver auto-detects a sole project when it's unset.
+      - name: Check for Neon API secret
+        id: cfg
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          if [ -n "$NEON_API_KEY" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::NEON_API_KEY is not set — skipping preview database migration. Add NEON_API_KEY (and optionally NEON_PROJECT_ID) to enable it."
+          fi
+
+      # Resolve the preview branch's connection URI (masked). `found=false` when the
+      # branch doesn't exist yet (Vercel still deploying) — the migrate step skips.
+      - name: Resolve preview branch connection URI
+        id: resolve
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          # NEON_PROJECT_ID is an identifier, not a credential — so it can live in
+          # repo *Variables* (preferred) or Secrets; read the variable first and
+          # fall back to a secret. Leave it unset only when the API key has a single
+          # project (the resolver auto-detects it then).
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID || secrets.NEON_PROJECT_ID }}
+          PREVIEW_BRANCH_NAME: preview/${{ github.head_ref }}
+        run: node .github/scripts/resolve-preview-db-url.mjs
+
+      - name: Apply migrations to the preview branch
+        if: steps.cfg.outputs.enabled == 'true' && steps.resolve.outputs.found == 'true'
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ steps.resolve.outputs.url }}
+
+      # Seed the freshly-migrated preview branch with the baked Denver listings.
+      # API-free (no Places key), idempotent, and a no-op when the baked file is
+      # empty — so the preview shows real density for schema PRs.
+      - name: Seed the preview branch
+        if: steps.cfg.outputs.enabled == 'true' && steps.resolve.outputs.found == 'true'
+        run: pnpm db:seed
+        env:
+          DATABASE_URL: ${{ steps.resolve.outputs.url }}

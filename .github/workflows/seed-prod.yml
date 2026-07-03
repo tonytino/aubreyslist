@@ -1,0 +1,73 @@
+name: Seed production database
+
+# Seeds the PRODUCTION database with the curated Denver gluten-free / celiac
+# listings (AUB-31), each carrying one or more "Suggested by Aubrey's Bot" labels.
+#
+# Manual + idempotent: run it from the Actions tab ("Run workflow") whenever you
+# want, and re-run freely as you curate the seed set — listings dedup on the Google
+# Place ID and a claim a real user has engaged with is never re-suggested. It
+# applies any pending migrations first (so the `claims.suggested_by` column exists)
+# and then runs the seed.
+#
+# API-FREE seed: `pnpm db:seed` inserts the BAKED data committed in
+# `scripts/seed-listings.generated.json` (captured once by `pnpm db:seed:refresh`),
+# so this workflow needs NO Google Places API key — only PROD_DATABASE_URL.
+#
+# Skips gracefully (with a warning, not a failure) if PROD_DATABASE_URL is not
+# configured, so the workflow is safe to merge before the secret exists.
+on:
+  workflow_dispatch: {}
+
+# Least privilege: this workflow only reads the repo (the DB URL + key are secrets).
+permissions:
+  contents: read
+
+# Never let two production seeds (or a seed + migration) race.
+concurrency:
+  group: seed-production
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    name: Seed listings
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The `secrets` context isn't allowed in step-level `if`, so detect the
+      # required secrets here and gate the seed steps on this output.
+      - name: Check for required secrets
+        id: cfg
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          if [ -z "$PROD_DATABASE_URL" ]; then
+            echo "::warning::PROD_DATABASE_URL is not set — skipping production seed."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Ensure the schema (incl. claims.suggested_by) is applied before seeding.
+      - name: Apply migrations
+        if: steps.cfg.outputs.enabled == 'true'
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+
+      - name: Seed Denver listings
+        if: steps.cfg.outputs.enabled == 'true'
+        run: pnpm db:seed
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}

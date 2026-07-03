@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { parseEnv } from "./env";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { getPlacesApiKey, parseEnv } from "./env";
 
 describe("parseEnv", () => {
   it("returns typed env for a valid source", () => {
@@ -81,5 +81,28 @@ describe("parseEnv", () => {
       SESSION_SECRET: secret,
     });
     expect(env.SESSION_SECRET).toBe(secret);
+  });
+});
+
+describe("getPlacesApiKey", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns the key without requiring DATABASE_URL (the refresh never opens a DB)", () => {
+    // Clearing DATABASE_URL proves this accessor is independent of the full schema.
+    vi.stubEnv("DATABASE_URL", undefined);
+    vi.stubEnv("GOOGLE_PLACES_API_KEY", "places-key");
+    expect(getPlacesApiKey()).toBe("places-key");
+  });
+
+  it("throws a descriptive error when the key is missing", () => {
+    vi.stubEnv("GOOGLE_PLACES_API_KEY", undefined);
+    expect(() => getPlacesApiKey()).toThrowError(/GOOGLE_PLACES_API_KEY/);
+  });
+
+  it("throws when the key is an empty string", () => {
+    vi.stubEnv("GOOGLE_PLACES_API_KEY", "");
+    expect(() => getPlacesApiKey()).toThrowError(/GOOGLE_PLACES_API_KEY/);
   });
 });

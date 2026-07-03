@@ -1,0 +1,2 @@
+ALTER TABLE "claims" ADD COLUMN "suggested_by" text;--> statement-breakpoint
+ALTER TABLE "claims" ADD CONSTRAINT "claims_suggested_by_users_id_fk" FOREIGN KEY ("suggested_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;

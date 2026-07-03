@@ -183,6 +183,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: false,
         evidence: { confirmations: 8, contributors: 6 },
         freshness: { kind: "fresh", label: "Verified 27d ago" },
+        suggestedByBot: false,
       },
       // stale: confirm-majority aged past the window → "stale" + "Updated".
       {
@@ -190,6 +191,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: false,
         evidence: { confirmations: 30, contributors: 12 },
         freshness: { kind: "stale", label: "Updated 6mo ago" },
+        suggestedByBot: false,
       },
       // contested: disputes lead → gluten-friendly; the fresh confirm still
       // reads as a "Verified" freshness cue (an independent display signal).
@@ -198,6 +200,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: false,
         evidence: { confirmations: 2, contributors: 7 },
         freshness: { kind: "fresh", label: "Verified 8d ago" },
+        suggestedByBot: false,
       },
       // recent-incident: fresh confirm-majority (celiac-safe) BUT a recent report
       // flags the card and the incident cue wins the freshness slot.
@@ -206,6 +209,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: true,
         evidence: { confirmations: 8, contributors: 5 },
         freshness: { kind: "incident", label: "Reported 10d ago" },
+        suggestedByBot: false,
       },
       // unattested: no celiac claim → honest empty state, no evidence, no cue.
       {
@@ -213,6 +217,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: false,
         evidence: null,
         freshness: null,
+        suggestedByBot: false,
       },
     ];
 
@@ -242,6 +247,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
       hasRecentIncident: false,
       evidence: null,
       freshness: null,
+      suggestedByBot: false,
     });
   });
 
