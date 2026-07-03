@@ -94,8 +94,12 @@ The Neon↔Vercel integration forks each PR's **preview** database branch
 merges — so without help, a schema-changing PR's preview 500s (the deployed preview
 code queries a column/table the preview DB doesn't have yet).
 
-`.github/workflows/migrate-preview.yml` closes that gap: on a `pull_request` that
-changes `db/schema.ts` or `db/migrations/**`, it resolves the preview branch's Neon
+`.github/workflows/migrate-preview.yml` closes that gap: it runs on every
+`pull_request` (its check is required by the branch ruleset, so it must always
+report — a trigger-level `paths:` filter would leave the check stuck "Expected"
+and block unrelated PRs), and a first in-job `relevance` step no-ops it with
+success unless the PR changes `db/schema.ts`, `db/migrations/**`, or the seed
+inputs. When relevant, it resolves the preview branch's Neon
 connection URI via the Neon API (`.github/scripts/resolve-preview-db-url.mjs`), runs
 `pnpm db:migrate` against it, and then **seeds** it (`pnpm db:seed`) — so the preview
 matches the PR's schema *and* shows real density. The seed step is free (API-free
