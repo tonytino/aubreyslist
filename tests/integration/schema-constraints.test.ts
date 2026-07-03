@@ -117,6 +117,14 @@ describe.skipIf(!hasDb)("schema constraints (real Postgres)", () => {
     ).rejects.toThrow();
   });
 
+  it("rejects a second favorite for the same (user, listing) — UNIQUE(user_id, listing_id)", async () => {
+    const listingId = await makeListing();
+
+    await db.insert(schema.favorites).values({ userId, listingId });
+
+    await expect(db.insert(schema.favorites).values({ userId, listingId })).rejects.toThrow();
+  });
+
   it("accepts a flag with exactly one target but rejects zero or two — flags_one_target CHECK", async () => {
     const listingId = await makeListing();
     const claimId = await makeClaim(listingId);
@@ -168,9 +176,14 @@ describe.skipIf(!hasDb)("schema constraints (real Postgres)", () => {
       reporterId: userId,
       reason: `${run} cascade`,
     });
+    await db.insert(schema.favorites).values({ listingId, userId });
 
     const countWhere = async (
-      table: typeof schema.claims | typeof schema.incidents | typeof schema.flags,
+      table:
+        | typeof schema.claims
+        | typeof schema.incidents
+        | typeof schema.flags
+        | typeof schema.favorites,
       column: "listing_id",
       value: string
     ) => {
@@ -185,6 +198,7 @@ describe.skipIf(!hasDb)("schema constraints (real Postgres)", () => {
     expect(await countWhere(schema.claims, "listing_id", listingId)).toBeGreaterThan(0);
     expect(await countWhere(schema.incidents, "listing_id", listingId)).toBeGreaterThan(0);
     expect(await countWhere(schema.flags, "listing_id", listingId)).toBeGreaterThan(0);
+    expect(await countWhere(schema.favorites, "listing_id", listingId)).toBeGreaterThan(0);
 
     await db.delete(schema.listings).where(sql`${schema.listings.id} = ${listingId}`);
     listingIds.delete(listingId);
@@ -193,6 +207,7 @@ describe.skipIf(!hasDb)("schema constraints (real Postgres)", () => {
     expect(await countWhere(schema.claims, "listing_id", listingId)).toBe(0);
     expect(await countWhere(schema.incidents, "listing_id", listingId)).toBe(0);
     expect(await countWhere(schema.flags, "listing_id", listingId)).toBe(0);
+    expect(await countWhere(schema.favorites, "listing_id", listingId)).toBe(0);
     // And the attestation under the (now-deleted) claim cascaded too.
     const attestations = await db
       .select({ id: schema.attestations.id })

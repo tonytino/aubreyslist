@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { LogIn, LogOut, ShieldCheck, User } from "lucide-react";
+import { FlaskConical, Heart, LogIn, LogOut, ShieldCheck, User } from "lucide-react";
 import type { SessionUser } from "~/auth/current-user-query";
 import { Button } from "~/components/ui/button";
 import {
@@ -14,6 +14,13 @@ import {
 interface UserMenuProps {
   /** The signed-in user, or `null` when logged out. */
   user: SessionUser | null;
+  /**
+   * Whether this deployment's preview-only dev-login is active. When `true` AND
+   * logged out, a "Dev sign-in" link is shown beside "Log in" so a tester can
+   * sign in on a Vercel preview (where Google OAuth can't complete). Resolves
+   * `false` in production, so the affordance never renders there.
+   */
+  previewLoginEnabled?: boolean;
 }
 
 /**
@@ -27,17 +34,31 @@ interface UserMenuProps {
  *   identity, a moderation/admin link for moderator+ roles, and a POST sign-out
  *   form.
  */
-export function UserMenu({ user }: UserMenuProps) {
+export function UserMenu({ user, previewLoginEnabled = false }: UserMenuProps) {
   if (user === null) {
     // Full-page navigation to the OAuth initiation route (not an RPC data
     // fetch) — a plain anchor is the correct mechanism for the redirect dance.
     return (
-      <Button asChild variant="outline" size="sm">
-        <a href="/api/auth/google">
-          <LogIn aria-hidden className="h-4 w-4" />
-          Log in
-        </a>
-      </Button>
+      <div className="flex items-center gap-1 sm:gap-2">
+        {/* Preview-only: Google OAuth can't complete on a per-deployment preview
+            URL, so surface the dev-login form as a working alternative. Never
+            rendered in production (the query resolves false there). Plain anchor:
+            the form page is a full-page server route, not an RPC. */}
+        {previewLoginEnabled ? (
+          <Button asChild variant="ghost" size="sm">
+            <a href="/api/auth/dev-login">
+              <FlaskConical aria-hidden className="h-4 w-4" />
+              <span className="hidden sm:inline">Dev sign-in</span>
+            </a>
+          </Button>
+        ) : null}
+        <Button asChild variant="outline" size="sm">
+          <a href="/api/auth/google">
+            <LogIn aria-hidden className="h-4 w-4" />
+            Log in
+          </a>
+        </Button>
+      </div>
     );
   }
 
@@ -75,6 +96,16 @@ export function UserMenu({ user }: UserMenuProps) {
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+
+        {/* The viewer's saved spots (AUB-127 / F9) — signed-in only, since
+            favorites are viewer-scoped. Navigation only; the page re-derives the
+            viewer from the session server-side. */}
+        <DropdownMenuItem asChild>
+          <Link to="/favorites">
+            <Heart aria-hidden className="h-4 w-4" />
+            Favorites
+          </Link>
+        </DropdownMenuItem>
 
         {/* Link to /admin for moderator+ — the route is RBAC-gated and shows
             role-appropriate sections (admins: roles + settings + queue;

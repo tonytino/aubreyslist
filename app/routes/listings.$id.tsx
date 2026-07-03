@@ -1,9 +1,10 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound, stripSearchParams } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { CircleCheck, Heart, MapPin, Menu, Users } from "lucide-react";
+import { CircleCheck, MapPin, Menu, Users } from "lucide-react";
 import { z } from "zod";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
+import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
@@ -12,7 +13,6 @@ import { SafetySummary } from "~/components/listing/SafetySummary";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { absoluteUrl, canonicalLink, jsonLdScript, pageSeoMeta } from "~/lib/seo";
 import {
   LISTING_DETAIL_SEARCH_DEFAULTS,
@@ -233,21 +233,18 @@ function ListingDetail() {
             className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent"
           />
 
-          {/* Top-right circular icon actions: favorite (presentational) + flag. */}
+          {/* Top-right circular icon actions: favorite (wired) + flag. */}
           <div className="absolute right-3 top-3 z-30 flex gap-2">
-            {/* PRESENTATIONAL favorite — mirrors the unwired heart on the browse
-                ListingCard. It awaits the mutation from the in-flight favorites
-                feature (AUB scope); intentionally has no onClick / no persisted
-                state yet, only an accessible label + tooltip. Do NOT build a
-                favorites backend here. */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button type="button" aria-label="Save to favorites" className={HERO_ICON_BUTTON}>
-                  <Heart aria-hidden="true" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Save to favorites</TooltipContent>
-            </Tooltip>
+            {/* Save/favorite affordance (F7, AUB-126) — the shipped, wired island.
+                Reads `["favorites"]` + `currentUserQuery` itself (both prefetched at
+                the root), so it needs no loader wiring and handles its own anon
+                (dialog) vs signed-in (optimistic toggle) behaviour. Styled with the
+                hero overlay chrome so it matches the sibling flag icon button. */}
+            <FavoriteButton
+              listingId={listing.id}
+              listingName={listing.name}
+              className={HERO_ICON_BUTTON}
+            />
             {/* Flag this listing (#39) as an icon + tooltip. FlagControl keeps its
                 login gate (renders nothing when anonymous) and the server re-gates
                 regardless; the reason form opens in a portaled dialog. */}

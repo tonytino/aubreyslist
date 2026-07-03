@@ -1,0 +1,1 @@
+- `[manual]` Added a `favorites` join table (`db/schema.ts`) — a create-or-delete edge per `(user, listing)` mirroring `attestations` but without `updatedAt`, with a `favorites_user_listing_unique` constraint, `favorites_user_idx`/`favorites_listing_idx` indexes, and cascade FKs to `users`/`listings` — plus its generated migration. No app wiring yet.

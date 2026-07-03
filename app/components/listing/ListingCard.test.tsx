@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   RouterProvider,
   createMemoryHistory,
@@ -7,10 +8,21 @@ import {
 } from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { currentUserQuery } from "~/auth/current-user-query";
 import type { Listing } from "~/db/schema";
+import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
-import { ListingCard, RestaurantCard, type RestaurantCardVM } from "./ListingCard";
+import { ListingCard, RestaurantCard, type RestaurantCardVM, listingToCardVM } from "./ListingCard";
+
+// The card now embeds the FavoriteButton island (F6, AUB-125), which imports the
+// `favorites.fn` server seam. That seam transitively pulls in the db-touching
+// implementation, so — exactly as FavoriteButton.test.tsx does — we mock it out;
+// these tests only assert the heart RENDERS in the card, not its write behaviour.
+vi.mock("~/server/favorites/favorites.fn", () => ({
+  favoriteListing: vi.fn(() => Promise.resolve()),
+  unfavoriteListing: vi.fn(() => Promise.resolve()),
+}));
 
 /**
  * Tests for the browse-list card (#33, AUB-61 redesign). Covers the trust-glance
@@ -66,9 +78,19 @@ function renderInRouter(element: ReactNode) {
     routeTree: rootRoute.addChildren([browseRoute, detailRoute]),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
+  // The embedded FavoriteButton reads the prefetched favorites + current-user
+  // suspense queries; seed both (anonymous, no favorites) so it renders its empty
+  // "Save …" heart synchronously without hitting the mocked server fns.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient.setQueryData(favoriteIdsQuery.queryKey, []);
+  queryClient.setQueryData(currentUserQuery.queryKey, null);
   // The concrete router type doesn't match the provider's generic default; this
   // is a test-only structural mismatch, safe to assert through unknown.
-  render(<RouterProvider router={router as unknown as never} />);
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router as unknown as never} />
+    </QueryClientProvider>
+  );
 }
 
 function renderCard(overrides: Partial<RestaurantCardVM> = {}) {
@@ -93,13 +115,15 @@ describe("RestaurantCard", () => {
     expect(link).toHaveAttribute("href", "/listings/listing-1");
   });
 
-  it("renders the save button as a sibling of the link, not nested in the anchor", async () => {
+  it("renders the FavoriteButton as a sibling of the link, not nested in the anchor", async () => {
     renderCard();
-    // The stretched-link pattern keeps a valid DOM: the <button> must NOT be a
+    // The dead heart is now the wired FavoriteButton island (F6, AUB-125); its
+    // accessible name is derived from the listing name ("Save <name>"). The
+    // stretched-link pattern keeps a valid DOM: the <button> must NOT be a
     // descendant of the <a> (a button inside an anchor is invalid HTML + an a11y
     // defect). Both remain independently present.
     const link = await screen.findByRole("link");
-    const saveButton = screen.getByRole("button", { name: "Save this spot" });
+    const saveButton = screen.getByRole("button", { name: "Save Acme Gluten-Free" });
     expect(saveButton).toBeInTheDocument();
     expect(link).not.toContainElement(saveButton);
     expect(saveButton).not.toContainElement(link);
@@ -150,6 +174,64 @@ describe("RestaurantCard", () => {
     // and it carries no SafetySignal state marker.
     expect(pill).not.toHaveTextContent(/celiac|safe|gluten/i);
     expect(pill).not.toHaveAttribute("data-safety-state");
+  });
+
+  it("does not render a save-count pill when saveCount is 0", async () => {
+    renderCard({ saveCount: 0 });
+    await screen.findByText("Celiac-safe");
+    // Hidden at 0 (matches how googleRating hides when absent) — no fabricated
+    // "0 saves" pill.
+    expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
+    expect(screen.queryByText("saves")).not.toBeInTheDocument();
+  });
+
+  it("does not render a save-count pill when saveCount is absent (undefined)", async () => {
+    renderCard();
+    await screen.findByText("Celiac-safe");
+    expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
+  });
+
+  it("renders an ATTRIBUTED save-count pill only when saveCount > 0", async () => {
+    // The count is a PLAIN NUMBER on the client-safe VM — no server-only import
+    // reaches the card; it just renders the number it is handed.
+    renderCard({ saveCount: 12 });
+    const pill = await screen.findByTestId("save-count");
+    // The count is shown AND explicitly attributed ("saves")...
+    expect(pill).toHaveTextContent("12");
+    expect(pill).toHaveTextContent("saves");
+    // ...and it is NOT presented as a safety verdict (ADR-007): no safety label,
+    // and it carries no SafetySignal state marker.
+    expect(pill).not.toHaveTextContent(/celiac|safe|gluten/i);
+    expect(pill).not.toHaveAttribute("data-safety-state");
+  });
+
+  it("keeps the save-count pill in the title row, SEPARATE from the SafetySignal row", async () => {
+    renderCard({ saveCount: 8, safetyState: "celiac-safe" });
+    const pill = await screen.findByTestId("save-count");
+    const heading = screen.getByRole("heading", { name: "Acme Gluten-Free" });
+    // The SafetySignal chip carries a `data-safety-state` marker; the pill must
+    // live in the TITLE row alongside the heading, never in/adjacent to it.
+    const safety = document.querySelector('[data-safety-state="celiac-safe"]');
+    expect(safety).not.toBeNull();
+    // Neither element nests the other — they are structurally distinct.
+    expect(pill).not.toContainElement(safety as HTMLElement);
+    expect(safety as HTMLElement).not.toContainElement(pill);
+    // Not siblings: the pill and the safety signal live in different rows.
+    expect(pill.parentElement).not.toBe((safety as HTMLElement).parentElement);
+    // The pill shares the title row with the heading; the safety signal does not.
+    const titleRow = heading.parentElement as HTMLElement;
+    expect(titleRow).toContainElement(pill);
+    expect(titleRow).not.toContainElement(safety as HTMLElement);
+  });
+
+  it("renders BOTH the save-count and Google rating pills together in the title row", async () => {
+    renderCard({ saveCount: 5, googleRating: { value: 4.8, count: 128 } });
+    const save = await screen.findByTestId("save-count");
+    const google = screen.getByTestId("google-rating");
+    expect(save).toHaveTextContent("5");
+    expect(google).toHaveTextContent("Google");
+    // Both attributed pills share a container, apart from any safety signal.
+    expect(save.parentElement).toBe(google.parentElement);
   });
 
   it("renders evidence counts when present", async () => {
@@ -234,5 +316,26 @@ describe("ListingCard (mapping wrapper)", () => {
     await screen.findByText("Celiac-safe");
     expect(screen.queryByText(/confirmations/)).not.toBeInTheDocument();
     expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
+  });
+});
+
+describe("listingToCardVM (save-count threading)", () => {
+  const glance: ListingTrustGlance = {
+    safetyState: "celiac-safe",
+    hasRecentIncident: false,
+    evidence: null,
+    freshness: null,
+  };
+
+  it("threads a provided save count onto the VM", () => {
+    const vm = listingToCardVM(baseListing, glance, undefined, 9);
+    expect(vm.saveCount).toBe(9);
+  });
+
+  it("leaves saveCount absent when not supplied (optional trailing param)", () => {
+    // Callers that don't have a count (e.g. the map carousel) omit it and simply
+    // render no pill — the prop stays truly absent, not `undefined`.
+    const vm = listingToCardVM(baseListing, glance);
+    expect("saveCount" in vm).toBe(false);
   });
 });

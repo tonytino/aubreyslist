@@ -47,6 +47,16 @@ const h = vi.hoisted(() => {
     subqueryWhere: undefined as unknown,
     /** The WHERE predicate handed to the incidents query (#41 visibility). */
     incidentWhere: undefined as unknown,
+    /** Public per-listing save counts returned by the (mocked) favorites layer. */
+    favoriteCounts: new Map<string, number>(),
+    /** The listing ids passed to `getFavoriteCounts` (asserted batched, not N+1). */
+    favoriteCountIds: undefined as string[] | undefined,
+    /**
+     * The viewer's VISIBLE favorite ids returned by the (mocked)
+     * `getViewerFavoriteIds` — drives the F11 `savedOnly` path. `[]` models both
+     * an anonymous caller and a signed-in user with no favorites.
+     */
+    viewerFavoriteIds: [] as string[],
   };
 
   // The page query chain (the celiac-trust JOIN form):
@@ -144,6 +154,21 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({ select: h.selectMock }),
 }));
 
+// The public save-count aggregate is a SEPARATE server-only helper
+// (`~/server/favorites`) that `getBrowseListings` batches alongside the trust
+// signals. We stub it here so this loader test stays focused on the loader's
+// composition/attachment (the aggregate's own SQL is pinned in the favorites
+// tests), and capture the ids to assert the call is batched (one call, all ids).
+vi.mock("~/server/favorites/index", () => ({
+  getFavoriteCounts: (listingIds: string[]) => {
+    h.state.favoriteCountIds = listingIds;
+    return Promise.resolve(h.state.favoriteCounts);
+  },
+  // The F11 `savedOnly` path resolves the viewer's VISIBLE favorite ids here.
+  // `[]` (anonymous OR empty favorites) must SHORT-CIRCUIT to an empty page.
+  getViewerFavoriteIds: () => Promise.resolve(h.state.viewerFavoriteIds),
+}));
+
 import { formatFreshness } from "~/trust/browse-card-format";
 import {
   DEFAULT_STALENESS_MONTHS,
@@ -173,6 +198,9 @@ beforeEach(() => {
   state.aggWhere = undefined;
   state.subqueryWhere = undefined;
   state.incidentWhere = undefined;
+  state.favoriteCounts = new Map();
+  state.favoriteCountIds = undefined;
+  state.viewerFavoriteIds = [];
   h.resetCallCounters();
 });
 
@@ -180,7 +208,15 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const baseInput: BrowseListingsInput = { page: 1, pageSize: 20, q: "", attrs: [], sort: "alpha" };
+const baseInput: BrowseListingsInput = {
+  page: 1,
+  pageSize: 20,
+  q: "",
+  attrs: [],
+  sort: "alpha",
+  savedOnly: false,
+  quick: [],
+};
 
 describe("getBrowseListings", () => {
   it("returns an empty page (and skips signal queries) when there are no listings", async () => {
@@ -527,6 +563,52 @@ describe("getBrowseListings", () => {
     expect(result.cards[0]?.distanceLabel).toBeUndefined();
   });
 
+  // --- F10: public, user-agnostic save-count attachment ---------------------
+
+  it("attaches the public favorite count to each card from the batched aggregate", async () => {
+    state.pageListings = [
+      { id: "l1", name: "A", address: "a" },
+      { id: "l2", name: "B", address: "b" },
+    ];
+    state.total = 2;
+    state.favoriteCounts = new Map([
+      ["l1", 12],
+      ["l2", 3],
+    ]);
+
+    const result = await getBrowseListings(baseInput, NOW);
+
+    expect(result.cards[0]?.favoriteCount).toBe(12);
+    expect(result.cards[1]?.favoriteCount).toBe(3);
+    // Batched (NO N+1): the count helper is called ONCE with ALL page listing ids.
+    expect(state.favoriteCountIds).toEqual(["l1", "l2"]);
+  });
+
+  it("defaults the favorite count to 0 for a listing absent from the aggregate", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+    // No entry for l1 → it has no favorites → the card reports 0 (never undefined).
+    state.favoriteCounts = new Map();
+
+    const result = await getBrowseListings(baseInput, NOW);
+
+    expect(result.cards[0]?.favoriteCount).toBe(0);
+  });
+
+  it("attaches BOTH the save count and the distance label when distance-sorting", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a", distanceKm: 0.643_738 }];
+    state.total = 1;
+    state.favoriteCounts = new Map([["l1", 7]]);
+
+    const result = await getBrowseListings(
+      { ...baseInput, sort: "distance", userLat: 39.7392, userLng: -104.9903 },
+      NOW
+    );
+
+    expect(result.cards[0]?.favoriteCount).toBe(7);
+    expect(result.cards[0]?.distanceLabel).toBe("0.4 mi");
+  });
+
   // --- #34/#35: WHERE composition (search + taxonomy filter) ----------------
 
   it("always constrains to visible listings even when no attrs/search are given (#41)", async () => {
@@ -739,7 +821,15 @@ describe("getBrowseListings", () => {
     state.total = 5;
 
     const result = await getBrowseListings(
-      { page: 2, pageSize: 2, q: "taco", attrs: ["dedicated_fryer"], sort: "trust" },
+      {
+        page: 2,
+        pageSize: 2,
+        q: "taco",
+        attrs: ["dedicated_fryer"],
+        sort: "trust",
+        savedOnly: false,
+        quick: [],
+      },
       NOW
     );
 
@@ -755,6 +845,115 @@ describe("getBrowseListings", () => {
     expect(result.sort).toBe("trust");
     // Trust sort still applied under filter + search + pagination.
     expect(state.orderByArgs).toHaveLength(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F11 (AUB-129): server-side "Saved" filter (savedOnly)
+//
+// The blocker this fixes: the Saved filter MUST be server-side so pagination and
+// the honest total cover the FULL favorites set, not a client-side slice of the
+// loaded page. So `savedOnly` folds `listings.id IN (viewer favorite ids)` into
+// the SHARED where — applied to the page AND count queries BEFORE paginating —
+// and short-circuits an anonymous/empty caller to an empty page WITHOUT a broad
+// (unconstrained) query.
+// ---------------------------------------------------------------------------
+describe("getBrowseListings — savedOnly (F11)", () => {
+  const FIVE_FAVES = ["l1", "l2", "l3", "l4", "l5"];
+
+  it("constrains BOTH the page and count queries to the viewer's favorite ids (folded into the shared WHERE)", async () => {
+    state.viewerFavoriteIds = FIVE_FAVES;
+    state.pageListings = [
+      { id: "l1", name: "A", address: "a" },
+      { id: "l2", name: "B", address: "b" },
+    ];
+    state.total = 5;
+
+    await getBrowseListings({ ...baseInput, savedOnly: true, pageSize: 2 }, NOW);
+
+    // The SAME predicate object constrains the page AND the count query, so the
+    // total is honest over the favorites subset (count-honesty).
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+
+    const rendered = dialect.sqlToQuery(state.pageWhere as SQL);
+    // `listings.id IN (...)` over the viewer's favorite ids, still AND-folded with
+    // the visibility predicate (#41 preserved).
+    expect(rendered.sql.toLowerCase()).toContain(" in (");
+    expect(rendered.params).toContain("visible");
+    for (const id of FIVE_FAVES) {
+      expect(rendered.params).toContain(id);
+    }
+  });
+
+  it("keeps total honest over the FULL favorites set and paginates correctly (page 1 of 3)", async () => {
+    // 5 favorites, pageSize 2 → page 1 holds the first 2, and hasMore is true
+    // because the honest total (5) exceeds offset+rows (0+2).
+    state.viewerFavoriteIds = FIVE_FAVES;
+    state.pageListings = [
+      { id: "l1", name: "A", address: "a" },
+      { id: "l2", name: "B", address: "b" },
+    ];
+    state.total = 5;
+
+    const result = await getBrowseListings({ ...baseInput, savedOnly: true, pageSize: 2 }, NOW);
+
+    expect(result.total).toBe(5);
+    expect(result.page).toBe(1);
+    expect(result.pageSize).toBe(2);
+    expect(result.hasMore).toBe(true);
+    expect(result.cards.map((c) => c.listing.id)).toEqual(["l1", "l2"]);
+  });
+
+  it("reports hasMore=false on the last page of the favorites set (page 3 of 3)", async () => {
+    // Offset 4 + the 1 trailing row = 5 = total → no further page.
+    state.viewerFavoriteIds = FIVE_FAVES;
+    state.pageListings = [{ id: "l5", name: "E", address: "e" }];
+    state.total = 5;
+
+    const result = await getBrowseListings(
+      { ...baseInput, savedOnly: true, page: 3, pageSize: 2 },
+      NOW
+    );
+
+    expect(result.total).toBe(5);
+    expect(result.page).toBe(3);
+    expect(result.hasMore).toBe(false);
+    expect(result.cards.map((c) => c.listing.id)).toEqual(["l5"]);
+  });
+
+  it("ANONYMOUS/EMPTY favorites → empty page with total 0 and NO query at all (no broad read)", async () => {
+    // getViewerFavoriteIds() returns [] for an anonymous caller AND a signed-in
+    // user with no visible favorites; both must short-circuit to an empty page
+    // WITHOUT ever issuing a query.
+    state.viewerFavoriteIds = [];
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }]; // would be returned by a broad read
+    state.total = 999;
+
+    const result = await getBrowseListings({ ...baseInput, savedOnly: true }, NOW);
+
+    expect(result.cards).toEqual([]);
+    expect(result.total).toBe(0);
+    expect(result.hasMore).toBe(false);
+    // Proof there was NO broad query: no select() ran, so neither the page nor the
+    // count WHERE was ever built.
+    expect(h.selectMock).not.toHaveBeenCalled();
+    expect(state.pageWhere).toBeUndefined();
+    expect(state.countWhere).toBeUndefined();
+  });
+
+  it("does NOT constrain by favorites when savedOnly is false (unchanged behavior)", async () => {
+    // A signed-in viewer WITH favorites, but savedOnly off → the normal browse:
+    // getViewerFavoriteIds is never consulted and the WHERE has no id IN (...).
+    state.viewerFavoriteIds = FIVE_FAVES;
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, savedOnly: false }, NOW);
+
+    const sql = renderArg(state.pageWhere);
+    expect(sql).not.toContain(" in (");
+    expect(sql).toContain("moderation_status");
   });
 });
 
@@ -1067,7 +1266,7 @@ describe("quick filter composition (AUB-135)", () => {
     state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
     state.total = 1;
 
-    await getBrowseListings({ ...baseInput, quick: "celiac" }, NOW);
+    await getBrowseListings({ ...baseInput, quick: ["celiac"] }, NOW);
 
     const pageWhere = renderArg(state.pageWhere);
     const countWhere = renderArg(state.countWhere);
@@ -1093,7 +1292,7 @@ describe("quick filter composition (AUB-135)", () => {
     state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
     state.total = 1;
 
-    await getBrowseListings({ ...baseInput, quick: "friendly" }, NOW);
+    await getBrowseListings({ ...baseInput, quick: ["friendly"] }, NOW);
 
     expect(renderArg(state.pageWhere)).toContain("<=");
   });
@@ -1102,7 +1301,7 @@ describe("quick filter composition (AUB-135)", () => {
     state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
     state.total = 1;
 
-    await getBrowseListings({ ...baseInput, quick: "recent" }, NOW);
+    await getBrowseListings({ ...baseInput, quick: ["recent"] }, NOW);
 
     const recentWhere = renderArg(state.pageWhere);
     expect(recentWhere).toContain("not exists");
@@ -1114,7 +1313,7 @@ describe("quick filter composition (AUB-135)", () => {
     state.total = 1;
 
     await getBrowseListings(
-      { ...baseInput, quick: "celiac", attrs: ["dedicated_fryer"], q: "taco" },
+      { ...baseInput, quick: ["celiac"], attrs: ["dedicated_fryer"], q: "taco" },
       NOW
     );
 
@@ -1122,13 +1321,30 @@ describe("quick filter composition (AUB-135)", () => {
     expect(composed).toContain("ilike"); // search
     expect(composed.match(/exists/g)?.length ?? 0).toBeGreaterThanOrEqual(2); // taxonomy + quick
   });
+
+  it("AND-composes a multi-token set into the SAME page + count WHERE (AUB-140)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, quick: ["celiac", "recent"] }, NOW);
+
+    const pageWhere = renderArg(state.pageWhere);
+    // Both facets present — celiac's EXISTS and recent's NOT EXISTS incident guard.
+    expect(pageWhere).toContain("exists");
+    expect(pageWhere).toContain("not exists");
+    expect(pageWhere).toContain("occurred_on");
+    // Honest total: the multi-token predicate constrains the count identically.
+    expect(renderArg(state.countWhere)).toBe(pageWhere);
+  });
 });
 
-describe("quick filter ↔ glance spec equivalence (AUB-135)", () => {
+describe("quick filter ↔ glance spec equivalence (AUB-135/AUB-140)", () => {
   // DO NOT WEAKEN. Each quick token must select EXACTLY the rows whose displayed
   // glance matches — `celiac`→"celiac-safe", `friendly`→"gluten-friendly",
-  // `recent`→freshness "fresh". We drive the same evidence shapes the trust-tier
-  // suite uses and assert the quick predicate's boolean ⟺ the pure glance reading.
+  // `recent`→freshness "fresh" — and a faceted SET must select EXACTLY the rows
+  // matching EVERY selected token (conjunction). We drive the same evidence shapes
+  // the trust-tier suite uses and assert the quick predicate's boolean ⟺ the pure
+  // glance reading.
   const MONTH = 30 * 24 * 60 * 60 * 1000;
   const cutoff = stalenessCutoff(NOW, DEFAULT_STALENESS_MONTHS);
   const ago = (ms: number) => new Date(NOW.getTime() - ms);
@@ -1187,6 +1403,74 @@ describe("quick filter ↔ glance spec equivalence (AUB-135)", () => {
         quickRecentMatches(c.lastConfirmedAt, cutoff, c.recentIncidentAt),
         `lastConfirmed=${String(c.lastConfirmedAt)} incident=${String(c.recentIncidentAt)}`
       ).toBe(freshness?.kind === "fresh");
+    }
+  });
+
+  it("a SET matches iff EVERY selected token matches — {celiac, recent} conjunction", () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const cases: Array<{
+      label: string;
+      confirms: number;
+      disputes: number;
+      lastConfirmedAt: Date | null;
+      recentIncidentAt: Date | null;
+    }> = [
+      // celiac-safe AND fresh, no incident → the set matches.
+      {
+        label: "celiac-safe + fresh, no incident",
+        confirms: 8,
+        disputes: 1,
+        lastConfirmedAt: ago(1 * MONTH),
+        recentIncidentAt: null,
+      },
+      // celiac-safe by the safety glance, but a recent incident makes freshness
+      // "incident" not "fresh" → `recent` fails → the SET excludes it even though
+      // `celiac` alone would match. This is the whole point of AND-composition.
+      {
+        label: "celiac-safe but recent incident",
+        confirms: 8,
+        disputes: 1,
+        lastConfirmedAt: ago(1 * MONTH),
+        recentIncidentAt: ago(2 * DAY),
+      },
+      // fresh confirmation but dispute-majority → `recent` matches, `celiac` fails.
+      {
+        label: "fresh but dispute-majority",
+        confirms: 1,
+        disputes: 10,
+        lastConfirmedAt: ago(1 * MONTH),
+        recentIncidentAt: null,
+      },
+      // stale confirm-majority → neither token matches.
+      {
+        label: "stale confirm-majority",
+        confirms: 30,
+        disputes: 0,
+        lastConfirmedAt: ago(24 * MONTH),
+        recentIncidentAt: null,
+      },
+    ];
+    for (const c of cases) {
+      // The server AND-composes each token's predicate, so the SET matches a row iff
+      // every token's per-row predicate matches.
+      const setMatches =
+        quickCeliacMatches(c.confirms, c.disputes, c.lastConfirmedAt, cutoff) &&
+        quickRecentMatches(c.lastConfirmedAt, cutoff, c.recentIncidentAt);
+      // Cross-checked against the DISPLAYED glance directly: a row belongs in the
+      // {celiac, recent} result iff its safety glance is "celiac-safe" AND its
+      // freshness cue is "fresh" — never a row whose card would read differently.
+      const headline = deriveHeadlineSafetyState(
+        { confirmCount: c.confirms, disputeCount: c.disputes, lastConfirmedAt: c.lastConfirmedAt },
+        NOW,
+        DEFAULT_STALENESS_MONTHS
+      );
+      const freshness = formatFreshness(
+        c.lastConfirmedAt,
+        c.recentIncidentAt,
+        NOW,
+        DEFAULT_STALENESS_MONTHS
+      );
+      expect(setMatches, c.label).toBe(headline === "celiac-safe" && freshness?.kind === "fresh");
     }
   });
 });

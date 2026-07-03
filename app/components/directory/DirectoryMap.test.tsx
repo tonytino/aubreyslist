@@ -1,7 +1,19 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
+import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { DirectoryMap, type DirectoryMapEntry } from "./DirectoryMap";
+
+// Each carousel entry now carries a FavoriteButton island (F6, AUB-125), which
+// imports the `favorites.fn` server seam (transitively db-touching). As in
+// FavoriteButton.test.tsx we mock it out — these tests only assert the heart
+// renders as a sibling overlay, not its write behaviour.
+vi.mock("~/server/favorites/favorites.fn", () => ({
+  favoriteListing: vi.fn(() => Promise.resolve()),
+  unfavoriteListing: vi.fn(() => Promise.resolve()),
+}));
 
 /**
  * Tests for the stylized Map view (AUB-61, Phase 2b). Safety-relevant behaviour:
@@ -35,7 +47,16 @@ const entries: DirectoryMapEntry[] = [
 
 function renderMap(selectedId: string | null = "a") {
   const onSelect = vi.fn();
-  render(<DirectoryMap entries={entries} selectedId={selectedId} onSelect={onSelect} />);
+  // Seed the favorites + current-user suspense queries the FavoriteButton reads
+  // (anonymous, no favorites) so each carousel heart renders synchronously.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient.setQueryData(favoriteIdsQuery.queryKey, []);
+  queryClient.setQueryData(currentUserQuery.queryKey, null);
+  render(
+    <QueryClientProvider client={queryClient}>
+      <DirectoryMap entries={entries} selectedId={selectedId} onSelect={onSelect} />
+    </QueryClientProvider>
+  );
   return { onSelect };
 }
 
@@ -92,5 +113,29 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
     const rootCard = within(carousel).getByRole("button", { name: "Root & Rye — Celiac-safe" });
     expect(within(rootCard).getByText("Celiac-safe")).toBeInTheDocument();
     expect(within(rootCard).queryByText("Recent incident")).not.toBeInTheDocument();
+  });
+});
+
+describe("DirectoryMap — carousel FavoriteButton (F6, AUB-125)", () => {
+  it("renders a FavoriteButton for each carousel entry", () => {
+    renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    // One heart per entry, labelled from the listing name (anonymous → "Save …").
+    expect(within(carousel).getByRole("button", { name: "Save Root & Rye" })).toBeInTheDocument();
+    expect(
+      within(carousel).getByRole("button", { name: "Save Lucia Trattoria" })
+    ).toBeInTheDocument();
+    expect(within(carousel).getByRole("button", { name: "Save New Spot" })).toBeInTheDocument();
+  });
+
+  it("wires the heart as a SIBLING overlay, never nested inside the mini-card button", () => {
+    renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    // A <button> inside the mini-card <button> would be invalid HTML + nested
+    // interactive; the heart must be a sibling, not a descendant.
+    const miniCard = within(carousel).getByRole("button", { name: "Root & Rye — Celiac-safe" });
+    const heart = within(carousel).getByRole("button", { name: "Save Root & Rye" });
+    expect(miniCard).not.toContainElement(heart);
+    expect(heart).not.toContainElement(miniCard);
   });
 });
