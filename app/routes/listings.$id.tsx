@@ -124,7 +124,7 @@ export const Route = createFileRoute("/listings/$id")({
     return {
       meta: pageSeoMeta({
         title: `${listing.name} · Aubrey's List`,
-        description: `${listing.name} — ${listing.address}. See what the Aubrey's List community has attested about how safe it is for gluten-free and celiac diners.`,
+        description: `${listing.name}, ${listing.address}. See what the community has attested about its safety for gluten-free and celiac diners.`,
         path,
       }),
       links: [canonicalLink(path)],
@@ -371,9 +371,9 @@ function ListingDetail() {
 
               <TabsContent value="claims" className="pt-4">
                 <p className="mb-3 text-body-sm text-muted-foreground">
-                  What the community has confirmed or disputed about this restaurant. Each summary
-                  is a roll-up of the visible attestations below it — never a hidden score. Sign in
-                  to confirm or dispute any attribute.
+                  What the community has confirmed or disputed. Each summary is a roll-up of the
+                  visible attestations below it, never a hidden score. Sign in to confirm or dispute
+                  any attribute.
                 </p>
                 <CommunityClaims
                   listingId={listing.id}
@@ -386,8 +386,8 @@ function ListingDetail() {
 
               <TabsContent value="incidents" className="pt-4">
                 <p className="mb-3 text-body-sm text-muted-foreground">
-                  Recent glutened reports, most recent first. Recent ones flag the listing at the
-                  top of the page regardless of older confirmations.
+                  Glutened reports, newest first. A recent one flags the listing at the top of the
+                  page regardless of older confirmations.
                 </p>
                 <IncidentReports
                   listingId={listing.id}
@@ -410,8 +410,7 @@ function ListingNotFound() {
     <main className="mx-auto flex w-full max-w-3xl flex-col items-start gap-4 px-4 py-16 text-foreground sm:px-6">
       <h1 className="text-headline font-bold tracking-tight">Listing not found</h1>
       <p className="text-body text-muted-foreground">
-        We couldn’t find a restaurant for that link. It may have been removed, or the link may be
-        incorrect.
+        We couldn't find that restaurant. It may have been removed, or the link may be wrong.
       </p>
       <Link to="/" className="text-body-sm underline underline-offset-4">
         Back to home
