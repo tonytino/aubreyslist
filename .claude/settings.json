@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "permissions": {
+    "allow": [
+      "mcp__Linear"
+    ],
+    "ask": [
+      "mcp__Linear__delete_comment",
+      "mcp__Linear__delete_attachment",
+      "mcp__Linear__delete_status_update"
+    ]
+  }
+}
