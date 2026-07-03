@@ -5,7 +5,7 @@ import { type CreateListingResult, createListingInputSchema } from "~/listings/c
  * Client-callable add-listing server function (issues #26, #25; #141 boundary).
  *
  * The ONLY part of the add-listing write path that client code (the
- * `ManualIntakeForm` / `PlacesIntakeForm` intake forms) imports. Mirroring the
+ * add-listing wizard) imports. Mirroring the
  * lazy-`import()` `*.fn.ts` seam (`app/server/admin/set-intake-mode.fn.ts`,
  * `set-role.fn.ts`), the db-touching implementation lives in `./create` and is
  * referenced ONLY from inside the handler via a dynamic `import()`, so the
@@ -19,7 +19,7 @@ import { type CreateListingResult, createListingInputSchema } from "~/listings/c
  * Auth + rate-limit + dedup are all enforced inside `runCreateListing`'s
  * server-fn (`createListing`): anonymous -> 401, abusive burst -> 429, a blocked
  * manual duplicate -> a `DuplicateListingError` whose existing-listing link the
- * forms recover via `parseDuplicateListingError` (#25). Behaviour is identical to
+ * wizard recovers via `parseDuplicateListingError` (#25). Behaviour is identical to
  * calling the previous `createListing` export directly.
  *
  * Server-only at runtime; safe to import from client modules.

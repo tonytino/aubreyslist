@@ -101,7 +101,7 @@ export function ClaimAttestStep({
 
         <Button
           type="button"
-          variant={value === "dispute" ? "destructive" : "outline"}
+          variant={value === "dispute" ? "secondary" : "outline"}
           aria-pressed={value === "dispute"}
           onClick={() => onAnswer("dispute")}
           className="h-auto w-full justify-start gap-3 py-3 text-body"

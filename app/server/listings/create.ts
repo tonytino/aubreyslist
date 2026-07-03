@@ -73,10 +73,19 @@ interface ResolvedListing {
 }
 
 /**
- * Resolve a validated input into the canonical insert shape for the **active**
- * intake mode. The active mode is read from app settings, not taken from the
- * client: a `places` submission while intake is `manual` (or vice-versa) is
- * rejected, so the client can never bypass an admin's degradation toggle.
+ * Resolve a validated input into the canonical insert shape. The active mode is
+ * read from app settings (not taken from the client), but the rule is
+ * ASYMMETRIC — manual entry is a first-class fallback in EVERY mode (ADR-008:
+ * "the manual form must always work … it is the safety net, not dead code"):
+ *
+ * - **Manual** submissions are ALWAYS accepted, regardless of the active mode —
+ *   this powers the wizard's "Enter manually instead" fallback even while Places
+ *   is the default intake.
+ * - **Places** submissions are rejected ONLY when the admin has degraded intake
+ *   to `manual` (budget / rate-limit): disabling Places must still block the
+ *   Google-backed writes it turns off. That degradation intent is preserved.
+ *
+ * So the sole rejection is `input.mode === "places" && activeMode === "manual"`.
  *
  * In `places` mode the name/address/lat/lng are fetched from the Places provider
  * (the submitted `placeId` is the only trusted field). A provider failure
@@ -86,10 +95,8 @@ interface ResolvedListing {
 async function resolveListing(input: CreateListingInput): Promise<ResolvedListing> {
   const activeMode = await getSetting("intake_mode");
 
-  if (input.mode !== activeMode) {
-    throw new Error(
-      `Listing intake is currently in "${activeMode}" mode. Please use the ${activeMode} form to add a listing.`
-    );
+  if (input.mode === "places" && activeMode === "manual") {
+    throw new Error("Places search is currently disabled. Please add the restaurant manually.");
   }
 
   if (input.mode === "manual") {
