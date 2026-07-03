@@ -14,6 +14,7 @@ import { currentUserQuery } from "~/auth/current-user-query";
 import { SiteHeader } from "~/components/SiteHeader";
 import { Button } from "~/components/ui/button";
 import { Toaster } from "~/components/ui/sonner";
+import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { defaultSeoMeta, jsonLdScript, siteJsonLd } from "~/lib/seo";
 // Import the stylesheet as a bundled URL so the bundler emits a hashed asset
 // and rewrites the href. Referencing the source path ("/app/styles/app.css")
@@ -53,8 +54,13 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     scripts: [jsonLdScript(siteJsonLd())],
   }),
   loader: async ({ context }) => {
-    // Prefetch on the server so the header hydrates with the right auth state.
-    await context.queryClient.ensureQueryData(currentUserQuery);
+    // Prefetch on the server so the header hydrates with the right auth state,
+    // and the viewer's favorited ids so favorite controls hydrate marked without
+    // a client round-trip (anonymous viewers short-circuit to `[]`, no DB hit).
+    await Promise.all([
+      context.queryClient.ensureQueryData(currentUserQuery),
+      context.queryClient.ensureQueryData(favoriteIdsQuery),
+    ]);
   },
   component: RootComponent,
   notFoundComponent: NotFound,
