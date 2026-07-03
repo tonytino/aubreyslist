@@ -115,15 +115,16 @@ export const browseListingsInputSchema = z.object({
   /**
    * Prebuilt "quick" filter (AUB-135): one mutually-exclusive constraint on the
    * DISPLAYED safety glance — `celiac` (celiac-safe), `friendly` (gluten-friendly),
-   * or `recent` (freshly verified, no recent incident). Applied server-side as a
-   * correlated predicate AND-folded into the SAME `where` as search/taxonomy/radius,
-   * so the page, total, and pagination all reflect it (see `./quick-filter.ts`).
-   * Omitted → no quick constraint. COMPOSES with `attrs` (AND) and is orthogonal to
-   * `sort` (which only reorders).
+   * `recent` (freshly verified, no recent incident). A faceted SET (AUB-140): each
+   * selected token's correlated predicate is AND-composed and folded into the SAME
+   * `where` as search/taxonomy/radius, so the page, total, and pagination all reflect
+   * the conjunction (see `./quick-filter.ts`). Empty → no quick constraint. COMPOSES
+   * with `attrs` (AND) and is orthogonal to `sort` (which only reorders). Mutual
+   * exclusivity within the `safety` group is enforced upstream by `parseQuick`.
    */
   quick: z
-    .enum(QUICK_FILTER_VALUES as unknown as [QuickFilterValue, ...QuickFilterValue[]])
-    .optional(),
+    .array(z.enum(QUICK_FILTER_VALUES as unknown as [QuickFilterValue, ...QuickFilterValue[]]))
+    .default([]),
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 

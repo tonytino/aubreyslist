@@ -6,15 +6,17 @@ import type { SessionUser } from "~/server/auth/current-user.fn";
 import { FilterChips } from "./FilterChips";
 
 /**
- * Tests for the directory filter chip row (AUB-61, Phase 2b; extended for the
- * server-side "Saved" filter in AUB-129 / F11). The three quick chips are real
- * <button>s with `aria-pressed`, mutually exclusive, and toggle off on a second
- * click. The "Filters" chip is the entry point to the existing server-side
- * taxonomy filter (its sheet is Radix-portaled and only mounts on open, so we
- * assert on the trigger + its active-count badge here). The search leads the row
- * as a {@link SearchChip} (user feedback #5), wired to `search`/`onSearchChange`.
- * The "Saved" chip is sign-in-gated: it reads {@link currentUserQuery} (seeded
- * into the QueryClient below), so the whole row renders under a provider.
+ * Tests for the directory filter chip row (AUB-61, Phase 2b; faceted in AUB-140;
+ * extended for the server-side "Saved" filter in AUB-129 / F11). The quick chips
+ * are real <button>s with `aria-pressed`; the component is purely presentational
+ * — it renders whichever set it's handed and reports each click via
+ * `onQuickToggle` (the group-exclusivity rule lives in the parent's
+ * `applyQuickToggle` reducer, unit-tested in quick.test.ts). The "Filters" chip is
+ * the entry point to the existing server-side taxonomy filter (its sheet is
+ * Radix-portaled and only mounts on open, so we assert on the trigger + its
+ * active-count badge here). The search leads the row as a {@link SearchChip} (user
+ * feedback #5). The "Saved" chip is sign-in-gated: it reads {@link currentUserQuery}
+ * (seeded into the QueryClient below), so the whole row renders under a provider.
  */
 
 const SIGNED_IN_USER: SessionUser = {
@@ -29,7 +31,7 @@ function renderChips(
   overrides: Partial<Parameters<typeof FilterChips>[0]> = {},
   { signedIn = false }: { signedIn?: boolean } = {}
 ) {
-  const onQuickChange = vi.fn();
+  const onQuickToggle = vi.fn();
   const onToggleAttr = vi.fn();
   const onClearAttrs = vi.fn();
   const onSearchChange = vi.fn();
@@ -46,8 +48,8 @@ function renderChips(
         attrs={[]}
         onToggleAttr={onToggleAttr}
         onClearAttrs={onClearAttrs}
-        quick={null}
-        onQuickChange={onQuickChange}
+        quick={[]}
+        onQuickToggle={onQuickToggle}
         search=""
         onSearchChange={onSearchChange}
         saved={false}
@@ -56,7 +58,7 @@ function renderChips(
       />
     </QueryClientProvider>
   );
-  return { onQuickChange, onToggleAttr, onClearAttrs, onSearchChange, onSavedToggle };
+  return { onQuickToggle, onToggleAttr, onClearAttrs, onSearchChange, onSavedToggle };
 }
 
 describe("FilterChips — quick chips", () => {
@@ -68,13 +70,12 @@ describe("FilterChips — quick chips", () => {
     expect(screen.getByRole("button", { name: "Recently verified" })).toBeInTheDocument();
   });
 
-  it("reflects the active quick chip via aria-pressed (state, not colour alone)", () => {
-    renderChips({ quick: "celiac" });
+  it("reflects the active quick set via aria-pressed (state, not colour alone)", () => {
+    renderChips({ quick: ["celiac"] });
     expect(screen.getByRole("button", { name: "Celiac-safe" })).toHaveAttribute(
       "aria-pressed",
       "true"
     );
-    // Mutual exclusivity: the others are not pressed.
     expect(screen.getByRole("button", { name: "Gluten-friendly" })).toHaveAttribute(
       "aria-pressed",
       "false"
@@ -85,16 +86,34 @@ describe("FilterChips — quick chips", () => {
     );
   });
 
-  it("selecting a chip requests that single quick value", () => {
-    const { onQuickChange } = renderChips({ quick: null });
-    fireEvent.click(screen.getByRole("button", { name: "Gluten-friendly" }));
-    expect(onQuickChange).toHaveBeenCalledWith("friendly");
+  it("renders an additive combination (safety + recency) as multiple pressed chips", () => {
+    // The faceted model allows a safety choice AND recently-verified at once — both
+    // read as pressed, while the unselected safety sibling stays off.
+    renderChips({ quick: ["celiac", "recent"] });
+    expect(screen.getByRole("button", { name: "Celiac-safe" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: "Recently verified" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: "Gluten-friendly" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
   });
 
-  it("clicking the active chip toggles it back off (null)", () => {
-    const { onQuickChange } = renderChips({ quick: "recent" });
+  it("clicking a chip reports its value (the parent reducer computes the next set)", () => {
+    const { onQuickToggle } = renderChips({ quick: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Gluten-friendly" }));
+    expect(onQuickToggle).toHaveBeenCalledWith("friendly");
+  });
+
+  it("clicking an already-active chip still reports its value (toggle-off is the parent's job)", () => {
+    const { onQuickToggle } = renderChips({ quick: ["recent"] });
     fireEvent.click(screen.getByRole("button", { name: "Recently verified" }));
-    expect(onQuickChange).toHaveBeenCalledWith(null);
+    expect(onQuickToggle).toHaveBeenCalledWith("recent");
   });
 
   it("shows the active taxonomy-attribute count on the Filters chip", () => {
