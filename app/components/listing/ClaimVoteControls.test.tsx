@@ -16,6 +16,9 @@ vi.mock("~/server/attestations/attestations.fn", () => ({
   removeVote: (args: unknown) => removeVoteMock(args),
 }));
 
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
+
 import { ClaimVoteControls } from "./ClaimVoteControls";
 import { claimsQueryKey } from "./CommunityClaims";
 
@@ -67,6 +70,29 @@ describe("ClaimVoteControls", () => {
       data: { listingId: "listing-1", attribute: "dedicated_fryer", value: "confirm" },
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: claimsQueryKey("listing-1") });
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Vote recorded");
+    });
+  });
+
+  it("shows an error toast when casting a vote fails", async () => {
+    submitVoteMock.mockRejectedValueOnce(new Error("boom"));
+    renderWithQuery(
+      <ClaimVoteControls
+        listingId="listing-1"
+        attribute="dedicated_fryer"
+        claimId="claim-1"
+        viewerVote={null}
+        isSignedIn={true}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Could not record your vote. Please try again.");
+    });
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("changes an existing vote (confirm → dispute) via the same upsert path", async () => {
@@ -134,5 +160,28 @@ describe("ClaimVoteControls", () => {
       data: { listingId: "listing-1", attribute: "dedicated_fryer" },
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: claimsQueryKey("listing-1") });
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Vote retracted");
+    });
+  });
+
+  it("shows an error toast when retracting a vote fails", async () => {
+    removeVoteMock.mockRejectedValueOnce(new Error("boom"));
+    renderWithQuery(
+      <ClaimVoteControls
+        listingId="listing-1"
+        attribute="dedicated_fryer"
+        claimId="claim-1"
+        viewerVote="confirm"
+        isSignedIn={true}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Retract" }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Could not retract your vote. Please try again.");
+    });
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

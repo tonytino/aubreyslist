@@ -43,6 +43,9 @@ vi.mock("~/server/auth/current-user.fn", () => ({
   fetchCurrentUser: () => Promise.resolve(null),
 }));
 
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from "sonner";
+
 import { currentUserQuery } from "~/auth/current-user-query";
 import { PendingFavoriteHandler, __resetPendingFavoriteGuard } from "./use-pending-favorite";
 
@@ -101,6 +104,38 @@ describe("PendingFavoriteHandler", () => {
     expect(replaceSpy).toHaveBeenCalled();
     expect(window.location.pathname).toBe("/listings/listing-1");
     expect(window.location.search).toBe("?ref=email");
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Saved to your spots");
+    });
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("shows an error toast when the auto-save write fails, without a second attempt", async () => {
+    favoriteListingMock.mockRejectedValueOnce(new Error("boom"));
+    setLocation("/listings/listing-5?save=listing-5");
+    const client = newClient(signedInUser);
+
+    const first = renderHandler(client);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Could not save the spot. Please try again.");
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(favoriteListingMock).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    // Second return with the same marker AFTER the failure (back/forward or a
+    // re-nav): the one-shot guard is retained even when the write failed, so
+    // there is NO retry and NO second error toast on remount.
+    setLocation("/listings/listing-5?save=listing-5");
+    renderHandler(client);
+
+    // Give any stray effect a chance to fire, then assert nothing re-ran.
+    await Promise.resolve();
+    expect(favoriteListingMock).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("does NOT double-write on a second return with the same marker (re-mount)", async () => {

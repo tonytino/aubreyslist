@@ -1,6 +1,7 @@
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { favoriteListing } from "~/server/favorites/favorites.fn";
 import { favoriteIdsQuery } from "./favorites-query";
@@ -72,11 +73,17 @@ export function usePendingFavorite(): void {
 
     // Fire the one-shot write, then drop the marker so a refresh can't re-trigger
     // it. Strip immediately (the write is in flight); refresh the favorites query
-    // once it settles so the heart flips. The write is idempotent server-side, so
-    // a rare failure is swallowed rather than surfaced.
+    // once it settles so the heart flips. The write is idempotent server-side;
+    // either way the diner gets feedback via toast rather than a silently
+    // swallowed failure.
     void favoriteListing({ data: { listingId } })
-      .then(() => queryClient.invalidateQueries({ queryKey: favoriteIdsQuery.queryKey }))
-      .catch(() => undefined);
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: favoriteIdsQuery.queryKey });
+        toast.success("Saved to your spots");
+      })
+      .catch(() => {
+        toast.error("Could not save the spot. Please try again.");
+      });
     stripSaveParam();
   }, [searchStr, user, queryClient]);
 }

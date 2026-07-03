@@ -1,0 +1,1 @@
+- `[manual]` Added missing toast feedback for the claim-vote confirm/dispute/retract controls, the admin intake-mode toggle, the favorite-button success path, and the post-sign-in pending-favorite auto-save (which previously swallowed failures silently) — closing gaps found in a toast-feedback audit.
