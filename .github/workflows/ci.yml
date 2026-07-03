@@ -426,14 +426,23 @@ jobs:
       # build-only breakage (e.g. a stylesheet referenced by source path, or a
       # missing ?url asset import), so we assert the served HTML returns 200 and
       # that its stylesheet asset actually resolves. No database required.
+      #
+      # We smoke `/about`, NOT `/`. `/` is now the Denver directory (the home
+      # page), which needs a live DATABASE_URL — DB-free it renders the SSR error
+      # boundary, which carries no stylesheet/client-entry to assert on. `/about`
+      # is a static, DB-free content route that still renders the FULL root shell
+      # (the hashed stylesheet `<link>` + the `<script type="module">` client
+      # entry), so it exercises exactly the build-output wiring this guard exists
+      # to protect. `/api/health` below is likewise DB-free.
       - name: Smoke-test the production server
         run: |
+          SMOKE_PATH=/about
           pnpm start &
           for i in $(seq 1 30); do
-            curl -sf http://localhost:3000 >/dev/null 2>&1 && break
+            curl -sf "http://localhost:3000$SMOKE_PATH" >/dev/null 2>&1 && break
             sleep 1
           done
-          HTML=$(curl -fsS http://localhost:3000) || { echo "::error::Homepage did not return 200 from the production server"; exit 1; }
+          HTML=$(curl -fsS "http://localhost:3000$SMOKE_PATH") || { echo "::error::$SMOKE_PATH did not return 200 from the production server"; exit 1; }
           CSS=$(printf '%s' "$HTML" | grep -oE '/[^"]*\.css' | head -1)
           if [ -z "$CSS" ]; then
             echo "::error::No stylesheet <link> found in served HTML"
