@@ -32,14 +32,14 @@ function renderMenu(user: SessionUser | null) {
   const rootRoute = createRootRoute({
     component: () => <UserMenu user={user} />,
   });
-  // Link targets must exist in the tree for `Link` to resolve.
-  const adminRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/admin",
-    component: () => null,
-  });
+  // Link targets must exist in the tree for `Link` to resolve (the signed-in menu
+  // links to /favorites and, for moderator+, /admin).
+  const childPaths = ["/admin", "/favorites"] as const;
+  const children = childPaths.map((path) =>
+    createRoute({ getParentRoute: () => rootRoute, path, component: () => null })
+  );
   const router = createRouter({
-    routeTree: rootRoute.addChildren([adminRoute]),
+    routeTree: rootRoute.addChildren(children),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
   // The concrete router type doesn't match the provider's generic default; this
@@ -103,6 +103,15 @@ describe("UserMenu", () => {
     await openMenu(user);
 
     expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("shows a Favorites link to /favorites for any logged-in user", async () => {
+    const user: SessionUser = { ...baseUser, role: "user" };
+    renderMenu(user);
+    await openMenu(user);
+
+    const favoritesLink = screen.getByRole("menuitem", { name: "Favorites" });
+    expect(favoritesLink).toHaveAttribute("href", "/favorites");
   });
 
   it("shows the user's name and email in the menu label", async () => {

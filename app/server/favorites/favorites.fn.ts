@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { favoriteInputSchema } from "~/listings/favorite-input";
-import { addFavorite, getViewerFavoriteIds, removeFavorite } from "./index";
+import type { BrowseListingCard } from "~/server/listings/browse";
+import { getSetting } from "~/server/settings";
+import { addFavorite, getViewerFavoriteIds, getViewerFavorites, removeFavorite } from "./index";
 
 /**
  * Client-callable favorite server functions (issue AUB-120 / F2).
@@ -30,4 +32,20 @@ export const unfavoriteListing = createServerFn({ method: "POST" })
 /** The current viewer's favorited listing ids. See {@link getViewerFavoriteIds}. */
 export const fetchViewerFavoriteIds = createServerFn({ method: "GET" }).handler(() =>
   getViewerFavoriteIds()
+);
+
+/**
+ * The current viewer's favorited listings as browse cards (issue AUB-127 / F9) —
+ * the data behind the `/favorites` page. See {@link getViewerFavorites}.
+ *
+ * Resolves "now" ONCE on the server and reads the admin-tunable `staleness_months`
+ * setting the SAME way `fetchBrowseListings` does, then threads both into the
+ * shared card builder so the `/favorites` cards match browse exactly (glance +
+ * save-count pill). Anonymous callers resolve to `[]` with no DB hit.
+ */
+export const fetchViewerFavorites = createServerFn({ method: "GET" }).handler(
+  async (): Promise<BrowseListingCard[]> => {
+    const stalenessMonths = await getSetting("staleness_months");
+    return getViewerFavorites(new Date(), stalenessMonths);
+  }
 );
