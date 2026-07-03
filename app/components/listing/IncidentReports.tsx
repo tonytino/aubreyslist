@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Clock, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -13,9 +13,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Incident } from "~/db/schema";
 import { removeIncident, submitIncident, updateIncident } from "~/server/incidents/incidents.fn";
-import { INCIDENT_SEVERITIES, toCalendarDayString } from "~/trust/incident-recency";
+import {
+  INCIDENT_SEVERITIES,
+  type IncidentSeverity,
+  isRecentIncident,
+  toCalendarDayString,
+} from "~/trust/incident-recency";
 import { FlagControl } from "./FlagControl";
 import { formatIncidentDate, formatSeverity } from "./incident-format";
 
@@ -35,6 +41,12 @@ interface IncidentReportsProps {
    * is UX only — the writes are re-gated + ownership-checked server-side.
    */
   viewerId: string | null;
+  /**
+   * Reference instant for the per-row "Recent" recency tag (AUB-131), resolved
+   * once server-side and threaded down so SSR and client agree. Defaults to the
+   * current time when omitted.
+   */
+  now?: Date | undefined;
 }
 
 /**
@@ -50,10 +62,10 @@ interface IncidentReportsProps {
  * Owners may edit or retract their OWN reports inline (issue #32). The controls
  * appear only on the viewer's own incidents; ownership is enforced server-side.
  */
-export function IncidentReports({ listingId, incidents, viewerId }: IncidentReportsProps) {
+export function IncidentReports({ listingId, incidents, viewerId, now }: IncidentReportsProps) {
   return (
     <div className="flex flex-col gap-4">
-      <IncidentList listingId={listingId} incidents={incidents} viewerId={viewerId} />
+      <IncidentList listingId={listingId} incidents={incidents} viewerId={viewerId} now={now} />
       {viewerId !== null ? (
         <ReportIncidentDialog listingId={listingId} />
       ) : (
@@ -73,15 +85,15 @@ function IncidentList({
   listingId,
   incidents,
   viewerId,
+  now,
 }: {
   listingId: string;
   incidents: readonly Incident[];
   viewerId: string | null;
+  now?: Date | undefined;
 }) {
   if (incidents.length === 0) {
-    return (
-      <p className="text-body-sm text-muted-foreground">No “got glutened here” reports yet.</p>
-    );
+    return <p className="text-body-sm text-muted-foreground">No glutened reports yet.</p>;
   }
 
   return (
@@ -95,9 +107,76 @@ function IncidentList({
           isOwn={viewerId !== null && viewerId === incident.userId}
           // Any signed-in viewer can flag a report (#39); the server re-gates.
           isSignedIn={viewerId !== null}
+          now={now}
         />
       ))}
     </ul>
+  );
+}
+
+/**
+ * Per-severity colour + tooltip for the incident SEVERITY tag (AUB-131).
+ *
+ * Severity is a yellow→orange→red scale (Mild → Moderate → Severe) and is the
+ * coloured focus of a report row. It is NOT a safety signal — it grades how bad
+ * ONE report was — so it uses the dedicated `--color-severity-*` tokens, not the
+ * safety palette. Every tag pairs the colour with the warning-triangle icon AND
+ * the visible text label, so meaning survives greyscale; the tooltip only adds a
+ * supplementary gloss.
+ */
+const SEVERITY_TAG: Record<IncidentSeverity, { className: string; tip: string }> = {
+  mild: {
+    className: "bg-severity-mild-soft text-severity-mild border-severity-mild/35",
+    tip: "Reporter-rated severity: mild reaction.",
+  },
+  moderate: {
+    className: "bg-severity-moderate-soft text-severity-moderate border-severity-moderate/35",
+    tip: "Reporter-rated severity: moderate reaction.",
+  },
+  severe: {
+    className: "bg-severity-severe-soft text-severity-severe border-severity-severe/35",
+    tip: "Reporter-rated severity: severe reaction.",
+  },
+};
+
+/** The coloured severity tag — the far-right, highest-emphasis label in a row. */
+function SeverityTag({ severity }: { severity: IncidentSeverity }) {
+  const cfg = SEVERITY_TAG[severity];
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex cursor-help items-center gap-1 rounded-chip border px-2 py-0.5 text-caption font-bold uppercase tracking-wide focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${cfg.className}`}
+        >
+          <TriangleAlert aria-hidden="true" className="size-3.5" strokeWidth={2.25} />
+          {formatSeverity(severity)}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{cfg.tip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * The "Recent" recency tag — intentionally LOW intensity (muted outline, no red)
+ * so the coloured severity tag dominates the row. Shown only when the incident is
+ * inside the recency window (it is what flags the listing at the top of the page).
+ */
+function RecencyTag() {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex cursor-help items-center gap-1 rounded-chip border border-border bg-transparent px-2 py-0.5 text-caption font-semibold text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+        >
+          <Clock aria-hidden="true" className="size-3.5" />
+          Recent
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>Reported within the recency window, so it flags the listing.</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -107,13 +186,16 @@ function IncidentItem({
   incident,
   isOwn,
   isSignedIn,
+  now,
 }: {
   listingId: string;
   incident: Incident;
   isOwn: boolean;
   isSignedIn: boolean;
+  now?: Date | undefined;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const isRecent = isRecentIncident(incident.occurredOn, now ?? new Date());
 
   return (
     <li className="flex flex-col gap-2 rounded-xl border border-border bg-card p-gutter text-card-foreground shadow-sm">
@@ -125,15 +207,15 @@ function IncidentItem({
         />
       ) : (
         <>
+          {/* Label order (AUB-131): date (left) · recency (muted) · severity
+              (coloured, far-right). `mr-auto` on the date pushes the recency +
+              severity group to the right so severity anchors the far edge. */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-body-sm font-medium text-foreground">
+            <span className="mr-auto text-body-sm font-bold text-foreground">
               {formatIncidentDate(incident.occurredOn)}
             </span>
-            {incident.severity ? (
-              <Badge className="rounded-chip border-incident/30 bg-incident-soft text-incident">
-                {formatSeverity(incident.severity)}
-              </Badge>
-            ) : null}
+            {isRecent ? <RecencyTag /> : null}
+            {incident.severity ? <SeverityTag severity={incident.severity} /> : null}
           </div>
           {incident.note ? (
             <p className="text-body-sm text-muted-foreground">{incident.note}</p>
@@ -385,7 +467,9 @@ function ReportIncidentDialog({ listingId }: { listingId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="destructive" className="self-start">
+        {/* Right-aligned (AUB-131): `self-end` in the incident section's column
+            flex anchors the CTA to the right edge, under the report list. */}
+        <Button type="button" variant="destructive" className="self-end">
           Report an incident
         </Button>
       </DialogTrigger>
@@ -394,7 +478,7 @@ function ReportIncidentDialog({ listingId }: { listingId: string }) {
           modal open calm; the diner engages the date field themselves. */}
       <DialogContent onOpenAutoFocus={(event) => event.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Report a “got glutened here” incident</DialogTitle>
+          <DialogTitle>Report a glutened incident</DialogTitle>
           <DialogDescription>
             Share when it happened so other diners are warned. A recent report flags this listing at
             the top of the page.

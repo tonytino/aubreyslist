@@ -13,12 +13,21 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
+import { cn } from "~/lib/utils";
 import { favoriteListing, unfavoriteListing } from "~/server/favorites/favorites.fn";
 
 interface FavoriteButtonProps {
   listingId: string;
   /** The listing's name, woven into the accessible label ("Save Blue Sparrow"). */
   listingName?: string;
+  /**
+   * Optional positioning/appearance override. When provided, it REPLACES the
+   * default browse-card overlay chrome (the `absolute right-3 top-3 …
+   * bg-background/80` styling) so a different surface (e.g. the listing hero) can
+   * restyle the button — the disabled-state utilities are always kept. When
+   * omitted, the button renders with its exact browse-card styling unchanged.
+   */
+  className?: string;
 }
 
 /**
@@ -68,7 +77,7 @@ function buildReturnTo(listingId: string): string {
  * CLIENT-SAFE: imports only the client-safe `favorites.fn` seam, the query
  * modules, the UI dialog, and icons — never `~/server/favorites/index` or `db`.
  */
-export function FavoriteButton({ listingId, listingName }: FavoriteButtonProps) {
+export function FavoriteButton({ listingId, listingName, className }: FavoriteButtonProps) {
   const queryClient = useQueryClient();
   const { data: favoriteIds } = useSuspenseQuery(favoriteIdsQuery);
   const { data: currentUser } = useSuspenseQuery(currentUserQuery);
@@ -131,7 +140,14 @@ export function FavoriteButton({ listingId, listingName }: FavoriteButtonProps) 
         aria-pressed={isFavorited}
         disabled={toggleFavorite.isPending}
         onClick={handleClick}
-        className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand disabled:pointer-events-none disabled:opacity-60"
+        className={cn(
+          // Default browse-card overlay chrome — replaced wholesale when a caller
+          // (e.g. the listing hero) passes its own `className`.
+          className ??
+            "absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand",
+          // Disabled-while-pending treatment is kept regardless of the override.
+          "disabled:pointer-events-none disabled:opacity-60"
+        )}
       >
         <Heart className={`h-4 w-4 ${isFavorited ? "fill-current" : ""}`} aria-hidden="true" />
       </button>

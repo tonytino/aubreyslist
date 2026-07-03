@@ -58,7 +58,11 @@ test.describe("report an incident", () => {
   });
 
   test("submitting a got-glutened report flags the summary", async ({ page }) => {
-    await page.goto(`/listings/${listingId}`);
+    // Open straight to the Incident-reports tab (AUB-131 tabbed evidence panel);
+    // the tab is URL-backed, so `?tab=incidents` deep-links the incidents view
+    // where the empty state + report form live. The recent-incident banner sits
+    // ABOVE the tabs, so it is visible regardless of which tab is active.
+    await page.goto(`/listings/${listingId}?tab=incidents`);
     await waitForHydration(page);
 
     // The banner's distinctive user-visible warning text — the real signal a
@@ -66,7 +70,7 @@ test.describe("report an incident", () => {
     const bannerText = page.getByText(/A diner reported getting glutened here on/);
 
     // Before reporting: the honest empty state, no recent-incident banner.
-    await expect(page.getByText("No “got glutened here” reports yet.")).toBeVisible();
+    await expect(page.getByText("No glutened reports yet.")).toBeVisible();
     await expect(bannerText).toHaveCount(0);
 
     // Yesterday's UTC calendar date — unambiguously in-window and strictly past.
@@ -83,7 +87,7 @@ test.describe("report an incident", () => {
 
     // The report appears in the list (the empty state is gone). The form
     // invalidates the incidents query, so the list reflects the write.
-    await expect(page.getByText("No “got glutened here” reports yet.")).toHaveCount(0);
+    await expect(page.getByText("No glutened reports yet.")).toHaveCount(0);
     await expect(page.getByText("Cross-contamination reaction.")).toBeVisible();
 
     // The same invalidated query drives the recent-incident banner, so its

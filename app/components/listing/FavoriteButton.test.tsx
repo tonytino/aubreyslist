@@ -169,4 +169,38 @@ describe("FavoriteButton", () => {
     });
     expect(screen.getByRole("button", { name: "Save this spot" })).toBeInTheDocument();
   });
+
+  it("keeps its default browse-card styling when no className is given", () => {
+    renderButton({
+      signedIn: true,
+      favoriteIds: [],
+      ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" />,
+    });
+    const btn = screen.getByRole("button", { name: "Save Blue Sparrow" });
+    // The default overlay chrome (absolute-positioned, translucent background)…
+    expect(btn).toHaveClass("absolute", "right-3", "top-3", "bg-background/80");
+    // …plus the always-kept disabled-while-pending utilities.
+    expect(btn).toHaveClass("disabled:pointer-events-none", "disabled:opacity-60");
+  });
+
+  it("replaces the default chrome with a provided className (disabled utils kept)", () => {
+    renderButton({
+      signedIn: true,
+      favoriteIds: [],
+      ui: (
+        <FavoriteButton
+          listingId="listing-1"
+          listingName="Blue Sparrow"
+          className="size-10 rounded-full bg-black/50 text-white"
+        />
+      ),
+    });
+    const btn = screen.getByRole("button", { name: "Save Blue Sparrow" });
+    // The caller's chrome is applied…
+    expect(btn).toHaveClass("size-10", "bg-black/50", "text-white");
+    // …and the default browse-card positioning/appearance is gone.
+    expect(btn).not.toHaveClass("absolute", "right-3", "top-3", "bg-background/80");
+    // The disabled-while-pending utilities survive the override.
+    expect(btn).toHaveClass("disabled:pointer-events-none", "disabled:opacity-60");
+  });
 });

@@ -29,7 +29,10 @@ describe("ClaimTrustSummaryRow", () => {
         now={NOW}
       />
     );
-    expect(screen.getByText("No confirmations or disputes yet")).toBeInTheDocument();
+    // Honest empty state (AUB-131): an explicit "Not yet attested" lead + the
+    // "no confirmations or disputes yet" gloss — never a fabricated verdict.
+    expect(screen.getByText("Not yet attested")).toBeInTheDocument();
+    expect(screen.getByText(/no confirmations or disputes yet/)).toBeInTheDocument();
     // Never fabricates a count or a recency.
     expect(screen.queryByText(/confirm \//)).not.toBeInTheDocument();
   });

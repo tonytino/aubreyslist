@@ -150,6 +150,65 @@ describe("IncidentReports", () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 
+  describe("severity, recency + label order (AUB-131)", () => {
+    const now = new Date("2026-06-28T12:00:00Z");
+
+    it("renders the severity as a text label, never colour alone", () => {
+      renderWithQuery(
+        <IncidentReports
+          listingId="listing-1"
+          incidents={[incident({ severity: "moderate", occurredOn: "2026-06-27" })]}
+          viewerId={null}
+          now={now}
+        />
+      );
+      expect(screen.getByText("Moderate")).toBeInTheDocument();
+    });
+
+    it("flags an in-window incident with a 'Recent' recency tag", () => {
+      renderWithQuery(
+        <IncidentReports
+          listingId="listing-1"
+          incidents={[incident({ occurredOn: "2026-06-27" })]}
+          viewerId={null}
+          now={now}
+        />
+      );
+      expect(screen.getByText("Recent")).toBeInTheDocument();
+    });
+
+    it("omits the 'Recent' tag for an out-of-window incident", () => {
+      renderWithQuery(
+        <IncidentReports
+          listingId="listing-1"
+          incidents={[incident({ occurredOn: "2025-01-01" })]}
+          viewerId={null}
+          now={now}
+        />
+      );
+      expect(screen.queryByText("Recent")).not.toBeInTheDocument();
+    });
+
+    it("orders the row labels date → recency → severity (severity anchors far-right)", () => {
+      renderWithQuery(
+        <IncidentReports
+          listingId="listing-1"
+          incidents={[incident({ severity: "severe", occurredOn: "2026-06-27" })]}
+          viewerId={null}
+          now={now}
+        />
+      );
+      const date = screen.getByText("Jun 27, 2026");
+      const recency = screen.getByText("Recent");
+      const severity = screen.getByText("Severe");
+      // Document order proves the anchoring: date first, recency next, severity last.
+      expect(date.compareDocumentPosition(recency) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(
+        recency.compareDocumentPosition(severity) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    });
+  });
+
   describe("owner-only edit/retract controls (#32)", () => {
     it("shows Edit/Retract only on the viewer's OWN incident", () => {
       renderWithQuery(
