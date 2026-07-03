@@ -29,7 +29,19 @@ const env: MockEnv = {
   PREVIEW_LOGIN_SECRET: PREVIEW_SECRET,
 };
 
-vi.mock("~/env", () => ({ getEnv: () => env }));
+// When `true`, the mocked `getEnv()` THROWS — simulating an unreadable/invalid
+// env (e.g. the production build-smoke server booting with no env vars), so we
+// can assert `isPreviewLoginEnabled()` fails closed instead of propagating.
+const envControl = { throws: false };
+
+vi.mock("~/env", () => ({
+  getEnv: () => {
+    if (envControl.throws) {
+      throw new Error("env not configured (test)");
+    }
+    return env;
+  },
+}));
 
 // Mock the DB client so the preview-user upsert (find → insert) is what we
 // verify, not Drizzle/Neon itself.
@@ -53,6 +65,7 @@ function resetEnv(): void {
   env.SESSION_SECRET = SESSION_SECRET;
   env.VERCEL_ENV = "preview";
   env.PREVIEW_LOGIN_SECRET = PREVIEW_SECRET;
+  envControl.throws = false;
 }
 
 /** Parse `Set-Cookie` headers into a name→value map. */
@@ -106,6 +119,14 @@ describe("isPreviewLoginEnabled", () => {
   it("is false when VERCEL_ENV is unset — fail-closed (secret set)", () => {
     env.VERCEL_ENV = undefined;
     env.PREVIEW_LOGIN_SECRET = PREVIEW_SECRET;
+    expect(isPreviewLoginEnabled()).toBe(false);
+  });
+
+  it("is false (fails closed) when getEnv() throws — unreadable/unset env", () => {
+    // The root loader prefetches this flag on every page; an unreadable env
+    // (e.g. the build-smoke server with no vars) must disable the affordance,
+    // not throw and 500 the page.
+    envControl.throws = true;
     expect(isPreviewLoginEnabled()).toBe(false);
   });
 });

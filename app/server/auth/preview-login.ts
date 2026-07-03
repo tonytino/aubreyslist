@@ -53,7 +53,18 @@ const PREVIEW_SUB_PREFIX = "preview:";
  * Google on `http://localhost:3000` (its callback is registered).
  */
 export function isPreviewLoginEnabled(): boolean {
-  const env = getEnv();
+  // `getEnv()` validates the FULL env schema and THROWS if a required var is
+  // missing. This flag is prefetched by the root loader on every page (incl.
+  // anonymous `/about`), and is also non-essential UI — so an unreadable env
+  // must fail CLOSED (disabled) rather than 500 the page. Concretely, the
+  // production build-smoke boots the server with no env at all; without this
+  // guard that first `getEnv()` on the loader path would reject the loader.
+  let env: ReturnType<typeof getEnv>;
+  try {
+    env = getEnv();
+  } catch {
+    return false;
+  }
   const envAllowed = env.VERCEL_ENV === "preview" || env.VERCEL_ENV === "development";
   return envAllowed && Boolean(env.PREVIEW_LOGIN_SECRET && env.PREVIEW_LOGIN_SECRET.length > 0);
 }
