@@ -1,0 +1,1 @@
+- `[manual]` Added Playwright e2e coverage for the favorites flow: a signed-in user favorites a listing from a card → it appears on `/favorites` → the "Saved" directory filter narrows to exactly it → unfavoriting drops it; and an anonymous heart click opens the sign-in dialog without writing a favorite.
