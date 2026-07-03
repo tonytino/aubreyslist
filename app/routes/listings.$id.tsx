@@ -330,8 +330,11 @@ function ListingDetail() {
       </section>
 
       {/* Tabbed evidence panel (AUB-131): Community claims + Incident reports in
-          one card. The active tab is URL-backed (`?tab=`) so it is shareable and
-          survives refresh/back-forward. The shadcn Tabs primitive handles
+          one card, with short "Claims" / "Reports" trigger labels (the count
+          chips + full context make the surface unambiguous even on mobile,
+          where the grid-cols-2 TabsList is cramped for longer text). The
+          active tab is URL-backed (`?tab=`) so it is shareable and survives
+          refresh/back-forward. The shadcn Tabs primitive handles
           role=tab/tabpanel + arrow-key roving focus. Community claims ALWAYS
           render the full fixed taxonomy as attestable (#150), with honest empty
           states — never fabricated data. */}
@@ -341,13 +344,13 @@ function ListingDetail() {
             <Tabs value={tab} onValueChange={handleTabChange}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="claims">
-                  Community claims
+                  Claims
                   <span className="ml-1.5 rounded-chip bg-muted px-1.5 text-caption font-semibold text-muted-foreground">
                     {claimsCount}
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="incidents">
-                  Incident reports
+                  Reports
                   <span className="ml-1.5 rounded-chip bg-muted px-1.5 text-caption font-semibold text-muted-foreground">
                     {incidentsCount}
                   </span>

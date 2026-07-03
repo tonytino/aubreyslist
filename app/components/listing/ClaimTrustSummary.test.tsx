@@ -109,7 +109,7 @@ describe("ClaimTrustSummaryRow", () => {
     expect(screen.getByText(/Confirm if the community vouches/)).toBeInTheDocument();
   });
 
-  it("omits the clarifier for a self-evident attribute", () => {
+  it("renders the honest one-line fact for a non-headline attribute", () => {
     render(
       <ClaimTrustSummaryRow
         attribute="dedicated_fryer"
@@ -118,5 +118,8 @@ describe("ClaimTrustSummaryRow", () => {
       />
     );
     expect(screen.queryByText(/Confirm if the community vouches/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/shared fryer oil is a major cross-contamination risk/)
+    ).toBeInTheDocument();
   });
 });

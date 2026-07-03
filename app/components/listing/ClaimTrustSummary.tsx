@@ -55,9 +55,10 @@ export function ClaimTrustSummaryRow({
     <div className={`flex flex-col gap-1${className ? ` ${className}` : ""}`}>
       <p className="text-body font-semibold text-foreground">{summary.label}</p>
 
-      {/* Clarify confirm/dispute meaning for attributes that aren't self-evident
-          (e.g. "Celiac-safe"), so a vote is never ambiguous (issue #175). */}
-      {description ? <p className="text-caption text-muted-foreground">{description}</p> : null}
+      {/* Every attribute carries a one-line descriptor — clarifying confirm/dispute
+          meaning for the headline (e.g. "Celiac-safe", issue #175) and stating the
+          plain fact for the rest — so a vote is never ambiguous. */}
+      <p className="text-caption text-muted-foreground">{description}</p>
 
       {summary.hasEvidence ? (
         <p className="text-body-sm text-muted-foreground">

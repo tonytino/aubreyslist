@@ -48,21 +48,29 @@ export function claimAttributeLabel(attribute: ClaimAttribute): string {
 }
 
 /**
- * Optional one-line clarifier for what *confirm* vs *dispute* MEANS on an
- * attribute, shown under its label on the Community-claims surface. Only
- * attributes whose vote semantics aren't self-evident carry one — e.g.
- * "Celiac-safe", where a bare confirm/dispute is otherwise ambiguous ("confirm
- * what?", issue #175). Partial by design: most boolean attributes ("Dedicated
- * fryer", "GF substitutes") read for themselves and need no gloss.
+ * One-line clarifier for what *confirm* vs *dispute* MEANS on an attribute,
+ * shown under its label on the Community-claims surface (listing detail) AND
+ * as the helper copy on the matching add-listing attestation step — one
+ * source of truth for both surfaces. Keyed by the `claim_attribute` enum so
+ * the mapping is exhaustive at compile time — add a taxonomy value and
+ * TypeScript forces a description here too. `celiac_safe_vs_gluten_friendly`
+ * carries the confirm/dispute gloss a bare vote would otherwise leave
+ * ambiguous (issue #175); the other four are honest one-line facts.
  */
-export const CLAIM_ATTRIBUTE_DESCRIPTIONS: Partial<Record<ClaimAttribute, string>> = {
+export const CLAIM_ATTRIBUTE_DESCRIPTIONS: Record<ClaimAttribute, string> = {
   celiac_safe_vs_gluten_friendly:
     "Confirm if the community vouches this place is celiac-safe — it takes cross-contamination seriously. Dispute if it's only gluten-friendly.",
+  dedicated_fryer:
+    "A separate fryer for gluten-free food — shared fryer oil is a major cross-contamination risk.",
+  dedicated_gf_menu: "A dedicated gluten-free menu, not just a few marked items on the main one.",
+  off_menu_gf_on_request:
+    "Staff will prepare gluten-free options on request even if they aren't listed.",
+  gf_substitutes: "Offers gluten-free swaps like GF buns, pasta, or bread.",
 };
 
-/** The confirm/dispute clarifier for an attribute, or `null` when none is needed. */
-export function claimAttributeDescription(attribute: ClaimAttribute): string | null {
-  return CLAIM_ATTRIBUTE_DESCRIPTIONS[attribute] ?? null;
+/** The confirm/dispute clarifier for an attribute. */
+export function claimAttributeDescription(attribute: ClaimAttribute): string {
+  return CLAIM_ATTRIBUTE_DESCRIPTIONS[attribute];
 }
 
 // ---------------------------------------------------------------------------
