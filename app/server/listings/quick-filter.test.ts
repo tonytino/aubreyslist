@@ -54,11 +54,11 @@ describe("buildQuickFilterPredicate", () => {
       const { lower } = render(
         buildQuickFilterPredicate("celiac", NOW, DEFAULT_STALENESS_MONTHS) as SQL
       );
-      // The strict `> ` compares the confirm tally (left) to the dispute tally (right).
-      const gtIndex = lower.indexOf(" > ");
-      expect(gtIndex).toBeGreaterThan(-1);
-      expect(lower.indexOf("'confirm'")).toBeLessThan(gtIndex);
-      expect(lower.lastIndexOf("'dispute'")).toBeGreaterThan(gtIndex);
+      // The strict `>` compares the confirm tally (left) to the dispute tally
+      // (right): `count(*) filter (… 'confirm') > count(*) filter (… 'dispute')`.
+      // The tally-structured regex resists a refactor that reshapes the operands.
+      expect(lower).toMatch(/'confirm'\)\s*>\s*count\(\*\)\s*filter/);
+      expect(lower).not.toMatch(/'confirm'\)\s*>=\s*count\(\*\)\s*filter/); // NOT a tie-including `>=`
       // Fresh is INCLUSIVE (`>=` the cutoff), matching `isStale`'s edge rule, and a
       // null lastConfirmedAt is treated as fresh (not stale).
       expect(lower).toContain(">=");
@@ -75,8 +75,9 @@ describe("buildQuickFilterPredicate", () => {
       expect(lower).toContain("having");
       // hasEvidence: at least one attestation.
       expect(lower).toContain("> 0");
-      // The direction lock: disputes tie or outnumber confirms → gluten-friendly.
-      expect(lower).toContain("<=");
+      // The direction lock: `count(… 'confirm') <= count(… 'dispute')` — disputes
+      // tie or outnumber confirms → gluten-friendly (contested, never affirmed).
+      expect(lower).toMatch(/'confirm'\)\s*<=\s*count\(\*\)\s*filter/);
       expect(params).toContain("celiac_safe_vs_gluten_friendly");
       expect(params).toContain("visible");
     });
