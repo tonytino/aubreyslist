@@ -216,7 +216,10 @@ function BrowseListings() {
 
   // The full server page as VMs (mapped once, via the shared `listingToCardVM`).
   const allVms = useMemo(
-    () => data.cards.map((card) => listingToCardVM(card.listing, card.glance, card.distanceLabel)),
+    () =>
+      data.cards.map((card) =>
+        listingToCardVM(card.listing, card.glance, card.distanceLabel, card.favoriteCount)
+      ),
     [data.cards]
   );
 
