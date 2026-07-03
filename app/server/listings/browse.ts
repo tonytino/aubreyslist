@@ -13,6 +13,7 @@ import { BROWSE_PAGE_SIZE, MAX_PAGE_SIZE } from "~/listings/browse-params";
 import { type Coords, EARTH_RADIUS_KM, milesToKm } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
+import { getFavoriteCounts } from "~/server/favorites/index";
 import { formatDistanceLabel } from "~/trust/browse-card-format";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident, toCalendarDayString } from "~/trust/incident-recency";
@@ -100,16 +101,32 @@ export const browseListingsInputSchema = z.object({
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
-/** One browse card's data: the listing plus its precomputed trust glance. */
-export interface BrowseListingCard {
+/**
+ * The trust CORE of a browse card — the listing plus its precomputed trust
+ * glance — before any browse-only concerns (distance, save-count) are layered
+ * on. This is what the distance-agnostic {@link buildBrowseCards} produces; the
+ * browse-only fields below are attached by {@link getBrowseListings}.
+ */
+export interface BrowseListingCardCore {
   listing: Listing;
   glance: ListingTrustGlance;
+}
+
+/** One browse card's data: the trust core plus browse-only display concerns. */
+export interface BrowseListingCard extends BrowseListingCardCore {
   /**
    * A "0.4 mi" distance label, present ONLY when the page is distance-sorted
    * with a complete user coordinate pair. Reused from the distance-sort path's
    * haversine (never recomputed client-side); omitted for every other sort.
    */
   distanceLabel?: string;
+  /**
+   * PUBLIC, user-agnostic count of how many people have saved this listing —
+   * the grouped `favorites` aggregate ({@link getFavoriteCounts}), `0` when the
+   * listing has no favorites. A plain number on the (client-safe) card, never a
+   * viewer-scoped or safety signal (ADR-007): it is attributed as "saves".
+   */
+  favoriteCount: number;
 }
 
 /** A page of browse cards plus the cursor info the UI needs to paginate. */
@@ -233,18 +250,29 @@ export async function getBrowseListings(
 
   // 2. + 3. Derive each card's listing + at-a-glance trust. `buildBrowseCards`
   //    owns the trust-glance tail (celiac aggregate + recent incident → glance)
-  //    and is DISTANCE-AGNOSTIC so a distance-less caller can reuse it.
-  const baseCards = await buildBrowseCards(pageRows, now, resolvedStalenessMonths);
+  //    and is DISTANCE-AGNOSTIC so a distance-less caller can reuse it. The
+  //    public save-count aggregate is batched ALONGSIDE it (one grouped query
+  //    for the whole page, NO N+1) — a browse concern like distance, so it stays
+  //    HERE rather than in the reusable, distance-agnostic helper.
+  const pageListingIds = pageRows.map((listing) => listing.id);
+  const [baseCards, favoriteCounts] = await Promise.all([
+    buildBrowseCards(pageRows, now, resolvedStalenessMonths),
+    getFavoriteCounts(pageListingIds),
+  ]);
 
-  // Attach the "0.4 mi" distance label AFTER the (distance-agnostic) glance
-  // derivation — the label is a browse-only concern (the near-me distance sort),
-  // never part of the reusable trust glance. Spread it in conditionally so the
-  // optional prop is truly absent (not `undefined`) under
-  // `exactOptionalPropertyTypes` — and only when distance-sorting produced a
-  // value for this row.
+  // Attach the public save-count and the "0.4 mi" distance label AFTER the
+  // (distance-agnostic) glance derivation — both are browse-only concerns, never
+  // part of the reusable trust glance. The count defaults to 0 for a listing with
+  // no favorites (absent from the grouped aggregate). The distance label is spread
+  // in conditionally so the optional prop is truly absent (not `undefined`) under
+  // `exactOptionalPropertyTypes` — and only when distance-sorting produced a value
+  // for this row.
   const cards: BrowseListingCard[] = baseCards.map((card) => {
+    const favoriteCount = favoriteCounts.get(card.listing.id) ?? 0;
     const km = distanceByListing.get(card.listing.id);
-    return km !== undefined ? { ...card, distanceLabel: formatDistanceLabel(km) } : card;
+    return km !== undefined
+      ? { ...card, favoriteCount, distanceLabel: formatDistanceLabel(km) }
+      : { ...card, favoriteCount };
   });
 
   return { cards, page, pageSize, sort, total, hasMore: offset + pageRows.length < total };
@@ -277,7 +305,7 @@ export async function buildBrowseCards(
   listings: Listing[],
   now: Date,
   stalenessMonths: number
-): Promise<BrowseListingCard[]> {
+): Promise<BrowseListingCardCore[]> {
   // Nothing to build → no cards, and skip the batched signal queries (which
   // would otherwise run `IN ()`), mirroring getBrowseListings' empty-page guard.
   if (listings.length === 0) {

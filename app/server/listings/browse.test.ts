@@ -47,6 +47,10 @@ const h = vi.hoisted(() => {
     subqueryWhere: undefined as unknown,
     /** The WHERE predicate handed to the incidents query (#41 visibility). */
     incidentWhere: undefined as unknown,
+    /** Public per-listing save counts returned by the (mocked) favorites layer. */
+    favoriteCounts: new Map<string, number>(),
+    /** The listing ids passed to `getFavoriteCounts` (asserted batched, not N+1). */
+    favoriteCountIds: undefined as string[] | undefined,
   };
 
   // The page query chain (the celiac-trust JOIN form):
@@ -144,6 +148,18 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({ select: h.selectMock }),
 }));
 
+// The public save-count aggregate is a SEPARATE server-only helper
+// (`~/server/favorites`) that `getBrowseListings` batches alongside the trust
+// signals. We stub it here so this loader test stays focused on the loader's
+// composition/attachment (the aggregate's own SQL is pinned in the favorites
+// tests), and capture the ids to assert the call is batched (one call, all ids).
+vi.mock("~/server/favorites/index", () => ({
+  getFavoriteCounts: (listingIds: string[]) => {
+    h.state.favoriteCountIds = listingIds;
+    return Promise.resolve(h.state.favoriteCounts);
+  },
+}));
+
 import {
   DEFAULT_STALENESS_MONTHS,
   deriveHeadlineSafetyState,
@@ -172,6 +188,8 @@ beforeEach(() => {
   state.aggWhere = undefined;
   state.subqueryWhere = undefined;
   state.incidentWhere = undefined;
+  state.favoriteCounts = new Map();
+  state.favoriteCountIds = undefined;
   h.resetCallCounters();
 });
 
@@ -524,6 +542,52 @@ describe("getBrowseListings", () => {
     const result = await getBrowseListings({ ...baseInput, sort: "alpha" }, NOW);
 
     expect(result.cards[0]?.distanceLabel).toBeUndefined();
+  });
+
+  // --- F10: public, user-agnostic save-count attachment ---------------------
+
+  it("attaches the public favorite count to each card from the batched aggregate", async () => {
+    state.pageListings = [
+      { id: "l1", name: "A", address: "a" },
+      { id: "l2", name: "B", address: "b" },
+    ];
+    state.total = 2;
+    state.favoriteCounts = new Map([
+      ["l1", 12],
+      ["l2", 3],
+    ]);
+
+    const result = await getBrowseListings(baseInput, NOW);
+
+    expect(result.cards[0]?.favoriteCount).toBe(12);
+    expect(result.cards[1]?.favoriteCount).toBe(3);
+    // Batched (NO N+1): the count helper is called ONCE with ALL page listing ids.
+    expect(state.favoriteCountIds).toEqual(["l1", "l2"]);
+  });
+
+  it("defaults the favorite count to 0 for a listing absent from the aggregate", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+    // No entry for l1 → it has no favorites → the card reports 0 (never undefined).
+    state.favoriteCounts = new Map();
+
+    const result = await getBrowseListings(baseInput, NOW);
+
+    expect(result.cards[0]?.favoriteCount).toBe(0);
+  });
+
+  it("attaches BOTH the save count and the distance label when distance-sorting", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a", distanceKm: 0.643_738 }];
+    state.total = 1;
+    state.favoriteCounts = new Map([["l1", 7]]);
+
+    const result = await getBrowseListings(
+      { ...baseInput, sort: "distance", userLat: 39.7392, userLng: -104.9903 },
+      NOW
+    );
+
+    expect(result.cards[0]?.favoriteCount).toBe(7);
+    expect(result.cards[0]?.distanceLabel).toBe("0.4 mi");
   });
 
   // --- #34/#35: WHERE composition (search + taxonomy filter) ----------------
