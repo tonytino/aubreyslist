@@ -16,9 +16,32 @@ describe("RecentIncidentBanner", () => {
     expect(screen.getByText(/Recent incident/)).toBeInTheDocument();
   });
 
-  it("shows the absolute date of the incident", () => {
-    render(<RecentIncidentBanner occurredOn="2026-06-01" />);
+  it("keeps the pill to the plain, non-wrapping 'Recent incident' label", () => {
+    // Regression for the mobile 3-line wrap bug: the pill used to interpolate
+    // the relative recency into its own label ("Recent incident · 2 days ago"),
+    // which wrapped on narrow screens. It must now render the exact default
+    // label with a nowrap guard, and never the interpolated form.
+    const { container } = render(
+      <RecentIncidentBanner
+        occurredOn="2026-06-01"
+        nowMs={new Date("2026-06-03T00:00:00Z").getTime()}
+      />
+    );
+    expect(screen.getByText("Recent incident")).toBeInTheDocument();
+    expect(screen.queryByText(/Recent incident ·/)).not.toBeInTheDocument();
+    const pill = container.querySelector('[data-safety-state="incident"]');
+    expect(pill).toHaveClass("whitespace-nowrap");
+  });
+
+  it("shows the absolute date AND the relative recency in the body copy (not duplicated)", () => {
+    render(
+      <RecentIncidentBanner
+        occurredOn="2026-06-01"
+        nowMs={new Date("2026-06-03T00:00:00Z").getTime()}
+      />
+    );
     expect(screen.getByText(/Jun 1, 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/2 days ago/)).toBeInTheDocument();
   });
 });
 
