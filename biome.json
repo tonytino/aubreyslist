@@ -32,6 +32,7 @@
   "files": {
     "ignore": [
       "app/routeTree.gen.ts",
+      "scripts/seed-listings.generated.json",
       "node_modules",
       ".output",
       ".nitro",
