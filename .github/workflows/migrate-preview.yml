@@ -73,7 +73,11 @@ jobs:
         if: steps.cfg.outputs.enabled == 'true'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          # NEON_PROJECT_ID is an identifier, not a credential — so it can live in
+          # repo *Variables* (preferred) or Secrets; read the variable first and
+          # fall back to a secret. Leave it unset only when the API key has a single
+          # project (the resolver auto-detects it then).
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID || secrets.NEON_PROJECT_ID }}
           PREVIEW_BRANCH_NAME: preview/${{ github.head_ref }}
         run: node .github/scripts/resolve-preview-db-url.mjs
 

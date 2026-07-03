@@ -99,9 +99,12 @@ changes `db/schema.ts` or `db/migrations/**`, it resolves the preview branch's N
 connection URI via the Neon API (`.github/scripts/resolve-preview-db-url.mjs`) and
 runs `pnpm db:migrate` against it, so the preview matches the PR's schema.
 
-- **Secrets:** `NEON_API_KEY` (required) and `NEON_PROJECT_ID` (optional — the
-  resolver auto-detects a sole project). Absent → the workflow skips with a warning
-  (also the case for fork PRs, where secrets are withheld).
+- **Config:** `NEON_API_KEY` — a **repo Secret** (required; sensitive). Absent → the
+  workflow skips with a warning (also the case for fork PRs, where secrets are
+  withheld). `NEON_PROJECT_ID` — a **repo Variable** (preferred) or Secret; it's an
+  identifier, not a credential. Optional: the resolver auto-detects the project when
+  the key has a single one, but an **organization-scoped** API key needs it set
+  explicitly (its `GET /projects` 400s otherwise).
 - **Timing:** the branch lookup retries, since Vercel may still be creating the
   preview branch right after a first deploy; if it never appears the migrate step
   skips (a later push re-runs it). Idempotent — safe to re-run.

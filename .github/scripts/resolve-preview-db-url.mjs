@@ -7,10 +7,12 @@
 // preview code queries a column/table the preview DB doesn't have yet.
 //
 // The testable core is {@link resolvePreviewConnectionUri} (all I/O injected). The
-// thin {@link main} reads env, masks the URI in the log, and writes it to
-// `$GITHUB_OUTPUT` (`url` + `found`). It NEVER throws on "branch not found" — it
-// sets `found=false` so the workflow skips the migrate step gracefully (the branch
-// may still be being created by Vercel; a later push re-runs this).
+// thin {@link main} reads env, masks the URI in the log, writes it to
+// `$GITHUB_OUTPUT` (`url` + `found`), and records a step summary. It NEVER throws on
+// "branch not found" — it sets `found=false` (a loud, visible skip via a
+// `::warning::` + step summary) so a reviewer can tell the preview was NOT migrated,
+// rather than the skip hiding behind a green check. It DOES hard-fail on genuine
+// misconfiguration (e.g. an ambiguous/absent NEON_PROJECT_ID) so the fix is seen.
 
 import { appendFileSync } from "node:fs";
 
@@ -18,15 +20,42 @@ const NEON_API = "https://console.neon.tech/api/v2";
 
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** GET a Neon API path with bearer auth; throws on a non-2xx (a real API error). */
-async function neonGet(apiKey, path, fetchImpl) {
-  const res = await fetchImpl(`${NEON_API}${path}`, {
-    headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
-  });
-  if (!res.ok) {
+/**
+ * GET a Neon API path with bearer auth, JSON-decoded. Retries transient failures
+ * (network error or 5xx) with a short backoff, so a Neon hiccup doesn't fail an
+ * otherwise-good schema PR; a 4xx (client/config error, e.g. a 400 from an
+ * org-scoped key) throws immediately since retrying can't help.
+ */
+async function neonGet(
+  apiKey,
+  path,
+  fetchImpl,
+  { retries = 2, retryDelayMs = 1000, sleep = sleepMs } = {}
+) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    let res;
+    try {
+      res = await fetchImpl(`${NEON_API}${path}`, {
+        headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await sleep(retryDelayMs);
+        continue;
+      }
+      throw error;
+    }
+    if (res.ok) return res.json();
+    // 5xx is transient (retry); 4xx is a client/config error (fail fast).
+    if (res.status >= 500 && attempt < retries) {
+      await sleep(retryDelayMs);
+      continue;
+    }
     throw new Error(`Neon API GET ${path} → ${res.status} ${res.statusText}`);
   }
-  return res.json();
+  throw lastError;
 }
 
 /** Guidance appended to every project-resolution failure — the one-line fix. */
@@ -71,10 +100,12 @@ async function findBranchByName(apiKey, projectId, branchName, fetchImpl) {
 /**
  * Resolve the connection URI for the PR's preview branch.
  *
- * Retries the branch lookup (Vercel may still be creating it right after a first
- * deploy). Returns `{ found: false }` when it never appears — a graceful skip, not
- * an error. On success returns the direct (non-pooled) URI, which is what
- * drizzle-kit's migrate wants for DDL.
+ * Retries the branch lookup for up to ~3 minutes by default, because Vercel may
+ * still be creating the Neon preview branch right after a first deploy — the
+ * timing this action races. Returns `{ found: false }` when it never appears — a
+ * graceful, VISIBLE skip (see {@link main}), not an error; a later push (or a
+ * re-run once the preview deploy has finished) applies it. On success returns the
+ * direct (non-pooled) URI, which is what drizzle-kit's migrate wants for DDL.
  */
 export async function resolvePreviewConnectionUri({
   apiKey,
@@ -82,7 +113,7 @@ export async function resolvePreviewConnectionUri({
   branchName,
   fetchImpl = fetch,
   sleep = sleepMs,
-  attempts = 6,
+  attempts = 12,
   delayMs = 15000,
   log = console,
 }) {
@@ -143,27 +174,48 @@ function writeOutput(key, value) {
   if (file) appendFileSync(file, `${key}=${value}\n`);
 }
 
-/** CLI shell: read env, resolve, mask the URI, and write step outputs. */
-export async function main(env = process.env, log = console) {
-  const result = await resolvePreviewConnectionUri({
+/** Append a line to the GitHub Actions step summary (visible on the run page). */
+function writeSummary(markdown) {
+  const file = process.env.GITHUB_STEP_SUMMARY;
+  if (file) appendFileSync(file, `${markdown}\n`);
+}
+
+/**
+ * CLI shell: resolve, mask the URI, write step outputs, and record a summary.
+ * All side-effects are injected so {@link main} is testable without touching the
+ * network or the runner's files.
+ */
+export async function main({
+  env = process.env,
+  log = console,
+  resolve = resolvePreviewConnectionUri,
+  writeOut = writeOutput,
+  summarize = writeSummary,
+} = {}) {
+  const result = await resolve({
     apiKey: env.NEON_API_KEY,
     projectId: env.NEON_PROJECT_ID,
     branchName: env.PREVIEW_BRANCH_NAME,
   });
 
   if (!result.found) {
-    log.log(
-      `::warning::No Neon preview branch "${env.PREVIEW_BRANCH_NAME}" — skipping preview migrate.`
-    );
-    writeOutput("found", "false");
+    // A VISIBLE skip (minor review finding): a `::warning::` annotation + a step
+    // summary, so a green check never hides "the preview was NOT migrated".
+    const msg = `Preview database NOT migrated: Neon branch "${env.PREVIEW_BRANCH_NAME}" was not found (Vercel may still be creating it). Re-run this workflow once the preview deploy has finished, or it will apply on the next push.`;
+    log.log(`::warning::${msg}`);
+    summarize(`### ⚠️ Preview database not migrated\n\n${msg}`);
+    writeOut("found", "false");
     return 0;
   }
 
-  // Mask the URI everywhere in the log BEFORE it can be echoed, then hand it to
-  // the migrate step via a (masked) output. Never print the URI itself.
+  // Mask the URI job-wide BEFORE writing it to a step output, so the later migrate
+  // step's `DATABASE_URL` is masked in logs too. Never print the URI itself.
   log.log(`::add-mask::${result.uri}`);
-  writeOutput("url", result.uri);
-  writeOutput("found", "true");
+  writeOut("url", result.uri);
+  writeOut("found", "true");
+  summarize(
+    `### ✅ Migrating preview database\n\nApplying migrations to \`${env.PREVIEW_BRANCH_NAME}\`.`
+  );
   log.log(`Resolved preview branch (${result.branchId}) connection URI.`);
   return 0;
 }

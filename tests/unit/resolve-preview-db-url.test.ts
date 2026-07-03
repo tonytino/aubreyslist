@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 // The preview-DB resolver is plain ESM CI glue (AUB-139); import its testable core.
 // @ts-expect-error — .mjs script, no type declarations
-import { resolvePreviewConnectionUri } from "../../.github/scripts/resolve-preview-db-url.mjs";
+import * as previewDb from "../../.github/scripts/resolve-preview-db-url.mjs";
+
+const { main, resolvePreviewConnectionUri } = previewDb;
 
 /**
  * Unit tests for the Neon preview-branch connection-URI resolver. All I/O is
@@ -11,10 +13,13 @@ import { resolvePreviewConnectionUri } from "../../.github/scripts/resolve-previ
 
 const silentLog = { warn: () => {}, log: () => {}, error: () => {} };
 
-/** A canned Neon API `fetch` keyed on the request path. Missing keys → 404. */
+/**
+ * A canned Neon API `fetch` keyed on the request path. Returns the body of the
+ * FIRST route (in insertion order) whose prefix matches the path; unmatched → 404.
+ * Callers order routes most-specific-first so a longer path wins over `/projects`.
+ */
 function mockFetch(routes: Record<string, unknown>) {
   return vi.fn(async (url: string) => {
-    // Match by pathname+search against the routes map (longest-prefix wins).
     const path = url.replace("https://console.neon.tech/api/v2", "");
     for (const [prefix, body] of Object.entries(routes)) {
       if (path.startsWith(prefix)) {
@@ -168,5 +173,63 @@ describe("resolvePreviewConnectionUri", () => {
         log: silentLog,
       })
     ).rejects.toThrow(/NEON_PROJECT_ID/);
+  });
+});
+
+describe("main (side-effect ordering + skip)", () => {
+  /** Capture log + output side-effects in call order to assert their sequence. */
+  function capture() {
+    const events: Array<[string, string, string?]> = [];
+    return {
+      events,
+      log: { log: (m: string) => events.push(["log", m]), warn: () => {} },
+      writeOut: (k: string, v: string) => events.push(["out", k, v]),
+      summarize: (m: string) => events.push(["summary", m]),
+    };
+  }
+
+  it("masks the URI BEFORE writing it to the output, and marks found=true", async () => {
+    const { events, log, writeOut, summarize } = capture();
+    const resolve = async () => ({ found: true, uri: "postgresql://u:p@host/db", branchId: "b1" });
+
+    const code = await main({
+      env: { PREVIEW_BRANCH_NAME: "preview/x" },
+      log,
+      resolve,
+      writeOut,
+      summarize,
+    });
+
+    expect(code).toBe(0);
+    const maskIdx = events.findIndex(
+      (e) => e[0] === "log" && String(e[1]).startsWith("::add-mask::postgresql://")
+    );
+    const urlIdx = events.findIndex((e) => e[0] === "out" && e[1] === "url");
+    expect(maskIdx).toBeGreaterThanOrEqual(0);
+    // The mask MUST be emitted before the url output (else the migrate step leaks it).
+    expect(urlIdx).toBeGreaterThan(maskIdx);
+    expect(events).toContainEqual(["out", "url", "postgresql://u:p@host/db"]);
+    expect(events).toContainEqual(["out", "found", "true"]);
+  });
+
+  it("skips VISIBLY on found:false — a warning, no url output, found=false", async () => {
+    const { events, log, writeOut, summarize } = capture();
+    const resolve = async () => ({ found: false });
+
+    const code = await main({
+      env: { PREVIEW_BRANCH_NAME: "preview/x" },
+      log,
+      resolve,
+      writeOut,
+      summarize,
+    });
+
+    expect(code).toBe(0);
+    // Never writes a url when the branch wasn't found.
+    expect(events.some((e) => e[0] === "out" && e[1] === "url")).toBe(false);
+    expect(events).toContainEqual(["out", "found", "false"]);
+    // The skip is loud: a ::warning:: annotation + a step summary (not a silent pass).
+    expect(events.some((e) => e[0] === "log" && String(e[1]).startsWith("::warning::"))).toBe(true);
+    expect(events.some((e) => e[0] === "summary")).toBe(true);
   });
 });
