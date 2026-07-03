@@ -30,6 +30,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Orchestrating agents, reviewing agent output  | `docs/agents/orchestration.md` |
 | Redesigning a page (design → approval → code)  | `docs/agents/design-orchestration.md` |
 | Routes, pages, navigation                     | `docs/agents/routing.md`      |
+| URL/query-param state, shareable filters      | `docs/agents/url-state.md`    |
 | API endpoints, server logic                   | `docs/agents/api.md`          |
 | Database, schema, migrations                  | `docs/agents/database.md`     |
 | Tests (unit, component, E2E)                  | `docs/agents/testing.md`      |
@@ -89,6 +90,7 @@ These apply everywhere, always, with no exceptions.
 - **No `any`.** Use `unknown` and narrow it, or fix the type properly.
 - **No `@ts-ignore` or `@ts-expect-error`** without a comment explaining why.
 - **No `useEffect` + `useState` for data fetching.** Use TanStack Query.
+- **Shareable/restorable UI state lives in the URL.** Filters, sort, search, page, and selected tab go through `validateSearch` + `stripSearchParams` + `navigate` — never route-level `useState` — so the view survives refresh/back-forward/share. Only genuinely ephemeral state (toasts, loading shimmers, transient hover/selection) stays in `useState`. See `docs/agents/url-state.md`.
 - **No `db` imports in client-side code.** Database access is server-only.
 - **No raw `fetch` against Hono routes from the frontend.** Use the RPC client.
 - **No manual edits to `app/routeTree.gen.ts` or `db/migrations/`.** Both are auto-generated.
