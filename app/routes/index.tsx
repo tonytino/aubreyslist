@@ -1,18 +1,13 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AddSpotFab } from "~/components/directory/AddSpotFab";
 import { DirectoryList } from "~/components/directory/DirectoryList";
 import { DirectoryMap, type DirectoryMapEntry } from "~/components/directory/DirectoryMap";
-import {
-  DirectoryEmpty,
-  DirectoryNoResults,
-  LoadingSkeletons,
-} from "~/components/directory/DirectoryStates";
+import { DirectoryEmpty, DirectoryNoResults } from "~/components/directory/DirectoryStates";
 import { DistanceSelector } from "~/components/directory/DistanceSelector";
 import { FilterChips } from "~/components/directory/FilterChips";
 import { type DirectoryView, ViewToggle } from "~/components/directory/ViewToggle";
-import { type QuickFilter, filterByQuick } from "~/components/directory/filtering";
 import { listingToCardVM } from "~/components/listing/ListingCard";
 import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 import {
@@ -22,8 +17,9 @@ import {
   parseAttrs,
   serializeAttrs,
 } from "~/listings/browse-params";
-import { browseSearchSchema } from "~/listings/browse-search";
+import { BROWSE_SEARCH_DEFAULTS, browseSearchSchema } from "~/listings/browse-search";
 import { UNION_STATION } from "~/listings/distance";
+import type { QuickFilter } from "~/listings/quick";
 import { BROWSE_SORT_OPTIONS, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 import { useGeolocation } from "~/listings/use-geolocation";
@@ -37,21 +33,21 @@ import { fetchBrowseListings } from "~/server/listings/browse.fn";
  * land directly in the directory; the old marketing landing is retired and
  * `/listings` redirects here (AUB-116).
  *
- * DATA PATTERN — PRESERVED. The page number and the GF taxonomy filter still live
- * in the URL (`?page=`, `?attrs=`, `?sort=`, `?lat=`/`?lng=`), so the
- * server-filtered, SSR-prefetched view stays linkable/shareable and back/forward
- * works. Data is prefetched in the loader and read via `useSuspenseQuery`, so it
- * dehydrates into the SSR HTML and hydrates with no loading flash
- * (docs/agents/api.md). The trust glance + consensus taxonomy filter are computed
- * server-side (one batched query set) by `fetchBrowseListings`.
+ * DATA PATTERN — PRESERVED. Every filter that changes the result set lives in the
+ * URL (`?page=`, `?attrs=`, `?sort=`, `?q=`, `?lat=`/`?lng=`, `?radius=`, and the
+ * quick chip `?quick=`), so the server-filtered, SSR-prefetched view stays
+ * linkable/shareable and back/forward works. Data is prefetched in the loader and
+ * read via `useSuspenseQuery`, so it dehydrates into the SSR HTML and hydrates with
+ * no loading flash (docs/agents/api.md). The trust glance + consensus taxonomy
+ * filter + quick filter are all computed server-side by `fetchBrowseListings`.
  *
- * BUNDLE LAYER — CLIENT-SIDE. On top of that server page, the redesign adds
- * INSTANT client-side affordances over the ALREADY-LOADED page: a search-as-chip
- * that leads the filter row (name + address substring, no shimmer — user feedback
- * #5) and three mutually-exclusive "quick" chips (celiac / gluten-friendly /
- * recently-verified) that DO flash the bundle's ~430ms loading shimmer. The real,
- * server-side taxonomy filter is untouched — it lives behind the "Filters" chip's
- * sheet and still drives `?attrs=`.
+ * QUICK CHIPS — SERVER-SIDE (AUB-135). The three mutually-exclusive "quick" chips
+ * (celiac-safe / gluten-friendly / recently-verified) are URL-driven (`?quick=`)
+ * and applied as a server-side constraint on the DISPLAYED safety glance, so the
+ * count + pagination stay honest and an applied chip persists across refresh/share
+ * (they are NOT a client-side refinement of the loaded page). The search-as-chip
+ * leads the filter row (name + address, mirrored to `?q=` with a debounce). The
+ * taxonomy filter lives behind the "Filters" sheet and drives `?attrs=`.
  *
  * ROOM FOR RESULTS (feedback batch). The shell is FULL-WIDTH (no max-width caps,
  * #1); the app-shell nav is always visible and the directory's filter bar offsets
@@ -68,7 +64,8 @@ function browseQueryOptions(
   coords: UserCoords | undefined,
   q: string,
   radius: number,
-  origin: UserCoords
+  origin: UserCoords,
+  quick: QuickFilter
 ) {
   // Only thread coords to the server when actually distance-sorting — a non-pair
   // (or a non-distance sort) means no coords, and the server falls back to the
@@ -94,6 +91,10 @@ function browseQueryOptions(
       radius,
       origin.lat,
       origin.lng,
+      // The quick chip changes the result SET + honest total, so it is part of a
+      // page's identity — a `?quick=` view caches independently. `null` (no chip)
+      // shares one cache entry.
+      quick,
     ],
     queryFn: () =>
       fetchBrowseListings({
@@ -110,6 +111,9 @@ function browseQueryOptions(
           radiusMiles: radius,
           originLat: origin.lat,
           originLng: origin.lng,
+          // Prebuilt quick filter (AUB-135): a server-side constraint on the
+          // displayed safety glance. `null` → omit, so no quick constraint.
+          quick: quick ?? undefined,
         },
       }),
   });
@@ -126,7 +130,16 @@ export const Route = createFileRoute("/")({
     links: [canonicalLink("/")],
   }),
   validateSearch: browseSearchSchema,
-  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius } }) => ({
+  // Keep the URL clean: drop any param whose value equals its default so the bar
+  // never carries redundant `?page=1&sort=alpha&radius=25` noise at rest. The
+  // schema still re-fills those defaults on the way in (validateSearch), so a
+  // stripped URL and a shared link both hydrate to the same state. Defaults are
+  // single-sourced in `BROWSE_SEARCH_DEFAULTS` so the strip map can't drift from
+  // the schema (asserted in browse-search.test.ts).
+  search: {
+    middlewares: [stripSearchParams(BROWSE_SEARCH_DEFAULTS)],
+  },
+  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius, quick } }) => ({
     page,
     attrs,
     sort,
@@ -134,8 +147,9 @@ export const Route = createFileRoute("/")({
     lng,
     q,
     radius,
+    quick,
   }),
-  loader: async ({ context, deps: { page, attrs, sort, lat, lng, q, radius } }) => {
+  loader: async ({ context, deps: { page, attrs, sort, lat, lng, q, radius, quick } }) => {
     // SSR has no live geolocation, so the radius origin is Denver Union Station
     // (user feedback #7). The client re-anchors to the visitor's real coords once
     // granted (see BrowseListings), which refetches under a new query key.
@@ -147,40 +161,49 @@ export const Route = createFileRoute("/")({
         coordsFromSearch(lat, lng),
         q,
         radius,
-        UNION_STATION
+        UNION_STATION,
+        quick ?? null
       )
     );
   },
   component: BrowseListings,
 });
 
-/** How long the bundle flashes the loading shimmer after a quick-chip change. */
-const QUICK_SHIMMER_MS = 430;
-
 /** Debounce before a keystroke is pushed to the URL `?q=` (keeps typing smooth). */
 const SEARCH_DEBOUNCE_MS = 275;
 
 function BrowseListings() {
-  const { page, attrs: attrsParam, sort, lat, lng, q: qParam, radius } = Route.useSearch();
+  const {
+    page,
+    attrs: attrsParam,
+    sort,
+    lat,
+    lng,
+    q: qParam,
+    radius,
+    quick: quickParam,
+  } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
   const coords = coordsFromSearch(lat, lng);
+  // The active quick chip is DERIVED straight from the URL (`?quick=`), not held in
+  // local state — so refresh / back-forward / a shared link all restore it by
+  // construction, with no server-vs-client seeding divergence. `undefined` (no
+  // param) reads as `null` (no chip).
+  const quick: QuickFilter = quickParam ?? null;
   // Radius-filter ORIGIN (user feedback #7): the visitor's own coords when we have
   // them (they opted into near-me and we kept the pair in the URL), else Denver
   // Union Station — the stable downtown anchor so an anonymous, non-located
   // visitor still gets a meaningful "within N mi" filter rather than everything.
   const origin: UserCoords = coords ?? UNION_STATION;
   const { data } = useSuspenseQuery(
-    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin)
+    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin, quick)
   );
   const geo = useGeolocation();
 
-  // Client-side directory state (the bundle layer). Text search is SERVER-side
-  // (URL `?q=`); the quick chips filter the current server result set client-side.
-  // View + selection are pure UI.
-  const [quick, setQuick] = useState<QuickFilter>(null);
+  // Remaining directory UI state is purely ephemeral (not shareable): the list/map
+  // view toggle and the map's selected pin.
   const [view, setView] = useState<DirectoryView>("list");
-  const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // The search box is a controlled local input mirrored to the URL `?q=` with a
@@ -209,30 +232,31 @@ function BrowseListings() {
     }
     const timer = setTimeout(() => {
       lastPushedQ.current = next;
-      navigate({ search: { page: 1, attrs: attrsParam, sort, lat, lng, q: next, radius } });
+      // Functional updater: carry every other param forward and only touch what
+      // changes (`q`, and reset to page 1 — a page index is meaningless under a
+      // new result set). stripSearchParams drops `q` from the URL when it's "".
+      navigate({ search: (prev) => ({ ...prev, page: 1, q: next }) });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [searchInput, qParam, attrsParam, sort, lat, lng, radius, navigate]);
+  }, [searchInput, qParam, navigate]);
 
-  // The full server page as VMs (mapped once, via the shared `listingToCardVM`).
-  const allVms = useMemo(
+  // The server page as VMs (mapped once, via the shared `listingToCardVM`). Search
+  // AND the quick chip are both applied SERVER-side now, so `data.cards` is already
+  // the exact set to show — no client-side refinement.
+  const vms = useMemo(
     () => data.cards.map((card) => listingToCardVM(card.listing, card.glance, card.distanceLabel)),
     [data.cards]
   );
 
-  // The subset the directory actually shows — the quick chip refines the server
-  // result set client-side (text search already applied server-side).
-  const visibleVms = useMemo(() => filterByQuick(allVms, quick), [allVms, quick]);
-
-  // Map entries pair each visible VM with its real coordinates to project (never
+  // Map entries pair each VM with its real coordinates to project (never
   // recomputed — straight from the loaded listing).
   const mapEntries: DirectoryMapEntry[] = useMemo(() => {
     const coordsById = new Map(data.cards.map((card) => [card.listing.id, card.listing]));
-    return visibleVms.flatMap((vm) => {
+    return vms.flatMap((vm) => {
       const listing = coordsById.get(vm.id);
       return listing ? [{ vm, lat: listing.lat, lng: listing.lng }] : [];
     });
-  }, [visibleVms, data.cards]);
+  }, [vms, data.cards]);
 
   // Default the map selection to the first visible entry, and keep the selection
   // valid as the filtered set changes (so a pin never points at a hidden card).
@@ -247,22 +271,15 @@ function BrowseListings() {
     }
   }, [mapEntries, selectedId]);
 
-  // A quick-chip change flashes the bundle's ~430ms shimmer to make filtering
-  // feel responsive; search does NOT (it must feel instant). The timer is cleared
-  // on unmount / re-trigger so it never fires against a stale render.
-  const shimmerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Apply a quick chip by writing it to the URL (`?quick=`), which drives the
+  // server-side filter via the loader — resetting to page 1 (the result set
+  // changes) and preserving every other param. `null` (toggling the active chip
+  // off) omits the param. Deriving `quick` from the URL means this needs no local
+  // state; the loader refetch + Suspense handle the pending view, like every other
+  // server-side param.
   function changeQuick(next: QuickFilter) {
-    setQuick(next);
-    setLoading(true);
-    if (shimmerTimer.current) clearTimeout(shimmerTimer.current);
-    shimmerTimer.current = setTimeout(() => setLoading(false), QUICK_SHIMMER_MS);
+    navigate({ search: (prev) => ({ ...prev, page: 1, quick: next ?? undefined }) });
   }
-  useEffect(
-    () => () => {
-      if (shimmerTimer.current) clearTimeout(shimmerTimer.current);
-    },
-    []
-  );
 
   // Toggling a taxonomy attribute (the REAL server filter) always resets to page
   // 1 and preserves the search query, sort + coords, exactly as before the
@@ -271,13 +288,11 @@ function BrowseListings() {
     const next = attrs.includes(attribute)
       ? attrs.filter((a) => a !== attribute)
       : [...attrs, attribute];
-    navigate({
-      search: { page: 1, attrs: serializeAttrs(next), sort, lat, lng, q: qParam, radius },
-    });
+    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: serializeAttrs(next) }) });
   }
 
   function clearAttributes() {
-    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: qParam, radius } });
+    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "" }) });
   }
 
   /**
@@ -289,42 +304,30 @@ function BrowseListings() {
     if (next !== "distance") {
       geo.reset();
       navigate({
-        search: {
-          page: 1,
-          attrs: attrsParam,
-          sort: next,
-          lat: undefined,
-          lng: undefined,
-          q: qParam,
-          radius,
-        },
+        search: (prev) => ({ ...prev, page: 1, sort: next, lat: undefined, lng: undefined }),
       });
       return;
     }
     void geo.request().then((result) => {
       if (result.status === "success") {
         navigate({
-          search: {
+          search: (prev) => ({
+            ...prev,
             page: 1,
-            attrs: attrsParam,
             sort: "distance",
             lat: result.coords.lat,
             lng: result.coords.lng,
-            q: qParam,
-            radius,
-          },
+          }),
         });
       } else {
         navigate({
-          search: {
+          search: (prev) => ({
+            ...prev,
             page: 1,
-            attrs: attrsParam,
             sort: DEFAULT_BROWSE_SORT,
             lat: undefined,
             lng: undefined,
-            q: qParam,
-            radius,
-          },
+          }),
         });
       }
     });
@@ -338,18 +341,15 @@ function BrowseListings() {
    * coords (or Union Station), so only the radius travels here.
    */
   function changeRadius(nextRadius: number) {
-    navigate({
-      search: { page: 1, attrs: attrsParam, sort, lat, lng, q: qParam, radius: nextRadius },
-    });
+    navigate({ search: (prev) => ({ ...prev, page: 1, radius: nextRadius }) });
   }
 
-  // The no-results CTA clears EVERYTHING: the client quick chip AND the
-  // server-side search + taxonomy filter (resets to page 1 with no `?q=`/`?attrs=`).
+  // The no-results CTA clears EVERY filter — the quick chip AND the server-side
+  // search + taxonomy filter (resets to page 1 with no `?q=`/`?attrs=`/`?quick=`).
   function clearAll() {
-    setQuick(null);
     setSearchInput("");
     lastPushedQ.current = "";
-    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: "", radius } });
+    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "", quick: undefined }) });
   }
 
   // Whether any filter is active across BOTH layers — decides empty vs no-results.
@@ -390,9 +390,6 @@ function BrowseListings() {
                 prompting={geo.status === "prompting"}
                 geoError={geo.error}
                 data={data}
-                attrsParam={attrsParam}
-                coords={coords}
-                radius={radius}
               />
             }
           />
@@ -413,9 +410,7 @@ function BrowseListings() {
           the last card clears the viewport-fixed FAB. `relative` still anchors the
           map's absolutely-positioned backdrop + pins to its bounded wrapper. */}
       <div className="relative bg-background px-gutter pb-28 pt-4">
-        {loading ? (
-          <LoadingSkeletons />
-        ) : visibleVms.length === 0 ? (
+        {vms.length === 0 ? (
           anyFilterActive ? (
             <DirectoryNoResults onClearAll={clearAll} />
           ) : (
@@ -432,7 +427,7 @@ function BrowseListings() {
             <DirectoryMap entries={mapEntries} selectedId={selectedId} onSelect={setSelectedId} />
           </div>
         ) : (
-          <DirectoryList cards={visibleVms} />
+          <DirectoryList cards={vms} />
         )}
       </div>
 
@@ -447,10 +442,10 @@ function BrowseListings() {
 /**
  * The server-driven sort + pagination controls, hosted inside the Filters sheet.
  *
- * The redesign's chips/search are CLIENT-side over the loaded page; these are the
- * SERVER capabilities the bundle doesn't surface visibly but which must stay
- * reachable and URL-driven (`?sort=`, `?page=`). Keeping them here preserves the
- * shareable/back-forward-correct behaviour without cluttering the mobile header.
+ * These are the SERVER capabilities the redesign doesn't surface as visible chips
+ * but which must stay reachable and URL-driven (`?sort=`, `?page=`). Keeping them
+ * here preserves the shareable/back-forward-correct behaviour without cluttering
+ * the mobile header.
  */
 function DirectoryServerControls({
   sort,
@@ -458,24 +453,15 @@ function DirectoryServerControls({
   prompting,
   geoError,
   data,
-  attrsParam,
-  coords,
-  radius,
 }: {
   sort: BrowseSort;
   onSortChange: (next: BrowseSort) => void;
   prompting: boolean;
   geoError: string | null;
   data: BrowseListingsPage;
-  attrsParam: string;
-  coords: UserCoords | undefined;
-  /** Current distance-radius filter (miles) — preserved across pagination. */
-  radius: number;
 }) {
   const hasPrev = data.page > 1;
   const hasNext = data.hasMore;
-  const lat = data.sort === "distance" ? coords?.lat : undefined;
-  const lng = data.sort === "distance" ? coords?.lng : undefined;
 
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-4">
@@ -517,7 +503,7 @@ function DirectoryServerControls({
           {hasPrev ? (
             <Link
               to="/"
-              search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort, lat, lng, radius }}
+              search={(prev) => ({ ...prev, page: data.page - 1 })}
               className="font-semibold text-brand hover:text-brand-strong"
             >
               ← Previous
@@ -529,7 +515,7 @@ function DirectoryServerControls({
           {hasNext ? (
             <Link
               to="/"
-              search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort, lat, lng, radius }}
+              search={(prev) => ({ ...prev, page: data.page + 1 })}
               className="font-semibold text-brand hover:text-brand-strong"
             >
               Next →

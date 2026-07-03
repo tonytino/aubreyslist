@@ -24,19 +24,17 @@ export async function waitForHydration(page: Page): Promise<void> {
  *
  *  1. Hydration — until the client bundle runs the controls' onChange handlers
  *     aren't wired (see {@link waitForHydration}).
- *  2. The route's initial search-param canonicalization. On hydration the browse
- *     route normalizes its URL to the full, validated search shape
- *     (`?page=1&attrs=&sort=alpha`) via a `navigate`. That navigation lands a beat
- *     AFTER hydration; a `selectOption`/`check` fired in that window is clobbered
- *     by the in-flight canonicalization (the URL snaps back to the default
- *     `sort=alpha`), which is the flake. Waiting for the canonical `sort=` param to
- *     appear proves that navigation settled, so the next interaction sticks.
+ *  2. The directory's controls being interactive. The route strips default params
+ *     from the URL (`stripSearchParams`), so a bare visit settles to `/` with NO
+ *     query string — there is no longer a `?sort=alpha…` canonicalization to wait
+ *     on (that was the old flake). We instead wait for the search chip, which only
+ *     renders once the directory chrome is mounted, as the readiness signal.
  *
  * Test-only timing guard; the sort/filter features themselves are correct.
  */
 export async function waitForBrowseReady(page: Page): Promise<void> {
   await waitForHydration(page);
-  await expect(page).toHaveURL(/sort=/);
+  await expect(page.getByRole("button", { name: "Search restaurants" })).toBeVisible();
 }
 
 /**

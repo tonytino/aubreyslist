@@ -79,9 +79,11 @@ test.describe("near me — geolocation denied", () => {
 
     await sort.selectOption("distance");
 
-    // Graceful fallback: the URL reverts to the alphabetical default (no coords),
-    // and an accessible alert explains why — never a crash or hang.
-    await expect(page).toHaveURL(/sort=alpha/);
+    // Graceful fallback: the sort reverts to the alphabetical default — which
+    // stripSearchParams drops from the URL — so `sort` disappears entirely (no
+    // `sort=distance`, no coords), and an accessible alert explains why. Never a
+    // crash or hang.
+    await expect(page).not.toHaveURL(/sort=/);
     await expect(page).not.toHaveURL(/lat=/);
     await expect(page.getByRole("alert")).toContainText(/denied/i);
 
