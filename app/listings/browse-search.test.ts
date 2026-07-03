@@ -22,6 +22,7 @@ describe("browseSearchSchema", () => {
       lat: undefined,
       lng: undefined,
       radius: DEFAULT_RADIUS_MILES,
+      saved: false,
     });
   });
 
@@ -35,6 +36,7 @@ describe("browseSearchSchema", () => {
         lat: 39.7392,
         lng: -104.9903,
         radius: 10,
+        saved: true,
       })
     ).toEqual({
       page: 3,
@@ -44,6 +46,7 @@ describe("browseSearchSchema", () => {
       lat: 39.7392,
       lng: -104.9903,
       radius: 10,
+      saved: true,
     });
   });
 
