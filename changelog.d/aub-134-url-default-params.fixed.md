@@ -1,0 +1,1 @@
+- `[manual]` The directory URL no longer carries redundant default query params — `?page=1&sort=alpha&radius=25` and other default-valued params are stripped (TanStack Router `stripSearchParams`), so a bare visit and a shared link both read as a clean `/`. Pagination links now also preserve the active `?q=` search instead of silently dropping it.

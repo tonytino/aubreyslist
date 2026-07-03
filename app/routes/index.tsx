@@ -1,5 +1,5 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AddSpotFab } from "~/components/directory/AddSpotFab";
 import { DirectoryList } from "~/components/directory/DirectoryList";
@@ -22,7 +22,7 @@ import {
   parseAttrs,
   serializeAttrs,
 } from "~/listings/browse-params";
-import { browseSearchSchema } from "~/listings/browse-search";
+import { BROWSE_SEARCH_DEFAULTS, browseSearchSchema } from "~/listings/browse-search";
 import { UNION_STATION } from "~/listings/distance";
 import { BROWSE_SORT_OPTIONS, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAttribute } from "~/listings/taxonomy";
@@ -126,6 +126,15 @@ export const Route = createFileRoute("/")({
     links: [canonicalLink("/")],
   }),
   validateSearch: browseSearchSchema,
+  // Keep the URL clean: drop any param whose value equals its default so the bar
+  // never carries redundant `?page=1&sort=alpha&radius=25` noise at rest. The
+  // schema still re-fills those defaults on the way in (validateSearch), so a
+  // stripped URL and a shared link both hydrate to the same state. Defaults are
+  // single-sourced in `BROWSE_SEARCH_DEFAULTS` so the strip map can't drift from
+  // the schema (asserted in browse-search.test.ts).
+  search: {
+    middlewares: [stripSearchParams(BROWSE_SEARCH_DEFAULTS)],
+  },
   loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius } }) => ({
     page,
     attrs,
@@ -209,10 +218,13 @@ function BrowseListings() {
     }
     const timer = setTimeout(() => {
       lastPushedQ.current = next;
-      navigate({ search: { page: 1, attrs: attrsParam, sort, lat, lng, q: next, radius } });
+      // Functional updater: carry every other param forward and only touch what
+      // changes (`q`, and reset to page 1 — a page index is meaningless under a
+      // new result set). stripSearchParams drops `q` from the URL when it's "".
+      navigate({ search: (prev) => ({ ...prev, page: 1, q: next }) });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [searchInput, qParam, attrsParam, sort, lat, lng, radius, navigate]);
+  }, [searchInput, qParam, navigate]);
 
   // The full server page as VMs (mapped once, via the shared `listingToCardVM`).
   const allVms = useMemo(
@@ -271,13 +283,11 @@ function BrowseListings() {
     const next = attrs.includes(attribute)
       ? attrs.filter((a) => a !== attribute)
       : [...attrs, attribute];
-    navigate({
-      search: { page: 1, attrs: serializeAttrs(next), sort, lat, lng, q: qParam, radius },
-    });
+    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: serializeAttrs(next) }) });
   }
 
   function clearAttributes() {
-    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: qParam, radius } });
+    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "" }) });
   }
 
   /**
@@ -289,42 +299,30 @@ function BrowseListings() {
     if (next !== "distance") {
       geo.reset();
       navigate({
-        search: {
-          page: 1,
-          attrs: attrsParam,
-          sort: next,
-          lat: undefined,
-          lng: undefined,
-          q: qParam,
-          radius,
-        },
+        search: (prev) => ({ ...prev, page: 1, sort: next, lat: undefined, lng: undefined }),
       });
       return;
     }
     void geo.request().then((result) => {
       if (result.status === "success") {
         navigate({
-          search: {
+          search: (prev) => ({
+            ...prev,
             page: 1,
-            attrs: attrsParam,
             sort: "distance",
             lat: result.coords.lat,
             lng: result.coords.lng,
-            q: qParam,
-            radius,
-          },
+          }),
         });
       } else {
         navigate({
-          search: {
+          search: (prev) => ({
+            ...prev,
             page: 1,
-            attrs: attrsParam,
             sort: DEFAULT_BROWSE_SORT,
             lat: undefined,
             lng: undefined,
-            q: qParam,
-            radius,
-          },
+          }),
         });
       }
     });
@@ -338,9 +336,7 @@ function BrowseListings() {
    * coords (or Union Station), so only the radius travels here.
    */
   function changeRadius(nextRadius: number) {
-    navigate({
-      search: { page: 1, attrs: attrsParam, sort, lat, lng, q: qParam, radius: nextRadius },
-    });
+    navigate({ search: (prev) => ({ ...prev, page: 1, radius: nextRadius }) });
   }
 
   // The no-results CTA clears EVERYTHING: the client quick chip AND the
@@ -349,7 +345,7 @@ function BrowseListings() {
     setQuick(null);
     setSearchInput("");
     lastPushedQ.current = "";
-    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: "", radius } });
+    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "" }) });
   }
 
   // Whether any filter is active across BOTH layers — decides empty vs no-results.
@@ -390,9 +386,6 @@ function BrowseListings() {
                 prompting={geo.status === "prompting"}
                 geoError={geo.error}
                 data={data}
-                attrsParam={attrsParam}
-                coords={coords}
-                radius={radius}
               />
             }
           />
@@ -458,24 +451,15 @@ function DirectoryServerControls({
   prompting,
   geoError,
   data,
-  attrsParam,
-  coords,
-  radius,
 }: {
   sort: BrowseSort;
   onSortChange: (next: BrowseSort) => void;
   prompting: boolean;
   geoError: string | null;
   data: BrowseListingsPage;
-  attrsParam: string;
-  coords: UserCoords | undefined;
-  /** Current distance-radius filter (miles) — preserved across pagination. */
-  radius: number;
 }) {
   const hasPrev = data.page > 1;
   const hasNext = data.hasMore;
-  const lat = data.sort === "distance" ? coords?.lat : undefined;
-  const lng = data.sort === "distance" ? coords?.lng : undefined;
 
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-4">
@@ -517,7 +501,7 @@ function DirectoryServerControls({
           {hasPrev ? (
             <Link
               to="/"
-              search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort, lat, lng, radius }}
+              search={(prev) => ({ ...prev, page: data.page - 1 })}
               className="font-semibold text-brand hover:text-brand-strong"
             >
               ← Previous
@@ -529,7 +513,7 @@ function DirectoryServerControls({
           {hasNext ? (
             <Link
               to="/"
-              search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort, lat, lng, radius }}
+              search={(prev) => ({ ...prev, page: data.page + 1 })}
               className="font-semibold text-brand hover:text-brand-strong"
             >
               Next →

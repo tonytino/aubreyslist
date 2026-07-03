@@ -30,9 +30,9 @@ test("browse directory renders for anonymous visitors", async ({ page }) => {
 
 test("/listings redirects to the directory at /", async ({ page }) => {
   // The old directory URL now permanently redirects to `/` (AUB-116). The
-  // beforeLoad redirect forwards the validated search, so the landing URL carries
-  // the schema's canonical defaults (e.g. `/?page=1&attrs=&q=&sort=alpha&radius=25`);
-  // tolerate that trailing query string rather than asserting a bare `/`.
+  // beforeLoad redirect forwards the validated search, but `stripSearchParams` on
+  // the target route drops every param equal to its default, so a bare `/listings`
+  // lands on a clean `/`. Tolerate either a bare `/` or a trailing query string.
   await page.goto("/listings");
   await expect(page).toHaveURL(/^[^?]*\/(\?|$)/);
   await expect(page).not.toHaveURL(/\/listings/);
@@ -68,9 +68,11 @@ test("browse sort control is labeled and drives the URL", async ({ page }) => {
   await sort.selectOption("recency");
   await expect(page).toHaveURL(/sort=recency/);
 
-  // Back to the default returns the list to alphabetical order.
+  // Back to the default returns the list to alphabetical order AND strips `sort`
+  // from the URL entirely (stripSearchParams drops any param equal to its default),
+  // so the bar reads as a clean `/` rather than carrying redundant `?sort=alpha`.
   await sort.selectOption("alpha");
-  await expect(page).toHaveURL(/sort=alpha/);
+  await expect(page).not.toHaveURL(/sort=/);
 });
 
 /**
