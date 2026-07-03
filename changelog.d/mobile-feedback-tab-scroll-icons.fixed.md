@@ -1,0 +1,3 @@
+- `[manual]` Fixed switching the listing-detail evidence tabs (Claims/Reports) scroll-jumping mobile viewers back to the hero — the `?tab=` navigation now passes `resetScroll: false`, since it's client-only view state that changes no data.
+- `[manual]` Fixed the search chip needing a double tap to raise the keyboard on iOS Safari — focus now runs synchronously (`flushSync`) within the tap's user gesture instead of a deferred `requestAnimationFrame` callback.
+- `[manual]` Fixed the remaining gluten-friendly icons that still used lucide's generic `Leaf` — the "Gluten-friendly" quick chip, the directory map pin, and the claim wizard's headline Dispute button — so every surface now renders the branded `WheatStrike` glyph, matching `SafetySignal` (AUB-133).

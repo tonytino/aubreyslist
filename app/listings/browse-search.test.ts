@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_RADIUS_MILES } from "~/listings/distance";
 import { DEFAULT_BROWSE_SORT } from "~/listings/sort";
-import { BROWSE_SEARCH_DEFAULTS, browseSearchSchema } from "./browse-search";
+import {
+  BROWSE_SEARCH_DEFAULTS,
+  type BrowseSearchLike,
+  browseSearchSchema,
+  isAnyBrowseFilterActive,
+} from "./browse-search";
 
 /**
  * Unit tests for the shared browse/directory search-param schema. This schema is
@@ -109,5 +114,52 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({ radius: 7 }).radius).toBe(DEFAULT_RADIUS_MILES);
     // ...and a non-numeric value trips `.catch` back to the default.
     expect(browseSearchSchema.parse({ radius: "far" }).radius).toBe(DEFAULT_RADIUS_MILES);
+  });
+});
+
+/**
+ * Unit tests for {@link isAnyBrowseFilterActive} — the shared predicate that
+ * gates the directory's "Reset" chip (repo-owner mobile feedback). Covers the
+ * default-at-rest case, one-param-at-a-time activation across the WHOLE browse
+ * param set (search, quick, taxonomy attrs, saved mode, sort, radius, page, and
+ * the near-me coordinate pair), and that it returns to `false` once every param
+ * is back at its default.
+ */
+describe("isAnyBrowseFilterActive", () => {
+  const AT_DEFAULT: BrowseSearchLike = {
+    page: BROWSE_SEARCH_DEFAULTS.page,
+    attrs: BROWSE_SEARCH_DEFAULTS.attrs,
+    q: BROWSE_SEARCH_DEFAULTS.q,
+    sort: BROWSE_SEARCH_DEFAULTS.sort,
+    radius: BROWSE_SEARCH_DEFAULTS.radius,
+    quick: BROWSE_SEARCH_DEFAULTS.quick,
+    saved: BROWSE_SEARCH_DEFAULTS.saved,
+  };
+
+  it("is false when every param is at its default (a bare visit)", () => {
+    expect(isAnyBrowseFilterActive(AT_DEFAULT)).toBe(false);
+  });
+
+  it("is false when lat/lng are explicitly undefined (the always-optional default)", () => {
+    expect(isAnyBrowseFilterActive({ ...AT_DEFAULT, lat: undefined, lng: undefined })).toBe(false);
+  });
+
+  it.each<[string, Partial<BrowseSearchLike>]>([
+    ["page", { page: 2 }],
+    ["attrs", { attrs: "celiac_safe_vs_gluten_friendly" }],
+    ["q", { q: "pizza" }],
+    ["sort", { sort: "trust" }],
+    ["radius", { radius: 10 }],
+    ["quick", { quick: "celiac" }],
+    ["saved", { saved: true }],
+    ["a near-me coordinate pair", { lat: 39.7392, lng: -104.9903 }],
+  ])("is true when only %s is off its default", (_label, override) => {
+    expect(isAnyBrowseFilterActive({ ...AT_DEFAULT, ...override })).toBe(true);
+  });
+
+  it("is true when multiple params are stacked", () => {
+    expect(
+      isAnyBrowseFilterActive({ ...AT_DEFAULT, q: "pizza", saved: true, sort: "recency" })
+    ).toBe(true);
   });
 });

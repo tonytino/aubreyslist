@@ -1,0 +1,1 @@
+- `[manual]` Added a "Reset" chip to the end of the directory's filter row, shown only when search, quick filters, taxonomy attrs, saved mode, sort, radius, or page is off its default, that clears all of them back to a bare `/` in one tap.

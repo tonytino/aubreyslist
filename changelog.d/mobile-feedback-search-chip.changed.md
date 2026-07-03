@@ -1,0 +1,1 @@
+- `[manual]` Changed the collapsed, empty search chip to render icon-only (was icon + "Search restaurants" text), reading as a compact chip that matches the rest of the filter row; the accessible name (`aria-label`) and the applied (query-showing) state are unchanged.

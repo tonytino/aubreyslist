@@ -1,5 +1,6 @@
-import { ArrowLeft, Check, HelpCircle, Leaf, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, Check, HelpCircle, ShieldCheck, X } from "lucide-react";
 import { SafetySignal } from "~/components/SafetySignal";
+import { WheatStrike } from "~/components/icons/WheatStrike";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import type { ClaimAttribute } from "~/listings/taxonomy";
@@ -18,8 +19,9 @@ import type { Answer } from "./AddListingWizard";
  * The HEADLINE attribute (`celiac_safe_vs_gluten_friendly`) is special — a bare
  * confirm/dispute is otherwise ambiguous — so ONLY it shows the "what your answer
  * records" safety preview (Confirm → celiac-safe, Dispute → gluten-friendly) and
- * carries the safety icons (green shield-check / amber leaf) on its buttons. The
- * other four are plain facts: neutral check / ✗ icons, NO safety colour.
+ * carries the safety icons (green shield-check / amber struck-wheat) on its
+ * buttons. The other four are plain facts: neutral check / ✗ icons, NO safety
+ * colour.
  *
  * Every attribute's helper copy comes from {@link claimAttributeDescription} —
  * the same shared one-liners the listing-detail Community-claims surface
@@ -91,7 +93,9 @@ export function ClaimAttestStep({
           className="h-auto w-full justify-start gap-3 py-3 text-body"
         >
           {isHeadline ? (
-            <Leaf
+            // The branded "gluten struck out" glyph — the SAME icon the adjacent
+            // SafetySignal preview renders for gluten-friendly (AUB-133).
+            <WheatStrike
               aria-hidden="true"
               className={cn("size-5 shrink-0", value !== "dispute" && "text-gluten-friendly")}
               strokeWidth={2.25}

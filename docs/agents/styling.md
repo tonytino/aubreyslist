@@ -117,7 +117,7 @@ label** for all four states:
 | State | Label | Icon shape | Meaning |
 | --- | --- | --- | --- |
 | `celiac-safe` | "Celiac-safe" | shield + check | headline trust state |
-| `gluten-friendly` | "Gluten-friendly" | leaf | GF-ish only — *not* safe |
+| `gluten-friendly` | "Gluten-friendly" | struck-out wheat (brand `WheatStrike`) | GF-ish only — *not* safe |
 | `stale` | "Needs update" | clock | outside the staleness window |
 | `incident` | "Recent incident" | warning triangle | recent "got glutened" harm |
 
@@ -192,6 +192,10 @@ Conventions:
   <Circle className="size-2 fill-current" aria-hidden="true" />
   ```
 
-`SafetySignal` uses lucide icons — one distinct, greyscale-survivable shape per
-state (`ShieldCheck` / `Leaf` / `Clock` / `TriangleAlert`). Keep them distinct
-if you ever revisit the mapping; the shape is load-bearing, not just the colour.
+`SafetySignal` uses one distinct, greyscale-survivable shape per state
+(`ShieldCheck` / the branded `WheatStrike` glyph (AUB-133) / `Clock` /
+`TriangleAlert`). Keep them distinct if you ever revisit the mapping; the shape
+is load-bearing, not just the colour. Any OTHER surface that represents the
+gluten-friendly state with an icon (map pins, quick chips, wizard buttons) must
+use the same `WheatStrike` glyph (`app/components/icons/WheatStrike.tsx`) — never
+a generic lucide `Leaf`.

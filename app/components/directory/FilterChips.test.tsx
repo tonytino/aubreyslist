@@ -36,6 +36,7 @@ function renderChips(
   const onClearAttrs = vi.fn();
   const onSearchChange = vi.fn();
   const onSavedToggle = vi.fn();
+  const onResetAll = vi.fn();
 
   // Seed the current-user suspense source so `useSuspenseQuery(currentUserQuery)`
   // (inside the Saved chip) resolves synchronously without calling a server fn.
@@ -54,11 +55,13 @@ function renderChips(
         onSearchChange={onSearchChange}
         saved={false}
         onSavedToggle={onSavedToggle}
+        isAnyFilterActive={false}
+        onResetAll={onResetAll}
         {...overrides}
       />
     </QueryClientProvider>
   );
-  return { onQuickToggle, onToggleAttr, onClearAttrs, onSearchChange, onSavedToggle };
+  return { onQuickToggle, onToggleAttr, onClearAttrs, onSearchChange, onSavedToggle, onResetAll };
 }
 
 describe("FilterChips — quick chips", () => {
@@ -185,5 +188,34 @@ describe("FilterChips — Saved chip (AUB-129 / F11)", () => {
     // regardless of the URL param.
     renderChips({ saved: true }, { signedIn: false });
     expect(screen.getByRole("button", { name: "Saved" })).toHaveAttribute("aria-pressed", "false");
+  });
+});
+
+describe("FilterChips — Reset chip (repo-owner mobile feedback)", () => {
+  it("is hidden when every browse param is at its default", () => {
+    renderChips({ isAnyFilterActive: false });
+    expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
+  });
+
+  it("is visible when any browse param is active, as text (never icon-only)", () => {
+    renderChips({ isAnyFilterActive: true });
+    const reset = screen.getByRole("button", { name: "Reset" });
+    expect(reset).toBeInTheDocument();
+    expect(reset).toHaveTextContent("Reset");
+  });
+
+  it("renders LAST in the chip row, after the quick chips", () => {
+    renderChips({ isAnyFilterActive: true });
+    const reset = screen.getByRole("button", { name: "Reset" });
+    const lastQuickChip = screen.getByRole("button", { name: "Recently verified" });
+    expect(
+      reset.compareDocumentPosition(lastQuickChip) & Node.DOCUMENT_POSITION_PRECEDING
+    ).toBeTruthy();
+  });
+
+  it("clicking Reset calls onResetAll", () => {
+    const { onResetAll } = renderChips({ isAnyFilterActive: true });
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(onResetAll).toHaveBeenCalledTimes(1);
   });
 });

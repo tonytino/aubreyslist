@@ -197,7 +197,15 @@ function ListingDetail() {
   const handleTabChange = (value: string) => {
     // Tab is client-only view state — it changes no server input, so we only
     // rewrite the `?tab=` param and never touch loaderDeps or reset a page index.
-    navigate({ search: (prev) => ({ ...prev, tab: value as ListingDetailTab }) });
+    // `resetScroll: false` because the evidence panel sits well below the hero (a
+    // control below the fold rewriting a client-only param), and TanStack Router
+    // resets scroll to top on navigation by default — without this, switching
+    // tabs would yank a mobile viewer back up to the hero on every tap (repo-owner
+    // mobile feedback).
+    navigate({
+      search: (prev) => ({ ...prev, tab: value as ListingDetailTab }),
+      resetScroll: false,
+    });
   };
 
   return (

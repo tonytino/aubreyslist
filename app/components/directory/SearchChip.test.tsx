@@ -9,10 +9,11 @@ import { SearchChip } from "./SearchChip";
  */
 
 describe("SearchChip", () => {
-  it("renders a collapsed 'Search' chip when empty", () => {
+  it("renders a collapsed, ICON-ONLY chip when empty (repo-owner mobile feedback)", () => {
     render(<SearchChip value="" onChange={() => {}} />);
     const chip = screen.getByRole("button", { name: "Search restaurants" });
-    expect(chip).toHaveTextContent("Search restaurants");
+    // The accessible name comes entirely from aria-label — no visible label text.
+    expect(chip).toHaveTextContent("");
     expect(chip).toHaveAttribute("aria-expanded", "false");
     // No text input while collapsed.
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
@@ -23,6 +24,16 @@ describe("SearchChip", () => {
     fireEvent.click(screen.getByRole("button", { name: "Search restaurants" }));
     const input = screen.getByRole("searchbox", { name: "Search restaurants" });
     expect(input).toHaveAttribute("placeholder", "Search restaurants");
+  });
+
+  it("focuses the input synchronously on click (iOS double-tap fix)", () => {
+    // Regression test for the iOS Safari double-tap bug: focus must land inside
+    // the SAME synchronous click handler, not a deferred `requestAnimationFrame`
+    // callback. jsdom never fires a real rAF during a synchronous `fireEvent`, so
+    // this only passes if `expand()` focuses synchronously (via `flushSync`).
+    render(<SearchChip value="" onChange={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Search restaurants" }));
+    expect(screen.getByRole("searchbox", { name: "Search restaurants" })).toHaveFocus();
   });
 
   it("reports each keystroke to onChange while expanded", () => {
