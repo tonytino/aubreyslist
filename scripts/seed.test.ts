@@ -136,6 +136,28 @@ describe("seedListings", () => {
     });
   });
 
+  it("prefers a baked googleMapsUri (Google's share link) as the persisted mapsUrl", async () => {
+    const { db, inserts } = makeFakeDb({ listingReturning: [[{ id: "listing-1" }]] });
+
+    await seedListings([listing({ googleMapsUri: "https://maps.google.com/?cid=42" })], { db });
+
+    const listingInsert = inserts.find((i) => i.table === listings);
+    expect(listingInsert?.values).toMatchObject({
+      mapsUrl: "https://maps.google.com/?cid=42",
+    });
+  });
+
+  it("falls back to the built link when a baked googleMapsUri is not https", async () => {
+    const { db, inserts } = makeFakeDb({ listingReturning: [[{ id: "listing-1" }]] });
+
+    await seedListings([listing({ googleMapsUri: "javascript:alert(1)" })], { db });
+
+    const listingInsert = inserts.find((i) => i.table === listings);
+    expect(listingInsert?.values).toMatchObject({
+      mapsUrl: expect.stringContaining("https://www.google.com/maps/search/?api=1&query="),
+    });
+  });
+
   it("treats a Place-ID dedup hit as an existing no-op and suggests onto the existing listing", async () => {
     // Listing insert conflicts (returns []), so the id is read back via select.
     const { db, inserts } = makeFakeDb({

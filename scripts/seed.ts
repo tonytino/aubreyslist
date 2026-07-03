@@ -108,7 +108,7 @@ export async function seedListings(
         address: entry.address,
         lat: entry.lat,
         lng: entry.lng,
-        mapsUrl: buildMapsUrl(entry.placeId, `${entry.name} ${entry.address}`),
+        mapsUrl: resolveMapsUrl(entry),
         menuUrl: entry.menuUrl ?? null,
       })
       .onConflictDoNothing({ target: listings.placeId })
@@ -154,6 +154,18 @@ export async function seedListings(
   }
 
   return result;
+}
+
+/**
+ * The `mapsUrl` to persist for a baked entry: prefer Google's own share link
+ * (`googleMapsUri`, captured by the refresh — the Maps "Share" button URL),
+ * guarded to https like the Places provider does (#90 scheme allowlist); fall
+ * back to a built Maps URLs API link for older bakes that didn't capture it.
+ */
+function resolveMapsUrl(entry: SeededListing): string {
+  return entry.googleMapsUri?.startsWith("https://") === true
+    ? entry.googleMapsUri
+    : buildMapsUrl(entry.placeId, `${entry.name} ${entry.address}`);
 }
 
 /**

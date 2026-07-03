@@ -167,7 +167,8 @@ away from the seed so `pnpm db:seed` is **API-free**:
    suggest. This is the editable source of truth.
 2. **Refresh (Places, one-time):** `pnpm db:seed:refresh`
    (`scripts/refresh-seed-data.ts`) resolves each `query` to a **real Google Place
-   ID + coordinates (+ rating)** via Places Text Search (biased to Union Station,
+   ID + coordinates (+ rating + Google's `googleMapsUri` share link, preferred as
+   the seeded `mapsUrl`)** via Places Text Search (biased to Union Station,
    hard-capped at a 25-mile radius) and **bakes** the fully-resolved entries into
    `scripts/seed-listings.generated.json`. Needs **only** `GOOGLE_PLACES_API_KEY`
    (read via `getPlacesApiKey()`, a narrow accessor — the refresh never opens a DB
