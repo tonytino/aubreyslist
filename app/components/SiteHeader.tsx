@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Menu, Plus, Search } from "lucide-react";
+import { Info, Menu, Plus, Search } from "lucide-react";
 import type { ComponentType } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { ThemeToggle } from "~/components/ThemeToggle";
@@ -23,9 +23,9 @@ interface NavItem {
 // Primary navigation. Each item targets its real, existing route so the active
 // state is accurate.
 const NAV_ITEMS: readonly NavItem[] = [
-  { to: "/listings", label: "Browse", Icon: Search },
+  { to: "/", label: "Browse", Icon: Search },
   { to: "/listings/new", label: "Add a listing", Icon: Plus },
-  { to: "/about", label: "About", Icon: null },
+  { to: "/about", label: "About", Icon: Info },
 ];
 
 /**

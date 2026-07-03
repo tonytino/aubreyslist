@@ -65,7 +65,7 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
   });
 
   test("celiac-safe + dedicated fryer filter narrows to the matching listing", async ({ page }) => {
-    await page.goto("/listings");
+    await page.goto("/");
     // The taxonomy filter lives in the "Filters" bottom sheet in the AUB-61
     // redesign; open it before toggling the attribute checkboxes.
     await openBrowseFilters(page);
@@ -111,7 +111,7 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     const lateToken = uniqueToken("zsearch");
     const late = await seeder.createListing(lateToken, { name: `zzzz-${lateToken} Diner` });
 
-    await page.goto("/listings");
+    await page.goto("/");
     // Wait for hydration + the route's search-param canonicalization before typing —
     // otherwise the debounced `?q=` navigate races the not-yet-wired input onChange
     // (and the in-flight canonicalizing navigate clobbers it), leaving `q=` empty.

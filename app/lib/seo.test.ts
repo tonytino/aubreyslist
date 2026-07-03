@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  LOGO_PATH,
   OG_IMAGE_PATH,
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_URL,
   absoluteUrl,
+  canonicalLink,
   defaultSeoMeta,
+  jsonLdScript,
+  pageSeoMeta,
+  serializeJsonLd,
+  siteJsonLd,
 } from "./seo";
 
 describe("absoluteUrl", () => {
@@ -47,5 +53,100 @@ describe("defaultSeoMeta", () => {
     expect(named("twitter:card")?.content).toBe("summary_large_image");
     expect(named("twitter:image")?.content).toBe(absoluteUrl(OG_IMAGE_PATH));
     expect(named("twitter:description")?.content).toBe(SITE_DESCRIPTION);
+  });
+
+  it("declares the Open Graph locale", () => {
+    expect(prop("og:locale")?.content).toBe("en_US");
+  });
+});
+
+describe("pageSeoMeta", () => {
+  const meta = pageSeoMeta({
+    title: "Example Spot · Aubrey's List",
+    description: "A community-vetted gluten-free spot.",
+    path: "/listings/abc123",
+  });
+
+  const named = (name: string) =>
+    meta.find((t) => "name" in t && t.name === name) as { content: string } | undefined;
+  const prop = (property: string) =>
+    meta.find((t) => "property" in t && t.property === property) as { content: string } | undefined;
+
+  it("overrides the document title and description", () => {
+    expect(meta.some((t) => "title" in t && t.title === "Example Spot · Aubrey's List")).toBe(true);
+    expect(named("description")?.content).toBe("A community-vetted gluten-free spot.");
+  });
+
+  it("mirrors the title/description into Open Graph and Twitter tags", () => {
+    expect(prop("og:title")?.content).toBe("Example Spot · Aubrey's List");
+    expect(prop("og:description")?.content).toBe("A community-vetted gluten-free spot.");
+    expect(named("twitter:title")?.content).toBe("Example Spot · Aubrey's List");
+    expect(named("twitter:description")?.content).toBe("A community-vetted gluten-free spot.");
+  });
+
+  it("emits an ABSOLUTE og:url built from the path", () => {
+    expect(prop("og:url")?.content).toBe(`${SITE_URL}/listings/abc123`);
+    expect(prop("og:url")?.content).toMatch(/^https:\/\//);
+  });
+});
+
+describe("canonicalLink", () => {
+  it("returns a canonical link with an absolute href", () => {
+    expect(canonicalLink("/about")).toEqual({
+      rel: "canonical",
+      href: `${SITE_URL}/about`,
+    });
+  });
+});
+
+describe("serializeJsonLd", () => {
+  it("produces valid JSON that round-trips", () => {
+    const json = serializeJsonLd({ a: 1, b: "two" });
+    expect(JSON.parse(json)).toEqual({ a: 1, b: "two" });
+  });
+
+  it("escapes '<' so it cannot break out of a <script> tag", () => {
+    const json = serializeJsonLd({ name: "Bread </script><script>alert(1)" });
+    expect(json).not.toContain("</script>");
+    expect(json).not.toContain("<");
+    expect(json).toContain("\\u003c");
+    // Still valid JSON that decodes back to the original string.
+    expect(JSON.parse(json)).toEqual({ name: "Bread </script><script>alert(1)" });
+  });
+});
+
+describe("jsonLdScript", () => {
+  it("wraps serialized JSON-LD as an application/ld+json script descriptor", () => {
+    const script = jsonLdScript({ "@type": "Thing" });
+    expect(script.type).toBe("application/ld+json");
+    expect(JSON.parse(script.children)).toEqual({ "@type": "Thing" });
+  });
+});
+
+describe("siteJsonLd", () => {
+  const data = siteJsonLd();
+  const graph = data["@graph"] as Array<Record<string, unknown>>;
+
+  it("declares the schema.org context", () => {
+    expect(data["@context"]).toBe("https://schema.org");
+  });
+
+  it("includes a WebSite with a ?q= SearchAction target", () => {
+    const website = graph.find((n) => n["@type"] === "WebSite");
+    expect(website?.name).toBe(SITE_NAME);
+    expect(website?.url).toBe(SITE_URL);
+    const action = website?.potentialAction as Record<string, unknown>;
+    expect(action["@type"]).toBe("SearchAction");
+    expect((action.target as Record<string, unknown>).urlTemplate).toBe(
+      `${SITE_URL}/?q={search_term_string}`
+    );
+    expect(action["query-input"]).toBe("required name=search_term_string");
+  });
+
+  it("includes an Organization with an absolute logo URL", () => {
+    const org = graph.find((n) => n["@type"] === "Organization");
+    expect(org?.name).toBe(SITE_NAME);
+    expect(org?.url).toBe(SITE_URL);
+    expect(org?.logo).toBe(absoluteUrl(LOGO_PATH));
   });
 });

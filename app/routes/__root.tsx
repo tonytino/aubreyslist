@@ -14,7 +14,7 @@ import { currentUserQuery } from "~/auth/current-user-query";
 import { SiteHeader } from "~/components/SiteHeader";
 import { Button } from "~/components/ui/button";
 import { Toaster } from "~/components/ui/sonner";
-import { defaultSeoMeta } from "~/lib/seo";
+import { defaultSeoMeta, jsonLdScript, siteJsonLd } from "~/lib/seo";
 // Import the stylesheet as a bundled URL so the bundler emits a hashed asset
 // and rewrites the href. Referencing the source path ("/app/styles/app.css")
 // works in dev but 404s after `vinxi build`.
@@ -47,6 +47,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/site.webmanifest" },
     ],
+    // Site-level structured data (WebSite + Organization), injected once at the
+    // root so every page carries the brand/search graph. Serialized via
+    // `jsonLdScript`, which escapes `<` so a value can't break out of the tag.
+    scripts: [jsonLdScript(siteJsonLd())],
   }),
   loader: async ({ context }) => {
     // Prefetch on the server so the header hydrates with the right auth state.

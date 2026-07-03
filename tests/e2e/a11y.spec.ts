@@ -12,19 +12,20 @@ import { type Page, expect, test } from "@playwright/test";
  * secret (see `.github/workflows/ci.yml` → `integration-e2e`).
  *
  * SCOPE — only pages that render their REAL content WITHOUT auth or a DB:
- *   /            landing page (static component, no loader)
  *   /about       static marketing copy
  *   /style-guide static component gallery
  *
  * DELIBERATELY EXCLUDED — these need a live `DATABASE_URL` to render at all:
- *   /listings     its browse loader calls a server fn → `getDb()` → `getEnv()`,
- *                 which THROWS without `DATABASE_URL`; DB-free, the route renders
- *                 the router's default error component (a red
- *                 "Invalid environment variables: DATABASE_URL: Required" code
- *                 block), NOT the browse list. axe'ing that error page would be
- *                 auditing a fixture artifact, not the real page (and it self-
- *                 trips a color-contrast rule on the error text). Its real
- *                 content is covered by the DB-gated `browse.spec.ts`.
+ *   /             the Denver directory is the home page now (AUB-116); its browse
+ *                 loader calls a server fn → `getDb()` → `getEnv()`, which THROWS
+ *                 without `DATABASE_URL`. DB-free, the route renders the router's
+ *                 default error component (a red "Invalid environment variables:
+ *                 DATABASE_URL: Required" code block), NOT the directory. axe'ing
+ *                 that error page would be auditing a fixture artifact, not the
+ *                 real page (and it self-trips a color-contrast rule on the error
+ *                 text). Its real content is covered by the DB-gated `browse.spec.ts`.
+ *   /listings     permanently redirects to `/` (AUB-116) — same DB dependency once
+ *                 it lands on the directory. Covered by the DB-gated `browse.spec.ts`.
  *   /listings/new same: the loader (`getSetting` + `getCurrentUser`) hits the DB,
  *                 so DB-free it renders the same error component rather than the
  *                 add-listing form / sign-in prompt. Covered by `add-listing.spec.ts`
@@ -44,7 +45,7 @@ import { type Page, expect, test } from "@playwright/test";
  * a real a11y bug to fix (issue #192).
  */
 
-const PUBLIC_DB_FREE_PAGES = ["/", "/about", "/style-guide"] as const;
+const PUBLIC_DB_FREE_PAGES = ["/about", "/style-guide"] as const;
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa"] as const;
 
