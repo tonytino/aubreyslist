@@ -231,33 +231,77 @@ export async function getBrowseListings(
     }
   }
 
-  const listingIds = pageRows.map((listing) => listing.id);
+  // 2. + 3. Derive each card's listing + at-a-glance trust. `buildBrowseCards`
+  //    owns the trust-glance tail (celiac aggregate + recent incident → glance)
+  //    and is DISTANCE-AGNOSTIC so a distance-less caller can reuse it.
+  const baseCards = await buildBrowseCards(pageRows, now, resolvedStalenessMonths);
 
-  // 2. + 3. Batch the two trust signals for exactly this page's listings.
+  // Attach the "0.4 mi" distance label AFTER the (distance-agnostic) glance
+  // derivation — the label is a browse-only concern (the near-me distance sort),
+  // never part of the reusable trust glance. Spread it in conditionally so the
+  // optional prop is truly absent (not `undefined`) under
+  // `exactOptionalPropertyTypes` — and only when distance-sorting produced a
+  // value for this row.
+  const cards: BrowseListingCard[] = baseCards.map((card) => {
+    const km = distanceByListing.get(card.listing.id);
+    return km !== undefined ? { ...card, distanceLabel: formatDistanceLabel(km) } : card;
+  });
+
+  return { cards, page, pageSize, sort, total, hasMore: offset + pageRows.length < total };
+}
+
+/**
+ * Build browse cards — each listing paired with its at-a-glance trust — from a
+ * set of listings. Owns ONLY the trust-glance derivation (ADR-007): it batches
+ * the two visible-evidence signals for these listings (the headline celiac
+ * aggregate and the recent-incident dates) and reduces each to a pure
+ * {@link ListingTrustGlance} via {@link deriveListingTrustGlance}.
+ *
+ * DISTANCE-AGNOSTIC by design: the "0.4 mi" `distanceLabel` is a browse-only
+ * concern (the near-me sort) and stays in {@link getBrowseListings}, so this
+ * helper can be reused by a distance-less caller (e.g. a future
+ * viewer-favorites loader with no distance origin) without change. Cards come
+ * back in the SAME order as `listings`.
+ *
+ * NO N+1: the two signal queries are batched across ALL `listings` at once,
+ * regardless of how many there are.
+ *
+ * SERVER-ONLY: it drives the db-backed aggregate helpers below, so it must never
+ * be imported into client code (same rule as the rest of this module).
+ *
+ * `now` and `stalenessMonths` are injected so the glance's staleness boundary
+ * matches the caller's already-resolved window EXACTLY (no drift between the
+ * sort and the displayed card).
+ */
+export async function buildBrowseCards(
+  listings: Listing[],
+  now: Date,
+  stalenessMonths: number
+): Promise<BrowseListingCard[]> {
+  // Nothing to build → no cards, and skip the batched signal queries (which
+  // would otherwise run `IN ()`), mirroring getBrowseListings' empty-page guard.
+  if (listings.length === 0) {
+    return [];
+  }
+
+  const listingIds = listings.map((listing) => listing.id);
+
   const [celiacAggregates, recentIncidentDates] = await Promise.all([
     getCeliacAggregatesByListing(listingIds),
     getRecentIncidentDatesByListing(listingIds, now),
   ]);
 
-  const cards: BrowseListingCard[] = pageRows.map((listing) => {
+  return listings.map((listing) => {
     const celiac = celiacAggregates.get(listing.id) ?? null;
-    const km = distanceByListing.get(listing.id);
     const glance = deriveListingTrustGlance(
       celiac?.aggregate ?? null,
       celiac?.contributors ?? 0,
       recentIncidentDates.get(listing.id) ?? null,
       now,
-      resolvedStalenessMonths
+      stalenessMonths
     );
-    // Distance label only when distance-sorting produced a value for this row.
-    // Spread it in conditionally so the optional prop is truly absent (not
-    // `undefined`) under `exactOptionalPropertyTypes`.
-    return km !== undefined
-      ? { listing, glance, distanceLabel: formatDistanceLabel(km) }
-      : { listing, glance };
+    return { listing, glance };
   });
-
-  return { cards, page, pageSize, sort, total, hasMore: offset + pageRows.length < total };
 }
 
 /**
