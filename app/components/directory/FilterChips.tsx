@@ -1,10 +1,11 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Check, Funnel, Heart, Leaf, ShieldCheck } from "lucide-react";
+import { Check, Funnel, Heart, RotateCcw, ShieldCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type * as React from "react";
 import { useState } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { SearchChip } from "~/components/directory/SearchChip";
+import { WheatStrike } from "~/components/icons/WheatStrike";
 import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -61,7 +62,11 @@ interface QuickChipDef {
 
 const QUICK_CHIPS: readonly QuickChipDef[] = [
   { value: "celiac", label: "Celiac-safe", Icon: ShieldCheck },
-  { value: "friendly", label: "Gluten-friendly", Icon: Leaf },
+  // Brand "gluten struck out" glyph — matches SafetySignal's `gluten-friendly`
+  // icon (AUB-133) so the same state reads with the same shape everywhere,
+  // rather than lucide's generic `Leaf`. Drop-in compatible: typed as
+  // `LucideIcon`, same 24×24 box, sized/stroked identically to the other chips.
+  { value: "friendly", label: "Gluten-friendly", Icon: WheatStrike },
   { value: "recent", label: "Recently verified", Icon: Check },
 ];
 
@@ -169,6 +174,8 @@ export function FilterChips({
   saved,
   onSavedToggle,
   sheetExtras,
+  isAnyFilterActive,
+  onResetAll,
 }: {
   attrs: ClaimAttribute[];
   onToggleAttr: (attribute: ClaimAttribute) => void;
@@ -195,6 +202,17 @@ export function FilterChips({
    * sort/pager, but the server capability must not be lost).
    */
   sheetExtras?: React.ReactNode;
+  /**
+   * Whether ANY browse search param (search, quick, taxonomy attrs, saved mode,
+   * sort, radius, or page) is off its default — the route computes this across the
+   * WHOLE param set, not just the subset this component renders chips for.
+   * Gates the trailing "Reset" chip (repo-owner mobile feedback: previously only
+   * the taxonomy filter's own "Clear" existed, with no single affordance to back
+   * out of a stacked search + quick filter + saved mode + sort + radius + page).
+   */
+  isAnyFilterActive: boolean;
+  /** Reset EVERY browse search param to its default in one navigation. */
+  onResetAll: () => void;
 }) {
   return (
     <div className="-mx-gutter flex items-center gap-2 overflow-x-auto px-gutter pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -249,6 +267,19 @@ export function FilterChips({
           </button>
         );
       })}
+
+      {/* Trailing "Reset" chip (repo-owner mobile feedback): the single affordance
+          to back out of every stacked browse param at once. Rendered ONLY when at
+          least one is off its default — never shown on a bare visit. Always icon +
+          VISIBLE text (never icon/colour-only), using the same inactive pill
+          treatment as "Filters" rather than a warning colour — resetting isn't a
+          destructive/alarming action. */}
+      {isAnyFilterActive ? (
+        <button type="button" onClick={onResetAll} className={chipClasses(false)}>
+          <RotateCcw className="size-4" strokeWidth={2.25} aria-hidden="true" />
+          <span>Reset</span>
+        </button>
+      ) : null}
     </div>
   );
 }

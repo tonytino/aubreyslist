@@ -17,7 +17,11 @@ import {
   parseAttrs,
   serializeAttrs,
 } from "~/listings/browse-params";
-import { BROWSE_SEARCH_DEFAULTS, browseSearchSchema } from "~/listings/browse-search";
+import {
+  BROWSE_SEARCH_DEFAULTS,
+  browseSearchSchema,
+  isAnyBrowseFilterActive,
+} from "~/listings/browse-search";
 import { UNION_STATION } from "~/listings/distance";
 import {
   type QuickFilterValue,
@@ -391,9 +395,47 @@ function BrowseListings() {
     navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "", quick: "" }) });
   }
 
+  /**
+   * Reset EVERY browse search param to its default in one navigation (repo-owner
+   * mobile feedback): unlike `clearAll` above (which preserves `saved`/`sort`/
+   * `radius` — it's scoped to "filters" only), this backs all the way out —
+   * search, quick chips, taxonomy attrs, saved mode, sort, radius, page, and any
+   * near-me coordinate pair. `search: () => ({})` is a deliberate FULL REPLACE
+   * (not the usual functional updater that carries `prev` forward) — every param
+   * goes away, `validateSearch` refills `BROWSE_SEARCH_DEFAULTS`, and
+   * `stripSearchParams` keeps the URL bare, exactly like a fresh `/` visit.
+   * `geo.reset()` mirrors `changeSort`'s non-distance branch so a stale "near me"
+   * prompt/error state doesn't linger once the sort is back to alphabetical.
+   */
+  function resetAll() {
+    setSearchInput("");
+    lastPushedQ.current = "";
+    geo.reset();
+    navigate({ search: () => ({}) });
+  }
+
   // Whether any filter is active — decides empty vs no-results. Uses the URL `?q=`
   // (the server-applied search), not the in-flight local input.
   const anyFilterActive = qParam.trim() !== "" || quick.length > 0 || attrs.length > 0;
+
+  // Whether ANY browse search param is off its default — gates the "Reset" chip
+  // (repo-owner mobile feedback). Broader than `anyFilterActive` above (which only
+  // covers the "no results" empty-state question): this also covers the saved
+  // mode, sort, radius, page, and a near-me coordinate pair, none of which affect
+  // whether results are showing. Delegates to the shared, unit-tested
+  // `isAnyBrowseFilterActive` (browse-search.ts) so this can never drift from what
+  // `stripSearchParams` considers "at rest".
+  const isAnyFilterActive = isAnyBrowseFilterActive({
+    page,
+    attrs: attrsParam,
+    q: qParam,
+    sort,
+    radius,
+    quick: quickParam,
+    saved,
+    lat,
+    lng,
+  });
 
   // The radius origin label (user feedback #7): "your location" once we have the
   // visitor's coords (near-me opt-in kept the pair in the URL), else the stable
@@ -424,6 +466,8 @@ function BrowseListings() {
             onSearchChange={setSearchInput}
             saved={saved}
             onSavedToggle={toggleSaved}
+            isAnyFilterActive={isAnyFilterActive}
+            onResetAll={resetAll}
             sheetExtras={
               <DirectoryServerControls
                 sort={sort}

@@ -46,6 +46,49 @@ export const BROWSE_SEARCH_DEFAULTS = {
   saved: false,
 } as const;
 
+/**
+ * The raw browse search values relevant to "is anything filtered/sorted/paged
+ * away from a bare visit" — one field per {@link BROWSE_SEARCH_DEFAULTS} entry,
+ * plus the always-optional near-me coordinate pair (which has no default entry
+ * because it's absent by default rather than defaulting to a value).
+ */
+export interface BrowseSearchLike {
+  page: number;
+  attrs: string;
+  q: string;
+  sort: BrowseSort;
+  radius: number;
+  quick: string;
+  saved: boolean;
+  lat?: number | undefined;
+  lng?: number | undefined;
+}
+
+/**
+ * True when at least one browse search param is off its default — gates the
+ * directory's "Reset" chip (repo-owner mobile feedback: previously only the
+ * taxonomy filter's own "Clear" existed, with no single affordance to back out
+ * of a stacked search + quick filter + saved mode + sort + radius + page).
+ *
+ * Compared field-by-field against {@link BROWSE_SEARCH_DEFAULTS} — the SAME map
+ * `stripSearchParams` strips the URL against — so this can never drift from what
+ * counts as "at rest". A set `lat`/`lng` pair (no default entry, always-optional)
+ * means the visitor opted into "near me", so it counts as active too.
+ */
+export function isAnyBrowseFilterActive(search: BrowseSearchLike): boolean {
+  return (
+    search.page !== BROWSE_SEARCH_DEFAULTS.page ||
+    search.attrs !== BROWSE_SEARCH_DEFAULTS.attrs ||
+    search.q !== BROWSE_SEARCH_DEFAULTS.q ||
+    search.sort !== BROWSE_SEARCH_DEFAULTS.sort ||
+    search.radius !== BROWSE_SEARCH_DEFAULTS.radius ||
+    search.quick !== BROWSE_SEARCH_DEFAULTS.quick ||
+    search.saved !== BROWSE_SEARCH_DEFAULTS.saved ||
+    search.lat !== undefined ||
+    search.lng !== undefined
+  );
+}
+
 export const browseSearchSchema = z.object({
   page: z.number().int().min(1).catch(BROWSE_SEARCH_DEFAULTS.page),
   /** Comma-separated taxonomy attributes (#35); defaults to "" (no filter). */

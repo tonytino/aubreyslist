@@ -1,5 +1,6 @@
 import { Search, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 /**
  * Directory search rendered as a filter chip (user feedback #5).
@@ -7,12 +8,19 @@ import { useId, useRef, useState } from "react";
  * The search shares the visual language of {@link FilterChips}: a pill that reads
  * as "just another filter". It has three states:
  *
- *   - **Collapsed + empty** — an inactive-style chip (a `<button>`): a `Search`
- *     icon + the label "Search". Clicking/focusing it EXPANDS to a real input.
+ *   - **Collapsed + empty** — an inactive-style chip (a `<button>`), ICON-ONLY (no
+ *     visible label text — repo-owner mobile feedback: a compact icon chip, not a
+ *     wide "Search restaurants" pill, leads the row). The accessible name still
+ *     comes from `aria-label="Search restaurants"` and it carries `aria-expanded`,
+ *     so screen readers get the same information sighted users lose by dropping
+ *     the text. Clicking/focusing it EXPANDS to a real input, which keeps the
+ *     "Search restaurants" placeholder.
  *   - **Collapsed + applied** — when there's a query, the chip takes the ACTIVE
  *     brand-filled treatment (colour signals "applied", but never alone — the
  *     query text and an explicit clear affordance carry the meaning too) and
- *     shows the (truncated) query with a small ✕ that clears it.
+ *     shows the (truncated) query with a small ✕ that clears it. This state
+ *     STAYS text + icon (never collapses to icon-only) — an applied filter must
+ *     remain visibly identifiable, not hidden behind a bare icon.
  *   - **Expanded** — a real, labelled `<input type="search">` wired to
  *     value/onChange, autofocused on expand, with its own inline ✕ while
  *     non-empty. Blurring the input COLLAPSES back to the chip (the query is
@@ -25,6 +33,16 @@ import { useId, useRef, useState } from "react";
  * ACCESSIBLE: the collapsed control is a `<button>` carrying `aria-expanded`;
  * expanding moves focus into a labelled input (visually-hidden `<label>`). The
  * native `::-webkit-search-cancel-button` is suppressed so the ✕ is consistent.
+ *
+ * FOCUS TIMING (repo-owner mobile feedback — iOS double-tap bug): `expand()`
+ * flushes the `setExpanded(true)` state update SYNCHRONOUSLY via `flushSync`
+ * before calling `.focus()`, instead of deferring the focus call to a
+ * `requestAnimationFrame` callback. iOS Safari only auto-shows the keyboard when
+ * `.focus()` runs synchronously within the original user-gesture call stack; a
+ * `requestAnimationFrame` (or any other deferral) breaks that chain, so the input
+ * mounted but the keyboard never appeared until a SECOND tap. `flushSync` forces
+ * React to commit + mount the `<input>` immediately, so the ref is live and
+ * `.focus()` still runs inside the same gesture.
  */
 export function SearchChip({
   value,
@@ -46,9 +64,11 @@ export function SearchChip({
   const chipActive = "border-brand bg-brand text-brand-foreground";
 
   function expand() {
-    setExpanded(true);
-    // Focus after the input has mounted this tick.
-    requestAnimationFrame(() => inputRef.current?.focus());
+    // Synchronous commit + focus, both still inside the click's user-gesture call
+    // stack — see the FOCUS TIMING doc comment above. `flushSync` mounts the
+    // `<input>` immediately so `inputRef.current` is live right after.
+    flushSync(() => setExpanded(true));
+    inputRef.current?.focus();
   }
 
   if (expanded) {
@@ -115,6 +135,9 @@ export function SearchChip({
     );
   }
 
+  // Collapsed + empty: ICON-ONLY (repo-owner mobile feedback) — the accessible
+  // name lives entirely in `aria-label`, so screen readers still announce "Search
+  // restaurants" even though sighted users only see the glyph.
   return (
     <button
       type="button"
@@ -124,7 +147,6 @@ export function SearchChip({
       className={`${chipBase} ${chipInactive}`}
     >
       <Search className="size-4" strokeWidth={2.25} aria-hidden="true" />
-      <span>Search restaurants</span>
     </button>
   );
 }

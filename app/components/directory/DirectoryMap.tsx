@@ -1,7 +1,8 @@
-import { Clock, Leaf, LocateFixed, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Clock, LocateFixed, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { type SafetyState, safetyLabel } from "~/components/SafetySignal";
 import { projectToMap } from "~/components/directory/map-projection";
+import { WheatStrike } from "~/components/icons/WheatStrike";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 
@@ -47,7 +48,9 @@ const PIN_STYLES: Record<
   "gluten-friendly": {
     fill: "bg-gluten-friendly",
     ring: "ring-gluten-friendly/30",
-    Icon: Leaf,
+    // The branded "gluten struck out" glyph — the SAME icon SafetySignal renders
+    // for this state (AUB-133), so the pin's shape matches every other surface.
+    Icon: WheatStrike,
     label: safetyLabel("gluten-friendly"),
   },
   stale: {

@@ -87,6 +87,30 @@ pagination link) has no such need — navigate directly; do not add a mirror.
 - `stripSearchParams` / `retainSearchParams` — from `@tanstack/react-router`
   (no new dependency; TanStack-native).
 
+## Client-only params: don't scroll-jump on write
+
+TanStack Router resets scroll to top on every `navigate()` by default. For a
+param that changes the SERVER result set (a filter, sort, search, radius, page),
+that reset is usually correct — the visitor should land at the top of the new
+results. But a client-only, view-only param (the canonical example: the listing
+detail page's `?tab=`, `app/routes/listings.$id.tsx`) changes no data — rewriting
+it should never move the viewport at all, especially when the control that
+writes it sits below the fold (an evidence tab strip far down a long page). Pass
+`resetScroll: false` on that `navigate()` call so flipping the param never
+scroll-jumps:
+
+```ts
+navigate({
+  search: (prev) => ({ ...prev, tab: value }),
+  resetScroll: false,
+});
+```
+
+Don't blanket-apply this — a control at the very top of the page (the browse
+route's filter chip row) has no scroll-jump to fix either way, and a param that
+DOES change the result set generally wants the default top-of-results reset. Use
+judgment per call site, the same way you'd judge any other UX default.
+
 ## Known follow-up
 
 The directory's list/map **view toggle** is still `useState` (`view` in

@@ -327,8 +327,8 @@ function StyleGuide() {
         <Tabs defaultValue="overview" className="max-w-md">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="claims">Community claims</TabsTrigger>
-            <TabsTrigger value="incidents">Incidents</TabsTrigger>
+            <TabsTrigger value="claims">Claims</TabsTrigger>
+            <TabsTrigger value="incidents">Reports</TabsTrigger>
           </TabsList>
           <TabsContent value="overview" className="text-body-sm text-muted-foreground">
             A summary of the listing's safety signals, hours, and dedicated prep details.

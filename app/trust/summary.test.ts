@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLAIM_ATTRIBUTE_DESCRIPTIONS,
   CLAIM_ATTRIBUTE_LABELS,
   DEFAULT_STALENESS_MONTHS,
   claimAttributeDescription,
@@ -58,9 +59,17 @@ describe("claimAttributeDescription", () => {
     expect(description).toMatch(/dispute/i);
   });
 
-  it("returns null for self-evident attributes (no fabricated gloss)", () => {
-    expect(claimAttributeDescription("dedicated_fryer")).toBeNull();
-    expect(claimAttributeDescription("gf_substitutes")).toBeNull();
+  it("returns the honest one-line fact for the other four attributes", () => {
+    expect(claimAttributeDescription("dedicated_fryer")).toMatch(/separate fryer/i);
+    expect(claimAttributeDescription("gf_substitutes")).toMatch(/gluten-free swaps/i);
+    expect(claimAttributeDescription("dedicated_gf_menu")).toMatch(/dedicated gluten-free menu/i);
+    expect(claimAttributeDescription("off_menu_gf_on_request")).toMatch(/on request/i);
+  });
+
+  it("has a non-empty description for every attribute (exhaustive)", () => {
+    for (const description of Object.values(CLAIM_ATTRIBUTE_DESCRIPTIONS)) {
+      expect(description.length).toBeGreaterThan(0);
+    }
   });
 });
 

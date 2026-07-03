@@ -1,5 +1,6 @@
-import { ArrowLeft, Check, HelpCircle, Leaf, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, Check, HelpCircle, ShieldCheck, X } from "lucide-react";
 import { SafetySignal } from "~/components/SafetySignal";
+import { WheatStrike } from "~/components/icons/WheatStrike";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import type { ClaimAttribute } from "~/listings/taxonomy";
@@ -18,31 +19,16 @@ import type { Answer } from "./AddListingWizard";
  * The HEADLINE attribute (`celiac_safe_vs_gluten_friendly`) is special — a bare
  * confirm/dispute is otherwise ambiguous — so ONLY it shows the "what your answer
  * records" safety preview (Confirm → celiac-safe, Dispute → gluten-friendly) and
- * carries the safety icons (green shield-check / amber leaf) on its buttons. The
- * other four are plain facts: neutral check / ✗ icons, NO safety colour.
+ * carries the safety icons (green shield-check / amber struck-wheat) on its
+ * buttons. The other four are plain facts: neutral check / ✗ icons, NO safety
+ * colour.
+ *
+ * Every attribute's helper copy comes from {@link claimAttributeDescription} —
+ * the same shared one-liners the listing-detail Community-claims surface
+ * renders, so the wizard and the trust summary never drift.
  */
 
 const HEADLINE = "celiac_safe_vs_gluten_friendly" as const;
-
-/**
- * Short, honest helpers for the four fact attributes (the headline uses its own
- * confirm/dispute gloss from {@link claimAttributeDescription}).
- */
-const ATTRIBUTE_HELPERS: Record<Exclude<ClaimAttribute, typeof HEADLINE>, string> = {
-  dedicated_fryer:
-    "A separate fryer for gluten-free food — shared fryer oil is a major cross-contamination risk.",
-  dedicated_gf_menu: "A dedicated gluten-free menu, not just a few marked items on the main one.",
-  off_menu_gf_on_request:
-    "Staff will prepare gluten-free options on request even if they aren't listed.",
-  gf_substitutes: "Offers gluten-free swaps like GF buns, pasta, or bread.",
-};
-
-function helperFor(attribute: ClaimAttribute): string {
-  if (attribute === HEADLINE) {
-    return claimAttributeDescription(attribute) ?? "";
-  }
-  return ATTRIBUTE_HELPERS[attribute];
-}
 
 export function ClaimAttestStep({
   attribute,
@@ -62,7 +48,7 @@ export function ClaimAttestStep({
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <h2 className="text-title font-semibold">{label}</h2>
-        <p className="text-body text-muted-foreground">{helperFor(attribute)}</p>
+        <p className="text-body text-muted-foreground">{claimAttributeDescription(attribute)}</p>
       </div>
 
       {isHeadline ? (
@@ -107,7 +93,9 @@ export function ClaimAttestStep({
           className="h-auto w-full justify-start gap-3 py-3 text-body"
         >
           {isHeadline ? (
-            <Leaf
+            // The branded "gluten struck out" glyph — the SAME icon the adjacent
+            // SafetySignal preview renders for gluten-friendly (AUB-133).
+            <WheatStrike
               aria-hidden="true"
               className={cn("size-5 shrink-0", value !== "dispute" && "text-gluten-friendly")}
               strokeWidth={2.25}

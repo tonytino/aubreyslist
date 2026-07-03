@@ -197,7 +197,15 @@ function ListingDetail() {
   const handleTabChange = (value: string) => {
     // Tab is client-only view state — it changes no server input, so we only
     // rewrite the `?tab=` param and never touch loaderDeps or reset a page index.
-    navigate({ search: (prev) => ({ ...prev, tab: value as ListingDetailTab }) });
+    // `resetScroll: false` because the evidence panel sits well below the hero (a
+    // control below the fold rewriting a client-only param), and TanStack Router
+    // resets scroll to top on navigation by default — without this, switching
+    // tabs would yank a mobile viewer back up to the hero on every tap (repo-owner
+    // mobile feedback).
+    navigate({
+      search: (prev) => ({ ...prev, tab: value as ListingDetailTab }),
+      resetScroll: false,
+    });
   };
 
   return (
@@ -330,8 +338,11 @@ function ListingDetail() {
       </section>
 
       {/* Tabbed evidence panel (AUB-131): Community claims + Incident reports in
-          one card. The active tab is URL-backed (`?tab=`) so it is shareable and
-          survives refresh/back-forward. The shadcn Tabs primitive handles
+          one card, with short "Claims" / "Reports" trigger labels (the count
+          chips + full context make the surface unambiguous even on mobile,
+          where the grid-cols-2 TabsList is cramped for longer text). The
+          active tab is URL-backed (`?tab=`) so it is shareable and survives
+          refresh/back-forward. The shadcn Tabs primitive handles
           role=tab/tabpanel + arrow-key roving focus. Community claims ALWAYS
           render the full fixed taxonomy as attestable (#150), with honest empty
           states — never fabricated data. */}
@@ -341,13 +352,13 @@ function ListingDetail() {
             <Tabs value={tab} onValueChange={handleTabChange}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="claims">
-                  Community claims
+                  Claims
                   <span className="ml-1.5 rounded-chip bg-muted px-1.5 text-caption font-semibold text-muted-foreground">
                     {claimsCount}
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="incidents">
-                  Incident reports
+                  Reports
                   <span className="ml-1.5 rounded-chip bg-muted px-1.5 text-caption font-semibold text-muted-foreground">
                     {incidentsCount}
                   </span>

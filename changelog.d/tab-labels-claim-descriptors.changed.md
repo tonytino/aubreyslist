@@ -1,0 +1,2 @@
+- `[manual]` Shortened the listing-detail evidence-panel tab labels to "Claims" and "Reports" (count chips unchanged) so the triggers fit comfortably on mobile; the style-guide Tabs demo matches.
+- `[manual]` Every claim attribute now shows its one-line descriptor on the listing-detail Community-claims rows — the same honest one-liners the add-listing wizard uses, promoted into the shared `CLAIM_ATTRIBUTE_DESCRIPTIONS` map so both surfaces share one source of truth.

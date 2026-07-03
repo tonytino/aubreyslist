@@ -54,8 +54,11 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
 
     // Before voting: the full taxonomy renders (no "Coming soon" dead-end) and
     // the headline cue is the honest empty state. The claims now live in the
-    // default-open "Community claims" tab panel (AUB-131 tabbed evidence panel).
-    const claimsSection = page.getByRole("tabpanel", { name: /Community claims/ });
+    // default-open "Claims" tab panel (AUB-131 tabbed evidence panel). The
+    // tabpanel's accessible name derives from its trigger's FULL text — the
+    // "Claims" label plus the count chip (e.g. "Claims 0") — which the
+    // unanchored /Claims/ regex matches.
+    const claimsSection = page.getByRole("tabpanel", { name: /Claims/ });
     // Exact match: the row label is "Celiac-safe" (issue #175); the row's
     // confirm/dispute clarifier copy also contains "celiac-safe" lower-cased.
     await expect(claimsSection.getByText("Celiac-safe", { exact: true })).toBeVisible();
