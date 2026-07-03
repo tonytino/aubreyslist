@@ -140,7 +140,9 @@ function SettingsSection({ settings }: { settings: AdminSettingsView | null }) {
  * never colour) wired to the `setIntakeMode` server fn through a TanStack Query
  * `useMutation`. On success it invalidates the admin route loader
  * (`router.invalidate()`) so the displayed value refetches from the
- * authoritative `intake_mode` setting and the whole shell stays consistent.
+ * authoritative `intake_mode` setting and the whole shell stays consistent, and
+ * confirms the change with a toast; a failure toasts too, alongside the
+ * existing inline error text below the select.
  */
 function IntakeModeControl({ current }: { current: string }) {
   const router = useRouter();
@@ -148,7 +150,13 @@ function IntakeModeControl({ current }: { current: string }) {
 
   const mutation = useMutation({
     mutationFn: (mode: IntakeMode) => setIntakeMode({ data: { mode } }),
-    onSuccess: () => router.invalidate(),
+    onSuccess: () => {
+      router.invalidate();
+      toast.success("Intake mode updated");
+    },
+    onError: () => {
+      toast.error("Could not update the intake mode. Please try again.");
+    },
   });
 
   return (

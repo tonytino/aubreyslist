@@ -99,6 +99,9 @@ describe("FavoriteButton", () => {
       "aria-pressed",
       "true"
     );
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Saved to your spots");
+    });
   });
 
   it("signed-in click unfavorites optimistically when already favorited", async () => {
@@ -117,6 +120,9 @@ describe("FavoriteButton", () => {
     });
     expect(unfavoriteListingMock).toHaveBeenCalledWith({ data: { listingId: "listing-1" } });
     expect(favoriteListingMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Removed from your saved spots");
+    });
   });
 
   it("rolls back the optimistic state and shows a toast when the write fails", async () => {
