@@ -43,10 +43,13 @@ export const WheatStrike = forwardRef<SVGSVGElement, LucideProps>(function Wheat
       {...props}
     >
       {/* The diagonal strike, wiped out of the wheat as a cutout: white keeps the
-          wheat, the black band erases a diagonal through it. */}
+          wheat, the black band erases a diagonal through it. The cutout is 3.5 wide
+          (not 3) so the "struck-out" gap stays legible — and de-crowds the middle
+          grains — when the glyph renders at chip size (~16px / `size-4`), where a
+          narrower gap smudged shut against the surrounding strokes. */}
       <mask id={maskId}>
         <rect width="24" height="24" fill="#fff" />
-        <line x1="18" y1="6" x2="6" y2="18" stroke="#000" strokeWidth="3" strokeLinecap="round" />
+        <line x1="18" y1="6" x2="6" y2="18" stroke="#000" strokeWidth="3.5" strokeLinecap="round" />
       </mask>
       {/* Ear of wheat: central stalk, top awns, three tiers of grains. */}
       <g mask={`url(#${maskId})`}>
