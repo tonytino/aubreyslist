@@ -25,15 +25,22 @@ import type { ClaimAttribute } from "~/db/schema";
  * re-suggested).
  */
 
-/** The curator-bot identity that authors every seed suggestion (AUB-31). */
+/**
+ * The curator-bot identity that authors every seed suggestion (AUB-31).
+ *
+ * Intrinsically collision-proof with any real account on BOTH unique `users`
+ * columns, so it is safe to seed in every environment including production:
+ * - `googleSub` is a NON-numeric sentinel a real Google login can never produce
+ *   (real Google subjects are numeric strings); and
+ * - `email` uses the reserved `.invalid` TLD (RFC 2606) — an un-routable address
+ *   no real Google mailbox can ever equal, so a future real sign-in can never
+ *   collide with this row on the UNIQUE email constraint (which would otherwise
+ *   throw in `upsertUserFromGoogle` and break that person's sign-in).
+ * Role is left to the DB default (`user`) — no standing privileged account.
+ */
 export const CURATOR_BOT = {
-  /**
-   * A NON-numeric sentinel Google subject a real Google login can never produce
-   * (real subs are numeric), so this row never collides with a real account on
-   * `google_sub` — safe to seed in every environment including production.
-   */
   googleSub: "seed:aubreys-bot",
-  email: "bot@aubreyslist.app",
+  email: "aubreys-bot@seed.invalid",
   name: "Aubrey's Bot",
 } as const;
 

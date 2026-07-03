@@ -139,12 +139,14 @@ with one or more GF-attribute "labels" **suggested by a curator bot**.
 - **Command:** `pnpm db:seed` — needs `DATABASE_URL` **and** `GOOGLE_PLACES_API_KEY`
   (both read via `getEnv()`). Anything the API can't resolve, or that falls
   outside 25 miles, is skipped and logged, never guessed.
-- **Curator bot:** a single `users` row (`Aubrey's Bot`, email `bot@aubreyslist.app`,
-  role `user`) keyed on a **non-numeric sentinel `google_sub`** (`seed:aubreys-bot`)
-  a real Google login can never produce — so it never collides with a real account
-  on `google_sub`/`email` and is safe to seed in **every** environment, including
-  production. (Contrast `db:seed-admin`, which must never insert a real-email row —
-  see above.)
+- **Curator bot:** a single `users` row (`Aubrey's Bot`, role `user`) that is
+  **intrinsically collision-proof** with any real account on both unique columns —
+  a **non-numeric sentinel `google_sub`** (`seed:aubreys-bot`) a real Google login
+  can never produce, and an **un-routable `.invalid` email** (`aubreys-bot@seed.invalid`,
+  RFC 2606) no real Google mailbox can equal. So it is safe to seed in **every**
+  environment, including production, and can never break a future real sign-in on
+  the UNIQUE email constraint. (Contrast `db:seed-admin`, which must never insert a
+  real-email row — see above.)
 - **Suggestions, not votes:** a seeded label sets `claims.suggested_by = <bot id>`
   (NOT an attestation), so it shows a "Suggested by Aubrey's Bot" badge, stays out
   of the confirm/dispute counts (ADR-007), and is cleared automatically by the
@@ -152,6 +154,10 @@ with one or more GF-attribute "labels" **suggested by a curator bot**.
 - **Idempotent:** listings dedup on the unique Place ID; a claim is only suggested
   when its `(listing, attribute)` slot doesn't already exist, so a slot a real user
   has engaged with is never re-suggested. Re-run freely as you curate the data.
+  (Dedup is **Place-ID-scoped**, not name-scoped: idempotency holds as long as a
+  query keeps resolving to the same Google Place ID. If Google ever returns a
+  different Place ID for the same spot, it would seed as a separate listing — rare,
+  and a real user can flag/merge it.)
 
 ### Per-environment
 
