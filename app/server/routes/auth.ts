@@ -33,8 +33,59 @@ import { upsertUserFromGoogle } from "../auth/users";
 
 const STATE_COOKIE_NAME = "al_oauth_state";
 const VERIFIER_COOKIE_NAME = "al_oauth_verifier";
+const RETURN_TO_COOKIE_NAME = "al_oauth_return_to";
 // Short-lived: the OAuth round-trip should complete in well under 10 minutes.
 const OAUTH_TX_MAX_AGE_SECONDS = 60 * 10;
+
+/**
+ * Open-redirect defense for the post-sign-in `returnTo`. Returns the original
+ * path only when it is unambiguously a same-origin, single-slash-rooted local
+ * path; otherwise falls back to `/`. Kept pure + exported so it can be
+ * unit/fuzz-tested in isolation.
+ *
+ * `returnTo` is NEVER round-tripped through Google's OAuth `state`; it lives in
+ * a short-lived httpOnly cookie set alongside the other transaction cookies.
+ */
+export function validateReturnTo(returnTo: string | undefined, requestOrigin: string): string {
+  const fallback = "/";
+  if (!returnTo) {
+    return fallback;
+  }
+
+  // Must be a path rooted at a single `/` — rejects `//host`, `/\host`
+  // (protocol-relative / backslash tricks) and absolute URLs like `https://…`.
+  if (!returnTo.startsWith("/") || returnTo.startsWith("//") || returnTo.startsWith("/\\")) {
+    return fallback;
+  }
+
+  // No control characters (defends against CRLF header injection).
+  if (/[\r\n\t]/.test(returnTo)) {
+    return fallback;
+  }
+
+  // Percent-encoded escapes (e.g. `%2f%2f`, `%5c`) must not decode into a
+  // `//` or `/\` that would smuggle in a protocol-relative redirect.
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(returnTo);
+  } catch {
+    return fallback;
+  }
+  if (decoded.includes("//") || decoded.includes("/\\")) {
+    return fallback;
+  }
+
+  // Final origin check: resolving against the request origin must stay on it.
+  try {
+    if (new URL(returnTo, requestOrigin).origin !== requestOrigin) {
+      return fallback;
+    }
+  } catch {
+    return fallback;
+  }
+
+  return returnTo;
+}
 
 const TX_COOKIE_BASE = {
   httpOnly: true,
@@ -63,6 +114,13 @@ export const authRoutes = new Hono()
     setCookie(c, STATE_COOKIE_NAME, state, txCookieOptions());
     setCookie(c, VERIFIER_COOKIE_NAME, codeVerifier, txCookieOptions());
 
+    // Stash a validated `returnTo` in a short-lived tx cookie (never via OAuth
+    // `state`). Only same-origin local paths survive validation.
+    const returnTo = validateReturnTo(c.req.query("returnTo"), new URL(c.req.url).origin);
+    if (returnTo !== "/") {
+      setCookie(c, RETURN_TO_COOKIE_NAME, returnTo, txCookieOptions());
+    }
+
     const authUrl = buildAuthorizationUrl({
       redirectUri: callbackUrl(c.req.url),
       state,
@@ -84,10 +142,12 @@ export const authRoutes = new Hono()
 
     const expectedState = getCookie(c, STATE_COOKIE_NAME);
     const codeVerifier = getCookie(c, VERIFIER_COOKIE_NAME);
+    const returnToCookie = getCookie(c, RETURN_TO_COOKIE_NAME);
 
     // Always clear the transaction cookies — they are single-use.
     deleteCookie(c, STATE_COOKIE_NAME, { path: "/" });
     deleteCookie(c, VERIFIER_COOKIE_NAME, { path: "/" });
+    deleteCookie(c, RETURN_TO_COOKIE_NAME, { path: "/" });
 
     if (!code || !returnedState || !expectedState || returnedState !== expectedState) {
       throw new HTTPException(400, { message: "Invalid OAuth state or missing code" });
@@ -111,8 +171,11 @@ export const authRoutes = new Hono()
       maxAge: SESSION_MAX_AGE_SECONDS,
     });
 
-    // Land back on the home page, now signed in.
-    return c.redirect(new URL("/", c.req.url).toString());
+    // Land back on the requested same-origin path (re-validated), now signed
+    // in; default to the home page when no valid `returnTo` was stashed.
+    const requestUrl = new URL(c.req.url);
+    const returnTo = validateReturnTo(returnToCookie, requestUrl.origin);
+    return c.redirect(new URL(returnTo, requestUrl).toString());
   })
 
   // Sign-out: drop the session cookie.
