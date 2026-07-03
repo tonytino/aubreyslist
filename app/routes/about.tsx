@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Utensils } from "lucide-react";
 import { SAFETY_STATES, SafetySignal } from "~/components/SafetySignal";
+import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 import { claimAttributeLabel } from "~/trust/summary";
 
 /**
@@ -16,14 +17,13 @@ import { claimAttributeLabel } from "~/trust/summary";
  */
 export const Route = createFileRoute("/about")({
   head: () => ({
-    meta: [
-      { title: "About · Aubrey's List" },
-      {
-        name: "description",
-        content:
-          "Aubrey's List is a community-driven directory of how safe restaurants are for gluten-free and celiac needs. Learn how its transparent trust model works and how to contribute.",
-      },
-    ],
+    meta: pageSeoMeta({
+      title: "About · Aubrey's List",
+      description:
+        "Aubrey's List is a community-driven directory of how safe restaurants are for gluten-free and celiac needs. Learn how its transparent trust model works and how to contribute.",
+      path: "/about",
+    }),
+    links: [canonicalLink("/about")],
   }),
   component: AboutPage,
 });

@@ -27,6 +27,13 @@ export const SITE_DESCRIPTION =
 /** 1200×630 social share card (Open Graph / Twitter summary_large_image). */
 export const OG_IMAGE_PATH = "/og-image.png";
 
+/**
+ * A real square brand logo that ships in `public/` — used as the
+ * `Organization` logo in the site JSON-LD (a square mark reads better there than
+ * the wide OG card). Must stay in sync with an asset that actually exists.
+ */
+export const LOGO_PATH = "/icon-512.png";
+
 /** Resolve a root-relative path to an absolute URL against {@link SITE_URL}. */
 export function absoluteUrl(path: string): string {
   return new URL(path, SITE_URL).toString();
@@ -37,6 +44,99 @@ type MetaTag =
   | { charSet: string }
   | { name: string; content: string }
   | { property: string; content: string };
+
+/** A canonical `<link>` descriptor (belongs in `head().links`, not meta). */
+export type CanonicalLink = { rel: "canonical"; href: string };
+
+/**
+ * The per-page meta a specific route should OVERRIDE on top of the root
+ * defaults: document `title` + `description`, and the matching Open Graph /
+ * Twitter Card tags. TanStack Router dedupes meta by `title` / `name` /
+ * `property` (descendant wins), so spreading this into a route's `head().meta`
+ * cleanly overrides the root's defaults. `og:url` is ABSOLUTE (via
+ * {@link absoluteUrl}) because social scrapers require it.
+ */
+export function pageSeoMeta({
+  title,
+  description,
+  path,
+}: {
+  title: string;
+  description: string;
+  path: string;
+}): MetaTag[] {
+  const url = absoluteUrl(path);
+  return [
+    { title },
+    { name: "description", content: description },
+    { property: "og:title", content: title },
+    { property: "og:description", content: description },
+    { property: "og:url", content: url },
+    { name: "twitter:title", content: title },
+    { name: "twitter:description", content: description },
+  ];
+}
+
+/**
+ * The canonical link for a page. Canonical is a `<link rel="canonical">`, so it
+ * belongs in `head().links`, not `head().meta`. Href is absolute.
+ */
+export function canonicalLink(path: string): CanonicalLink {
+  return { rel: "canonical", href: absoluteUrl(path) };
+}
+
+/**
+ * Serialize a JSON-LD payload to a string safe to embed inside a
+ * `<script type="application/ld+json">` block. Escaping `<` as its `<`
+ * unicode form means a `<` in any string value (e.g. a restaurant name) can
+ * never open a `</script>` sequence and break out of the tag — the single XSS
+ * risk with inlined structured data. `JSON.stringify` already escapes quotes.
+ */
+export function serializeJsonLd(data: unknown): string {
+  return JSON.stringify(data).replace(/</g, "\\u003c");
+}
+
+/** A JSON-LD `<script>` descriptor for TanStack Start's `head().scripts`. */
+export function jsonLdScript(data: unknown): {
+  type: "application/ld+json";
+  children: string;
+} {
+  return { type: "application/ld+json", children: serializeJsonLd(data) };
+}
+
+/**
+ * Site-level structured data injected once at the root: a `WebSite` (with a
+ * `SearchAction` pointing at the directory's `?q=` search) and an
+ * `Organization` (name, url, square logo). Only honest, site-wide facts — no
+ * per-page or invented data.
+ */
+export function siteJsonLd(): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        name: SITE_NAME,
+        url: SITE_URL,
+        description: SITE_DESCRIPTION,
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: `${SITE_URL}/?q={search_term_string}`,
+          },
+          "query-input": "required name=search_term_string",
+        },
+      },
+      {
+        "@type": "Organization",
+        name: SITE_NAME,
+        url: SITE_URL,
+        logo: absoluteUrl(LOGO_PATH),
+      },
+    ],
+  };
+}
 
 /**
  * The default document + social meta tags for the whole site. Spread into the
@@ -54,6 +154,7 @@ export function defaultSeoMeta(): MetaTag[] {
 
     // Open Graph — Facebook, iMessage, Slack, Discord, LinkedIn.
     { property: "og:type", content: "website" },
+    { property: "og:locale", content: "en_US" },
     { property: "og:site_name", content: SITE_NAME },
     { property: "og:title", content: SITE_SOCIAL_TITLE },
     { property: "og:description", content: SITE_DESCRIPTION },

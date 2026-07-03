@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { ManualIntakeForm } from "~/components/add-listing/ManualIntakeForm";
 import { PlacesIntakeForm } from "~/components/add-listing/PlacesIntakeForm";
 import { Button } from "~/components/ui/button";
+import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 import type { CreateListingResult } from "~/listings/create-input";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { type IntakeMode, getSetting } from "~/server/settings";
@@ -32,6 +33,15 @@ const getAddListingContext = createServerFn({ method: "GET" }).handler(
 );
 
 export const Route = createFileRoute("/listings/new")({
+  head: () => ({
+    meta: pageSeoMeta({
+      title: "Add a restaurant · Aubrey's List",
+      description:
+        "Add a gluten-free or celiac-safe restaurant to Aubrey's List so the community can vet it — then attest to how safe it really is.",
+      path: "/listings/new",
+    }),
+    links: [canonicalLink("/listings/new")],
+  }),
   loader: () => getAddListingContext(),
   component: AddListing,
 });

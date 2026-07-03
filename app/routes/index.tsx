@@ -14,6 +14,7 @@ import { FilterChips } from "~/components/directory/FilterChips";
 import { type DirectoryView, ViewToggle } from "~/components/directory/ViewToggle";
 import { type QuickFilter, filterByQuick } from "~/components/directory/filtering";
 import { listingToCardVM } from "~/components/listing/ListingCard";
+import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 import {
   BROWSE_PAGE_SIZE,
   type UserCoords,
@@ -115,6 +116,15 @@ function browseQueryOptions(
 }
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: pageSeoMeta({
+      title: "Browse gluten-free restaurants in Denver · Aubrey's List",
+      description:
+        "Browse Denver's community-vetted directory of gluten-free and celiac-safe restaurants — every listing is contributed, attested, and kept fresh by people who live with the same stakes.",
+      path: "/",
+    }),
+    links: [canonicalLink("/")],
+  }),
   validateSearch: browseSearchSchema,
   loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius } }) => ({
     page,
