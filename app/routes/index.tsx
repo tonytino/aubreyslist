@@ -68,7 +68,8 @@ function browseQueryOptions(
   coords: UserCoords | undefined,
   q: string,
   radius: number,
-  origin: UserCoords
+  origin: UserCoords,
+  saved: boolean
 ) {
   // Only thread coords to the server when actually distance-sorting — a non-pair
   // (or a non-distance sort) means no coords, and the server falls back to the
@@ -94,6 +95,10 @@ function browseQueryOptions(
       radius,
       origin.lat,
       origin.lng,
+      // The saved filter (F11) changes the result SET (and makes the response
+      // viewer-specific), so it's part of a page's identity — keying on it keeps
+      // the saved and unsaved views cached independently (spec §11.1).
+      saved,
     ],
     queryFn: () =>
       fetchBrowseListings({
@@ -110,6 +115,9 @@ function browseQueryOptions(
           radiusMiles: radius,
           originLat: origin.lat,
           originLng: origin.lng,
+          // Server-side "Saved" filter (F11): when set, the server constrains to
+          // the viewer's favorites BEFORE paginating (honest total/hasMore).
+          savedOnly: saved,
         },
       }),
   });
@@ -126,7 +134,7 @@ export const Route = createFileRoute("/")({
     links: [canonicalLink("/")],
   }),
   validateSearch: browseSearchSchema,
-  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius } }) => ({
+  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius, saved } }) => ({
     page,
     attrs,
     sort,
@@ -134,8 +142,9 @@ export const Route = createFileRoute("/")({
     lng,
     q,
     radius,
+    saved,
   }),
-  loader: async ({ context, deps: { page, attrs, sort, lat, lng, q, radius } }) => {
+  loader: async ({ context, deps: { page, attrs, sort, lat, lng, q, radius, saved } }) => {
     // SSR has no live geolocation, so the radius origin is Denver Union Station
     // (user feedback #7). The client re-anchors to the visitor's real coords once
     // granted (see BrowseListings), which refetches under a new query key.
@@ -147,7 +156,8 @@ export const Route = createFileRoute("/")({
         coordsFromSearch(lat, lng),
         q,
         radius,
-        UNION_STATION
+        UNION_STATION,
+        saved
       )
     );
   },
@@ -161,7 +171,7 @@ const QUICK_SHIMMER_MS = 430;
 const SEARCH_DEBOUNCE_MS = 275;
 
 function BrowseListings() {
-  const { page, attrs: attrsParam, sort, lat, lng, q: qParam, radius } = Route.useSearch();
+  const { page, attrs: attrsParam, sort, lat, lng, q: qParam, radius, saved } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
   const coords = coordsFromSearch(lat, lng);
@@ -171,7 +181,7 @@ function BrowseListings() {
   // visitor still gets a meaningful "within N mi" filter rather than everything.
   const origin: UserCoords = coords ?? UNION_STATION;
   const { data } = useSuspenseQuery(
-    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin)
+    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin, saved)
   );
   const geo = useGeolocation();
 
@@ -209,10 +219,10 @@ function BrowseListings() {
     }
     const timer = setTimeout(() => {
       lastPushedQ.current = next;
-      navigate({ search: { page: 1, attrs: attrsParam, sort, lat, lng, q: next, radius } });
+      navigate({ search: { page: 1, attrs: attrsParam, sort, lat, lng, q: next, radius, saved } });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [searchInput, qParam, attrsParam, sort, lat, lng, radius, navigate]);
+  }, [searchInput, qParam, attrsParam, sort, lat, lng, radius, saved, navigate]);
 
   // The full server page as VMs (mapped once, via the shared `listingToCardVM`).
   const allVms = useMemo(
@@ -275,12 +285,12 @@ function BrowseListings() {
       ? attrs.filter((a) => a !== attribute)
       : [...attrs, attribute];
     navigate({
-      search: { page: 1, attrs: serializeAttrs(next), sort, lat, lng, q: qParam, radius },
+      search: { page: 1, attrs: serializeAttrs(next), sort, lat, lng, q: qParam, radius, saved },
     });
   }
 
   function clearAttributes() {
-    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: qParam, radius } });
+    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: qParam, radius, saved } });
   }
 
   /**
@@ -300,6 +310,7 @@ function BrowseListings() {
           lng: undefined,
           q: qParam,
           radius,
+          saved,
         },
       });
       return;
@@ -315,6 +326,7 @@ function BrowseListings() {
             lng: result.coords.lng,
             q: qParam,
             radius,
+            saved,
           },
         });
       } else {
@@ -327,6 +339,7 @@ function BrowseListings() {
             lng: undefined,
             q: qParam,
             radius,
+            saved,
           },
         });
       }
@@ -342,17 +355,32 @@ function BrowseListings() {
    */
   function changeRadius(nextRadius: number) {
     navigate({
-      search: { page: 1, attrs: attrsParam, sort, lat, lng, q: qParam, radius: nextRadius },
+      search: { page: 1, attrs: attrsParam, sort, lat, lng, q: qParam, radius: nextRadius, saved },
+    });
+  }
+
+  /**
+   * Toggle the server-side "Saved" filter (F11), resetting to page 1 (a page
+   * index is meaningless under the favorites subset) and preserving every other
+   * param. Signed-in only — the auth gate lives in {@link FilterChips} (anonymous
+   * click opens a sign-in dialog and never reaches here, so no `savedOnly`
+   * request is ever made for an anonymous viewer).
+   */
+  function toggleSaved() {
+    navigate({
+      search: { page: 1, attrs: attrsParam, sort, lat, lng, q: qParam, radius, saved: !saved },
     });
   }
 
   // The no-results CTA clears EVERYTHING: the client quick chip AND the
   // server-side search + taxonomy filter (resets to page 1 with no `?q=`/`?attrs=`).
+  // The saved filter is a distinct MODE (not a "filter" over the directory), so
+  // it is preserved — clearing filters inside the saved view keeps you in it.
   function clearAll() {
     setQuick(null);
     setSearchInput("");
     lastPushedQ.current = "";
-    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: "", radius } });
+    navigate({ search: { page: 1, attrs: "", sort, lat, lng, q: "", radius, saved } });
   }
 
   // Whether any filter is active across BOTH layers — decides empty vs no-results.
@@ -386,6 +414,8 @@ function BrowseListings() {
             onQuickChange={changeQuick}
             search={searchInput}
             onSearchChange={setSearchInput}
+            saved={saved}
+            onSavedToggle={toggleSaved}
             sheetExtras={
               <DirectoryServerControls
                 sort={sort}
@@ -396,6 +426,7 @@ function BrowseListings() {
                 attrsParam={attrsParam}
                 coords={coords}
                 radius={radius}
+                saved={saved}
               />
             }
           />
@@ -464,6 +495,7 @@ function DirectoryServerControls({
   attrsParam,
   coords,
   radius,
+  saved,
 }: {
   sort: BrowseSort;
   onSortChange: (next: BrowseSort) => void;
@@ -474,6 +506,8 @@ function DirectoryServerControls({
   coords: UserCoords | undefined;
   /** Current distance-radius filter (miles) — preserved across pagination. */
   radius: number;
+  /** Whether the server-side "Saved" filter (F11) is active — preserved across pagination. */
+  saved: boolean;
 }) {
   const hasPrev = data.page > 1;
   const hasNext = data.hasMore;
@@ -520,7 +554,15 @@ function DirectoryServerControls({
           {hasPrev ? (
             <Link
               to="/"
-              search={{ page: data.page - 1, attrs: attrsParam, sort: data.sort, lat, lng, radius }}
+              search={{
+                page: data.page - 1,
+                attrs: attrsParam,
+                sort: data.sort,
+                lat,
+                lng,
+                radius,
+                saved,
+              }}
               className="font-semibold text-brand hover:text-brand-strong"
             >
               ← Previous
@@ -532,7 +574,15 @@ function DirectoryServerControls({
           {hasNext ? (
             <Link
               to="/"
-              search={{ page: data.page + 1, attrs: attrsParam, sort: data.sort, lat, lng, radius }}
+              search={{
+                page: data.page + 1,
+                attrs: attrsParam,
+                sort: data.sort,
+                lat,
+                lng,
+                radius,
+                saved,
+              }}
               className="font-semibold text-brand hover:text-brand-strong"
             >
               Next →

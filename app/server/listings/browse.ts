@@ -13,7 +13,7 @@ import { BROWSE_PAGE_SIZE, MAX_PAGE_SIZE } from "~/listings/browse-params";
 import { type Coords, EARTH_RADIUS_KM, milesToKm } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
-import { getFavoriteCounts } from "~/server/favorites/index";
+import { getFavoriteCounts, getViewerFavoriteIds } from "~/server/favorites/index";
 import { formatDistanceLabel } from "~/trust/browse-card-format";
 import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident, toCalendarDayString } from "~/trust/incident-recency";
@@ -98,6 +98,18 @@ export const browseListingsInputSchema = z.object({
   radiusMiles: z.number().finite().positive().optional(),
   originLat: z.number().finite().min(-90).max(90).optional(),
   originLng: z.number().finite().min(-180).max(180).optional(),
+  /**
+   * SERVER-SIDE "Saved" filter (AUB-129 / F11). When set AND the caller is
+   * signed in, the browse is constrained to the viewer's VISIBLE favorite
+   * listing ids ({@link getViewerFavoriteIds}) — folded into the WHERE BEFORE
+   * paginating, so `page`/`total`/`hasMore` stay honest over the FULL favorites
+   * subset (never a client-side filter over the loaded page). An anonymous
+   * caller or an empty favorite set yields an empty page WITHOUT a broad query.
+   *
+   * PRIVACY (spec §11.1): a `savedOnly` response is viewer-specific, NOT
+   * user-agnostic — it must never be shared/edge/CDN-cached. See `./browse.fn.ts`.
+   */
+  savedOnly: z.boolean().default(false),
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
@@ -177,12 +189,31 @@ export async function getBrowseListings(
   // Independent of `userLat`/`userLng` (those only drive the sort ORDER BY).
   const radiusPredicate = buildRadiusPredicate(input.radiusMiles, input.originLat, input.originLng);
 
-  // Compose visibility (#41) with the search/filter (#34/#35) and the radius
-  // filter (feedback #7). `and(...)` drops `undefined` terms, so a missing
-  // search/filter or a missing/incomplete radius simply contributes nothing.
+  // SERVER-SIDE "Saved" filter (AUB-129 / F11). When `savedOnly` is set we
+  // resolve the viewer's VISIBLE favorite ids and constrain the query to
+  // `listings.id IN (those ids)` — folded into the SHARED `where` below so it
+  // applies to BOTH the page query and the count query, keeping `page`/`total`/
+  // `hasMore` honest over the FULL favorites subset (NOT a client-side filter
+  // over the loaded page). `getViewerFavoriteIds()` returns `[]` for an
+  // anonymous caller AND for a signed-in user with no visible favorites; either
+  // way we SHORT-CIRCUIT to an empty page here WITHOUT ever issuing a broad
+  // (unconstrained) query.
+  let savedPredicate: SQL | undefined;
+  if (input.savedOnly) {
+    const favoriteIds = await getViewerFavoriteIds();
+    if (favoriteIds.length === 0) {
+      return { cards: [], page, pageSize, sort, total: 0, hasMore: false };
+    }
+    savedPredicate = inArray(listings.id, favoriteIds);
+  }
+
+  // Compose visibility (#41) with the search/filter (#34/#35), the radius
+  // filter (feedback #7), and the saved filter (F11). `and(...)` drops
+  // `undefined` terms, so a missing search/filter, a missing/incomplete radius,
+  // or an inactive saved filter simply contributes nothing.
   const where =
-    searchAndFilter || radiusPredicate
-      ? and(visibleListing, searchAndFilter, radiusPredicate)
+    searchAndFilter || radiusPredicate || savedPredicate
+      ? and(visibleListing, searchAndFilter, radiusPredicate, savedPredicate)
       : visibleListing;
 
   // The ORDER BY (#36). Search/filter live in the WHERE above; sort only touches
