@@ -209,9 +209,60 @@ jobs:
       - name: Unit tests
         run: pnpm exec vitest run --allowOnly=false --exclude 'tests/integration/**'
 
+  # Apply migrations to the persistent CI Neon branch ONCE, serially, before any
+  # DB-touching job runs (issue: concurrent-migrate race). The integration suites
+  # each call Drizzle's `migrate()` in `beforeAll`, and vitest runs test files in
+  # parallel — plus `integration-e2e` and `diff-coverage` run concurrently against
+  # the SAME persistent branch. For a brand-NEW migration that means several
+  # `ALTER TABLE … ADD COLUMN` statements fire at once: one wins, the rest error
+  # `column already exists` (Postgres 42701). Making both DB jobs `needs: db-migrate`
+  # guarantees the new migration is applied + recorded exactly once up front, so
+  # every later `migrate()` (in either job, any worker) is a no-op — no race.
+  #
+  # Gated on the optional CI DB secret: with it unset the migrate step is skipped
+  # and the JOB still succeeds (never fails/skips as a job), so dependents with
+  # `needs: [db-migrate]` still run their DB-free paths.
+  db-migrate:
+    name: Apply migrations (CI database)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `secrets` isn't allowed in step-level `if`, so detect the optional CI DB
+      # secret here and gate the migrate step on this output.
+      - name: Check for E2E database secret
+        id: e2e
+        env:
+          E2E_DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+        run: |
+          if [ -n "$E2E_DATABASE_URL" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply database migrations
+        if: steps.e2e.outputs.enabled == 'true'
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+
   integration-e2e:
     name: Integration & E2E
     runs-on: ubuntu-latest
+    # Migrations are applied up front by `db-migrate` so the parallel integration
+    # `migrate()` calls never race on a brand-new migration (see that job).
+    needs: [db-migrate]
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -270,16 +321,11 @@ jobs:
         if: steps.e2e.outputs.enabled == 'true'
         run: pnpm test:e2e:install
 
-      # Apply migrations before E2E so DB-touching features (auth is the first)
-      # run against an up-to-date schema. Gated on the same secret as the E2E
-      # steps. NOTE: the CI Neon branch is persistent (state accumulates across
-      # runs), so DB-touching E2E tests must manage their own data — see
+      # Migrations are applied up front by the `db-migrate` job (this job
+      # `needs: [db-migrate]`), so the schema is already current here — no per-job
+      # migrate step. NOTE: the CI Neon branch is persistent (state accumulates
+      # across runs), so DB-touching E2E tests must manage their own data — see
       # docs/agents/testing.md.
-      - name: Apply database migrations
-        if: steps.e2e.outputs.enabled == 'true'
-        run: pnpm db:migrate
-        env:
-          DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
 
       # The E2E suite includes authenticated + DB-seeded flows (issue #45). Those
       # specs seed via Drizzle and mint a sealed session cookie with the repo's
@@ -305,6 +351,11 @@ jobs:
   diff-coverage:
     name: Diff coverage
     runs-on: ubuntu-latest
+    # In FULL mode this job runs the integration suite against the same persistent
+    # CI branch as `integration-e2e`; depend on `db-migrate` so a brand-new
+    # migration is applied once up front and the parallel `migrate()` calls here
+    # never race it (see the `db-migrate` job).
+    needs: [db-migrate]
 
     steps:
       # fetch-depth: 0 so the merge-base against origin/main resolves (the gate
