@@ -1,14 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { claims, listings, users } from "~/db/schema";
-import { type ResolvedPlace, type SeedListingsResult, seedListings } from "./seed";
-import { CURATOR_BOT, type SeedListing } from "./seed-data";
+import { type SeedListingsResult, seedListings } from "./seed";
+import { CURATOR_BOT, type SeededListing } from "./seed-data";
 
 /**
- * Tests for the listings seeder core (AUB-31). The core takes its DB + Places
- * resolver as injected deps (per `docs/agents/testing.md`), so we model the exact
- * drizzle chains it uses — insert().values().onConflictDoNothing([.returning()])
- * and select().from().where().limit() — with a small fake, and assert behaviour
- * without a live DB or network.
+ * Tests for the listings seeder core (AUB-31). The core is API-free: it takes its
+ * DB as an injected dep (per `docs/agents/testing.md`) and already-resolved BAKED
+ * `SeededListing[]` data as an argument, so we model the exact drizzle chains it
+ * uses — insert().values().onConflictDoNothing([.returning()]) and
+ * select().from().where().limit() — with a small fake, and assert behaviour without
+ * a live DB or network.
  */
 
 type Rows = { id: string }[];
@@ -84,27 +85,24 @@ function makeFakeDb(overrides: Partial<FakeState> = {}) {
   return { db: db as unknown as Parameters<typeof seedListings>[1]["db"], inserts, state };
 }
 
-const place = (over: Partial<ResolvedPlace> = {}): ResolvedPlace => ({
+const listing = (over: Partial<SeededListing> = {}): SeededListing => ({
   placeId: "place-1",
   name: "Moore Cafe and Bakery",
   address: "123 Main St, Denver, CO",
   lat: 39.75,
   lng: -104.99,
-  ...over,
-});
-
-const entry = (over: Partial<SeedListing> = {}): SeedListing => ({
-  query: "Moore Cafe and Bakery, Denver, CO",
   suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
+  menuUrl: null,
+  googleRating: 4.8,
+  googleRatingCount: 120,
   ...over,
 });
 
 describe("seedListings", () => {
-  it("upserts the curator bot and suggests each label under it for a resolved place", async () => {
+  it("upserts the curator bot and suggests each label under it for a baked listing", async () => {
     const { db, inserts } = makeFakeDb({ listingReturning: [[{ id: "listing-1" }]] });
-    const resolvePlace = vi.fn(async () => place());
 
-    const result: SeedListingsResult = await seedListings([entry()], { db, resolvePlace });
+    const result: SeedListingsResult = await seedListings([listing()], { db });
 
     expect(result.botUserId).toBe("bot-1");
     expect(result.listingsInserted).toBe(1);
@@ -128,7 +126,7 @@ describe("seedListings", () => {
       { listingId: "listing-1", attribute: "gf_substitutes", suggestedBy: "bot-1" },
     ]);
 
-    // The listing persists a Place-ID Maps deep-link + the resolved fields.
+    // The listing persists a Place-ID Maps deep-link + the baked fields.
     const listingInsert = inserts.find((i) => i.table === listings);
     expect(listingInsert?.values).toMatchObject({
       placeId: "place-1",
@@ -143,11 +141,9 @@ describe("seedListings", () => {
       listingReturning: [[]],
       listingSelect: [[{ id: "existing-1" }]],
     });
-    const resolvePlace = vi.fn(async () => place());
 
-    const result = await seedListings([entry({ suggestedAttributes: ["dedicated_gf_menu"] })], {
+    const result = await seedListings([listing({ suggestedAttributes: ["dedicated_gf_menu"] })], {
       db,
-      resolvePlace,
     });
 
     expect(result.listingsInserted).toBe(0);
@@ -159,30 +155,15 @@ describe("seedListings", () => {
     });
   });
 
-  it("skips (and records) an entry the resolver can't place, without inserting a listing", async () => {
-    const { db, inserts } = makeFakeDb();
-    const resolvePlace = vi.fn(async () => null);
-
-    const result = await seedListings([entry()], { db, resolvePlace });
-
-    expect(result.skipped).toEqual([
-      { query: "Moore Cafe and Bakery, Denver, CO", reason: "unresolved-or-out-of-range" },
-    ]);
-    expect(result.listingsInserted).toBe(0);
-    expect(inserts.some((i) => i.table === listings)).toBe(false);
-  });
-
   it("does not re-suggest a claim that already exists (idempotent re-run)", async () => {
     // Claim insert conflicts (returns []) — an already-present/attested slot.
     const { db } = makeFakeDb({
       listingReturning: [[{ id: "listing-1" }]],
       claimReturning: [],
     });
-    const resolvePlace = vi.fn(async () => place());
 
-    const result = await seedListings([entry({ suggestedAttributes: ["dedicated_fryer"] })], {
+    const result = await seedListings([listing({ suggestedAttributes: ["dedicated_fryer"] })], {
       db,
-      resolvePlace,
     });
 
     expect(result.claimsSuggested).toBe(0);
@@ -190,8 +171,7 @@ describe("seedListings", () => {
 
   it("throws when the curator bot row can't be resolved", async () => {
     const { db } = makeFakeDb({ botRows: [] });
-    const resolvePlace = vi.fn(async () => place());
 
-    await expect(seedListings([entry()], { db, resolvePlace })).rejects.toThrow(/curator bot/i);
+    await expect(seedListings([listing()], { db })).rejects.toThrow(/curator bot/i);
   });
 });

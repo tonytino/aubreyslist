@@ -4,14 +4,17 @@ name: Seed production database
 # listings (AUB-31), each carrying one or more "Suggested by Aubrey's Bot" labels.
 #
 # Manual + idempotent: run it from the Actions tab ("Run workflow") whenever you
-# want, and re-run freely as you curate `scripts/seed-data.ts` — listings dedup on
-# the Google Place ID and a claim a real user has engaged with is never
-# re-suggested. It applies any pending migrations first (so the `claims.suggested_by`
-# column exists) and then runs the seed.
+# want, and re-run freely as you curate the seed set — listings dedup on the Google
+# Place ID and a claim a real user has engaged with is never re-suggested. It
+# applies any pending migrations first (so the `claims.suggested_by` column exists)
+# and then runs the seed.
 #
-# Skips gracefully (with a warning, not a failure) if PROD_DATABASE_URL or
-# GOOGLE_PLACES_API_KEY is not configured, so the workflow is safe to merge before
-# the secrets exist.
+# API-FREE seed: `pnpm db:seed` inserts the BAKED data committed in
+# `scripts/seed-listings.generated.json` (captured once by `pnpm db:seed:refresh`),
+# so this workflow needs NO Google Places API key — only PROD_DATABASE_URL.
+#
+# Skips gracefully (with a warning, not a failure) if PROD_DATABASE_URL is not
+# configured, so the workflow is safe to merge before the secret exists.
 on:
   workflow_dispatch: {}
 
@@ -49,12 +52,9 @@ jobs:
         id: cfg
         env:
           PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
         run: |
           if [ -z "$PROD_DATABASE_URL" ]; then
             echo "::warning::PROD_DATABASE_URL is not set — skipping production seed."
-          elif [ -z "$GOOGLE_PLACES_API_KEY" ]; then
-            echo "::warning::GOOGLE_PLACES_API_KEY is not set — skipping production seed."
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
@@ -71,4 +71,3 @@ jobs:
         run: pnpm db:seed
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}

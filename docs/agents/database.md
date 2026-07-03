@@ -96,8 +96,10 @@ code queries a column/table the preview DB doesn't have yet).
 
 `.github/workflows/migrate-preview.yml` closes that gap: on a `pull_request` that
 changes `db/schema.ts` or `db/migrations/**`, it resolves the preview branch's Neon
-connection URI via the Neon API (`.github/scripts/resolve-preview-db-url.mjs`) and
-runs `pnpm db:migrate` against it, so the preview matches the PR's schema.
+connection URI via the Neon API (`.github/scripts/resolve-preview-db-url.mjs`), runs
+`pnpm db:migrate` against it, and then **seeds** it (`pnpm db:seed`) — so the preview
+matches the PR's schema *and* shows real density. The seed step is free (API-free
+baked data; see the seeding section) and a graceful no-op when the baked file is empty.
 
 - **Config:** `NEON_API_KEY` — a **repo Secret** (required; sensitive). Absent → the
   workflow skips with a warning (also the case for fork PRs, where secrets are
@@ -156,14 +158,39 @@ dependency is added. See `scripts/seed-admin.ts`.
 ## Seeding Denver listings (`pnpm db:seed`, AUB-31)
 
 Seeds the directory with a curated set of real Denver-metro gluten-free / celiac
-spots (`scripts/seed-data.ts`) so it has density before real users arrive. Each
-entry is resolved to a **real Google Place ID + coordinates** via Places Text
-Search (biased to Union Station, hard-capped at a 25-mile radius), then inserted
-with one or more GF-attribute "labels" **suggested by a curator bot**.
+spots so it has density before real users arrive, with one or more GF-attribute
+"labels" **suggested by a curator bot**. The pipeline splits the Places API call
+away from the seed so `pnpm db:seed` is **API-free**:
 
-- **Command:** `pnpm db:seed` — needs `DATABASE_URL` **and** `GOOGLE_PLACES_API_KEY`
-  (both read via `getEnv()`). Anything the API can't resolve, or that falls
-  outside 25 miles, is skipped and logged, never guessed.
+1. **Sources (edit these):** `scripts/seed-sources.ts` holds the human-curated
+   `SEED_SOURCES` — a Places `query` per spot plus the labels the bot should
+   suggest. This is the editable source of truth.
+2. **Refresh (Places, one-time):** `pnpm db:seed:refresh`
+   (`scripts/refresh-seed-data.ts`) resolves each `query` to a **real Google Place
+   ID + coordinates (+ rating)** via Places Text Search (biased to Union Station,
+   hard-capped at a 25-mile radius) and **bakes** the fully-resolved entries into
+   `scripts/seed-listings.generated.json`. Needs `GOOGLE_PLACES_API_KEY` (read via
+   `getEnv()`). Anything the API can't resolve, or that falls outside 25 miles, is
+   skipped and logged, never guessed. Run it (and commit the regenerated JSON)
+   whenever you curate the sources — locally, or with the **"Refresh seed data"**
+   GitHub Action (`.github/workflows/refresh-seed-data.yml`, `workflow_dispatch`),
+   which runs the refresh with the `GOOGLE_PLACES_API_KEY` secret and commits the
+   regenerated JSON back to the branch. This is the **only** step that spends Places
+   API calls — never `pnpm db:seed`.
+3. **Baked data (committed, generated):** `scripts/seed-listings.generated.json`
+   is the captured output — **do not hand-edit it**. `scripts/seed-data.ts` just
+   parses it into `SEED_LISTINGS`.
+4. **Seed (API-free):** `pnpm db:seed` inserts the baked `SEED_LISTINGS` directly —
+   it **never calls Places**. If the baked file is empty it prints a hint to run
+   the refresh first and exits 0.
+
+- **Command:** `pnpm db:seed` — needs only `DATABASE_URL` (read via `getDb()`); it
+  makes **no network call**. Capturing the data is the separate, one-time
+  `pnpm db:seed:refresh`.
+- **Adding a captured field:** to bake a new Places field (e.g. the Google rating,
+  already captured as `googleRating`/`googleRatingCount`), extend the field mask +
+  `SeededListing` shape in `scripts/refresh-seed-data.ts` (and `seed-data.ts`),
+  then re-run `pnpm db:seed:refresh` and commit the regenerated JSON.
 - **Curator bot:** a single `users` row (`Aubrey's Bot`, role `user`) that is
   **intrinsically collision-proof** with any real account on both unique columns —
   a **non-numeric sentinel `google_sub`** (`seed:aubreys-bot`) a real Google login
@@ -189,12 +216,14 @@ with one or more GF-attribute "labels" **suggested by a curator bot**.
 - **Local / dev:** `pnpm db:seed` against your `.env` `DATABASE_URL`.
 - **Production:** run the **"Seed production database"** GitHub Action
   (`.github/workflows/seed-prod.yml`, `workflow_dispatch`). It applies migrations
-  then seeds, using the `PROD_DATABASE_URL` and `GOOGLE_PLACES_API_KEY` Actions
-  secrets, and skips-with-a-warning if either is unset. Re-runnable from the
-  Actions tab.
+  then seeds, using only the `PROD_DATABASE_URL` Actions secret (the seed is
+  API-free — no Places key needed), and skips-with-a-warning if it is unset.
+  Re-runnable from the Actions tab.
 - **CI (E2E branch):** intentionally **not** auto-seeded — the E2E fixtures
   (`tests/e2e/fixtures.ts`) own their state via per-run tokens + cleanup, and a
   pre-seeded directory would risk flaky count/empty-state assertions.
 
-The testable core is {@link seedListings} with its DB + Places resolver injected;
-the CLI shell wires the real ones. See `scripts/seed.ts` / `scripts/seed-data.ts`.
+The testable core is {@link seedListings} with its DB injected (it takes baked
+data, no resolver); the Places capture lives in {@link refreshSeedData} with its
+resolver injected. See `scripts/seed.ts`, `scripts/refresh-seed-data.ts`,
+`scripts/seed-sources.ts`, and `scripts/seed-data.ts`.
