@@ -185,7 +185,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             they REFLOW side-by-side and a long name can never slide under the pills
             (no absolute overlay, no magic offsets). */}
         <div className="flex items-start justify-between gap-2">
-          <h3 className="min-w-0 font-display text-card-title font-bold text-foreground">
+          <h3 className="min-w-0 break-words font-display text-card-title font-bold text-foreground">
             {vm.name}
           </h3>
 
