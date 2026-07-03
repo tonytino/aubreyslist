@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Check, Clock, Heart, Star, TriangleAlert, Users } from "lucide-react";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
+import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { Badge } from "~/components/ui/badge";
 import type { Listing } from "~/db/schema";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
@@ -222,17 +223,13 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
         </div>
       </Link>
 
-      {/* Save/heart affordance — present but not wired (Phase 2). A SIBLING of the
-          Link (not a descendant — a <button> inside an <a> is invalid HTML), raised
-          above the stretched-link overlay with `relative z-10` so it stays
-          independently focusable/clickable. */}
-      <button
-        type="button"
-        aria-label="Save this spot"
-        className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand"
-      >
-        <Heart className="h-4 w-4" aria-hidden="true" />
-      </button>
+      {/* Save/heart affordance (F6, AUB-125). A SIBLING of the Link (not a
+          descendant — a <button> inside an <a> is invalid HTML), raised above the
+          stretched-link overlay with `absolute … z-10` so it stays independently
+          focusable/clickable. FavoriteButton reproduces the previous inert heart's
+          exact top-right position/classes and reads `["favorites"]` itself, so the
+          VM stays per-user-free. */}
+      <FavoriteButton listingId={vm.id} listingName={vm.name} />
     </div>
   );
 }
