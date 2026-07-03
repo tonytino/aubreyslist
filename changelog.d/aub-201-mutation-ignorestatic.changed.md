@@ -1,0 +1,1 @@
+- `[manual]` Mutation testing enables `ignoreStatic`: per Stryker's warning, static mutants (~13% of the total) consumed an estimated ~92% of the run; the suite now finishes in ~5 minutes. Baseline re-measured with statics excluded — score 84.62% across 403 runtime mutants, `thresholds.break` ratcheted 76 → 84 (AUB-201).
