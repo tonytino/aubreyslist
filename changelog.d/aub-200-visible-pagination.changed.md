@@ -1,0 +1,1 @@
+- `[manual]` Browse pagination is now visible at the end of the List view: Previous/Next links with an honest "Page N of M" from the server total, real disabled states at the ends, hidden when there's only one page, and URL-driven `?page=` throughout (AUB-200). Previously the pager was buried in the Filter listings sheet.

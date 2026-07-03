@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { openBrowseFilters, waitForBrowseReady } from "./helpers";
+import { waitForBrowseReady } from "./helpers";
 
 /**
  * Smoke test for the browse/directory route (#33, AUB-61 redesign). Open to
@@ -8,9 +8,10 @@ import { openBrowseFilters, waitForBrowseReady } from "./helpers";
  * seeded), so we assert the directory chrome renders and EITHER listing cards OR
  * one of the honest empty/no-results states — never a fabricated count.
  *
- * The redesign moves the server-side sort + taxonomy filter behind the "Filters"
- * bottom sheet (the mobile header surfaces search + quick chips), so the sort/
- * filter tests open that sheet first via {@link openBrowseFilters}.
+ * AUB-198 retired the "Filter listings" bottom sheet: the server-side taxonomy
+ * filter renders as toggle chips and the sort as a labelled select chip, all
+ * directly in the filter chip row — so the sort/filter tests interact with the
+ * row itself (no sheet to open).
  */
 test("browse directory renders for anonymous visitors", async ({ page }) => {
   // The directory is the home page now (AUB-116).
@@ -80,14 +81,15 @@ test("a quick chip persists in the URL and across a reload", async ({ page }) =>
 });
 
 /**
- * Sort control (#36). The labeled `<select>` lives in the Filters sheet; choosing
- * a sort drives the URL (`?sort=`) so the view stays linkable, mirroring the
- * `?page=`/`?attrs=` pattern. We assert the accessible labeled control and the
- * URL wiring; the page-reset on sort change is covered by unit tests.
+ * Sort control (#36, chip row since AUB-198). The labelled `<select>` chip sits
+ * directly in the filter row; choosing a sort drives the URL (`?sort=`) so the
+ * view stays linkable, mirroring the `?page=`/`?attrs=` pattern. We assert the
+ * accessible labeled control and the URL wiring; the page-reset on sort change is
+ * covered by unit tests.
  */
 test("browse sort control is labeled and drives the URL", async ({ page }) => {
   await page.goto("/");
-  await openBrowseFilters(page);
+  await waitForBrowseReady(page);
 
   const sort = page.getByLabel("Sort by");
   await expect(sort).toBeVisible();
@@ -108,20 +110,24 @@ test("browse sort control is labeled and drives the URL", async ({ page }) => {
 /**
  * Taxonomy filter (#35) and sort (#36) compose: applying a filter and then a
  * sort keeps BOTH params in the URL (they are orthogonal). Guards the merge of
- * the two parallel features. Both controls live in the Filters sheet now.
+ * the two parallel features. Both controls live directly in the chip row now
+ * (AUB-198) — the taxonomy filter as toggle chips, the sort as a select chip.
  */
 test("filter and sort compose in the URL", async ({ page }) => {
   await page.goto("/");
-  await openBrowseFilters(page);
+  await waitForBrowseReady(page);
 
-  // Toggle the headline celiac-safe taxonomy filter (a labeled checkbox from #35).
-  const celiacFilter = page.getByRole("checkbox", { name: "Celiac-safe" });
-  await expect(celiacFilter).toBeVisible();
-
-  // Use click(), not check(): the checkbox is a controlled input whose state is
-  // derived from the URL, so toggling it fires a navigation that re-renders it.
-  await celiacFilter.click();
-  await expect(page).toHaveURL(/attrs=celiac_safe_vs_gluten_friendly/);
+  // Toggle a taxonomy chip (the server-side consensus filter from #35). The chip
+  // is URL-controlled (`aria-pressed` derives from `?attrs=`), so the click fires
+  // a navigation that re-renders it pressed.
+  const fryerChip = page.getByRole("button", { name: "Dedicated fryer" });
+  await expect(fryerChip).toBeVisible();
+  await fryerChip.click();
+  await expect(page).toHaveURL(/attrs=dedicated_fryer/);
+  await expect(page.getByRole("button", { name: "Dedicated fryer" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
 
   // Now sort; the filter param must survive alongside the new sort param.
   await page.getByLabel("Sort by").selectOption("trust");

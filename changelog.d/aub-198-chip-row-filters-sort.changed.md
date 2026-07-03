@@ -1,0 +1,2 @@
+- `[manual]` The directory's GF taxonomy filters now render as toggle chips directly in the filter row (one per attribute, each with its distinct icon), and the sort control is a select chip beside them — both still URL-driven (`?attrs=`, `?sort=`) with unchanged server-side semantics (AUB-198).
+- `[manual]` The chip row wraps into multiple lines on wider screens (still one horizontal scroll row on mobile) so all filters stay visible without a long sideways drag.
