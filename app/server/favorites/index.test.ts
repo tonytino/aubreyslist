@@ -91,6 +91,10 @@ const h = vi.hoisted(() => {
     Promise.resolve(listings.map((listing) => ({ listing, glance: {} })))
   );
 
+  // `Sentry.captureException` — spied so we can assert a degraded read still
+  // REPORTS its error (observability is preserved when we swallow it).
+  const captureExceptionMock = vi.fn();
+
   return {
     state,
     limitMock,
@@ -107,6 +111,7 @@ const h = vi.hoisted(() => {
     getCurrentUserMock,
     enforceWriteLimitMock,
     buildBrowseCardsMock,
+    captureExceptionMock,
   };
 });
 
@@ -132,6 +137,10 @@ vi.mock("~/server/rate-limit", () => ({
 
 vi.mock("~/server/listings/browse", () => ({
   buildBrowseCards: h.buildBrowseCardsMock,
+}));
+
+vi.mock("@sentry/tanstackstart-react", () => ({
+  captureException: h.captureExceptionMock,
 }));
 
 import {
@@ -165,6 +174,49 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+});
+
+describe("read degradation — a favorites read failure never 500s the page", () => {
+  // The favorites reads run on hot paths (getFavoriteCounts on EVERY browse
+  // render + /favorites; getViewerFavoriteIds on the __root prefetch for every
+  // signed-in page; getViewerFavorites on /favorites). A read failure — e.g. the
+  // `favorites` table briefly unavailable on a fresh/preview DB, or the deploy
+  // window before a schema migration applies — must degrade, not crash the page.
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
+  it("getFavoriteCounts degrades to an empty map (not a throw) when the aggregate query fails", async () => {
+    selectMock.mockImplementationOnce(() => {
+      throw new Error('relation "favorites" does not exist');
+    });
+    const result = await getFavoriteCounts(["listing-1", "listing-2"]);
+    expect(result.size).toBe(0);
+    // Still reported — degradation is not silent.
+    expect(h.captureExceptionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("getViewerFavoriteIds degrades to [] when the read fails (never 500s the root prefetch)", async () => {
+    selectMock.mockImplementationOnce(() => {
+      throw new Error('relation "favorites" does not exist');
+    });
+    const result = await getViewerFavoriteIds();
+    expect(result).toEqual([]);
+    expect(h.captureExceptionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("getViewerFavorites degrades to [] when the read fails (/favorites shows its empty state)", async () => {
+    selectMock.mockImplementationOnce(() => {
+      throw new Error('relation "favorites" does not exist');
+    });
+    const result = await getViewerFavorites(new Date(0), 6);
+    expect(result).toEqual([]);
+    expect(h.captureExceptionMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("addFavorite — idempotent, visibility-gated write", () => {

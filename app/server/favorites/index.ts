@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/tanstackstart-react";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { getDb } from "~/db/client";
@@ -32,6 +33,32 @@ import { enforceWriteLimit } from "~/server/rate-limit";
  * scoped to the current user (empty for anonymous, with no DB hit); the count
  * aggregate ({@link getFavoriteCounts}) is public and user-agnostic.
  */
+
+/**
+ * Run a NON-ESSENTIAL favorites READ, degrading to `fallback` if it throws.
+ *
+ * Favorites are an enhancement layered over the core directory — the public
+ * save-count and the viewer's saved set. A read failure here must NEVER 500 the
+ * browse loader or the `__root` prefetch that runs on every page. The realistic
+ * failure is the `favorites` table being briefly unavailable: a fresh/preview DB
+ * that hasn't had the migration applied, or the deploy window on a schema
+ * release BEFORE `migrate.yml` finishes applying it. We report the error (so it
+ * stays visible in Sentry + server logs) and fall back, so the core page still
+ * renders — cards simply show no save-count and no saved state.
+ *
+ * Only READS degrade. The gated WRITES ({@link addFavorite}/{@link removeFavorite})
+ * still throw — a failed save must surface to the user (the island toasts + rolls
+ * back), not silently no-op.
+ */
+async function readOrDegrade<T>(label: string, read: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    console.error(`[favorites] ${label} failed; degrading to fallback`, error);
+    Sentry.captureException(error);
+    return fallback;
+  }
+}
 
 /**
  * Favorite a listing for the current user (idempotent, concurrent-safe).
@@ -107,15 +134,24 @@ export async function getViewerFavoriteIds(): Promise<string[]> {
     return [];
   }
 
-  const db = getDb();
+  // Runs on the `__root` prefetch for every signed-in page view — degrade to an
+  // empty set (the viewer momentarily sees no saved state) rather than 500 the
+  // whole app if the favorites read fails.
+  return readOrDegrade(
+    "getViewerFavoriteIds",
+    async () => {
+      const db = getDb();
 
-  const rows = await db
-    .select({ listingId: favorites.listingId })
-    .from(favorites)
-    .innerJoin(listings, eq(listings.id, favorites.listingId))
-    .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")));
+      const rows = await db
+        .select({ listingId: favorites.listingId })
+        .from(favorites)
+        .innerJoin(listings, eq(listings.id, favorites.listingId))
+        .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")));
 
-  return rows.map((row) => row.listingId);
+      return rows.map((row) => row.listingId);
+    },
+    []
+  );
 }
 
 /**
@@ -150,33 +186,41 @@ export async function getViewerFavorites(
     return [];
   }
 
-  const db = getDb();
+  // Backs the `/favorites` page — degrade to an empty set (the page shows its
+  // empty state) rather than 500 if the favorites read fails.
+  return readOrDegrade(
+    "getViewerFavorites",
+    async () => {
+      const db = getDb();
 
-  // The viewer's favorited listings, visibility-gated and newest-saved first.
-  const rows = await db
-    .select({ listing: listings })
-    .from(favorites)
-    .innerJoin(listings, eq(listings.id, favorites.listingId))
-    .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")))
-    .orderBy(desc(favorites.createdAt));
+      // The viewer's favorited listings, visibility-gated and newest-saved first.
+      const rows = await db
+        .select({ listing: listings })
+        .from(favorites)
+        .innerJoin(listings, eq(listings.id, favorites.listingId))
+        .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")))
+        .orderBy(desc(favorites.createdAt));
 
-  const viewerListings = rows.map((row) => row.listing);
-  const listingIds = viewerListings.map((listing) => listing.id);
+      const viewerListings = rows.map((row) => row.listing);
+      const listingIds = viewerListings.map((listing) => listing.id);
 
-  // Build the trust cores through the SAME helper the browse page uses (so the
-  // glance matches byte-for-byte), and batch the public save-counts alongside it
-  // (one grouped query, NO N+1) — mirroring how getBrowseListings assembles a card.
-  const [baseCards, favoriteCounts] = await Promise.all([
-    buildBrowseCards(viewerListings, now, stalenessMonths),
-    getFavoriteCounts(listingIds),
-  ]);
+      // Build the trust cores through the SAME helper the browse page uses (so the
+      // glance matches byte-for-byte), and batch the public save-counts alongside it
+      // (one grouped query, NO N+1) — mirroring how getBrowseListings assembles a card.
+      const [baseCards, favoriteCounts] = await Promise.all([
+        buildBrowseCards(viewerListings, now, stalenessMonths),
+        getFavoriteCounts(listingIds),
+      ]);
 
-  // Attach the save-count (defaulting to 0 for a listing absent from the grouped
-  // aggregate). No distance origin here, so `distanceLabel` is intentionally absent.
-  return baseCards.map((card) => ({
-    ...card,
-    favoriteCount: favoriteCounts.get(card.listing.id) ?? 0,
-  }));
+      // Attach the save-count (defaulting to 0 for a listing absent from the grouped
+      // aggregate). No distance origin here, so `distanceLabel` is intentionally absent.
+      return baseCards.map((card) => ({
+        ...card,
+        favoriteCount: favoriteCounts.get(card.listing.id) ?? 0,
+      }));
+    },
+    []
+  );
 }
 
 /**
@@ -192,19 +236,28 @@ export async function getFavoriteCounts(listingIds: string[]): Promise<Map<strin
     return new Map();
   }
 
-  const db = getDb();
+  // Runs on EVERY browse render (public, user-agnostic) and on `/favorites` —
+  // degrade to an empty map (cards default each count to 0) rather than 500 the
+  // directory if the aggregate fails.
+  return readOrDegrade(
+    "getFavoriteCounts",
+    async () => {
+      const db = getDb();
 
-  const rows = await db
-    .select({ listingId: favorites.listingId, n: count() })
-    .from(favorites)
-    .where(inArray(favorites.listingId, listingIds))
-    .groupBy(favorites.listingId);
+      const rows = await db
+        .select({ listingId: favorites.listingId, n: count() })
+        .from(favorites)
+        .where(inArray(favorites.listingId, listingIds))
+        .groupBy(favorites.listingId);
 
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    counts.set(row.listingId, row.n);
-  }
-  return counts;
+      const counts = new Map<string, number>();
+      for (const row of rows) {
+        counts.set(row.listingId, row.n);
+      }
+      return counts;
+    },
+    new Map<string, number>()
+  );
 }
 
 // The client-callable `createServerFn` wrappers (favoriteListing /
