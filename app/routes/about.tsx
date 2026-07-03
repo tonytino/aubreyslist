@@ -1,4 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Utensils } from "lucide-react";
+import { SAFETY_STATES, SafetySignal } from "~/components/SafetySignal";
+import { claimAttributeLabel } from "~/trust/summary";
 
 /**
  * About — a static content route explaining the mission, the trust model, the GF
@@ -102,6 +105,24 @@ function AboutPage() {
           distinction, staleness, and recent incidents are each shown with a distinct icon and text
           label so the meaning survives color-vision differences and greyscale.
         </p>
+        {/* The concrete legend behind that claim (migrated from the retired home
+            hero, AUB-116): the headline trust verdicts plus one NEUTRAL GF
+            taxonomy-attribute example. Each is icon + text, never color alone
+            (styling.md), so the abstract "distinct icon and text label" reads as
+            something you can actually see. `stale` is a freshness meta-state, not
+            a headline verdict, so it is intentionally omitted here. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {SAFETY_STATES.filter((state) => state !== "stale").map((state) => (
+            <SafetySignal key={state} state={state} />
+          ))}
+          {/* An example GF taxonomy attribute (domain.md) — matches the
+              SafetySignal chip geometry but in a NEUTRAL tone so it never reads
+              as a safety verdict. */}
+          <span className="inline-flex items-center gap-1.5 rounded-chip border border-border bg-muted px-2.5 py-1 text-body-sm font-medium text-muted-foreground">
+            <Utensils aria-hidden className="h-4 w-4 shrink-0" />
+            {claimAttributeLabel("dedicated_fryer")}
+          </span>
+        </div>
       </section>
 
       <section aria-labelledby="taxonomy-heading" className="mt-section flex flex-col gap-3">
@@ -140,7 +161,7 @@ function AboutPage() {
         </ol>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Link
-            to="/listings"
+            to="/"
             className="inline-flex items-center justify-center rounded-card bg-brand px-5 py-2.5 text-body font-semibold text-brand-foreground hover:bg-brand-strong"
           >
             Browse Denver listings

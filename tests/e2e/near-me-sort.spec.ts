@@ -22,7 +22,7 @@ test.describe("near me — geolocation granted", () => {
   test.use({ geolocation: DENVER, permissions: ["geolocation"] });
 
   test("sorting by distance with permission granted puts coords in the URL", async ({ page }) => {
-    await page.goto("/listings");
+    await page.goto("/");
     await openBrowseFilters(page);
 
     const sort = page.getByLabel("Sort by");
@@ -71,7 +71,7 @@ test.describe("near me — geolocation denied", () => {
   test("denied geolocation falls back to alphabetical with an accessible message", async ({
     page,
   }) => {
-    await page.goto("/listings");
+    await page.goto("/");
     await openBrowseFilters(page);
 
     const sort = page.getByLabel("Sort by");

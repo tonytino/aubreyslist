@@ -13,7 +13,8 @@ import { openBrowseFilters } from "./helpers";
  * filter tests open that sheet first via {@link openBrowseFilters}.
  */
 test("browse directory renders for anonymous visitors", async ({ page }) => {
-  await page.goto("/listings");
+  // The directory is the home page now (AUB-116).
+  await page.goto("/");
 
   // The search now leads the filter chip row as a collapsed chip (user feedback
   // #5); its presence proves the directory chrome rendered.
@@ -27,11 +28,25 @@ test("browse directory renders for anonymous visitors", async ({ page }) => {
   await expect(resultsList.or(emptyState).first()).toBeVisible();
 });
 
-test("home Browse CTA navigates to the directory", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("link", { name: "Browse Denver listings" }).click();
-  await expect(page).toHaveURL(/\/listings/);
+test("/listings redirects to the directory at /", async ({ page }) => {
+  // The old directory URL now permanently redirects to `/` (AUB-116). The
+  // beforeLoad redirect forwards the validated search, so the landing URL carries
+  // the schema's canonical defaults (e.g. `/?page=1&attrs=&q=&sort=alpha&radius=25`);
+  // tolerate that trailing query string rather than asserting a bare `/`.
+  await page.goto("/listings");
+  await expect(page).toHaveURL(/^[^?]*\/(\?|$)/);
+  await expect(page).not.toHaveURL(/\/listings/);
   await expect(page.getByRole("button", { name: "Search restaurants" })).toBeVisible();
+});
+
+test("/listings redirect preserves search params", async ({ page }) => {
+  // A shared `/listings?…` link keeps its params through the redirect to `/`
+  // (routing.md smoke-test guidance).
+  await page.goto("/listings?page=2&sort=trust");
+  await expect(page).toHaveURL(/^[^?]*\/\?/);
+  await expect(page).not.toHaveURL(/\/listings/);
+  await expect(page).toHaveURL(/page=2/);
+  await expect(page).toHaveURL(/sort=trust/);
 });
 
 /**
@@ -41,7 +56,7 @@ test("home Browse CTA navigates to the directory", async ({ page }) => {
  * URL wiring; the page-reset on sort change is covered by unit tests.
  */
 test("browse sort control is labeled and drives the URL", async ({ page }) => {
-  await page.goto("/listings");
+  await page.goto("/");
   await openBrowseFilters(page);
 
   const sort = page.getByLabel("Sort by");
@@ -64,7 +79,7 @@ test("browse sort control is labeled and drives the URL", async ({ page }) => {
  * the two parallel features. Both controls live in the Filters sheet now.
  */
 test("filter and sort compose in the URL", async ({ page }) => {
-  await page.goto("/listings");
+  await page.goto("/");
   await openBrowseFilters(page);
 
   // Toggle the headline celiac-safe taxonomy filter (a labeled checkbox from #35).

@@ -65,9 +65,10 @@ test("the app hydrates: a <Link> does client-side navigation, not a full reload"
     (window as unknown as { __hydrationSentinel?: boolean }).__hydrationSentinel = true;
   });
 
-  // The home hero links to the add-listing route via TanStack Router's <Link>.
-  // Client-side navigation only happens once the page has hydrated.
-  await page.getByRole("link", { name: "Add a listing", exact: false }).first().click();
+  // `/` is the directory now (AUB-116); its floating "Add listing" FAB links to
+  // the add-listing route via TanStack Router's <Link>. Client-side navigation
+  // only happens once the page has hydrated.
+  await page.getByRole("link", { name: "Add listing", exact: false }).first().click();
   await expect(page).toHaveURL(/\/listings\/new/);
 
   // If the sentinel survived, the navigation was client-side — proof the page

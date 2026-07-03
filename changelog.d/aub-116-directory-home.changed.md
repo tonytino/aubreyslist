@@ -1,0 +1,1 @@
+- `[manual]` The Denver directory is now the home page (`/`); the standalone marketing landing is retired and `/listings` redirects to `/`. Added an About nav icon.
