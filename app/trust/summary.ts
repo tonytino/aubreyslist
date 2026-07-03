@@ -1,3 +1,11 @@
+import {
+  BookOpen,
+  ConciergeBell,
+  Flame,
+  type LucideIcon,
+  Replace,
+  ShieldCheck,
+} from "lucide-react";
 import type { SafetyState } from "~/components/SafetySignal";
 import type { ClaimAttribute } from "~/db/schema";
 import type { ClaimAggregate } from "~/server/attestations";
@@ -46,6 +54,24 @@ export const CLAIM_ATTRIBUTE_LABELS: Record<ClaimAttribute, string> = {
 export function claimAttributeLabel(attribute: ClaimAttribute): string {
   return CLAIM_ATTRIBUTE_LABELS[attribute];
 }
+
+/**
+ * A distinct lucide glyph per claim attribute — shape reinforces the attribute
+ * identity on compact surfaces (e.g. the review-step outcome chip), independent
+ * of colour. The headline `celiac_safe_vs_gluten_friendly` icon is included for
+ * completeness/exhaustiveness, but the review chip keeps its `SafetySignal` for
+ * the headline; these icons are used only for the four non-headline facts.
+ *
+ * Exhaustive by the `ClaimAttribute` key so adding a taxonomy value forces an
+ * icon here too. All glyphs are verified exports of the installed `lucide-react`.
+ */
+export const CLAIM_ATTRIBUTE_ICONS: Record<ClaimAttribute, LucideIcon> = {
+  celiac_safe_vs_gluten_friendly: ShieldCheck,
+  dedicated_fryer: Flame,
+  dedicated_gf_menu: BookOpen,
+  off_menu_gf_on_request: ConciergeBell,
+  gf_substitutes: Replace,
+};
 
 /**
  * Optional one-line clarifier for what *confirm* vs *dispute* MEANS on an

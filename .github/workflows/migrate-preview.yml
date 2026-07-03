@@ -15,27 +15,25 @@ name: Migrate & seed preview database
 # so it needs no Google Places key — only the resolved preview DB URL. It is
 # idempotent (dedup on Place ID) and a graceful no-op when the baked file is empty.
 #
-# Only runs when the schema/migrations OR the baked seed data actually change (paths
-# filter) — an unrelated PR needs no preview migration/seed. Skips gracefully (a
-# warning, not a failure) when the Neon secrets are absent (e.g. fork PRs, where
-# secrets are withheld) or when the preview branch doesn't exist yet.
+# The real work only happens when the schema/migrations OR the baked seed data
+# actually change — an unrelated PR needs no preview migration/seed. That
+# relevance check lives INSIDE the job (the `relevance` step) rather than as a
+# trigger-level `paths` filter: this check is required by the branch ruleset,
+# and a path-filtered workflow never reports on PRs outside its paths — leaving
+# the required check stuck "Expected" and blocking the merge of every unrelated
+# PR. Running always and no-op'ing with success keeps the gate enforceable.
+# Also skips gracefully (a warning, not a failure) when the Neon secrets are
+# absent (e.g. fork PRs, where secrets are withheld) or when the preview branch
+# doesn't exist yet.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      - "db/migrations/**"
-      - "db/schema.ts"
-      # Re-run the seed when the baked data (or the seed itself) changes, so a fresh
-      # bake populates the preview even on a PR that touches no schema/migration.
-      - "scripts/seed-listings.generated.json"
-      - "scripts/seed.ts"
-      - "scripts/seed-data.ts"
-      - ".github/workflows/migrate-preview.yml"
-      - ".github/scripts/resolve-preview-db-url.mjs"
 
-# Least privilege: only reads the repo; the Neon key + DB URL are secrets.
+# Least privilege: reads the repo + the PR's changed files; the Neon key + DB
+# URL are secrets.
 permissions:
   contents: read
+  pull-requests: read
 
 # One preview migration per branch at a time (drizzle-kit migrate is idempotent,
 # but serialize to avoid two runs racing the same branch — same class of race the
@@ -50,17 +48,53 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Decide whether this PR touches the schema, migrations, or seed inputs.
+      # When it doesn't, every later step is skipped and the job still reports
+      # success — see the header comment for why this is not a trigger `paths`
+      # filter.
+      - name: Check whether schema/migration/seed paths changed
+        id: relevance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Retry the listing: a transient API failure must not fail (or worse,
+          # silently pass) this required check.
+          files=""
+          for attempt in 1 2 3; do
+            if files=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --paginate --jq '.[].filename'); then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "::error::Could not list the PR's changed files after 3 attempts."
+              exit 1
+            fi
+            sleep 10
+          done
+          # The files endpoint caps at 3000 entries. A PR that large gets the
+          # full run rather than risking a silently skipped gate.
+          if [ "$(echo "$files" | wc -l)" -ge 3000 ] \
+            || echo "$files" | grep -qE '^(db/migrations/|db/schema\.ts$|scripts/seed-listings\.generated\.json$|scripts/seed\.ts$|scripts/seed-data\.ts$|\.github/workflows/migrate-preview\.yml$|\.github/scripts/resolve-preview-db-url\.mjs$)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "No schema/migration/seed files changed — skipping preview migration and reporting success."
+          fi
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: steps.relevance.outputs.relevant == 'true'
 
       # pnpm version comes from `packageManager` in package.json
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        if: steps.relevance.outputs.relevant == 'true'
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        if: steps.relevance.outputs.relevant == 'true'
         with:
           node-version-file: .nvmrc
           cache: "pnpm"
 
       - name: Install dependencies
+        if: steps.relevance.outputs.relevant == 'true'
         run: pnpm install --frozen-lockfile
 
       # The `secrets` context isn't allowed in step-level `if`, so detect the Neon
@@ -68,6 +102,7 @@ jobs:
       # optional — the resolver auto-detects a sole project when it's unset.
       - name: Check for Neon API secret
         id: cfg
+        if: steps.relevance.outputs.relevant == 'true'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |

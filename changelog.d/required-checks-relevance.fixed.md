@@ -1,0 +1,1 @@
+- `[manual]` Moved the path filters of the required `Mutation testing` and `Migrate & seed preview database` checks from the workflow trigger into an in-job relevance step, so they report success (as a no-op) on PRs that don't touch their paths instead of leaving the required check stuck "Expected" and blocking the merge.

@@ -132,8 +132,12 @@ The Neon↔Vercel integration forks each PR's **preview** database branch
 merges — so without help, a schema-changing PR's preview 500s (the deployed preview
 code queries a column/table the preview DB doesn't have yet).
 
-`.github/workflows/migrate-preview.yml` closes that gap: on a `pull_request` that
-changes `db/schema.ts` or `db/migrations/**`, it resolves the preview branch's Neon
+`.github/workflows/migrate-preview.yml` closes that gap: it runs on every
+`pull_request` (its check is required by the branch ruleset, so it must always
+report — a trigger-level `paths:` filter would leave the check stuck "Expected"
+and block unrelated PRs), and a first in-job `relevance` step no-ops it with
+success unless the PR changes `db/schema.ts`, `db/migrations/**`, or the seed
+inputs. When relevant, it resolves the preview branch's Neon
 connection URI via the Neon API (`.github/scripts/resolve-preview-db-url.mjs`), runs
 `pnpm db:migrate` against it, and then **seeds** it (`pnpm db:seed`) — so the preview
 matches the PR's schema *and* shows real density. The seed step is free (API-free
@@ -205,7 +209,8 @@ away from the seed so `pnpm db:seed` is **API-free**:
    suggest. This is the editable source of truth.
 2. **Refresh (Places, one-time):** `pnpm db:seed:refresh`
    (`scripts/refresh-seed-data.ts`) resolves each `query` to a **real Google Place
-   ID + coordinates (+ rating)** via Places Text Search (biased to Union Station,
+   ID + coordinates (+ rating + Google's `googleMapsUri` share link, preferred as
+   the seeded `mapsUrl`)** via Places Text Search (biased to Union Station,
    hard-capped at a 25-mile radius) and **bakes** the fully-resolved entries into
    `scripts/seed-listings.generated.json`. Needs **only** `GOOGLE_PLACES_API_KEY`
    (read via `getPlacesApiKey()`, a narrow accessor — the refresh never opens a DB
@@ -270,3 +275,23 @@ The testable core is {@link seedListings} with its DB injected (it takes baked
 data, no resolver); the Places capture lives in {@link refreshSeedData} with its
 resolver injected. See `scripts/seed.ts`, `scripts/refresh-seed-data.ts`,
 `scripts/seed-sources.ts`, and `scripts/seed-data.ts`.
+
+## Backfilling listing maps URLs (`pnpm db:backfill:maps-urls`)
+
+Listings created before the Maps-link fix stored `maps_url` in the legacy
+`https://www.google.com/maps/place/?q=place_id:…` format, which Google Maps no
+longer resolves. `pnpm db:backfill:maps-urls` (`scripts/backfill-maps-urls.ts`)
+rewrites exactly those rows to the documented Maps URLs API format
+(`/maps/search/?api=1&query=<name address>&query_place_id=<place id>`) using
+columns already on each row — **API-free**, needs only `DATABASE_URL`, and
+idempotent (a rewritten row never matches the legacy prefix again). Rows in the
+legacy format with no Place ID are reported and left untouched, never guessed.
+
+- **Local / dev:** `pnpm db:backfill:maps-urls` against your `.env` `DATABASE_URL`.
+- **Production:** run the **"Backfill production maps URLs"** GitHub Action
+  (`.github/workflows/backfill-maps-urls.yml`, `workflow_dispatch`) — uses the
+  `PROD_DATABASE_URL` secret and skips-with-a-warning if it is unset.
+
+New listings don't need it: the Places provider now stores Google's own share
+link (`googleMapsUri` from Place Details) and only falls back to the built
+Maps URLs API link when that field is absent.

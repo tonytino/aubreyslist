@@ -162,6 +162,25 @@ describe("AdminPanel — intake-mode toggle (#24)", () => {
       expect(mocks.setIntakeMode).toHaveBeenCalledTimes(1);
     });
     expect(mocks.setIntakeMode).toHaveBeenCalledWith({ data: { mode: "manual" } });
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Intake mode updated");
+    });
+  });
+
+  it("shows an error toast when switching the intake mode fails", async () => {
+    mocks.setIntakeMode.mockRejectedValueOnce(new Error("boom"));
+    renderInApp(<AdminPanel viewerRole="admin" settings={settings({ intakeMode: "places" })} />);
+
+    fireEvent.change(await screen.findByLabelText(/intake mode/i), {
+      target: { value: "manual" },
+    });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        "Could not update the intake mode. Please try again."
+      );
+    });
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("keeps the staleness window visible (read-only) alongside the toggle", async () => {

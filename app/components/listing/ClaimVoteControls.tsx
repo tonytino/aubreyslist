@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import type { AttestationValue, ClaimAttribute } from "~/db/schema";
 import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
@@ -57,12 +58,26 @@ export function ClaimVoteControls({
 
   const vote = useMutation({
     mutationFn: (value: AttestationValue) => submitVote({ data: { listingId, attribute, value } }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      // A single neutral message regardless of confirm vs dispute — the button's
+      // own pressed state already conveys which one was cast.
+      toast.success("Vote recorded");
+    },
+    onError: () => {
+      toast.error("Could not record your vote. Please try again.");
+    },
   });
 
   const retract = useMutation({
     mutationFn: () => removeVote({ data: { listingId, attribute } }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      toast.success("Vote retracted");
+    },
+    onError: () => {
+      toast.error("Could not retract your vote. Please try again.");
+    },
   });
 
   if (!isSignedIn) {

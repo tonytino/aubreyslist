@@ -4,8 +4,10 @@ import type { AnswerMap, WizardPlace } from "./AddListingWizard";
 import { ReviewStep } from "./ReviewStep";
 
 /**
- * ReviewStep tests: headline confirm → SafetySignal chip; fact confirm → plain
- * "Confirmed"; skip/untouched → "Not yet attested"; Edit jumps to the right step.
+ * ReviewStep tests: headline confirm → SafetySignal chip; fact confirm/dispute →
+ * a per-attribute icon chip carrying the "Confirmed"/"Disputed" word in a neutral
+ * (non-safety) tint; skip/untouched → "Not yet attested"; Edit jumps to the right
+ * step.
  */
 
 const PLACE: WizardPlace = { mode: "places", placeId: "p1", description: "Two Hands, Denver" };
@@ -40,7 +42,7 @@ describe("ReviewStep", () => {
     expect(container.querySelector('[data-safety-state="celiac-safe"]')).not.toBeNull();
   });
 
-  it("renders plain 'Confirmed' (no safety chip) for a confirmed fact attribute", () => {
+  it("renders a neutral fact chip (no safety chip) for a confirmed fact attribute", () => {
     const { container } = renderReviewContainer({
       celiac_safe_vs_gluten_friendly: undefined,
       dedicated_fryer: "confirm",
@@ -49,7 +51,20 @@ describe("ReviewStep", () => {
       gf_substitutes: undefined,
     });
     expect(screen.getByText("Confirmed")).toBeInTheDocument();
-    // No safety chip anywhere — the headline is untouched and the fact is plain.
+    // No safety chip anywhere — the headline is untouched and the fact chip must
+    // NOT borrow the celiac-safe / gluten-friendly safety colours.
+    expect(container.querySelector("[data-safety-state]")).toBeNull();
+  });
+
+  it("renders a neutral fact chip (no safety chip) for a disputed fact attribute", () => {
+    const { container } = renderReviewContainer({
+      celiac_safe_vs_gluten_friendly: undefined,
+      dedicated_fryer: undefined,
+      dedicated_gf_menu: "dispute",
+      off_menu_gf_on_request: undefined,
+      gf_substitutes: undefined,
+    });
+    expect(screen.getByText("Disputed")).toBeInTheDocument();
     expect(container.querySelector("[data-safety-state]")).toBeNull();
   });
 

@@ -6,7 +6,7 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
@@ -220,32 +220,106 @@ describe("RestaurantCard", () => {
     expect(pill).not.toHaveAttribute("data-safety-state");
   });
 
-  it("keeps the save-count pill in the title row, SEPARATE from the SafetySignal row", async () => {
+  it("keeps the save-count pill SEPARATE from the SafetySignal row (ADR-007)", async () => {
     renderCard({ saveCount: 8, safetyState: "celiac-safe" });
     const pill = await screen.findByTestId("save-count");
-    const heading = screen.getByRole("heading", { name: "Acme Gluten-Free" });
-    // The SafetySignal chip carries a `data-safety-state` marker; the pill must
-    // live in the TITLE row alongside the heading, never in/adjacent to it.
+    // The SafetySignal chip carries a `data-safety-state` marker; the attributed
+    // pill must never nest, be nested by, or share a row with it — safety meaning
+    // stays exclusively in SafetySignal.
     const safety = document.querySelector('[data-safety-state="celiac-safe"]');
     expect(safety).not.toBeNull();
     // Neither element nests the other — they are structurally distinct.
     expect(pill).not.toContainElement(safety as HTMLElement);
     expect(safety as HTMLElement).not.toContainElement(pill);
-    // Not siblings: the pill and the safety signal live in different rows.
+    // Not siblings: the pill and the safety signal live in different containers.
     expect(pill.parentElement).not.toBe((safety as HTMLElement).parentElement);
-    // The pill shares the title row with the heading; the safety signal does not.
-    const titleRow = heading.parentElement as HTMLElement;
-    expect(titleRow).toContainElement(pill);
-    expect(titleRow).not.toContainElement(safety as HTMLElement);
   });
 
-  it("renders BOTH the save-count and Google rating pills together in the title row", async () => {
+  it("renders the pills as real <button> tooltip triggers OUTSIDE the anchor (a11y)", async () => {
+    renderCard({ saveCount: 8, googleRating: { value: 4.8, count: 128 } });
+    const link = await screen.findByRole("link");
+    const save = screen.getByTestId("save-count");
+    const google = screen.getByTestId("google-rating");
+    // Nesting a focusable/interactive element inside an <a> is invalid HTML + an
+    // a11y defect, so the pills must be SIBLINGS of the link, not descendants.
+    expect(link).not.toContainElement(save);
+    expect(link).not.toContainElement(google);
+    // They are honest, natively-focusable, non-submitting <button> triggers (not a
+    // tabindex-hacked span) — giving keyboard users real trigger semantics for the
+    // ADR-007 tooltip.
+    expect(save.tagName).toBe("BUTTON");
+    expect(google.tagName).toBe("BUTTON");
+    expect(save).toHaveAttribute("type", "button");
+    expect(google).toHaveAttribute("type", "button");
+  });
+
+  it("keeps BOTH pills IN-FLOW in the title row so they reflow and never overlap the name", async () => {
+    // The both-pills path with a long name is the regression the review flagged:
+    // an absolute overlay would let the name slide UNDER the pills at 375px. With
+    // the pills in-flow in the SAME flex row as the name, flexbox reflows them
+    // side-by-side — structurally impossible to overlap, and no magic offsets.
+    renderCard({
+      name: "The Extraordinarily Long Gluten-Free Bakery And Coffee House Name",
+      saveCount: 8,
+      googleRating: { value: 4.8, count: 128 },
+    });
+    const heading = await screen.findByRole("heading");
+    const save = screen.getByTestId("save-count");
+    const google = screen.getByTestId("google-rating");
+    const titleRow = heading.parentElement as HTMLElement;
+    // Name + both pills share ONE in-flow row container, never an absolute layer.
+    expect(titleRow).toContainElement(heading);
+    expect(titleRow).toContainElement(save);
+    expect(titleRow).toContainElement(google);
+    // ...and the pills stay OUT of the anchor even in the both-pills case.
+    const link = screen.getByRole("link");
+    expect(link).not.toContainElement(save);
+    expect(link).not.toContainElement(google);
+  });
+
+  it("keeps the card ONE link with an accessible name after moving the body out", async () => {
+    renderCard({ saveCount: 8, googleRating: { value: 4.8, count: 128 } });
+    // Exactly one anchor, still pointing at the detail page. The <h3> is no longer
+    // inside the anchor, so the link takes its accessible name from `aria-label`.
+    const links = await screen.findAllByRole("link");
+    expect(links).toHaveLength(1);
+    const link = links[0] as HTMLElement;
+    expect(link).toHaveAttribute("href", "/listings/listing-1");
+    expect(link).toHaveAccessibleName("Acme Gluten-Free");
+  });
+
+  it("exposes the Google-rating ADR-007 tooltip on keyboard focus (never colour/tooltip alone)", async () => {
+    renderCard({ googleRating: { value: 4.8, count: 128 } });
+    const pill = await screen.findByTestId("google-rating");
+    // Resting state: the supplementary copy is portaled shut...
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    // ...the visible "Google" attribution is ALWAYS present (meaning never rests
+    // on the tooltip alone)...
+    expect(pill).toHaveTextContent("Google");
+    // ...and focusing the pill (keyboard path) reveals the ADR-007 attribution.
+    fireEvent.focus(pill);
+    const tip = await screen.findByRole("tooltip");
+    expect(tip).toHaveTextContent("Google rating — not an Aubrey's List safety score.");
+    // The tooltip explicitly denies being a safety score.
+    expect(tip).not.toHaveTextContent(/celiac-safe|gluten-friendly/i);
+  });
+
+  it("exposes the save-count ADR-007 tooltip on keyboard focus", async () => {
+    renderCard({ saveCount: 12 });
+    const pill = await screen.findByTestId("save-count");
+    expect(pill).toHaveTextContent("saves");
+    fireEvent.focus(pill);
+    const tip = await screen.findByRole("tooltip");
+    expect(tip).toHaveTextContent("Community saves — not a safety score.");
+  });
+
+  it("renders BOTH the save-count and Google rating pills together in one cluster", async () => {
     renderCard({ saveCount: 5, googleRating: { value: 4.8, count: 128 } });
     const save = await screen.findByTestId("save-count");
     const google = screen.getByTestId("google-rating");
     expect(save).toHaveTextContent("5");
     expect(google).toHaveTextContent("Google");
-    // Both attributed pills share a container, apart from any safety signal.
+    // Both attributed pills share the lifted-out cluster, apart from any safety signal.
     expect(save.parentElement).toBe(google.parentElement);
   });
 
@@ -299,12 +373,15 @@ describe("RestaurantCard", () => {
   it("stretches to fill its grid cell so cards equalize within a row (AUB-194)", async () => {
     renderCard();
     const link = await screen.findByRole("link");
-    // The card shell (the link's parent) is a full-height flex column and the
-    // link/body stretch, so the mt-auto meta row pins to the bottom.
+    // The card shell (the link's parent) is a full-height flex column; the BODY
+    // (the link's sibling, not the media-only link itself) stretches with
+    // flex-1, so the mt-auto meta row pins to the bottom.
     const shell = link.parentElement as HTMLElement;
     expect(shell.className).toContain("h-full");
     expect(shell.className).toContain("flex-col");
-    expect(link.className).toContain("flex-1");
+    const body = screen.getByTestId("card-meta-row").closest("div.flex-1") as HTMLElement;
+    expect(body).not.toBeNull();
+    expect(body.className).toContain("flex-col");
   });
 
   it("renders the accent placeholder tile when no photoUrl is given", async () => {

@@ -126,12 +126,35 @@ describe("seedListings", () => {
       { listingId: "listing-1", attribute: "gf_substitutes", suggestedBy: "bot-1" },
     ]);
 
-    // The listing persists a Place-ID Maps deep-link + the baked fields.
+    // The listing persists a documented Maps URLs API deep-link + the baked fields.
     const listingInsert = inserts.find((i) => i.table === listings);
     expect(listingInsert?.values).toMatchObject({
       placeId: "place-1",
       name: "Moore Cafe and Bakery",
-      mapsUrl: "https://www.google.com/maps/place/?q=place_id:place-1",
+      mapsUrl:
+        "https://www.google.com/maps/search/?api=1&query=Moore%20Cafe%20and%20Bakery%20123%20Main%20St%2C%20Denver%2C%20CO&query_place_id=place-1",
+    });
+  });
+
+  it("prefers a baked googleMapsUri (Google's share link) as the persisted mapsUrl", async () => {
+    const { db, inserts } = makeFakeDb({ listingReturning: [[{ id: "listing-1" }]] });
+
+    await seedListings([listing({ googleMapsUri: "https://maps.google.com/?cid=42" })], { db });
+
+    const listingInsert = inserts.find((i) => i.table === listings);
+    expect(listingInsert?.values).toMatchObject({
+      mapsUrl: "https://maps.google.com/?cid=42",
+    });
+  });
+
+  it("falls back to the built link when a baked googleMapsUri is not https", async () => {
+    const { db, inserts } = makeFakeDb({ listingReturning: [[{ id: "listing-1" }]] });
+
+    await seedListings([listing({ googleMapsUri: "javascript:alert(1)" })], { db });
+
+    const listingInsert = inserts.find((i) => i.table === listings);
+    expect(listingInsert?.values).toMatchObject({
+      mapsUrl: expect.stringContaining("https://www.google.com/maps/search/?api=1&query="),
     });
   });
 

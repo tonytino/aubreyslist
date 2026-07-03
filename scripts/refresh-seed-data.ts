@@ -3,7 +3,8 @@
  *
  * This is the ONLY script that talks to the Google Places API. It reads the
  * human-curated `SEED_SOURCES` (`scripts/seed-sources.ts`), resolves each `query`
- * to a REAL Google Place ID + coordinates (+ rating) via Places Text Search
+ * to a REAL Google Place ID + coordinates (+ rating + `googleMapsUri` share
+ * link) via Places Text Search
  * (biased to Union Station, hard-capped at a 25-mile radius), and BAKES the
  * fully-resolved entries to `scripts/seed-listings.generated.json`. That committed
  * file is what the API-free `pnpm db:seed` (`scripts/seed.ts`) inserts — so seeding
@@ -41,6 +42,8 @@ export interface ResolvedPlace {
   lng: number;
   googleRating?: number | null;
   googleRatingCount?: number | null;
+  /** Google's own share link for the place (the Maps "Share" button URL). */
+  googleMapsUri?: string | null;
 }
 
 /** Resolves a curated query to a real place, or `null` when it can't be seeded. */
@@ -91,6 +94,7 @@ export async function refreshSeedData(deps: RefreshSeedDataDeps): Promise<Refres
       menuUrl: source.menuUrl ?? null,
       googleRating: place.googleRating ?? null,
       googleRatingCount: place.googleRatingCount ?? null,
+      googleMapsUri: place.googleMapsUri ?? null,
     });
     log(`OK    ${place.name} — captured`);
   }
@@ -99,10 +103,11 @@ export async function refreshSeedData(deps: RefreshSeedDataDeps): Promise<Refres
 }
 
 // Places API (New) Text Search — one call resolves a query to id + name + address
-// + coordinates + rating (no separate details call). We validate only what we bake.
+// + coordinates + rating + Google's own share link (no separate details call).
+// We validate only what we bake.
 const PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
 const SEARCH_FIELD_MASK =
-  "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount";
+  "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri";
 
 const searchTextResponseSchema = z.object({
   places: z
@@ -114,6 +119,7 @@ const searchTextResponseSchema = z.object({
         location: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
         rating: z.number().optional(),
         userRatingCount: z.number().optional(),
+        googleMapsUri: z.string().optional(),
       })
     )
     .optional(),
@@ -184,6 +190,7 @@ export function makePlacesResolver(
       lng: coords.lng,
       googleRating: place.rating ?? null,
       googleRatingCount: place.userRatingCount ?? null,
+      googleMapsUri: place.googleMapsUri ?? null,
     };
   };
 }
