@@ -51,6 +51,12 @@ const h = vi.hoisted(() => {
     favoriteCounts: new Map<string, number>(),
     /** The listing ids passed to `getFavoriteCounts` (asserted batched, not N+1). */
     favoriteCountIds: undefined as string[] | undefined,
+    /**
+     * The viewer's VISIBLE favorite ids returned by the (mocked)
+     * `getViewerFavoriteIds` — drives the F11 `savedOnly` path. `[]` models both
+     * an anonymous caller and a signed-in user with no favorites.
+     */
+    viewerFavoriteIds: [] as string[],
   };
 
   // The page query chain (the celiac-trust JOIN form):
@@ -158,6 +164,9 @@ vi.mock("~/server/favorites/index", () => ({
     h.state.favoriteCountIds = listingIds;
     return Promise.resolve(h.state.favoriteCounts);
   },
+  // The F11 `savedOnly` path resolves the viewer's VISIBLE favorite ids here.
+  // `[]` (anonymous OR empty favorites) must SHORT-CIRCUIT to an empty page.
+  getViewerFavoriteIds: () => Promise.resolve(h.state.viewerFavoriteIds),
 }));
 
 import {
@@ -190,6 +199,7 @@ beforeEach(() => {
   state.incidentWhere = undefined;
   state.favoriteCounts = new Map();
   state.favoriteCountIds = undefined;
+  state.viewerFavoriteIds = [];
   h.resetCallCounters();
 });
 
@@ -197,7 +207,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const baseInput: BrowseListingsInput = { page: 1, pageSize: 20, q: "", attrs: [], sort: "alpha" };
+const baseInput: BrowseListingsInput = {
+  page: 1,
+  pageSize: 20,
+  q: "",
+  attrs: [],
+  sort: "alpha",
+  savedOnly: false,
+};
 
 describe("getBrowseListings", () => {
   it("returns an empty page (and skips signal queries) when there are no listings", async () => {
@@ -802,7 +819,14 @@ describe("getBrowseListings", () => {
     state.total = 5;
 
     const result = await getBrowseListings(
-      { page: 2, pageSize: 2, q: "taco", attrs: ["dedicated_fryer"], sort: "trust" },
+      {
+        page: 2,
+        pageSize: 2,
+        q: "taco",
+        attrs: ["dedicated_fryer"],
+        sort: "trust",
+        savedOnly: false,
+      },
       NOW
     );
 
@@ -818,6 +842,115 @@ describe("getBrowseListings", () => {
     expect(result.sort).toBe("trust");
     // Trust sort still applied under filter + search + pagination.
     expect(state.orderByArgs).toHaveLength(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F11 (AUB-129): server-side "Saved" filter (savedOnly)
+//
+// The blocker this fixes: the Saved filter MUST be server-side so pagination and
+// the honest total cover the FULL favorites set, not a client-side slice of the
+// loaded page. So `savedOnly` folds `listings.id IN (viewer favorite ids)` into
+// the SHARED where — applied to the page AND count queries BEFORE paginating —
+// and short-circuits an anonymous/empty caller to an empty page WITHOUT a broad
+// (unconstrained) query.
+// ---------------------------------------------------------------------------
+describe("getBrowseListings — savedOnly (F11)", () => {
+  const FIVE_FAVES = ["l1", "l2", "l3", "l4", "l5"];
+
+  it("constrains BOTH the page and count queries to the viewer's favorite ids (folded into the shared WHERE)", async () => {
+    state.viewerFavoriteIds = FIVE_FAVES;
+    state.pageListings = [
+      { id: "l1", name: "A", address: "a" },
+      { id: "l2", name: "B", address: "b" },
+    ];
+    state.total = 5;
+
+    await getBrowseListings({ ...baseInput, savedOnly: true, pageSize: 2 }, NOW);
+
+    // The SAME predicate object constrains the page AND the count query, so the
+    // total is honest over the favorites subset (count-honesty).
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+
+    const rendered = dialect.sqlToQuery(state.pageWhere as SQL);
+    // `listings.id IN (...)` over the viewer's favorite ids, still AND-folded with
+    // the visibility predicate (#41 preserved).
+    expect(rendered.sql.toLowerCase()).toContain(" in (");
+    expect(rendered.params).toContain("visible");
+    for (const id of FIVE_FAVES) {
+      expect(rendered.params).toContain(id);
+    }
+  });
+
+  it("keeps total honest over the FULL favorites set and paginates correctly (page 1 of 3)", async () => {
+    // 5 favorites, pageSize 2 → page 1 holds the first 2, and hasMore is true
+    // because the honest total (5) exceeds offset+rows (0+2).
+    state.viewerFavoriteIds = FIVE_FAVES;
+    state.pageListings = [
+      { id: "l1", name: "A", address: "a" },
+      { id: "l2", name: "B", address: "b" },
+    ];
+    state.total = 5;
+
+    const result = await getBrowseListings({ ...baseInput, savedOnly: true, pageSize: 2 }, NOW);
+
+    expect(result.total).toBe(5);
+    expect(result.page).toBe(1);
+    expect(result.pageSize).toBe(2);
+    expect(result.hasMore).toBe(true);
+    expect(result.cards.map((c) => c.listing.id)).toEqual(["l1", "l2"]);
+  });
+
+  it("reports hasMore=false on the last page of the favorites set (page 3 of 3)", async () => {
+    // Offset 4 + the 1 trailing row = 5 = total → no further page.
+    state.viewerFavoriteIds = FIVE_FAVES;
+    state.pageListings = [{ id: "l5", name: "E", address: "e" }];
+    state.total = 5;
+
+    const result = await getBrowseListings(
+      { ...baseInput, savedOnly: true, page: 3, pageSize: 2 },
+      NOW
+    );
+
+    expect(result.total).toBe(5);
+    expect(result.page).toBe(3);
+    expect(result.hasMore).toBe(false);
+    expect(result.cards.map((c) => c.listing.id)).toEqual(["l5"]);
+  });
+
+  it("ANONYMOUS/EMPTY favorites → empty page with total 0 and NO query at all (no broad read)", async () => {
+    // getViewerFavoriteIds() returns [] for an anonymous caller AND a signed-in
+    // user with no visible favorites; both must short-circuit to an empty page
+    // WITHOUT ever issuing a query.
+    state.viewerFavoriteIds = [];
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }]; // would be returned by a broad read
+    state.total = 999;
+
+    const result = await getBrowseListings({ ...baseInput, savedOnly: true }, NOW);
+
+    expect(result.cards).toEqual([]);
+    expect(result.total).toBe(0);
+    expect(result.hasMore).toBe(false);
+    // Proof there was NO broad query: no select() ran, so neither the page nor the
+    // count WHERE was ever built.
+    expect(h.selectMock).not.toHaveBeenCalled();
+    expect(state.pageWhere).toBeUndefined();
+    expect(state.countWhere).toBeUndefined();
+  });
+
+  it("does NOT constrain by favorites when savedOnly is false (unchanged behavior)", async () => {
+    // A signed-in viewer WITH favorites, but savedOnly off → the normal browse:
+    // getViewerFavoriteIds is never consulted and the WHERE has no id IN (...).
+    state.viewerFavoriteIds = FIVE_FAVES;
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, savedOnly: false }, NOW);
+
+    const sql = renderArg(state.pageWhere);
+    expect(sql).not.toContain(" in (");
+    expect(sql).toContain("moderation_status");
   });
 });
 

@@ -44,4 +44,15 @@ export const browseSearchSchema = z.object({
     .transform((value) => parseRadiusMiles(value))
     .catch(DEFAULT_RADIUS_MILES)
     .default(DEFAULT_RADIUS_MILES),
+  // SERVER-SIDE "Saved" filter (AUB-129 / F11): `?saved=1` (or `?saved=true`)
+  // switches the directory to the signed-in viewer's favorites, driven
+  // server-side so pagination + the honest total cover the FULL favorites set.
+  // URL-driven like the rest so a saved view is linkable/back-forwardable.
+  // Coerced from the router's parsed value (boolean `true`, numeric `1`, or the
+  // string forms) to a plain boolean; anything else degrades to `false`.
+  saved: z
+    .union([z.boolean(), z.number(), z.string()])
+    .transform((value) => value === true || value === 1 || value === "1" || value === "true")
+    .catch(false)
+    .default(false),
 });
