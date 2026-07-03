@@ -24,14 +24,13 @@ function render(node: SQL): { sql: string; lower: string; params: unknown[] } {
 }
 
 describe("buildQuickFilterPredicate", () => {
-  it("returns undefined when no quick filter is active", () => {
-    expect(buildQuickFilterPredicate(undefined, NOW, DEFAULT_STALENESS_MONTHS)).toBeUndefined();
-    expect(buildQuickFilterPredicate(null, NOW, DEFAULT_STALENESS_MONTHS)).toBeUndefined();
+  it("returns undefined when the selection is empty", () => {
+    expect(buildQuickFilterPredicate([], NOW, DEFAULT_STALENESS_MONTHS)).toBeUndefined();
   });
 
   describe("celiac (safetyState === 'celiac-safe')", () => {
     it("is a correlated EXISTS over the visible celiac claim, confirms > disputes AND fresh", () => {
-      const predicate = buildQuickFilterPredicate("celiac", NOW, DEFAULT_STALENESS_MONTHS);
+      const predicate = buildQuickFilterPredicate(["celiac"], NOW, DEFAULT_STALENESS_MONTHS);
       expect(predicate).toBeDefined();
       const { lower, params } = render(predicate as SQL);
 
@@ -52,7 +51,7 @@ describe("buildQuickFilterPredicate", () => {
 
     it("LOCK: uses a STRICT confirms > disputes (a tie is contested, never celiac-safe)", () => {
       const { lower } = render(
-        buildQuickFilterPredicate("celiac", NOW, DEFAULT_STALENESS_MONTHS) as SQL
+        buildQuickFilterPredicate(["celiac"], NOW, DEFAULT_STALENESS_MONTHS) as SQL
       );
       // The strict `>` compares the confirm tally (left) to the dispute tally
       // (right): `count(*) filter (… 'confirm') > count(*) filter (… 'dispute')`.
@@ -68,7 +67,7 @@ describe("buildQuickFilterPredicate", () => {
 
   describe("friendly (safetyState === 'gluten-friendly')", () => {
     it("LOCK: has evidence AND confirms <= disputes (contested / dispute-majority)", () => {
-      const predicate = buildQuickFilterPredicate("friendly", NOW, DEFAULT_STALENESS_MONTHS);
+      const predicate = buildQuickFilterPredicate(["friendly"], NOW, DEFAULT_STALENESS_MONTHS);
       const { lower, params } = render(predicate as SQL);
 
       expect(lower).toContain("exists");
@@ -85,7 +84,7 @@ describe("buildQuickFilterPredicate", () => {
 
   describe("recent (freshness.kind === 'fresh')", () => {
     it("requires a fresh confirmation AND no recent visible incident", () => {
-      const predicate = buildQuickFilterPredicate("recent", NOW, DEFAULT_STALENESS_MONTHS);
+      const predicate = buildQuickFilterPredicate(["recent"], NOW, DEFAULT_STALENESS_MONTHS);
       const { lower, params } = render(predicate as SQL);
 
       // A within-window confirmation: non-null lastConfirmedAt on/after the cutoff.
@@ -107,6 +106,37 @@ describe("buildQuickFilterPredicate", () => {
       );
       expect(dateParams).toContain("2026-06-28"); // today (UTC)
       expect(dateParams).toContain("2026-03-30"); // today − 90 days (UTC)
+    });
+  });
+
+  describe("faceted composition (AUB-140)", () => {
+    it("AND-composes each selected token's subquery (celiac + recent)", () => {
+      const predicate = buildQuickFilterPredicate(
+        ["celiac", "recent"],
+        NOW,
+        DEFAULT_STALENESS_MONTHS
+      );
+      const { lower } = render(predicate as SQL);
+
+      // Both facets are present: the celiac EXISTS (with its strict `>` tally lock)
+      // AND the recent NOT EXISTS incident subquery — conjoined, so the result
+      // matches listings satisfying BOTH.
+      expect(lower).toMatch(/'confirm'\)\s*>\s*count\(\*\)\s*filter/); // celiac still strict
+      expect(lower).toContain("not exists"); // recent's incident guard
+      expect(lower).toContain('from "incidents"');
+      // At least two correlated subqueries (celiac exists + recent's fresh exists +
+      // incident not-exists) are conjoined.
+      expect((lower.match(/exists/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("is order-independent: [recent, celiac] renders the same SQL as [celiac, recent]", () => {
+      const a = render(
+        buildQuickFilterPredicate(["celiac", "recent"], NOW, DEFAULT_STALENESS_MONTHS) as SQL
+      );
+      const b = render(
+        buildQuickFilterPredicate(["recent", "celiac"], NOW, DEFAULT_STALENESS_MONTHS) as SQL
+      );
+      expect(b.sql).toBe(a.sql);
     });
   });
 });
