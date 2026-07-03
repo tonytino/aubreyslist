@@ -1,0 +1,2 @@
+- `[manual]` Rewrote all user-facing website copy to be brief and plain: about page cut roughly in half, one site description instead of a stock phrase repeated on four surfaces, and no em dashes or semicolons in rendered strings, meta tags, aria-labels, or the webmanifest. Safety-critical meaning (transparent trust roll-ups, honest empty states, recent-incident flagging) is unchanged.
+- `[manual]` Added `docs/agents/copy.md` (user-facing copy rules) and a per-subagent model-selection section to `docs/agents/orchestration.md`, both codifying standing owner feedback.

@@ -55,8 +55,8 @@ function AboutPage() {
           community, and it goes stale: a kitchen that was safe last year may have changed.
         </p>
         <p className="text-body text-muted-foreground">
-          So we built a directory where people who share the need record what they know and keep it
-          current. Everything here exists to help you decide, with confidence, whether to eat
+          So we built a directory where celiac and gluten-free diners record what they know and keep
+          it current. Everything here exists to help you decide, with confidence, whether to eat
           somewhere.
         </p>
         <p className="text-body text-muted-foreground">

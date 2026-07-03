@@ -73,7 +73,7 @@ function buildReturnTo(listingId: string): string {
  * `returnTo` that returns the diner here with a `?save=<listingId>` marker.
  *
  * ACCESSIBILITY (styling.md — never colour alone): `aria-pressed` reflects the
- * favorited state, and the accessible label FLIPS ("Save …" ↔ "Saved — remove
+ * favorited state, and the accessible label FLIPS ("Save …" ↔ "Saved, remove
  * …"); the filled heart (`fill-current`) is a redundant cue on top of the label,
  * never the sole signal.
  *
