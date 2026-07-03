@@ -139,7 +139,7 @@ export function FavoriteButton({ listingId, listingName, className }: FavoriteBu
     toggleFavorite.mutate(!isFavorited);
   };
 
-  const accessibleLabel = isFavorited ? `Saved — remove ${name}` : `Save ${name}`;
+  const accessibleLabel = isFavorited ? `Saved, remove ${name}` : `Save ${name}`;
   const signInHref = `/api/auth/google?returnTo=${encodeURIComponent(buildReturnTo(listingId))}`;
 
   return (
@@ -166,10 +166,7 @@ export function FavoriteButton({ listingId, listingName, className }: FavoriteBu
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Sign in to save spots</DialogTitle>
-            <DialogDescription>
-              Favorites let you keep a personal list of gluten-free spots you trust. Sign in to save{" "}
-              {name} and find it again later.
-            </DialogDescription>
+            <DialogDescription>Sign in to save {name} and find it again later.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button asChild>

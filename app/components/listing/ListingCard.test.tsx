@@ -299,7 +299,7 @@ describe("RestaurantCard", () => {
     // ...and focusing the pill (keyboard path) reveals the ADR-007 attribution.
     fireEvent.focus(pill);
     const tip = await screen.findByRole("tooltip");
-    expect(tip).toHaveTextContent("Google rating — not an Aubrey's List safety score.");
+    expect(tip).toHaveTextContent("Google rating, not an Aubrey's List safety score.");
     // The tooltip explicitly denies being a safety score.
     expect(tip).not.toHaveTextContent(/celiac-safe|gluten-friendly/i);
   });
@@ -310,7 +310,7 @@ describe("RestaurantCard", () => {
     expect(pill).toHaveTextContent("saves");
     fireEvent.focus(pill);
     const tip = await screen.findByRole("tooltip");
-    expect(tip).toHaveTextContent("Community saves — not a safety score.");
+    expect(tip).toHaveTextContent("Community saves, not a safety score.");
   });
 
   it("renders BOTH the save-count and Google rating pills together in one cluster", async () => {
