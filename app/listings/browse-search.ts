@@ -13,7 +13,6 @@
 
 import { z } from "zod";
 import { DEFAULT_RADIUS_MILES, parseRadiusMiles } from "~/listings/distance";
-import { QUICK_FILTER_VALUES, type QuickFilterValue } from "~/listings/quick";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 
 /**
@@ -39,6 +38,7 @@ export const BROWSE_SEARCH_DEFAULTS = {
   q: "",
   sort: DEFAULT_BROWSE_SORT,
   radius: DEFAULT_RADIUS_MILES,
+  quick: "",
 } as const;
 
 export const browseSearchSchema = z.object({
@@ -72,14 +72,10 @@ export const browseSearchSchema = z.object({
     .transform((value) => parseRadiusMiles(value))
     .catch(BROWSE_SEARCH_DEFAULTS.radius)
     .default(BROWSE_SEARCH_DEFAULTS.radius),
-  // Prebuilt quick filter (#AUB-135): ONE mutually-exclusive server-side filter
-  // (celiac-safe / gluten-friendly / recently-verified). It carries NO default —
-  // absence means "no quick filter", so it is naturally omitted from the URL when
-  // unset (no `stripSearchParams` entry needed) and a garbage token degrades to
-  // absent via `.catch`. URL-driven like the rest so an applied chip is linkable,
-  // shareable, and back/forward-correct.
-  quick: z
-    .enum(QUICK_FILTER_VALUES as unknown as [QuickFilterValue, ...QuickFilterValue[]])
-    .optional()
-    .catch(undefined),
+  // Prebuilt quick filters (AUB-135/AUB-140): a comma-set of tokens, exactly like
+  // `attrs`. The raw string is stored here and validated/deduped/group-collapsed by
+  // `parseQuick` at the route (mirroring how `attrs` defers to `parseAttrs`), so
+  // the schema stays a plain string. Defaults to "" (no quick filter), which
+  // `stripSearchParams` drops from the URL at rest; garbage degrades to "".
+  quick: z.string().catch(BROWSE_SEARCH_DEFAULTS.quick).default(BROWSE_SEARCH_DEFAULTS.quick),
 });

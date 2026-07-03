@@ -12,7 +12,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "~/components/ui/sheet";
-import type { QuickFilter } from "~/listings/quick";
+import type { QuickFilterValue } from "~/listings/quick";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 
 /**
@@ -24,10 +24,12 @@ import type { ClaimAttribute } from "~/listings/taxonomy";
  *     community consensus per attribute) — untouched by this redesign; the chip
  *     is purely a new entry point to it, and its badge surfaces the active count.
  *   - **Quick chips** (Celiac-safe / Gluten-friendly / Recently verified) are
- *     URL-driven, SERVER-side filters (`?quick=`, AUB-135) and are MUTUALLY
- *     EXCLUSIVE (a single {@link QuickFilter} value). They are real `<button>`s
- *     carrying `aria-pressed` so the toggle state is announced — never colour
- *     alone.
+ *     URL-driven, SERVER-side filters (`?quick=`, AUB-135/AUB-140) forming a faceted
+ *     SET: the `safety` pair (celiac / friendly) is mutually exclusive, while
+ *     `recent` toggles additively. Exclusivity is enforced by the parent's
+ *     `applyQuickToggle` reducer — this component just renders whatever set it's
+ *     handed and reports each click via `onQuickToggle`. They are real `<button>`s
+ *     carrying `aria-pressed` so the toggle state is announced — never colour alone.
  *
  * SEARCH-AS-CHIP (user feedback #5): the free-text search now leads the row as a
  * {@link SearchChip} (replacing the old standalone search field above the chips).
@@ -40,7 +42,7 @@ import type { ClaimAttribute } from "~/listings/taxonomy";
  */
 
 interface QuickChipDef {
-  value: Exclude<QuickFilter, null>;
+  value: QuickFilterValue;
   label: string;
   Icon: LucideIcon;
 }
@@ -65,7 +67,7 @@ export function FilterChips({
   onToggleAttr,
   onClearAttrs,
   quick,
-  onQuickChange,
+  onQuickToggle,
   search,
   onSearchChange,
   sheetExtras,
@@ -73,8 +75,10 @@ export function FilterChips({
   attrs: ClaimAttribute[];
   onToggleAttr: (attribute: ClaimAttribute) => void;
   onClearAttrs: () => void;
-  quick: QuickFilter;
-  onQuickChange: (next: QuickFilter) => void;
+  /** The active quick-filter set (URL-derived). A chip is pressed iff it's a member. */
+  quick: QuickFilterValue[];
+  /** Report a chip click; the parent's `applyQuickToggle` computes the next set. */
+  onQuickToggle: (value: QuickFilterValue) => void;
   /** Current free-text search value (the route mirrors it to `?q=`, debounced). */
   search: string;
   /** Report a search change straight through — the route debounces it to the URL. */
@@ -120,15 +124,16 @@ export function FilterChips({
         </SheetContent>
       </Sheet>
 
-      {/* Mutually-exclusive quick chips (server-side, URL-driven via `?quick=`). */}
+      {/* Faceted quick chips (server-side, URL-driven via `?quick=`). Membership in
+          the active set = pressed; the parent reducer enforces safety exclusivity. */}
       {QUICK_CHIPS.map(({ value, label, Icon }) => {
-        const active = quick === value;
+        const active = quick.includes(value);
         return (
           <button
             key={value}
             type="button"
             aria-pressed={active}
-            onClick={() => onQuickChange(active ? null : value)}
+            onClick={() => onQuickToggle(value)}
             className={chipClasses(active)}
           >
             <Icon className="size-4" strokeWidth={2.25} aria-hidden="true" />

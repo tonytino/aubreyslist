@@ -180,7 +180,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const baseInput: BrowseListingsInput = { page: 1, pageSize: 20, q: "", attrs: [], sort: "alpha" };
+const baseInput: BrowseListingsInput = {
+  page: 1,
+  pageSize: 20,
+  q: "",
+  attrs: [],
+  sort: "alpha",
+  quick: [],
+};
 
 describe("getBrowseListings", () => {
   it("returns an empty page (and skips signal queries) when there are no listings", async () => {
@@ -739,7 +746,7 @@ describe("getBrowseListings", () => {
     state.total = 5;
 
     const result = await getBrowseListings(
-      { page: 2, pageSize: 2, q: "taco", attrs: ["dedicated_fryer"], sort: "trust" },
+      { page: 2, pageSize: 2, q: "taco", attrs: ["dedicated_fryer"], sort: "trust", quick: [] },
       NOW
     );
 
@@ -1067,7 +1074,7 @@ describe("quick filter composition (AUB-135)", () => {
     state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
     state.total = 1;
 
-    await getBrowseListings({ ...baseInput, quick: "celiac" }, NOW);
+    await getBrowseListings({ ...baseInput, quick: ["celiac"] }, NOW);
 
     const pageWhere = renderArg(state.pageWhere);
     const countWhere = renderArg(state.countWhere);
@@ -1093,7 +1100,7 @@ describe("quick filter composition (AUB-135)", () => {
     state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
     state.total = 1;
 
-    await getBrowseListings({ ...baseInput, quick: "friendly" }, NOW);
+    await getBrowseListings({ ...baseInput, quick: ["friendly"] }, NOW);
 
     expect(renderArg(state.pageWhere)).toContain("<=");
   });
@@ -1102,7 +1109,7 @@ describe("quick filter composition (AUB-135)", () => {
     state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
     state.total = 1;
 
-    await getBrowseListings({ ...baseInput, quick: "recent" }, NOW);
+    await getBrowseListings({ ...baseInput, quick: ["recent"] }, NOW);
 
     const recentWhere = renderArg(state.pageWhere);
     expect(recentWhere).toContain("not exists");
@@ -1114,7 +1121,7 @@ describe("quick filter composition (AUB-135)", () => {
     state.total = 1;
 
     await getBrowseListings(
-      { ...baseInput, quick: "celiac", attrs: ["dedicated_fryer"], q: "taco" },
+      { ...baseInput, quick: ["celiac"], attrs: ["dedicated_fryer"], q: "taco" },
       NOW
     );
 
@@ -1122,13 +1129,30 @@ describe("quick filter composition (AUB-135)", () => {
     expect(composed).toContain("ilike"); // search
     expect(composed.match(/exists/g)?.length ?? 0).toBeGreaterThanOrEqual(2); // taxonomy + quick
   });
+
+  it("AND-composes a multi-token set into the SAME page + count WHERE (AUB-140)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, quick: ["celiac", "recent"] }, NOW);
+
+    const pageWhere = renderArg(state.pageWhere);
+    // Both facets present — celiac's EXISTS and recent's NOT EXISTS incident guard.
+    expect(pageWhere).toContain("exists");
+    expect(pageWhere).toContain("not exists");
+    expect(pageWhere).toContain("occurred_on");
+    // Honest total: the multi-token predicate constrains the count identically.
+    expect(renderArg(state.countWhere)).toBe(pageWhere);
+  });
 });
 
-describe("quick filter ↔ glance spec equivalence (AUB-135)", () => {
+describe("quick filter ↔ glance spec equivalence (AUB-135/AUB-140)", () => {
   // DO NOT WEAKEN. Each quick token must select EXACTLY the rows whose displayed
   // glance matches — `celiac`→"celiac-safe", `friendly`→"gluten-friendly",
-  // `recent`→freshness "fresh". We drive the same evidence shapes the trust-tier
-  // suite uses and assert the quick predicate's boolean ⟺ the pure glance reading.
+  // `recent`→freshness "fresh" — and a faceted SET must select EXACTLY the rows
+  // matching EVERY selected token (conjunction). We drive the same evidence shapes
+  // the trust-tier suite uses and assert the quick predicate's boolean ⟺ the pure
+  // glance reading.
   const MONTH = 30 * 24 * 60 * 60 * 1000;
   const cutoff = stalenessCutoff(NOW, DEFAULT_STALENESS_MONTHS);
   const ago = (ms: number) => new Date(NOW.getTime() - ms);
@@ -1187,6 +1211,74 @@ describe("quick filter ↔ glance spec equivalence (AUB-135)", () => {
         quickRecentMatches(c.lastConfirmedAt, cutoff, c.recentIncidentAt),
         `lastConfirmed=${String(c.lastConfirmedAt)} incident=${String(c.recentIncidentAt)}`
       ).toBe(freshness?.kind === "fresh");
+    }
+  });
+
+  it("a SET matches iff EVERY selected token matches — {celiac, recent} conjunction", () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const cases: Array<{
+      label: string;
+      confirms: number;
+      disputes: number;
+      lastConfirmedAt: Date | null;
+      recentIncidentAt: Date | null;
+    }> = [
+      // celiac-safe AND fresh, no incident → the set matches.
+      {
+        label: "celiac-safe + fresh, no incident",
+        confirms: 8,
+        disputes: 1,
+        lastConfirmedAt: ago(1 * MONTH),
+        recentIncidentAt: null,
+      },
+      // celiac-safe by the safety glance, but a recent incident makes freshness
+      // "incident" not "fresh" → `recent` fails → the SET excludes it even though
+      // `celiac` alone would match. This is the whole point of AND-composition.
+      {
+        label: "celiac-safe but recent incident",
+        confirms: 8,
+        disputes: 1,
+        lastConfirmedAt: ago(1 * MONTH),
+        recentIncidentAt: ago(2 * DAY),
+      },
+      // fresh confirmation but dispute-majority → `recent` matches, `celiac` fails.
+      {
+        label: "fresh but dispute-majority",
+        confirms: 1,
+        disputes: 10,
+        lastConfirmedAt: ago(1 * MONTH),
+        recentIncidentAt: null,
+      },
+      // stale confirm-majority → neither token matches.
+      {
+        label: "stale confirm-majority",
+        confirms: 30,
+        disputes: 0,
+        lastConfirmedAt: ago(24 * MONTH),
+        recentIncidentAt: null,
+      },
+    ];
+    for (const c of cases) {
+      // The server AND-composes each token's predicate, so the SET matches a row iff
+      // every token's per-row predicate matches.
+      const setMatches =
+        quickCeliacMatches(c.confirms, c.disputes, c.lastConfirmedAt, cutoff) &&
+        quickRecentMatches(c.lastConfirmedAt, cutoff, c.recentIncidentAt);
+      // Cross-checked against the DISPLAYED glance directly: a row belongs in the
+      // {celiac, recent} result iff its safety glance is "celiac-safe" AND its
+      // freshness cue is "fresh" — never a row whose card would read differently.
+      const headline = deriveHeadlineSafetyState(
+        { confirmCount: c.confirms, disputeCount: c.disputes, lastConfirmedAt: c.lastConfirmedAt },
+        NOW,
+        DEFAULT_STALENESS_MONTHS
+      );
+      const freshness = formatFreshness(
+        c.lastConfirmedAt,
+        c.recentIncidentAt,
+        NOW,
+        DEFAULT_STALENESS_MONTHS
+      );
+      expect(setMatches, c.label).toBe(headline === "celiac-safe" && freshness?.kind === "fresh");
     }
   });
 });

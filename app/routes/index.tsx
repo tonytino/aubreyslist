@@ -19,7 +19,12 @@ import {
 } from "~/listings/browse-params";
 import { BROWSE_SEARCH_DEFAULTS, browseSearchSchema } from "~/listings/browse-search";
 import { UNION_STATION } from "~/listings/distance";
-import type { QuickFilter } from "~/listings/quick";
+import {
+  type QuickFilterValue,
+  applyQuickToggle,
+  parseQuick,
+  serializeQuick,
+} from "~/listings/quick";
 import { BROWSE_SORT_OPTIONS, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 import { useGeolocation } from "~/listings/use-geolocation";
@@ -41,13 +46,14 @@ import { fetchBrowseListings } from "~/server/listings/browse.fn";
  * no loading flash (docs/agents/api.md). The trust glance + consensus taxonomy
  * filter + quick filter are all computed server-side by `fetchBrowseListings`.
  *
- * QUICK CHIPS — SERVER-SIDE (AUB-135). The three mutually-exclusive "quick" chips
- * (celiac-safe / gluten-friendly / recently-verified) are URL-driven (`?quick=`)
- * and applied as a server-side constraint on the DISPLAYED safety glance, so the
- * count + pagination stay honest and an applied chip persists across refresh/share
- * (they are NOT a client-side refinement of the loaded page). The search-as-chip
- * leads the filter row (name + address, mirrored to `?q=` with a debounce). The
- * taxonomy filter lives behind the "Filters" sheet and drives `?attrs=`.
+ * QUICK CHIPS — SERVER-SIDE, FACETED (AUB-135/AUB-140). The "quick" chips are a
+ * URL-driven set (`?quick=`, comma-separated) applied as server-side constraints on
+ * the DISPLAYED safety glance, so the count + pagination stay honest and the applied
+ * chips persist across refresh/share (NOT a client-side refinement of the loaded
+ * page). They are grouped: `safety` (celiac-safe / gluten-friendly) is mutually
+ * exclusive, `recency` (recently-verified) is an additive toggle, and selections
+ * AND-compose. The search-as-chip leads the filter row (name + address, mirrored to
+ * `?q=` with a debounce). The taxonomy filter lives behind the "Filters" sheet (`?attrs=`).
  *
  * ROOM FOR RESULTS (feedback batch). The shell is FULL-WIDTH (no max-width caps,
  * #1); the app-shell nav is always visible and the directory's filter bar offsets
@@ -65,7 +71,7 @@ function browseQueryOptions(
   q: string,
   radius: number,
   origin: UserCoords,
-  quick: QuickFilter
+  quick: QuickFilterValue[]
 ) {
   // Only thread coords to the server when actually distance-sorting — a non-pair
   // (or a non-distance sort) means no coords, and the server falls back to the
@@ -91,9 +97,9 @@ function browseQueryOptions(
       radius,
       origin.lat,
       origin.lng,
-      // The quick chip changes the result SET + honest total, so it is part of a
-      // page's identity — a `?quick=` view caches independently. `null` (no chip)
-      // shares one cache entry.
+      // The quick-filter SET changes the result SET + honest total, so it is part of
+      // a page's identity — a `?quick=` view caches independently. An empty set (no
+      // chips) shares one cache entry. React Query hashes the array structurally.
       quick,
     ],
     queryFn: () =>
@@ -111,9 +117,9 @@ function browseQueryOptions(
           radiusMiles: radius,
           originLat: origin.lat,
           originLng: origin.lng,
-          // Prebuilt quick filter (AUB-135): a server-side constraint on the
-          // displayed safety glance. `null` → omit, so no quick constraint.
-          quick: quick ?? undefined,
+          // Prebuilt quick filters (AUB-135/AUB-140): a faceted set of server-side
+          // constraints on the displayed safety glance. Empty set → no quick constraint.
+          quick,
         },
       }),
   });
@@ -162,7 +168,7 @@ export const Route = createFileRoute("/")({
         q,
         radius,
         UNION_STATION,
-        quick ?? null
+        parseQuick(quick)
       )
     );
   },
@@ -186,11 +192,11 @@ function BrowseListings() {
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
   const coords = coordsFromSearch(lat, lng);
-  // The active quick chip is DERIVED straight from the URL (`?quick=`), not held in
-  // local state — so refresh / back-forward / a shared link all restore it by
-  // construction, with no server-vs-client seeding divergence. `undefined` (no
-  // param) reads as `null` (no chip).
-  const quick: QuickFilter = quickParam ?? null;
+  // The active quick-filter SET is DERIVED straight from the URL (`?quick=`), not
+  // held in local state — so refresh / back-forward / a shared link all restore it
+  // by construction, with no server-vs-client seeding divergence. `parseQuick`
+  // validates, de-dupes, and collapses the mutually-exclusive safety group.
+  const quick = parseQuick(quickParam);
   // Radius-filter ORIGIN (user feedback #7): the visitor's own coords when we have
   // them (they opted into near-me and we kept the pair in the URL), else Denver
   // Union Station — the stable downtown anchor so an anonymous, non-located
@@ -271,14 +277,16 @@ function BrowseListings() {
     }
   }, [mapEntries, selectedId]);
 
-  // Apply a quick chip by writing it to the URL (`?quick=`), which drives the
-  // server-side filter via the loader — resetting to page 1 (the result set
-  // changes) and preserving every other param. `null` (toggling the active chip
-  // off) omits the param. Deriving `quick` from the URL means this needs no local
-  // state; the loader refetch + Suspense handle the pending view, like every other
-  // server-side param.
-  function changeQuick(next: QuickFilter) {
-    navigate({ search: (prev) => ({ ...prev, page: 1, quick: next ?? undefined }) });
+  // Toggle a quick chip, honoring the faceted group rules (`applyQuickToggle`):
+  // picking a `safety` chip replaces its sibling; `recent` toggles additively. The
+  // resulting set is serialized to `?quick=` (canonical order), which drives the
+  // server-side filter via the loader — resetting to page 1 (the result set changes)
+  // and preserving every other param. An empty set serializes to "" (stripped from
+  // the URL). Deriving `quick` from the URL means this needs no local state; the
+  // loader refetch + Suspense handle the pending view, like every other server param.
+  function toggleQuick(value: QuickFilterValue) {
+    const next = applyQuickToggle(quick, value);
+    navigate({ search: (prev) => ({ ...prev, page: 1, quick: serializeQuick(next) }) });
   }
 
   // Toggling a taxonomy attribute (the REAL server filter) always resets to page
@@ -344,17 +352,17 @@ function BrowseListings() {
     navigate({ search: (prev) => ({ ...prev, page: 1, radius: nextRadius }) });
   }
 
-  // The no-results CTA clears EVERY filter — the quick chip AND the server-side
+  // The no-results CTA clears EVERY filter — the quick chips AND the server-side
   // search + taxonomy filter (resets to page 1 with no `?q=`/`?attrs=`/`?quick=`).
   function clearAll() {
     setSearchInput("");
     lastPushedQ.current = "";
-    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "", quick: undefined }) });
+    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "", quick: "" }) });
   }
 
-  // Whether any filter is active across BOTH layers — decides empty vs no-results.
-  // Uses the URL `?q=` (the server-applied search), not the in-flight local input.
-  const anyFilterActive = qParam.trim() !== "" || quick !== null || attrs.length > 0;
+  // Whether any filter is active — decides empty vs no-results. Uses the URL `?q=`
+  // (the server-applied search), not the in-flight local input.
+  const anyFilterActive = qParam.trim() !== "" || quick.length > 0 || attrs.length > 0;
 
   // The radius origin label (user feedback #7): "your location" once we have the
   // visitor's coords (near-me opt-in kept the pair in the URL), else the stable
@@ -380,7 +388,7 @@ function BrowseListings() {
             onToggleAttr={toggleAttribute}
             onClearAttrs={clearAttributes}
             quick={quick}
-            onQuickChange={changeQuick}
+            onQuickToggle={toggleQuick}
             search={searchInput}
             onSearchChange={setSearchInput}
             sheetExtras={
@@ -414,7 +422,7 @@ function BrowseListings() {
           anyFilterActive ? (
             <DirectoryNoResults onClearAll={clearAll} />
           ) : (
-            <DirectoryEmpty onBrowseCeliac={() => changeQuick("celiac")} />
+            <DirectoryEmpty onBrowseCeliac={() => toggleQuick("celiac")} />
           )
         ) : view === "map" ? (
           // The map is absolutely positioned (`inset-0`) inside its own root, so
