@@ -217,6 +217,63 @@ describe("INVARIANT 2 — a recent incident flags the summary regardless of conf
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+// INVARIANT 2b — A bot suggestion is PROVENANCE, never a verdict (ADR-007 /
+// AUB-31 / AUB-193). The browse glance's `suggestedByBot` may only ever be true
+// on the honest empty-state path: no headline safety verdict and no evidence
+// counts. It must never sit beside — or imply — real community evidence,
+// whether the suggestion comes from the headline celiac claim's own `suggested`
+// flag or from the listing-level "any visible bot-suggested claim" input.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe("INVARIANT 2b — suggestedByBot only ever accompanies the no-evidence empty state", () => {
+  it("suggestedByBot ⇒ safetyState is null AND evidence is null, across the evidence grid", () => {
+    // Property-style: sweep counts × both suggestion inputs × both flag sources.
+    // Whenever ANY evidence exists, the suggestion must be suppressed; whenever
+    // the glance flags a suggestion, it must be showing the empty state.
+    const freshConfirm = new Date(NOW.getTime() - DAY_MS);
+    for (const confirmCount of COUNT_GRID) {
+      for (const disputeCount of COUNT_GRID) {
+        for (const celiacSuggested of [true, false]) {
+          for (const anyVisibleSuggestion of [true, false]) {
+            const agg = {
+              ...aggregate(confirmCount, disputeCount, confirmCount > 0 ? freshConfirm : null),
+              suggested: celiacSuggested,
+            };
+            const glance = deriveListingTrustGlance(
+              agg,
+              1,
+              null,
+              NOW,
+              undefined,
+              anyVisibleSuggestion
+            );
+
+            if (glance.suggestedByBot) {
+              expect(glance.safetyState).toBeNull();
+              expect(glance.evidence).toBeNull();
+            }
+            if (confirmCount + disputeCount > 0) {
+              // Real evidence always suppresses the provenance chip.
+              expect(glance.suggestedByBot).toBe(false);
+            } else if (celiacSuggested || anyVisibleSuggestion) {
+              // No evidence + a live suggestion (either source) → the chip shows.
+              expect(glance.suggestedByBot).toBe(true);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("a listing with NO celiac claim still surfaces a live non-celiac suggestion honestly", () => {
+    const glance = deriveListingTrustGlance(null, 0, null, NOW, undefined, true);
+    expect(glance.suggestedByBot).toBe(true);
+    expect(glance.safetyState).toBeNull();
+    expect(glance.evidence).toBeNull();
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 // INVARIANT 4 — Staleness flags, never hides (ADR-007: a claim not confirmed
 // within the 6-month admin-tunable window gets a "may be stale" treatment — it
 // is SURFACED, not removed). Invariant 3 (one-per-user) is server/DB-side; see

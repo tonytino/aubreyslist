@@ -104,6 +104,20 @@ const FRESHNESS = {
  * rating, explicitly attributed ("Google"), and is NOT a safety score — all
  * safety meaning stays in {@link SafetySignal}.
  *
+ * CONSISTENT HEIGHT (AUB-194): every card in a directory grid renders at the
+ * same height regardless of which optional attributes its VM carries. Two
+ * mechanisms, both Tailwind-only and clip-free:
+ *  1. The card is `h-full flex flex-col` (and the Link/body stretch with it),
+ *     so cards fill their grid cell and equalize within a row even when a
+ *     name/address wraps to two lines — the meta row is pinned to the bottom
+ *     with an `mt-auto` wrapper.
+ *  2. The freshness/evidence meta row's space is ALWAYS reserved: when a VM has
+ *     neither (e.g. a freshly seeded, bot-suggested listing), the row renders an
+ *     `invisible` placeholder line of the same composition (icon + caption text)
+ *     instead of collapsing — so a row of all-seeded cards still matches the
+ *     height of fully-attested ones. Reserved space, never a fixed total height,
+ *     so wrapped text is never clipped.
+ *
  * CLIENT-SAFE: imports only pure/client-safe/type-only modules — no
  * `getDb`/server-only import — so it is safe in the browse route's client bundle.
  */
@@ -117,14 +131,14 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
     // SIBLING of the Link, raised above the overlay with `relative z-10` so it
     // stays independently focusable/clickable. The button is NOT a descendant of
     // the anchor — valid HTML, no interactive-nesting a11y defect.
-    <div className="group relative overflow-hidden rounded-card border border-border bg-card text-card-foreground shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand-ring hover:shadow-md focus-within:border-brand-ring">
+    <div className="group relative flex h-full flex-col overflow-hidden rounded-card border border-border bg-card text-card-foreground shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand-ring hover:shadow-md focus-within:border-brand-ring">
       <Link
         to="/listings/$id"
         params={{ id: vm.id }}
-        className="block rounded-card after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+        className="flex flex-1 flex-col rounded-card after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
       >
         {/* Photo area — a real <img> when available, else the accent placeholder tile. */}
-        <div className="relative h-[158px] overflow-hidden">
+        <div className="relative h-[158px] shrink-0 overflow-hidden">
           {vm.photoUrl ? (
             <img
               src={vm.photoUrl}
@@ -143,8 +157,9 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           )}
         </div>
 
-        {/* Body */}
-        <div className="flex flex-col gap-1 px-4 pb-4 pt-3">
+        {/* Body — flex-1 so the card fills its grid cell; the meta row below is
+            pinned to the bottom via its `mt-auto` wrapper (AUB-194). */}
+        <div className="flex flex-1 flex-col gap-1 px-4 pb-4 pt-3">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-display text-card-title font-bold text-foreground">{vm.name}</h3>
 
@@ -213,30 +228,59 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
           </div>
 
-          {/* Meta row — freshness cue (left) + evidence counts (right). */}
-          {(freshness || vm.evidence) && (
-            <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-caption">
-              {freshness && vm.freshness ? (
-                <span
-                  className={`inline-flex items-center gap-1.5 font-semibold ${freshness.className}`}
-                >
-                  <freshness.Icon className="h-4 w-4" aria-hidden="true" />
-                  <span>{vm.freshness.label}</span>
-                </span>
-              ) : (
-                <span />
-              )}
-
-              {vm.evidence ? (
-                <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground">
-                  <Users className="h-4 w-4" aria-hidden="true" />
-                  <span>
-                    {vm.evidence.confirmations} confirmations · {vm.evidence.contributors} neighbors
+          {/* Meta row — freshness cue (left) + evidence counts (right). ALWAYS
+              rendered so every card reserves the same bottom-row height
+              (AUB-194): a VM with neither signal gets an `invisible` placeholder
+              line of the same composition (icon + caption text) and a
+              transparent divider, so seeded/bot-suggested cards match the height
+              of fully-attested ones without any content clipping. The `mt-auto`
+              wrapper pins the row to the card bottom when a neighbour's name or
+              address wraps taller. */}
+          <div className="mt-auto">
+            {freshness || vm.evidence ? (
+              <div
+                data-testid="card-meta-row"
+                className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-caption"
+              >
+                {freshness && vm.freshness ? (
+                  <span
+                    className={`inline-flex items-center gap-1.5 font-semibold ${freshness.className}`}
+                  >
+                    <freshness.Icon className="h-4 w-4" aria-hidden="true" />
+                    <span>{vm.freshness.label}</span>
                   </span>
+                ) : (
+                  <span />
+                )}
+
+                {vm.evidence ? (
+                  <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground">
+                    <Users className="h-4 w-4" aria-hidden="true" />
+                    <span>
+                      {vm.evidence.confirmations} confirmations · {vm.evidence.contributors}{" "}
+                      neighbors
+                    </span>
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <div
+                data-testid="card-meta-row"
+                className="mt-3 flex items-center justify-between gap-2 border-t border-transparent pt-3 text-caption"
+              >
+                {/* Invisible height-reserving placeholder: same icon size + text
+                    line as the real row, hidden from paint AND the a11y tree. */}
+                <span
+                  data-testid="card-meta-placeholder"
+                  aria-hidden="true"
+                  className="invisible inline-flex items-center gap-1.5 font-semibold"
+                >
+                  <Clock className="h-4 w-4" aria-hidden="true" />
+                  <span>Not yet verified</span>
                 </span>
-              ) : null}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       </Link>
 

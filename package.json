@@ -30,6 +30,7 @@
     "test:mutation": "stryker run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:verify": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/verify-migrations.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed-admin": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/seed-admin.ts",
     "db:seed": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/seed.ts",
