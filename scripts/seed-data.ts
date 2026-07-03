@@ -43,6 +43,12 @@ export interface SeededListing {
   googleRating?: number | null;
   /** Captured Google rating count at refresh time (informational). */
   googleRatingCount?: number | null;
+  /**
+   * Google's own share link for the place (the Maps "Share" button URL),
+   * captured at refresh time. Preferred as `listings.mapsUrl` when present;
+   * absent (older bakes) the seeder builds a Maps URLs API link instead.
+   */
+  googleMapsUri?: string | null;
 }
 
 /**

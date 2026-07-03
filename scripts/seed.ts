@@ -108,7 +108,7 @@ export async function seedListings(
         address: entry.address,
         lat: entry.lat,
         lng: entry.lng,
-        mapsUrl: buildMapsUrl(entry.placeId),
+        mapsUrl: resolveMapsUrl(entry),
         menuUrl: entry.menuUrl ?? null,
       })
       .onConflictDoNothing({ target: listings.placeId })
@@ -157,14 +157,29 @@ export async function seedListings(
 }
 
 /**
- * The canonical Google Maps deep-link for a Place ID. Mirrors
- * `buildMapsUrl` in `app/server/places.ts` — inlined here (one line) so the CLI
- * never imports that module, which registers `createServerFn` entry points at
- * import time (a client/server transport concern that doesn't belong in a Node
- * script).
+ * The `mapsUrl` to persist for a baked entry: prefer Google's own share link
+ * (`googleMapsUri`, captured by the refresh — the Maps "Share" button URL),
+ * guarded to https like the Places provider does (#90 scheme allowlist); fall
+ * back to a built Maps URLs API link for older bakes that didn't capture it.
  */
-function buildMapsUrl(placeId: string): string {
-  return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`;
+function resolveMapsUrl(entry: SeededListing): string {
+  return entry.googleMapsUri?.startsWith("https://") === true
+    ? entry.googleMapsUri
+    : buildMapsUrl(entry.placeId, `${entry.name} ${entry.address}`);
+}
+
+/**
+ * The Google Maps deep-link for a Place ID, via the documented Maps URLs API
+ * (Place ID resolved directly; `query` is the required human-readable
+ * fallback). Mirrors `buildMapsUrl` in `app/server/places.ts` — inlined here
+ * (one line) so the CLI never imports that module, which registers
+ * `createServerFn` entry points at import time (a client/server transport
+ * concern that doesn't belong in a Node script).
+ */
+function buildMapsUrl(placeId: string, query: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    query
+  )}&query_place_id=${encodeURIComponent(placeId)}`;
 }
 
 /**

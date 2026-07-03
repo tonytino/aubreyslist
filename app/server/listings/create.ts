@@ -125,7 +125,12 @@ async function resolveListing(input: CreateListingInput): Promise<ResolvedListin
     address: details.data.formattedAddress,
     lat: details.data.lat,
     lng: details.data.lng,
-    mapsUrl: details.data.mapsUrl || buildMapsUrl(details.data.placeId),
+    mapsUrl:
+      details.data.mapsUrl ||
+      buildMapsUrl(
+        details.data.placeId,
+        `${details.data.name} ${details.data.formattedAddress}`.trim()
+      ),
     menuUrl: input.menuUrl ?? null,
   };
 }
