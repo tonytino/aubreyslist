@@ -78,7 +78,8 @@ function browseQueryOptions(
   radius: number,
   origin: UserCoords,
   saved: boolean,
-  quick: QuickFilterValue[]
+  quick: QuickFilterValue[],
+  bot: boolean
 ) {
   // Only thread coords to the server when actually distance-sorting — a non-pair
   // (or a non-distance sort) means no coords, and the server falls back to the
@@ -112,6 +113,10 @@ function browseQueryOptions(
       // a page's identity — a `?quick=` view caches independently. An empty set (no
       // chips) shares one cache entry. React Query hashes the array structurally.
       quick,
+      // Whether curator-bot suggestions participate in filter matching (AUB-31,
+      // `?bot=`). It changes the result SET + honest total, so it is part of a
+      // page's identity.
+      bot,
     ],
     queryFn: () =>
       fetchBrowseListings({
@@ -134,6 +139,9 @@ function browseQueryOptions(
           // Prebuilt quick filters (AUB-135/AUB-140): a faceted set of server-side
           // constraints on the displayed safety glance. Empty set → no quick constraint.
           quick,
+          // Curator-bot suggestion participation (AUB-31, `?bot=`): default ON;
+          // false reverts filters to community-evidence-only matching.
+          includeSuggested: bot,
         },
       }),
   });
@@ -159,7 +167,7 @@ export const Route = createFileRoute("/")({
   search: {
     middlewares: [stripSearchParams(BROWSE_SEARCH_DEFAULTS)],
   },
-  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius, saved, quick } }) => ({
+  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius, saved, quick, bot } }) => ({
     page,
     attrs,
     sort,
@@ -169,8 +177,12 @@ export const Route = createFileRoute("/")({
     radius,
     saved,
     quick,
+    bot,
   }),
-  loader: async ({ context, deps: { page, attrs, sort, lat, lng, q, radius, saved, quick } }) => {
+  loader: async ({
+    context,
+    deps: { page, attrs, sort, lat, lng, q, radius, saved, quick, bot },
+  }) => {
     // SSR has no live geolocation, so the radius origin is Denver Union Station
     // (user feedback #7). The client re-anchors to the visitor's real coords once
     // granted (see BrowseListings), which refetches under a new query key.
@@ -184,7 +196,8 @@ export const Route = createFileRoute("/")({
         radius,
         UNION_STATION,
         saved,
-        parseQuick(quick)
+        parseQuick(quick),
+        bot
       )
     );
   },
@@ -205,6 +218,7 @@ function BrowseListings() {
     radius,
     saved,
     quick: quickParam,
+    bot,
   } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
@@ -220,7 +234,7 @@ function BrowseListings() {
   // visitor still gets a meaningful "within N mi" filter rather than everything.
   const origin: UserCoords = coords ?? UNION_STATION;
   const { data } = useSuspenseQuery(
-    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin, saved, quick)
+    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin, saved, quick, bot)
   );
   const geo = useGeolocation();
 
@@ -382,15 +396,28 @@ function BrowseListings() {
     navigate({ search: (prev) => ({ ...prev, page: 1, saved: !saved }) });
   }
 
-  // The no-results CTA clears EVERY filter — the quick chips AND the server-side
-  // search + taxonomy filter (resets to page 1 with no `?q=`/`?attrs=`/`?quick=`).
+  /**
+   * Toggle whether curator-bot suggestions participate in filter matching
+   * (AUB-31, `?bot=`). Default ON (a live suggestion also satisfies the
+   * taxonomy/quick-celiac filters); the "Hide bot suggestions" chip flips it to
+   * community-evidence-only matching. Resets to page 1 (the result SET changes)
+   * and preserves every other param. `stripSearchParams` drops the inclusive
+   * default from the URL at rest.
+   */
+  function toggleBot() {
+    navigate({ search: (prev) => ({ ...prev, page: 1, bot: !bot }) });
+  }
+
+  // The no-results CTA clears EVERY filter — the quick chips, the server-side
+  // search + taxonomy filter, AND the bot-suggestions exclusion (resets to page 1
+  // with no `?q=`/`?attrs=`/`?quick=`/`?bot=`).
   // The saved filter is a distinct MODE (not a "filter" over the directory), so
   // the functional updater preserves it — clearing filters inside the saved view
   // keeps you in it.
   function clearAll() {
     setSearchInput("");
     lastPushedQ.current = "";
-    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "", quick: "" }) });
+    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "", quick: "", bot: true }) });
   }
 
   /**
@@ -414,7 +441,7 @@ function BrowseListings() {
 
   // Whether any filter is active — decides empty vs no-results. Uses the URL `?q=`
   // (the server-applied search), not the in-flight local input.
-  const anyFilterActive = qParam.trim() !== "" || quick.length > 0 || attrs.length > 0;
+  const anyFilterActive = qParam.trim() !== "" || quick.length > 0 || attrs.length > 0 || !bot;
 
   // Whether ANY browse search param is off its default — gates the "Reset" chip
   // (repo-owner mobile feedback). Broader than `anyFilterActive` above (which only
@@ -431,6 +458,7 @@ function BrowseListings() {
     radius,
     quick: quickParam,
     saved,
+    bot,
     lat,
     lng,
   });
@@ -463,6 +491,8 @@ function BrowseListings() {
             onSearchChange={setSearchInput}
             saved={saved}
             onSavedToggle={toggleSaved}
+            bot={bot}
+            onBotToggle={toggleBot}
             sort={sort}
             onSortChange={changeSort}
             isAnyFilterActive={isAnyFilterActive}
@@ -482,9 +512,16 @@ function BrowseListings() {
             {geo.status === "prompting" ? "Finding your location…" : null}
           </output>
           {geo.error ? (
+            // Text is `text-stale` ON `bg-stale-soft` — the exact pairing the
+            // SafetySignal `soft` variant uses. The `-soft` fills deliberately
+            // stay LIGHT in dark mode (styling.md) while `text-foreground`
+            // flips near-white, so the previous foreground pairing was
+            // unreadable on dark (Vercel feedback, iPhone/dark). `--color-stale`
+            // is not overridden in `.dark` (dark slate, L0.45), giving ~6:1 on
+            // the L0.90–0.95 soft fill in BOTH themes — WCAG AA.
             <p
               role="alert"
-              className="rounded-card border border-stale bg-stale-soft px-3 py-2 text-body-sm text-foreground"
+              className="rounded-card border border-stale bg-stale-soft px-3 py-2 text-body-sm font-medium text-stale"
             >
               {geo.error}
             </p>

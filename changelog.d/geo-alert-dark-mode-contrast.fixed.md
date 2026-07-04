@@ -1,0 +1,1 @@
+- `[manual]` The browse page's geolocation-denied alert was unreadable in dark mode (near-white `text-foreground` on the deliberately light `bg-stale-soft` fill). It now uses the same `text-stale`-on-`bg-stale-soft` pairing as the SafetySignal soft variant, meeting WCAG AA in both themes.

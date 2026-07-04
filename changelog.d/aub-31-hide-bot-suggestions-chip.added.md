@@ -1,0 +1,1 @@
+- `[manual]` New "Hide bot suggestions" toggle chip (Sparkles icon) in the browse filter row, URL-driven via `?bot=false` (default: suggestions included; the default is stripped from the URL at rest). When active, filters revert to community-evidence-only matching; the Reset chip and the no-results "clear filters" action both restore the default.

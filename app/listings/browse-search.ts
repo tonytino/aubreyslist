@@ -44,6 +44,11 @@ export const BROWSE_SEARCH_DEFAULTS = {
   // SERVER-SIDE "Saved" filter (AUB-129 / F11): defaults to off, so a bare visit
   // never carries `?saved=` and `stripSearchParams` drops it at rest.
   saved: false,
+  // Curator-bot suggestions participate in filter matching (AUB-31): default ON
+  // (`true` = include), so a bare visit never carries `?bot=` and
+  // `stripSearchParams` drops it at rest. `?bot=false` (the "Hide bot
+  // suggestions" chip) reverts filters to community-evidence-only matching.
+  bot: true,
 } as const;
 
 /**
@@ -60,6 +65,7 @@ export interface BrowseSearchLike {
   radius: number;
   quick: string;
   saved: boolean;
+  bot: boolean;
   lat?: number | undefined;
   lng?: number | undefined;
 }
@@ -84,6 +90,7 @@ export function isAnyBrowseFilterActive(search: BrowseSearchLike): boolean {
     search.radius !== BROWSE_SEARCH_DEFAULTS.radius ||
     search.quick !== BROWSE_SEARCH_DEFAULTS.quick ||
     search.saved !== BROWSE_SEARCH_DEFAULTS.saved ||
+    search.bot !== BROWSE_SEARCH_DEFAULTS.bot ||
     search.lat !== undefined ||
     search.lng !== undefined
   );
@@ -137,4 +144,15 @@ export const browseSearchSchema = z.object({
     .transform((value) => value === true || value === 1 || value === "1" || value === "true")
     .catch(BROWSE_SEARCH_DEFAULTS.saved)
     .default(BROWSE_SEARCH_DEFAULTS.saved),
+  // Curator-bot suggestion PARTICIPATION flag (AUB-31): `?bot=false` (or `0`)
+  // excludes live bot suggestions from filter matching ("Hide bot suggestions"
+  // chip); anything else — including absence — degrades to the inclusive
+  // default, which `stripSearchParams` keeps out of the URL at rest. Mirrors
+  // `saved`'s coercion (the router parses `false`/`0` to their JS values, but
+  // the string forms arrive from hand-edited links).
+  bot: z
+    .union([z.boolean(), z.number(), z.string()])
+    .transform((value) => !(value === false || value === 0 || value === "0" || value === "false"))
+    .catch(BROWSE_SEARCH_DEFAULTS.bot)
+    .default(BROWSE_SEARCH_DEFAULTS.bot),
 });

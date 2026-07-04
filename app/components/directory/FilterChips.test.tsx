@@ -37,6 +37,7 @@ function renderChips(
   const onToggleAttr = vi.fn();
   const onSearchChange = vi.fn();
   const onSavedToggle = vi.fn();
+  const onBotToggle = vi.fn();
   const onSortChange = vi.fn();
   const onResetAll = vi.fn();
 
@@ -56,6 +57,8 @@ function renderChips(
         onSearchChange={onSearchChange}
         saved={false}
         onSavedToggle={onSavedToggle}
+        bot={true}
+        onBotToggle={onBotToggle}
         sort="alpha"
         onSortChange={onSortChange}
         isAnyFilterActive={false}
@@ -64,7 +67,15 @@ function renderChips(
       />
     </QueryClientProvider>
   );
-  return { onQuickToggle, onToggleAttr, onSearchChange, onSavedToggle, onSortChange, onResetAll };
+  return {
+    onQuickToggle,
+    onToggleAttr,
+    onSearchChange,
+    onSavedToggle,
+    onBotToggle,
+    onSortChange,
+    onResetAll,
+  };
 }
 
 describe("FilterChips — quick chips", () => {
@@ -178,6 +189,30 @@ describe("FilterChips — taxonomy chips (AUB-198)", () => {
       fireEvent.click(attrChip);
     }
     expect(onToggleAttr).toHaveBeenCalledWith("celiac_safe_vs_gluten_friendly");
+  });
+});
+
+describe("FilterChips — 'Hide bot suggestions' chip (AUB-31 participation)", () => {
+  it("is unpressed by default (suggestions participate in filtering)", () => {
+    renderChips({ bot: true });
+    expect(screen.getByRole("button", { name: "Hide bot suggestions" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+  });
+
+  it("is pressed when suggestions are excluded (?bot=false), not colour alone", () => {
+    renderChips({ bot: false });
+    expect(screen.getByRole("button", { name: "Hide bot suggestions" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("clicking it reports the toggle (the route navigates ?bot=)", () => {
+    const { onBotToggle } = renderChips();
+    fireEvent.click(screen.getByRole("button", { name: "Hide bot suggestions" }));
+    expect(onBotToggle).toHaveBeenCalledTimes(1);
   });
 });
 

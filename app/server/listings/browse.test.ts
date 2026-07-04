@@ -216,6 +216,7 @@ const baseInput: BrowseListingsInput = {
   sort: "alpha",
   savedOnly: false,
   quick: [],
+  includeSuggested: true,
 };
 
 describe("getBrowseListings", () => {
@@ -640,6 +641,43 @@ describe("getBrowseListings", () => {
     expect(state.countWhere).toBe(state.pageWhere);
   });
 
+  // --- AUB-31: includeSuggested threading -----------------------------------
+  // Pins that `getBrowseListings` actually THREADS `input.includeSuggested` into
+  // BOTH predicate builders — dropping the argument at either call site in
+  // browse.ts would silently turn `?bot=false` into a no-op while every
+  // builder-level test stayed green.
+
+  it("threads includeSuggested=true (the default) into the taxonomy AND quick filter SQL", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, attrs: ["dedicated_fryer"], quick: ["celiac"] }, NOW);
+
+    // One shared WHERE for page + count, carrying the live-suggestion OR-branch
+    // in BOTH the taxonomy predicate and the quick=celiac predicate.
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+    const sql = renderArg(state.pageWhere);
+    // One live-suggestion OR-branch per predicate (taxonomy + quick=celiac).
+    // Match the HAVING's `suggested_by" is not null` specifically — each
+    // subquery also names the column once in its GROUP BY.
+    expect((sql.match(/suggested_by" is not null/g) ?? []).length).toBe(2);
+  });
+
+  it("includeSuggested=false strips the suggestion branch from the shared WHERE (?bot=false is not a no-op)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      { ...baseInput, attrs: ["dedicated_fryer"], quick: ["celiac"], includeSuggested: false },
+      NOW
+    );
+
+    expect(state.pageWhere).toBeDefined();
+    expect(state.countWhere).toBe(state.pageWhere);
+    expect(renderArg(state.pageWhere)).not.toContain("suggested_by");
+  });
+
   it("applies the search predicate to BOTH the page and count queries", async () => {
     state.pageListings = [{ id: "l1", name: "Taco House", address: "1 Main St" }];
     state.total = 1;
@@ -829,6 +867,7 @@ describe("getBrowseListings", () => {
         sort: "trust",
         savedOnly: false,
         quick: [],
+        includeSuggested: true,
       },
       NOW
     );

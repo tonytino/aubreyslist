@@ -1,5 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Check, Heart, RotateCcw, ShieldCheck } from "lucide-react";
+import { Check, Heart, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
@@ -187,6 +187,8 @@ export function FilterChips({
   onSearchChange,
   saved,
   onSavedToggle,
+  bot,
+  onBotToggle,
   sort,
   onSortChange,
   isAnyFilterActive,
@@ -214,6 +216,14 @@ export function FilterChips({
    * the chip's own auth gate opens a sign-in dialog for anonymous clicks instead.
    */
   onSavedToggle: () => void;
+  /**
+   * Whether curator-bot suggestions PARTICIPATE in filter matching (AUB-31,
+   * URL-derived from `?bot=`; default true). The "Hide bot suggestions" chip is
+   * pressed when this is FALSE — i.e. filters are community-evidence-only.
+   */
+  bot: boolean;
+  /** Toggle bot-suggestion participation; the route maps this to `?bot=`. */
+  onBotToggle: () => void;
   /** The active server-side sort (URL-derived from `?sort=`). */
   sort: BrowseSort;
   /**
@@ -272,6 +282,21 @@ export function FilterChips({
           </button>
         );
       })}
+
+      {/* "Hide bot suggestions" chip (AUB-31 filter participation): by default a
+          LIVE curator-bot suggestion also satisfies the taxonomy/quick-celiac
+          filters (a discovery aid). Card-cue scope: a headline (celiac-path)
+          suggestion match shows the "Suggested by Aubrey's Bot" badge on its
+          card; a non-headline attr match surfaces its provenance on the listing
+          detail's claim rows, not the browse card (owner follow-up). This chip
+          excludes them (`?bot=false`), reverting filters to community-evidence-
+          only matching. Sparkles is the established bot glyph (ListingCard /
+          ClaimTrustSummary), so the same provenance reads with the same shape.
+          Pressed = suggestions HIDDEN (`aria-pressed`, never colour alone). */}
+      <button type="button" aria-pressed={!bot} onClick={onBotToggle} className={chipClasses(!bot)}>
+        <Sparkles className="size-4" strokeWidth={2.25} aria-hidden="true" />
+        <span>Hide bot suggestions</span>
+      </button>
 
       {/* Taxonomy toggle chips (AUB-198) — the REAL server-side consensus filter
           (`?attrs=`, issue #35), flattened out of the retired sheet. Each chip

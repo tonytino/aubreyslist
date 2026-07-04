@@ -125,6 +125,21 @@ export const browseListingsInputSchema = z.object({
   quick: z
     .array(z.enum(QUICK_FILTER_VALUES as unknown as [QuickFilterValue, ...QuickFilterValue[]]))
     .default([]),
+  /**
+   * Whether curator-bot SUGGESTIONS (AUB-31) participate in filter matching.
+   * Default TRUE (a live, unvoted suggestion also satisfies the taxonomy
+   * `attrs` filter and the `quick=celiac` chip — a discovery aid that surfaces
+   * candidates worth validating). Card-cue scope: only the HEADLINE celiac
+   * path guarantees the "Suggested by Aubrey's Bot" badge on the matched
+   * browse card; a non-headline `attrs` suggestion match shows its provenance
+   * on the listing detail's claim rows instead (browse-card cue = owner
+   * follow-up). FALSE (the
+   * `?bot=` URL param's "Hide bot suggestions" chip) reverts to
+   * community-evidence-only matching. Affects only filter MATCHING — never the
+   * trust glance, counts, or sort (ADR-007: a suggestion is provenance, not
+   * evidence).
+   */
+  includeSuggested: z.boolean().default(true),
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
@@ -194,7 +209,11 @@ export async function getBrowseListings(
   // (hidden/removed) are excluded — `AND`-folded with the search/filter so the
   // page, the total count, and pagination all reflect ONLY visible listings.
   const visibleListing = eq(listings.moderationStatus, "visible");
-  const searchAndFilter = buildBrowseWhere(buildSearchPredicate(input.q ?? ""), input.attrs);
+  const searchAndFilter = buildBrowseWhere(
+    buildSearchPredicate(input.q ?? ""),
+    input.attrs,
+    input.includeSuggested
+  );
 
   // Distance-radius FILTER (user feedback #7). Applies ONLY when a complete
   // triple is present — a radius AND both origin coordinates. It is AND-folded
@@ -231,7 +250,12 @@ export async function getBrowseListings(
   // safety glance (celiac-safe / gluten-friendly / freshly-verified). Undefined
   // when no chip is active. AND-folded into the SHARED `where` below so it
   // constrains the page query AND the count query — the total honestly reflects it.
-  const quickPredicate = buildQuickFilterPredicate(input.quick, now, resolvedStalenessMonths);
+  const quickPredicate = buildQuickFilterPredicate(
+    input.quick,
+    now,
+    resolvedStalenessMonths,
+    input.includeSuggested
+  );
 
   // Compose visibility (#41) with the search/filter (#34/#35), the radius filter
   // (feedback #7), the saved filter (F11), and the quick filter (AUB-135).
