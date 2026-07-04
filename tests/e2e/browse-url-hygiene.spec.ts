@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { openBrowseFilters, waitForBrowseReady } from "./helpers";
+import { waitForBrowseReady } from "./helpers";
 
 /**
  * URL hygiene for the directory (AUB-134). The directory route applies
@@ -23,9 +23,10 @@ test("a bare visit to the directory carries no query string", async ({ page }) =
 
 test("only non-default params are written to the URL", async ({ page }) => {
   await page.goto("/");
-  await openBrowseFilters(page);
+  await waitForBrowseReady(page);
 
-  // A non-default sort is a real, shareable choice → it appears...
+  // A non-default sort (via the sort chip in the filter row, AUB-198) is a real,
+  // shareable choice → it appears...
   await page.getByLabel("Sort by").selectOption("trust");
   await expect(page).toHaveURL(/[?&]sort=trust/);
 

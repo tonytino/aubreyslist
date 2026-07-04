@@ -63,6 +63,37 @@ describe("buildQuickFilterPredicate", () => {
       expect(lower).toContain(">=");
       expect(lower).toContain("is null");
     });
+
+    // --- Curator-bot suggestion participation (AUB-31) -----------------------
+
+    it("DEFAULT: a live bot suggestion also matches, with NO freshness bound on it", () => {
+      const { lower } = render(
+        buildQuickFilterPredicate(["celiac"], NOW, DEFAULT_STALENESS_MONTHS) as SQL
+      );
+
+      // The suggestion OR-branch: suggested_by non-null AND zero votes — the
+      // EXACT badge rule (`summarizeClaim`'s `suggested && !hasEvidence`), via
+      // the shared `buildLiveSuggestionHaving` fragment. The zero-votes guard is
+      // what makes any real vote (including a dispute) kill the suggestion
+      // match; freshness applies only to the community path (a suggestion is
+      // dateless provenance — the cutoff comparison sits inside the community
+      // branch, not the suggestion branch).
+      expect(lower).toContain(" or ");
+      expect(lower).toContain("suggested_by");
+      expect(lower).toContain("is not null");
+      expect(lower).toMatch(/\+\s*count\(\*\)\s*filter[^)]*\)[^=<>]*=\s*0/);
+      // The community strict `>` + inclusive freshness bound are untouched.
+      expect(lower).toMatch(/'confirm'\)\s*>\s*count\(\*\)\s*filter/);
+      expect(lower).toContain(">=");
+    });
+
+    it("includeSuggested=false reverts celiac to community-evidence-only matching", () => {
+      const { lower } = render(
+        buildQuickFilterPredicate(["celiac"], NOW, DEFAULT_STALENESS_MONTHS, false) as SQL
+      );
+      expect(lower).not.toContain("suggested_by");
+      expect(lower).toMatch(/'confirm'\)\s*>\s*count\(\*\)\s*filter/);
+    });
   });
 
   describe("friendly (safetyState === 'gluten-friendly')", () => {
@@ -79,6 +110,19 @@ describe("buildQuickFilterPredicate", () => {
       expect(lower).toMatch(/'confirm'\)\s*<=\s*count\(\*\)\s*filter/);
       expect(params).toContain("celiac_safe_vs_gluten_friendly");
       expect(params).toContain("visible");
+    });
+
+    it("ignores the suggestion flag: a bot suggestion asserts celiac-safe, never the contested reading", () => {
+      // Matching `friendly` via a suggestion would fabricate a "gluten-friendly
+      // only" verdict the bot never made — the flag must not change this SQL.
+      const withFlag = render(
+        buildQuickFilterPredicate(["friendly"], NOW, DEFAULT_STALENESS_MONTHS, true) as SQL
+      );
+      const withoutFlag = render(
+        buildQuickFilterPredicate(["friendly"], NOW, DEFAULT_STALENESS_MONTHS, false) as SQL
+      );
+      expect(withFlag.sql).toBe(withoutFlag.sql);
+      expect(withFlag.lower).not.toContain("suggested_by");
     });
   });
 
@@ -106,6 +150,20 @@ describe("buildQuickFilterPredicate", () => {
       );
       expect(dateParams).toContain("2026-06-28"); // today (UTC)
       expect(dateParams).toContain("2026-03-30"); // today − 90 days (UTC)
+    });
+
+    it("ignores the suggestion flag: a suggestion is not a verification", () => {
+      // "Recently verified" is a freshness claim about real confirmations; a
+      // dateless bot suggestion can never satisfy it — the flag must not change
+      // this SQL.
+      const withFlag = render(
+        buildQuickFilterPredicate(["recent"], NOW, DEFAULT_STALENESS_MONTHS, true) as SQL
+      );
+      const withoutFlag = render(
+        buildQuickFilterPredicate(["recent"], NOW, DEFAULT_STALENESS_MONTHS, false) as SQL
+      );
+      expect(withFlag.sql).toBe(withoutFlag.sql);
+      expect(withFlag.lower).not.toContain("suggested_by");
     });
   });
 

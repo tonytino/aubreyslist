@@ -1,14 +1,15 @@
 import { type SQL, and, eq, sql } from "drizzle-orm";
 import { type ClaimAttribute, attestations, claims, incidents, listings } from "~/db/schema";
 import { QUICK_FILTER_VALUES, type QuickFilterValue } from "~/listings/quick";
+import { buildLiveSuggestionHaving } from "~/server/listings/filter";
 import { RECENT_INCIDENT_WINDOW_DAYS, todayUtcMidnight } from "~/trust/incident-recency";
 import { stalenessCutoff } from "~/trust/summary";
 
 /**
  * Server-side SQL expression of the directory's prebuilt "quick" filters
- * (`?quick=`, AUB-135). Each token is the SQL analogue of a DISPLAYED glance value
- * (ADR-007) — the same reading a user gets from the card — so filtering can never
- * overstate safety (a celiac could be hurt by a false match):
+ * (`?quick=`, AUB-135). Each token's BASE rule is the SQL analogue of a DISPLAYED
+ * glance value (ADR-007) — the same reading a user gets from the card — so
+ * filtering can never overstate safety (a celiac could be hurt by a false match):
  *
  *   - `celiac`   → `safetyState === "celiac-safe"`   (has evidence, confirms strictly
  *                  outnumber disputes, and the confirmation is fresh)
@@ -23,6 +24,14 @@ import { stalenessCutoff } from "~/trust/summary";
  * `confirmCount > disputeCount`, `hasEvidence`, staleness-cutoff, and
  * recent-incident boundaries the card and the "trust" sort use. `quick-filter.test.ts`
  * pins these boundaries against a weakening regression.
+ *
+ * PLUS LIVE BOT SUGGESTIONS BY DEFAULT (AUB-31): the `celiac` token ALSO matches
+ * a live, unvoted curator-bot suggestion on the headline claim (the shared
+ * `buildLiveSuggestionHaving` badge rule from `./filter.ts` — dateless, so no
+ * freshness bound; any real vote kills it). Default on; the `?bot=false` param
+ * (`includeSuggested: false`) reverts to community-evidence-only. `friendly` and
+ * `recent` deliberately ignore suggestions (a suggestion asserts celiac-safe,
+ * not the contested reading, and is not a verification).
  *
  * Each token is a self-contained correlated subquery over `listings.id` (mirroring
  * the taxonomy filter in `./filter.ts`). A faceted selection (AUB-140) AND-composes
@@ -66,17 +75,35 @@ function celiacClaimForListing(): SQL {
  * cutoff — inclusive, mirroring `isStale`). Confirms-lead implies at least one
  * confirm, so `lastConfirmedAt` is non-null here in practice; the `is null` branch
  * mirrors the pure `fresh` predicate exactly.
+ *
+ * When `includeSuggested`, a LIVE curator-bot suggestion on the celiac claim ALSO
+ * matches (the shared {@link buildLiveSuggestionHaving} rule — suggested and
+ * ZERO votes, exactly the badge rule). The freshness window applies ONLY to the
+ * community path: a suggestion is dateless provenance (no `lastConfirmedAt` to
+ * age), so it matches without one — and it dies the moment any real vote lands,
+ * at which point the community rule takes over. The matched card shows the
+ * "Suggested by Aubrey's Bot" badge, never a community-confirmed signal.
  */
-function celiacSafeExists(cutoff: Date): SQL {
+function celiacSafeExists(cutoff: Date, includeSuggested: boolean): SQL {
   const { confirmCount, disputeCount } = tallies();
+  const communityHaving = sql`(${confirmCount} > ${disputeCount}
+      and (${claims.lastConfirmedAt} is null or ${claims.lastConfirmedAt} >= ${cutoff}))`;
+  const having = includeSuggested
+    ? sql`${communityHaving} or ${buildLiveSuggestionHaving(confirmCount, disputeCount)}`
+    : communityHaving;
+  // `suggested_by` only enters the GROUP BY when the HAVING references it, so
+  // the flag-off predicate is semantically identical to the pre-AUB-31 form
+  // (it differs only by the grouping parentheses around the community HAVING).
+  const groupBy = includeSuggested
+    ? sql`${claims.id}, ${claims.lastConfirmedAt}, ${claims.suggestedBy}`
+    : sql`${claims.id}, ${claims.lastConfirmedAt}`;
   return sql`exists (
     select 1
     from ${claims}
     left join ${attestations} on ${eq(attestations.claimId, claims.id)}
     where ${celiacClaimForListing()}
-    group by ${claims.id}, ${claims.lastConfirmedAt}
-    having ${confirmCount} > ${disputeCount}
-      and (${claims.lastConfirmedAt} is null or ${claims.lastConfirmedAt} >= ${cutoff})
+    group by ${groupBy}
+    having ${having}
   )`;
 }
 
@@ -146,11 +173,25 @@ function utcDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-/** The correlated `exists` predicate for a single quick token. */
-function quickTokenPredicate(token: QuickFilterValue, cutoff: Date, now: Date): SQL {
+/**
+ * The correlated `exists` predicate for a single quick token.
+ *
+ * `includeSuggested` (AUB-31 participation) affects ONLY the `celiac` token. A
+ * bot suggestion of the headline claim asserts "celiac-safe" — it says nothing
+ * about the CONTESTED `friendly` reading (matching there would fabricate a
+ * "gluten-friendly only" verdict the bot never made), and it is not a
+ * verification, so the `recent` (freshly-verified) token stays community-only
+ * by definition. Both deliberately ignore the flag.
+ */
+function quickTokenPredicate(
+  token: QuickFilterValue,
+  cutoff: Date,
+  now: Date,
+  includeSuggested: boolean
+): SQL {
   switch (token) {
     case "celiac":
-      return celiacSafeExists(cutoff);
+      return celiacSafeExists(cutoff, includeSuggested);
     case "friendly":
       return glutenFriendlyExists();
     case "recent":
@@ -177,14 +218,15 @@ function quickTokenPredicate(token: QuickFilterValue, cutoff: Date, now: Date): 
 export function buildQuickFilterPredicate(
   quick: readonly QuickFilterValue[],
   now: Date,
-  stalenessMonths: number
+  stalenessMonths: number,
+  includeSuggested = true
 ): SQL | undefined {
   if (quick.length === 0) {
     return undefined;
   }
   const cutoff = stalenessCutoff(now, stalenessMonths);
   const predicates = QUICK_FILTER_VALUES.filter((token) => quick.includes(token)).map((token) =>
-    quickTokenPredicate(token, cutoff, now)
+    quickTokenPredicate(token, cutoff, now, includeSuggested)
   );
   return predicates.length === 1 ? predicates[0] : (and(...predicates) as SQL);
 }

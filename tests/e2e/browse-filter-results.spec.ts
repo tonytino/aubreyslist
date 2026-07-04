@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
-import { openBrowseFilters, waitForBrowseReady } from "./helpers";
+import { waitForBrowseReady } from "./helpers";
 
 /**
  * Browse + filter, with REAL seeded results (issue #45).
@@ -9,12 +9,19 @@ import { openBrowseFilters, waitForBrowseReady } from "./helpers";
  * The existing `browse.spec.ts` asserts the filter/sort URL WIRING but never
  * that a filter narrows the list to matching listings — it can't, since it
  * assumes no seeded data. This spec seeds a listing that the community has
- * affirmed for BOTH `celiac_safe_vs_gluten_friendly` and `dedicated_fryer` (a
- * filter only matches when confirms outnumber disputes — see
- * `app/server/listings/filter.ts`), applies that exact "celiac-safe + dedicated
- * fryer" filter, and asserts the URL carries both attrs AND the seeded listing
- * is in the results. A second listing affirmed ONLY for celiac-safe is seeded so
- * the dedicated-fryer constraint is doing real work (it must be excluded).
+ * affirmed for BOTH `celiac_safe_vs_gluten_friendly` and `dedicated_fryer`,
+ * applies the visible "Celiac-safe + Dedicated fryer" combination from the chip
+ * row, and asserts the URL carries both params AND the seeded listing is in the
+ * results. A second listing affirmed ONLY for celiac-safe is seeded so the
+ * dedicated-fryer constraint is doing real work (it must be excluded).
+ *
+ * CHIP ROW (AUB-198): the Filters sheet is retired. "Celiac-safe" is the quick
+ * chip (`?quick=celiac` — the headline taxonomy attribute is deliberately not
+ * duplicated as a taxonomy chip; the quick chip is the stricter reading, also
+ * requiring a FRESH consensus, which the just-seeded confirms satisfy).
+ * "Dedicated fryer" is a taxonomy toggle chip (`?attrs=dedicated_fryer`,
+ * positive-consensus filter — see `app/server/listings/filter.ts`). The two
+ * AND-compose server-side, exactly like the old sheet's checkbox pair.
  *
  * PAGINATION-PROOF (the persistent CI Neon branch accrues data across runs): the
  * default browse order is alphabetical with a page size of 20, so a both-attribute
@@ -66,22 +73,20 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
 
   test("celiac-safe + dedicated fryer filter narrows to the matching listing", async ({ page }) => {
     await page.goto("/");
-    // The taxonomy filter lives in the "Filters" bottom sheet in the AUB-61
-    // redesign; open it before toggling the attribute checkboxes.
-    await openBrowseFilters(page);
+    // Both filters are toggle chips directly in the row (AUB-198); wait for
+    // hydration so their click handlers are wired before toggling.
+    await waitForBrowseReady(page);
 
-    // Apply both taxonomy checkboxes (labels come from CLAIM_ATTRIBUTE_LABELS).
-    // click() (not check()) — the checkbox is URL-controlled and re-renders on
-    // navigation, so the URL is the source of truth (matches browse.spec.ts).
-    await page.getByRole("checkbox", { name: "Celiac-safe", exact: true }).click();
-    await expect(page).toHaveURL(/attrs=celiac_safe_vs_gluten_friendly/);
+    // The quick "Celiac-safe" chip — the single visible celiac-safe control
+    // (`?quick=celiac`, fresh confirm-majority; the just-seeded confirm is fresh).
+    await page.getByRole("button", { name: "Celiac-safe" }).click();
+    await expect(page).toHaveURL(/[?&]quick=celiac/);
 
-    await page.getByRole("checkbox", { name: "Dedicated fryer" }).click();
-    await expect(page).toHaveURL(/attrs=[^&]*dedicated_fryer/);
-
-    // Close the filter sheet so the filtered result list underneath is visible.
-    await page.getByRole("button", { name: "Close" }).click();
-    await expect(page.getByRole("dialog")).toBeHidden();
+    // The "Dedicated fryer" taxonomy chip (`?attrs=`, positive consensus). The
+    // chips are URL-controlled and re-render on navigation, so the URL is the
+    // source of truth (matches browse.spec.ts).
+    await page.getByRole("button", { name: "Dedicated fryer" }).click();
+    await expect(page).toHaveURL(/attrs=dedicated_fryer/);
 
     // The celiac-only listing is excluded by the dedicated-fryer constraint —
     // scoped to its unique name, robust regardless of pagination.

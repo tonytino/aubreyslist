@@ -29,6 +29,7 @@ describe("browseSearchSchema", () => {
       radius: DEFAULT_RADIUS_MILES,
       quick: "",
       saved: false,
+      bot: true,
     });
   });
 
@@ -55,6 +56,7 @@ describe("browseSearchSchema", () => {
         radius: 10,
         quick: "celiac,recent",
         saved: true,
+        bot: false,
       })
     ).toEqual({
       page: 3,
@@ -66,6 +68,7 @@ describe("browseSearchSchema", () => {
       radius: 10,
       quick: "celiac,recent",
       saved: true,
+      bot: false,
     });
   });
 
@@ -107,6 +110,20 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({}).quick).toBe(""); // default
   });
 
+  it("coerces the bot-suggestions flag: only explicit false/0 forms exclude", () => {
+    // `?bot=false` / `?bot=0` (boolean, number, or the string forms a hand-edited
+    // link produces) turn bot-suggestion matching OFF...
+    expect(browseSearchSchema.parse({ bot: false }).bot).toBe(false);
+    expect(browseSearchSchema.parse({ bot: 0 }).bot).toBe(false);
+    expect(browseSearchSchema.parse({ bot: "0" }).bot).toBe(false);
+    expect(browseSearchSchema.parse({ bot: "false" }).bot).toBe(false);
+    // ...everything else — absence, truthy forms, garbage — degrades to the
+    // inclusive default (and is stripped from the URL at rest).
+    expect(browseSearchSchema.parse({}).bot).toBe(true);
+    expect(browseSearchSchema.parse({ bot: true }).bot).toBe(true);
+    expect(browseSearchSchema.parse({ bot: "banana" }).bot).toBe(true);
+  });
+
   it("coerces radius to a valid option, falling back to the default", () => {
     // An on-list radius passes through the transform unchanged...
     expect(browseSearchSchema.parse({ radius: 5 }).radius).toBe(5);
@@ -134,6 +151,7 @@ describe("isAnyBrowseFilterActive", () => {
     radius: BROWSE_SEARCH_DEFAULTS.radius,
     quick: BROWSE_SEARCH_DEFAULTS.quick,
     saved: BROWSE_SEARCH_DEFAULTS.saved,
+    bot: BROWSE_SEARCH_DEFAULTS.bot,
   };
 
   it("is false when every param is at its default (a bare visit)", () => {
@@ -152,6 +170,7 @@ describe("isAnyBrowseFilterActive", () => {
     ["radius", { radius: 10 }],
     ["quick", { quick: "celiac" }],
     ["saved", { saved: true }],
+    ["bot (hide bot suggestions)", { bot: false }],
     ["a near-me coordinate pair", { lat: 39.7392, lng: -104.9903 }],
   ])("is true when only %s is off its default", (_label, override) => {
     expect(isAnyBrowseFilterActive({ ...AT_DEFAULT, ...override })).toBe(true);

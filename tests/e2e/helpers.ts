@@ -1,20 +1,51 @@
 import { type Page, expect } from "@playwright/test";
 
 /**
- * Wait for client hydration to actually complete before interacting.
+ * Wait for client hydration to actually COMMIT before interacting.
  *
- * TanStack Router assigns `window.__TSR_ROUTER__` in its constructor, which only
- * runs when the client bundle executes (i.e. `hydrateRoot` ran). In the `pnpm dev`
- * harness Playwright uses (see playwright.config.ts), the client bundle is compiled
- * and fetched on demand, so this can take a moment after first paint — interacting
- * with a control before it resolves would hit a not-yet-hydrated element (e.g. a
- * <select> or checkbox whose onChange isn't wired yet) and the URL would never
- * update. Awaiting this condition makes control interactions deterministic.
+ * Waits for the `data-hydrated` attribute the root route stamps on `<html>`
+ * from a post-mount effect (app/routes/__root.tsx) — effects only run after
+ * React commits the hydration render, so this is a true "the page is
+ * interactive" signal.
+ *
+ * Deliberately NOT `window.__TSR_ROUTER__` (the old signal): the router
+ * assigns that in its CONSTRUCTOR, when the client bundle merely starts
+ * executing — in the `pnpm dev` harness Playwright uses (playwright.config.ts)
+ * that can be seconds before the concurrent (`startTransition`-wrapped)
+ * hydration commit, because route chunks compile on demand. Interacting in
+ * that gap is treacherously asymmetric: a real CLICK is queued and replayed by
+ * React's discrete-event replay (so chip clicks "worked"), but a programmatic
+ * `change` on an SSR-rendered `<select>` (Playwright's `selectOption`) is
+ * swallowed — by commit time React has re-synced the controlled value and
+ * installed its input value-tracker, so `onChange` never fires and the URL
+ * never updates. That was the deterministic CI failure behind the browse
+ * sort-chip specs (sort select as the FIRST interaction on a fresh load
+ * failed every retry, while the same select after any prior navigation
+ * passed). If hydration never happens at all (the no-JS regression,
+ * hydration.spec.ts), this never resolves and the test fails here — the guard
+ * is preserved.
  */
 export async function waitForHydration(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => typeof (window as unknown as { __TSR_ROUTER__?: unknown }).__TSR_ROUTER__ !== "undefined"
-  );
+  await page.waitForFunction(() => document.documentElement.dataset.hydrated === "true");
+}
+
+/**
+ * Wait for the BROWSE ROUTE'S OWN hydration commit (see the `data-browse-hydrated`
+ * stamp in app/routes/index.tsx).
+ *
+ * The root `data-hydrated` marker is stamped from OUTSIDE the router's per-route
+ * Suspense boundary, so it proves only that the SHELL committed — the directory
+ * content inside the boundary hydrates in a LATER, lower-priority commit. In that
+ * window every browse control is visible (SSR HTML) but dehydrated, and a
+ * programmatic `selectOption` fired then is clobbered: the discrete `input` event
+ * makes React hydrate the boundary synchronously mid-event, hydration re-syncs the
+ * controlled `<select>` back to its rendered prop, and the retried `change` reports
+ * the OLD value — so `?sort=`/`?radius=` never changes (the deterministic CI
+ * failure behind the browse sort/radius specs; clicks survive because React
+ * re-dispatches them after hydrating and they carry no DOM value to clobber).
+ */
+async function waitForBrowseHydration(page: Page): Promise<void> {
+  await page.waitForFunction(() => document.documentElement.dataset.browseHydrated === "true");
 }
 
 /**
@@ -22,8 +53,12 @@ export async function waitForHydration(page: Page): Promise<void> {
  *
  * Two things must finish before clicking a URL-driving control on `/listings`:
  *
- *  1. Hydration — until the client bundle runs the controls' onChange handlers
- *     aren't wired (see {@link waitForHydration}).
+ *  1. Hydration of the ROUTE'S Suspense boundary, not just the shell — until the
+ *     boundary's own commit lands, a `selectOption` on the sort/radius chips is
+ *     clobbered by hydration's controlled-value re-sync (see
+ *     {@link waitForBrowseHydration}; {@link waitForHydration} is kept first so a
+ *     total no-JS regression still fails with the same signature as
+ *     hydration.spec.ts).
  *  2. The directory's controls being interactive. The route strips default params
  *     from the URL (`stripSearchParams`), so a bare visit settles to `/` with NO
  *     query string — there is no longer a `?sort=alpha…` canonicalization to wait
@@ -34,6 +69,7 @@ export async function waitForHydration(page: Page): Promise<void> {
  */
 export async function waitForBrowseReady(page: Page): Promise<void> {
   await waitForHydration(page);
+  await waitForBrowseHydration(page);
   await expect(page.getByRole("button", { name: "Search restaurants" })).toBeVisible();
 }
 
@@ -50,17 +86,6 @@ export async function waitForBrowseReady(page: Page): Promise<void> {
  */
 export async function waitForBrowseSearchApplied(page: Page, query: string): Promise<void> {
   await waitForHydration(page);
+  await waitForBrowseHydration(page);
   await expect(page.getByRole("button", { name: `Search: ${query}` })).toBeVisible();
-}
-
-/**
- * Open the directory's "Filters" bottom sheet, where the AUB-61 redesign hosts
- * the server-side sort control + taxonomy filter (the mobile header surfaces the
- * search + quick chips instead). Waits for the route to be ready first so the
- * chip's handler is wired, then opens the sheet and waits for its dialog.
- */
-export async function openBrowseFilters(page: Page): Promise<void> {
-  await waitForBrowseReady(page);
-  await page.getByRole("button", { name: "Filters" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
 }

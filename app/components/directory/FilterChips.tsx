@@ -1,13 +1,11 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Check, Funnel, Heart, RotateCcw, ShieldCheck } from "lucide-react";
+import { Check, Heart, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type * as React from "react";
 import { useState } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { SearchChip } from "~/components/directory/SearchChip";
+import { SortSelector } from "~/components/directory/SortSelector";
 import { WheatStrike } from "~/components/icons/WheatStrike";
-import { TaxonomyFilter } from "~/components/listing/TaxonomyFilter";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -17,25 +15,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "~/components/ui/sheet";
 import type { QuickFilterValue } from "~/listings/quick";
-import type { ClaimAttribute } from "~/listings/taxonomy";
+import type { BrowseSort } from "~/listings/sort";
+import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
+import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
 
 /**
- * Horizontal-scroll filter chip row (AUB-61, Phase 2b).
+ * Horizontal-scroll filter chip row (AUB-61, Phase 2b; flattened in AUB-198).
  *
- * Two kinds of chip, deliberately distinct in what they drive:
- *   - **Filters** opens the EXISTING {@link TaxonomyFilter} in a bottom Sheet.
- *     That is the real, URL-driven, SERVER-SIDE taxonomy filter (positive
- *     community consensus per attribute) — untouched by this redesign; the chip
- *     is purely a new entry point to it, and its badge surfaces the active count.
+ * The "Filter listings" bottom sheet is RETIRED (AUB-198): the taxonomy filter and
+ * the sort control it hosted now live directly in this row. Every control is
+ * URL-driven and server-side — nothing here refines the loaded page client-side:
  *   - **Quick chips** (Celiac-safe / Gluten-friendly / Recently verified) are
  *     URL-driven, SERVER-side filters (`?quick=`, AUB-135/AUB-140) forming a faceted
  *     SET: the `safety` pair (celiac / friendly) is mutually exclusive, while
@@ -43,15 +33,33 @@ import type { ClaimAttribute } from "~/listings/taxonomy";
  *     `applyQuickToggle` reducer — this component just renders whatever set it's
  *     handed and reports each click via `onQuickToggle`. They are real `<button>`s
  *     carrying `aria-pressed` so the toggle state is announced — never colour alone.
+ *   - **Taxonomy chips** are the real server-side consensus filter (`?attrs=`,
+ *     issue #35), previously checkboxes inside the sheet. One toggle chip per
+ *     attribute, labelled from `CLAIM_ATTRIBUTE_LABELS` with that attribute's
+ *     distinct `CLAIM_ATTRIBUTE_ICONS` glyph (shape, not colour, differentiates),
+ *     `aria-pressed`, reporting through `onToggleAttr` — semantics unchanged.
+ *   - **Sort chip** ({@link SortSelector}) mirrors the DistanceSelector pattern (a
+ *     native `<select>` styled as a chip) and drives `?sort=` via the route's
+ *     `changeSort` — including the "Near me" geolocation opt-in flow.
  *
- * SEARCH-AS-CHIP (user feedback #5): the free-text search now leads the row as a
- * {@link SearchChip} (replacing the old standalone search field above the chips).
- * It shares the chip visual language and is controlled by the route's
- * `search`/`onSearchChange` (still mirrored to the URL `?q=` with a debounce there),
- * so it reads as "just another filter" while staying SERVER-complete.
+ * ONE Celiac-safe chip (AUB-198 decision): the headline taxonomy attribute
+ * (`celiac_safe_vs_gluten_friendly`) is EXCLUDED from the default taxonomy chip
+ * set because the quick `celiac` chip already covers the same user question with
+ * a strictly SAFER reading — both require confirms to strictly outnumber disputes
+ * on the same headline claim, and the quick chip additionally requires the
+ * consensus to be FRESH (within the staleness window). Two side-by-side
+ * "Celiac-safe" chips with near-identical semantics would be illegible. The URL
+ * param still accepts the headline attr for back-compat (old shared links), and
+ * when such a link arrives the chip IS rendered (pressed) so the active filter
+ * stays visible and can be toggled off.
  *
- * The bundle's "Cuisine" chip is intentionally DROPPED (no cuisine data yet;
- * tracked in AUB-112).
+ * SEARCH-AS-CHIP (user feedback #5): the free-text search leads the row as a
+ * {@link SearchChip}, controlled by the route's `search`/`onSearchChange` (still
+ * mirrored to the URL `?q=` with a debounce there).
+ *
+ * ROW LAYOUT: one horizontal scroll row on mobile (the mobile-first base); from
+ * `sm:` up the chips wrap into multiple lines instead of scrolling, so all ~10
+ * controls stay visible on wider screens without a long sideways drag.
  */
 
 interface QuickChipDef {
@@ -69,6 +77,13 @@ const QUICK_CHIPS: readonly QuickChipDef[] = [
   { value: "friendly", label: "Gluten-friendly", Icon: WheatStrike },
   { value: "recent", label: "Recently verified", Icon: Check },
 ];
+
+/**
+ * The headline taxonomy attribute, deliberately absent from the default taxonomy
+ * chip set — the quick `celiac` chip is the one visible "Celiac-safe" control
+ * (see the module doc). Still valid in `?attrs=` for back-compat.
+ */
+const HEADLINE_ATTRIBUTE: ClaimAttribute = "celiac_safe_vs_gluten_friendly";
 
 /** Shared pill classes; `active` swaps to the filled brand treatment. */
 function chipClasses(active: boolean): string {
@@ -148,7 +163,8 @@ function SavedChip({ saved, onToggle }: { saved: boolean; onToggle: () => void }
           <DialogHeader>
             <DialogTitle>Sign in to see your saved spots</DialogTitle>
             <DialogDescription>
-              Sign in to save spots you trust and filter the directory to just those places.
+              Favorites let you keep a personal list of gluten-free spots you trust. Sign in to save
+              spots and filter the directory to just your saved places.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -165,20 +181,26 @@ function SavedChip({ saved, onToggle }: { saved: boolean; onToggle: () => void }
 export function FilterChips({
   attrs,
   onToggleAttr,
-  onClearAttrs,
   quick,
   onQuickToggle,
   search,
   onSearchChange,
   saved,
   onSavedToggle,
-  sheetExtras,
+  bot,
+  onBotToggle,
+  sort,
+  onSortChange,
   isAnyFilterActive,
   onResetAll,
 }: {
+  /** The active taxonomy-attribute selection (URL-derived from `?attrs=`). */
   attrs: ClaimAttribute[];
+  /**
+   * Toggle a single taxonomy attribute on/off; the route maps this to a `?attrs=`
+   * navigation (server-side consensus filter, unchanged semantics — issue #35).
+   */
   onToggleAttr: (attribute: ClaimAttribute) => void;
-  onClearAttrs: () => void;
   /** The active quick-filter set (URL-derived). A chip is pressed iff it's a member. */
   quick: QuickFilterValue[];
   /** Report a chip click; the parent's `applyQuickToggle` computes the next set. */
@@ -195,12 +217,20 @@ export function FilterChips({
    */
   onSavedToggle: () => void;
   /**
-   * Extra controls rendered inside the Filters sheet, below the taxonomy filter —
-   * the route passes the server-side sort control + pagination here so those
-   * URL-driven controls stay reachable in the redesign (the bundle has no visible
-   * sort/pager, but the server capability must not be lost).
+   * Whether curator-bot suggestions PARTICIPATE in filter matching (AUB-31,
+   * URL-derived from `?bot=`; default true). The "Hide bot suggestions" chip is
+   * pressed when this is FALSE — i.e. filters are community-evidence-only.
    */
-  sheetExtras?: React.ReactNode;
+  bot: boolean;
+  /** Toggle bot-suggestion participation; the route maps this to `?bot=`. */
+  onBotToggle: () => void;
+  /** The active server-side sort (URL-derived from `?sort=`). */
+  sort: BrowseSort;
+  /**
+   * Change the sort; the route's `changeSort` maps this to a `?sort=` navigation
+   * (including the "Near me" geolocation opt-in / graceful-denial flow).
+   */
+  onSortChange: (next: BrowseSort) => void;
   /**
    * Whether ANY browse search param (search, quick, taxonomy attrs, saved mode,
    * sort, radius, or page) is off its default — the route computes this across the
@@ -213,41 +243,27 @@ export function FilterChips({
   /** Reset EVERY browse search param to its default in one navigation. */
   onResetAll: () => void;
 }) {
+  // The taxonomy chips to show: every attribute EXCEPT the headline one — the
+  // quick `celiac` chip is the single visible "Celiac-safe" control (module doc).
+  // Back-compat: when a shared/old link carries the headline attr in `?attrs=`,
+  // its chip IS rendered (pressed) so the active filter is visible and can be
+  // toggled off — an invisible active filter would be dishonest.
+  const taxonomyChipAttributes = CLAIM_ATTRIBUTES.filter(
+    (attribute) => attribute !== HEADLINE_ATTRIBUTE || attrs.includes(attribute)
+  );
+
   return (
-    <div className="-mx-gutter flex items-center gap-2 overflow-x-auto px-gutter pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="-mx-gutter flex items-center gap-2 overflow-x-auto px-gutter pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap">
       {/* Search leads the row as a chip (user feedback #5) — controlled by the
           route, which debounces it into the URL `?q=`. */}
       <SearchChip value={search} onChange={onSearchChange} />
 
+      {/* Sort chip (AUB-198) — the server-side `?sort=` control, out of the retired
+          sheet and into the row, mirroring the DistanceSelector chip pattern. */}
+      <SortSelector value={sort} onChange={onSortChange} />
+
       {/* Sign-in-gated "Saved" chip — the server-side favorites filter (F11). */}
       <SavedChip saved={saved} onToggle={onSavedToggle} />
-
-      {/* Filters → the real server-side taxonomy filter, in a bottom sheet. */}
-      <Sheet>
-        <SheetTrigger asChild>
-          <button type="button" className={chipClasses(false)}>
-            <Funnel className="size-4" strokeWidth={2.25} aria-hidden="true" />
-            <span>Filters</span>
-            {attrs.length > 0 ? (
-              <Badge variant="secondary" className="ml-0.5">
-                {attrs.length}
-              </Badge>
-            ) : null}
-          </button>
-        </SheetTrigger>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Filter listings</SheetTitle>
-            <SheetDescription>
-              Show only places the community has confirmed for the attributes you pick.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex flex-col gap-4 px-4 pb-4">
-            <TaxonomyFilter selected={attrs} onToggle={onToggleAttr} onClear={onClearAttrs} />
-            {sheetExtras}
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {/* Faceted quick chips (server-side, URL-driven via `?quick=`). Membership in
           the active set = pressed; the parent reducer enforces safety exclusivity. */}
@@ -267,12 +283,50 @@ export function FilterChips({
         );
       })}
 
+      {/* "Hide bot suggestions" chip (AUB-31 filter participation): by default a
+          LIVE curator-bot suggestion also satisfies the taxonomy/quick-celiac
+          filters (a discovery aid). Card-cue scope (AUB-193): the card's bot
+          badge covers a live suggestion on ANY visible claim while the listing
+          has no real celiac evidence — so suggestion matches carry the badge
+          except a listing with community celiac evidence matching a
+          non-headline attr via suggestion (provenance then lives on the listing
+          detail's claim rows; owner follow-up). This chip
+          excludes them (`?bot=false`), reverting filters to community-evidence-
+          only matching. Sparkles is the established bot glyph (ListingCard /
+          ClaimTrustSummary), so the same provenance reads with the same shape.
+          Pressed = suggestions HIDDEN (`aria-pressed`, never colour alone). */}
+      <button type="button" aria-pressed={!bot} onClick={onBotToggle} className={chipClasses(!bot)}>
+        <Sparkles className="size-4" strokeWidth={2.25} aria-hidden="true" />
+        <span>Hide bot suggestions</span>
+      </button>
+
+      {/* Taxonomy toggle chips (AUB-198) — the REAL server-side consensus filter
+          (`?attrs=`, issue #35), flattened out of the retired sheet. Each chip
+          carries its attribute's distinct glyph so shape (not colour) tells them
+          apart, and `aria-pressed` announces the toggle state. */}
+      {taxonomyChipAttributes.map((attribute) => {
+        const active = attrs.includes(attribute);
+        const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
+        return (
+          <button
+            key={attribute}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onToggleAttr(attribute)}
+            className={chipClasses(active)}
+          >
+            <Icon className="size-4" strokeWidth={2.25} aria-hidden="true" />
+            <span>{CLAIM_ATTRIBUTE_LABELS[attribute]}</span>
+          </button>
+        );
+      })}
+
       {/* Trailing "Reset" chip (repo-owner mobile feedback): the single affordance
           to back out of every stacked browse param at once. Rendered ONLY when at
           least one is off its default — never shown on a bare visit. Always icon +
           VISIBLE text (never icon/colour-only), using the same inactive pill
-          treatment as "Filters" rather than a warning colour — resetting isn't a
-          destructive/alarming action. */}
+          treatment as the other chips rather than a warning colour — resetting
+          isn't a destructive/alarming action. */}
       {isAnyFilterActive ? (
         <button type="button" onClick={onResetAll} className={chipClasses(false)}>
           <RotateCcw className="size-4" strokeWidth={2.25} aria-hidden="true" />

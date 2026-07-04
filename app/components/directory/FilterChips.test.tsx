@@ -7,16 +7,18 @@ import { FilterChips } from "./FilterChips";
 
 /**
  * Tests for the directory filter chip row (AUB-61, Phase 2b; faceted in AUB-140;
- * extended for the server-side "Saved" filter in AUB-129 / F11). The quick chips
- * are real <button>s with `aria-pressed`; the component is purely presentational
- * — it renders whichever set it's handed and reports each click via
- * `onQuickToggle` (the group-exclusivity rule lives in the parent's
- * `applyQuickToggle` reducer, unit-tested in quick.test.ts). The "Filters" chip is
- * the entry point to the existing server-side taxonomy filter (its sheet is
- * Radix-portaled and only mounts on open, so we assert on the trigger + its
- * active-count badge here). The search leads the row as a {@link SearchChip} (user
- * feedback #5). The "Saved" chip is sign-in-gated: it reads {@link currentUserQuery}
- * (seeded into the QueryClient below), so the whole row renders under a provider.
+ * extended for the server-side "Saved" filter in AUB-129 / F11; flattened in
+ * AUB-198 — the "Filter listings" sheet is retired and the taxonomy filter + sort
+ * now live directly in the row). The quick AND taxonomy chips are real <button>s
+ * with `aria-pressed`; the component is purely presentational — it renders
+ * whichever sets it's handed and reports clicks via `onQuickToggle` /
+ * `onToggleAttr` (the quick group-exclusivity rule lives in the parent's
+ * `applyQuickToggle` reducer, unit-tested in quick.test.ts; the attrs URL
+ * round-trip in browse-params.test.ts). The sort chip is a native labelled
+ * <select> (SortSelector) driving the route's `changeSort`. The search leads the
+ * row as a {@link SearchChip} (user feedback #5). The "Saved" chip is
+ * sign-in-gated: it reads {@link currentUserQuery} (seeded into the QueryClient
+ * below), so the whole row renders under a provider.
  */
 
 const SIGNED_IN_USER: SessionUser = {
@@ -33,9 +35,10 @@ function renderChips(
 ) {
   const onQuickToggle = vi.fn();
   const onToggleAttr = vi.fn();
-  const onClearAttrs = vi.fn();
   const onSearchChange = vi.fn();
   const onSavedToggle = vi.fn();
+  const onBotToggle = vi.fn();
+  const onSortChange = vi.fn();
   const onResetAll = vi.fn();
 
   // Seed the current-user suspense source so `useSuspenseQuery(currentUserQuery)`
@@ -48,29 +51,41 @@ function renderChips(
       <FilterChips
         attrs={[]}
         onToggleAttr={onToggleAttr}
-        onClearAttrs={onClearAttrs}
         quick={[]}
         onQuickToggle={onQuickToggle}
         search=""
         onSearchChange={onSearchChange}
         saved={false}
         onSavedToggle={onSavedToggle}
+        bot={true}
+        onBotToggle={onBotToggle}
+        sort="alpha"
+        onSortChange={onSortChange}
         isAnyFilterActive={false}
         onResetAll={onResetAll}
         {...overrides}
       />
     </QueryClientProvider>
   );
-  return { onQuickToggle, onToggleAttr, onClearAttrs, onSearchChange, onSavedToggle, onResetAll };
+  return {
+    onQuickToggle,
+    onToggleAttr,
+    onSearchChange,
+    onSavedToggle,
+    onBotToggle,
+    onSortChange,
+    onResetAll,
+  };
 }
 
 describe("FilterChips — quick chips", () => {
-  it("renders the three quick chips plus the Filters trigger", () => {
+  it("renders the three quick chips (no Filters sheet trigger — AUB-198)", () => {
     renderChips();
-    expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Celiac-safe" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Gluten-friendly" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Recently verified" })).toBeInTheDocument();
+    // The sheet entry point is retired; the taxonomy filter renders as chips instead.
+    expect(screen.queryByRole("button", { name: "Filters" })).not.toBeInTheDocument();
   });
 
   it("reflects the active quick set via aria-pressed (state, not colour alone)", () => {
@@ -118,11 +133,101 @@ describe("FilterChips — quick chips", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recently verified" }));
     expect(onQuickToggle).toHaveBeenCalledWith("recent");
   });
+});
 
-  it("shows the active taxonomy-attribute count on the Filters chip", () => {
-    renderChips({ attrs: ["dedicated_fryer", "celiac_safe_vs_gluten_friendly"] });
-    const filters = screen.getByRole("button", { name: /Filters/ });
-    expect(filters).toHaveTextContent("2");
+describe("FilterChips — taxonomy chips (AUB-198)", () => {
+  it("renders the four non-headline taxonomy attributes as toggle chips", () => {
+    renderChips();
+    expect(screen.getByRole("button", { name: "Dedicated fryer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dedicated GF menu" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Off-menu GF on request" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "GF substitutes" })).toBeInTheDocument();
+  });
+
+  it("excludes the headline celiac attribute by default — one Celiac-safe chip only", () => {
+    // The quick `celiac` chip is the single visible "Celiac-safe" control; the
+    // near-equivalent (and less strict) headline taxonomy attribute would be an
+    // illegible duplicate next to it.
+    renderChips();
+    expect(screen.getAllByRole("button", { name: "Celiac-safe" })).toHaveLength(1);
+  });
+
+  it("reflects the active attrs via aria-pressed (state, not colour alone)", () => {
+    renderChips({ attrs: ["dedicated_fryer"] });
+    expect(screen.getByRole("button", { name: "Dedicated fryer" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: "GF substitutes" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+  });
+
+  it("clicking a taxonomy chip reports its attribute (the route navigates ?attrs=)", () => {
+    const { onToggleAttr } = renderChips();
+    fireEvent.click(screen.getByRole("button", { name: "Dedicated fryer" }));
+    expect(onToggleAttr).toHaveBeenCalledWith("dedicated_fryer");
+  });
+
+  it("clicking an active taxonomy chip still reports it (toggle-off is the parent's job)", () => {
+    const { onToggleAttr } = renderChips({ attrs: ["gf_substitutes"] });
+    fireEvent.click(screen.getByRole("button", { name: "GF substitutes" }));
+    expect(onToggleAttr).toHaveBeenCalledWith("gf_substitutes");
+  });
+
+  it("BACK-COMPAT: a URL carrying the headline attr renders its chip pressed and toggleable", () => {
+    // An old shared link may carry `?attrs=celiac_safe_vs_gluten_friendly`. The
+    // active filter must stay VISIBLE (an invisible active filter is dishonest)
+    // and removable — so the otherwise-hidden headline chip renders, pressed.
+    const { onToggleAttr } = renderChips({ attrs: ["celiac_safe_vs_gluten_friendly"] });
+    const celiacChips = screen.getAllByRole("button", { name: "Celiac-safe" });
+    expect(celiacChips).toHaveLength(2); // the quick chip + the back-compat attr chip
+    const attrChip = celiacChips.find((chip) => chip.getAttribute("aria-pressed") === "true");
+    expect(attrChip).toBeDefined();
+    if (attrChip) {
+      fireEvent.click(attrChip);
+    }
+    expect(onToggleAttr).toHaveBeenCalledWith("celiac_safe_vs_gluten_friendly");
+  });
+});
+
+describe("FilterChips — 'Hide bot suggestions' chip (AUB-31 participation)", () => {
+  it("is unpressed by default (suggestions participate in filtering)", () => {
+    renderChips({ bot: true });
+    expect(screen.getByRole("button", { name: "Hide bot suggestions" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+  });
+
+  it("is pressed when suggestions are excluded (?bot=false), not colour alone", () => {
+    renderChips({ bot: false });
+    expect(screen.getByRole("button", { name: "Hide bot suggestions" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("clicking it reports the toggle (the route navigates ?bot=)", () => {
+    const { onBotToggle } = renderChips();
+    fireEvent.click(screen.getByRole("button", { name: "Hide bot suggestions" }));
+    expect(onBotToggle).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("FilterChips — sort chip (AUB-198)", () => {
+  it("renders the labelled sort select reflecting the active sort", () => {
+    renderChips({ sort: "trust" });
+    expect(screen.getByRole("combobox", { name: "Sort by" })).toHaveValue("trust");
+  });
+
+  it("changing the sort reports the chosen value (the route navigates ?sort=)", () => {
+    const { onSortChange } = renderChips();
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort by" }), {
+      target: { value: "recency" },
+    });
+    expect(onSortChange).toHaveBeenCalledWith("recency");
   });
 });
 
@@ -131,9 +236,9 @@ describe("FilterChips — search chip (user feedback #5)", () => {
     renderChips();
     const search = screen.getByRole("button", { name: "Search restaurants" });
     expect(search).toBeInTheDocument();
-    // The collapsed search chip leads the row, before the Filters trigger.
-    const filters = screen.getByRole("button", { name: "Filters" });
-    expect(search.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The collapsed search chip leads the row, before the sort chip.
+    const sort = screen.getByRole("combobox", { name: "Sort by" });
+    expect(search.compareDocumentPosition(sort) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("reflects an applied search value as the active chip", () => {
@@ -204,12 +309,12 @@ describe("FilterChips — Reset chip (repo-owner mobile feedback)", () => {
     expect(reset).toHaveTextContent("Reset");
   });
 
-  it("renders LAST in the chip row, after the quick chips", () => {
+  it("renders LAST in the chip row, after the taxonomy chips", () => {
     renderChips({ isAnyFilterActive: true });
     const reset = screen.getByRole("button", { name: "Reset" });
-    const lastQuickChip = screen.getByRole("button", { name: "Recently verified" });
+    const lastTaxonomyChip = screen.getByRole("button", { name: "GF substitutes" });
     expect(
-      reset.compareDocumentPosition(lastQuickChip) & Node.DOCUMENT_POSITION_PRECEDING
+      reset.compareDocumentPosition(lastTaxonomyChip) & Node.DOCUMENT_POSITION_PRECEDING
     ).toBeTruthy();
   });
 

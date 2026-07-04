@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { openBrowseFilters } from "./helpers";
+import { waitForBrowseReady } from "./helpers";
 
 /**
  * "Near me" distance sort (#37). Choosing the distance sort requests browser
@@ -10,10 +10,13 @@ import { openBrowseFilters } from "./helpers";
  * coordinates) for the grant path and an injected error callback for the deny
  * path — no real permission prompt.
  *
+ * The sort control is the labelled select chip directly in the filter row
+ * (AUB-198 — the old Filters sheet is retired), so there is no sheet to open or
+ * close; the results content is always visible below the sticky filter bar.
+ *
  * Every interaction waits for {@link waitForBrowseReady} first: until hydration
- * AND the route's initial search-param canonicalization settle, the <select>'s
- * onChange isn't wired and a selection gets clobbered (the flake the earlier
- * browse specs hit). See helpers.ts.
+ * settles, the <select>'s onChange isn't wired and a selection gets clobbered
+ * (the flake the earlier browse specs hit). See helpers.ts.
  */
 
 const DENVER = { latitude: 39.7392, longitude: -104.9903 };
@@ -23,7 +26,7 @@ test.describe("near me — geolocation granted", () => {
 
   test("sorting by distance with permission granted puts coords in the URL", async ({ page }) => {
     await page.goto("/");
-    await openBrowseFilters(page);
+    await waitForBrowseReady(page);
 
     const sort = page.getByLabel("Sort by");
     await expect(sort).toBeVisible();
@@ -35,11 +38,9 @@ test.describe("near me — geolocation granted", () => {
     await expect(page).toHaveURL(/lat=39\.7392/);
     await expect(page).toHaveURL(/lng=-104\.9903/);
 
-    // Close the Filters sheet and confirm the RESULTS CONTENT actually renders
-    // under the distance sort — either a results list or an honest empty/
-    // no-results heading. Distance sort never crashes.
-    await page.getByRole("button", { name: "Close" }).click();
-    await expect(page.getByRole("dialog")).toBeHidden();
+    // Confirm the RESULTS CONTENT actually renders under the distance sort —
+    // either a results list or an honest empty/no-results heading. Distance sort
+    // never crashes.
     const resultsList = page.getByRole("list");
     const emptyState = page.getByRole("heading", {
       name: /Let's find your safe table|No spots match/,
@@ -72,7 +73,7 @@ test.describe("near me — geolocation denied", () => {
     page,
   }) => {
     await page.goto("/");
-    await openBrowseFilters(page);
+    await waitForBrowseReady(page);
 
     const sort = page.getByLabel("Sort by");
     await expect(sort).toBeVisible();
@@ -81,16 +82,14 @@ test.describe("near me — geolocation denied", () => {
 
     // Graceful fallback: the sort reverts to the alphabetical default — which
     // stripSearchParams drops from the URL — so `sort` disappears entirely (no
-    // `sort=distance`, no coords), and an accessible alert explains why. Never a
-    // crash or hang.
+    // `sort=distance`, no coords), and an accessible alert (rendered under the
+    // chip row, formerly inside the sheet) explains why. Never a crash or hang.
     await expect(page).not.toHaveURL(/sort=/);
     await expect(page).not.toHaveURL(/lat=/);
     await expect(page.getByRole("alert")).toContainText(/denied/i);
 
-    // Close the Filters sheet and confirm the RESULTS CONTENT renders under the
-    // fallback order — a results list or an honest empty/no-results heading.
-    await page.getByRole("button", { name: "Close" }).click();
-    await expect(page.getByRole("dialog")).toBeHidden();
+    // Confirm the RESULTS CONTENT renders under the fallback order — a results
+    // list or an honest empty/no-results heading.
     const resultsList = page.getByRole("list");
     const emptyState = page.getByRole("heading", {
       name: /Let's find your safe table|No spots match/,

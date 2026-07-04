@@ -99,6 +99,39 @@ describe("buildTaxonomyFilterPredicate", () => {
     expect(lower.indexOf("'confirm'")).toBeLessThan(gtIndex);
     expect(lower.lastIndexOf("'dispute'")).toBeGreaterThan(gtIndex);
   });
+
+  // --- Curator-bot suggestion participation (AUB-31) -------------------------
+  // By DEFAULT a LIVE suggestion (suggested_by non-null, ZERO votes — the exact
+  // rule the "Suggested by Aubrey's Bot" badge derives from via `summarizeClaim`)
+  // also matches; `includeSuggested: false` (the `?bot=` param) reverts to the
+  // community-evidence-only predicate above.
+
+  it("DEFAULT: a live bot suggestion also matches (suggested_by non-null, zero votes)", () => {
+    const predicate = buildTaxonomyFilterPredicate(["dedicated_fryer"]);
+    const lower = renderSql(predicate as SQL).sql.toLowerCase();
+
+    // The suggestion OR-branch alongside the consensus rule.
+    expect(lower).toContain(" or ");
+    expect(lower).toContain("suggested_by");
+    expect(lower).toContain("is not null");
+    // The badge-rule guard: ZERO attestations (confirms + disputes = 0). This is
+    // what makes ANY real vote — including a dispute — kill the suggestion match
+    // instantly (matching `summarizeClaim`'s `suggested && !hasEvidence`); the
+    // listing then matches only via the strict community consensus.
+    expect(lower).toMatch(/\+\s*count\(\*\)\s*filter[^)]*\)[^=<>]*=\s*0/);
+    // The community strict `>` is still present (the suggestion branch is an OR,
+    // never a weakening of the consensus rule).
+    expect(lower).toContain(" > ");
+  });
+
+  it("includeSuggested=false reverts to community-evidence-only matching", () => {
+    const predicate = buildTaxonomyFilterPredicate(["dedicated_fryer"], false);
+    const lower = renderSql(predicate as SQL).sql.toLowerCase();
+
+    // No suggestion branch at all — exactly the original consensus predicate.
+    expect(lower).not.toContain("suggested_by");
+    expect(lower).toContain(" > ");
+  });
 });
 
 describe("buildBrowseWhere — search + taxonomy composition", () => {
@@ -135,5 +168,12 @@ describe("buildBrowseWhere — search + taxonomy composition", () => {
     expect(lower).toContain(" and ");
     // The search term is still bound as the `%term%` wildcard.
     expect(params).toContain("%taco%");
+  });
+
+  it("threads includeSuggested=false through to the taxonomy predicate", () => {
+    const where = buildBrowseWhere(buildSearchPredicate(""), ["dedicated_fryer"], false);
+    const lower = renderSql(where as SQL).sql.toLowerCase();
+    expect(lower).toContain("exists");
+    expect(lower).not.toContain("suggested_by");
   });
 });

@@ -1,9 +1,10 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AddSpotFab } from "~/components/directory/AddSpotFab";
 import { DirectoryList } from "~/components/directory/DirectoryList";
 import { DirectoryMap, type DirectoryMapEntry } from "~/components/directory/DirectoryMap";
+import { DirectoryPager } from "~/components/directory/DirectoryPager";
 import { DirectoryEmpty, DirectoryNoResults } from "~/components/directory/DirectoryStates";
 import { DistanceSelector } from "~/components/directory/DistanceSelector";
 import { FilterChips } from "~/components/directory/FilterChips";
@@ -29,10 +30,9 @@ import {
   parseQuick,
   serializeQuick,
 } from "~/listings/quick";
-import { BROWSE_SORT_OPTIONS, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
+import { type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 import { useGeolocation } from "~/listings/use-geolocation";
-import type { BrowseListingsPage } from "~/server/listings/browse";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
 
 /**
@@ -57,7 +57,9 @@ import { fetchBrowseListings } from "~/server/listings/browse.fn";
  * page). They are grouped: `safety` (celiac-safe / gluten-friendly) is mutually
  * exclusive, `recency` (recently-verified) is an additive toggle, and selections
  * AND-compose. The search-as-chip leads the filter row (name + address, mirrored to
- * `?q=` with a debounce). The taxonomy filter lives behind the "Filters" sheet (`?attrs=`).
+ * `?q=` with a debounce). The taxonomy filter (`?attrs=`) and the sort (`?sort=`)
+ * render as chips directly in the same row (AUB-198 — the "Filter listings" sheet is
+ * retired), and the honest pager renders at the end of the List view (AUB-200).
  *
  * ROOM FOR RESULTS (feedback batch). The shell is FULL-WIDTH (no max-width caps,
  * #1); the app-shell nav is always visible and the directory's filter bar offsets
@@ -76,7 +78,8 @@ function browseQueryOptions(
   radius: number,
   origin: UserCoords,
   saved: boolean,
-  quick: QuickFilterValue[]
+  quick: QuickFilterValue[],
+  bot: boolean
 ) {
   // Only thread coords to the server when actually distance-sorting — a non-pair
   // (or a non-distance sort) means no coords, and the server falls back to the
@@ -110,6 +113,10 @@ function browseQueryOptions(
       // a page's identity — a `?quick=` view caches independently. An empty set (no
       // chips) shares one cache entry. React Query hashes the array structurally.
       quick,
+      // Whether curator-bot suggestions participate in filter matching (AUB-31,
+      // `?bot=`). It changes the result SET + honest total, so it is part of a
+      // page's identity.
+      bot,
     ],
     queryFn: () =>
       fetchBrowseListings({
@@ -132,6 +139,9 @@ function browseQueryOptions(
           // Prebuilt quick filters (AUB-135/AUB-140): a faceted set of server-side
           // constraints on the displayed safety glance. Empty set → no quick constraint.
           quick,
+          // Curator-bot suggestion participation (AUB-31, `?bot=`): default ON;
+          // false reverts filters to community-evidence-only matching.
+          includeSuggested: bot,
         },
       }),
   });
@@ -157,7 +167,7 @@ export const Route = createFileRoute("/")({
   search: {
     middlewares: [stripSearchParams(BROWSE_SEARCH_DEFAULTS)],
   },
-  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius, saved, quick } }) => ({
+  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius, saved, quick, bot } }) => ({
     page,
     attrs,
     sort,
@@ -167,8 +177,12 @@ export const Route = createFileRoute("/")({
     radius,
     saved,
     quick,
+    bot,
   }),
-  loader: async ({ context, deps: { page, attrs, sort, lat, lng, q, radius, saved, quick } }) => {
+  loader: async ({
+    context,
+    deps: { page, attrs, sort, lat, lng, q, radius, saved, quick, bot },
+  }) => {
     // SSR has no live geolocation, so the radius origin is Denver Union Station
     // (user feedback #7). The client re-anchors to the visitor's real coords once
     // granted (see BrowseListings), which refetches under a new query key.
@@ -182,7 +196,8 @@ export const Route = createFileRoute("/")({
         radius,
         UNION_STATION,
         saved,
-        parseQuick(quick)
+        parseQuick(quick),
+        bot
       )
     );
   },
@@ -203,6 +218,7 @@ function BrowseListings() {
     radius,
     saved,
     quick: quickParam,
+    bot,
   } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
@@ -218,9 +234,32 @@ function BrowseListings() {
   // visitor still gets a meaningful "within N mi" filter rather than everything.
   const origin: UserCoords = coords ?? UNION_STATION;
   const { data } = useSuspenseQuery(
-    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin, saved, quick)
+    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin, saved, quick, bot)
   );
   const geo = useGeolocation();
+
+  // Post-hydration marker for the BROWSE ROUTE'S Suspense boundary (companion
+  // to the root `data-hydrated` stamp in __root.tsx, and the fix behind the
+  // browse sort/radius `<select>` E2E failures). The router wraps this route's
+  // match in a Suspense boundary, and React hydrates a server-rendered boundary
+  // in its OWN, lower-priority commit AFTER the shell commit that stamps
+  // `data-hydrated` — so there is a window where the root marker is set and the
+  // directory chrome is VISIBLE (it's all in the SSR HTML) but none of it is
+  // hydrated yet. A discrete event fired into that dehydrated subtree makes
+  // React hydrate the boundary synchronously MID-EVENT, and hydration re-syncs
+  // every controlled `<select>` from its rendered prop — so a programmatic
+  // `input`→`change` pair (Playwright's `selectOption`) has its chosen value
+  // clobbered back to the prop before `onChange` can read it, and the sort/
+  // radius never reaches the URL. Clicks survive (React re-dispatches them
+  // after hydrating and a click carries no DOM value to clobber), which is why
+  // only the `<select>` specs failed. This effect runs only after THIS
+  // boundary's hydration commits, so it is the honest "the directory controls
+  // are live" signal `waitForBrowseReady` (tests/e2e/helpers.ts) waits on.
+  // Idempotent under StrictMode; never removed (same rationale as the root
+  // marker — a full reload re-stamps it after re-hydration).
+  useEffect(() => {
+    document.documentElement.dataset.browseHydrated = "true";
+  }, []);
 
   // Remaining directory UI state is purely ephemeral (not shareable): the list/map
   // view toggle and the map's selected pin.
@@ -329,10 +368,6 @@ function BrowseListings() {
     navigate({ search: (prev) => ({ ...prev, page: 1, attrs: serializeAttrs(next) }) });
   }
 
-  function clearAttributes() {
-    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "" }) });
-  }
-
   /**
    * Change the server-side sort (#36/#37), resetting to page 1. "Near me" is
    * special: it requests geolocation only on opt-in and falls back to the default
@@ -394,15 +429,28 @@ function BrowseListings() {
     navigate({ search: (prev) => ({ ...prev, page: 1, saved: !saved }) });
   }
 
-  // The no-results CTA clears EVERY filter — the quick chips AND the server-side
-  // search + taxonomy filter (resets to page 1 with no `?q=`/`?attrs=`/`?quick=`).
+  /**
+   * Toggle whether curator-bot suggestions participate in filter matching
+   * (AUB-31, `?bot=`). Default ON (a live suggestion also satisfies the
+   * taxonomy/quick-celiac filters); the "Hide bot suggestions" chip flips it to
+   * community-evidence-only matching. Resets to page 1 (the result SET changes)
+   * and preserves every other param. `stripSearchParams` drops the inclusive
+   * default from the URL at rest.
+   */
+  function toggleBot() {
+    navigate({ search: (prev) => ({ ...prev, page: 1, bot: !bot }) });
+  }
+
+  // The no-results CTA clears EVERY filter — the quick chips, the server-side
+  // search + taxonomy filter, AND the bot-suggestions exclusion (resets to page 1
+  // with no `?q=`/`?attrs=`/`?quick=`/`?bot=`).
   // The saved filter is a distinct MODE (not a "filter" over the directory), so
   // the functional updater preserves it — clearing filters inside the saved view
   // keeps you in it.
   function clearAll() {
     setSearchInput("");
     lastPushedQ.current = "";
-    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "", quick: "" }) });
+    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "", quick: "", bot: true }) });
   }
 
   /**
@@ -426,7 +474,7 @@ function BrowseListings() {
 
   // Whether any filter is active — decides empty vs no-results. Uses the URL `?q=`
   // (the server-applied search), not the in-flight local input.
-  const anyFilterActive = qParam.trim() !== "" || quick.length > 0 || attrs.length > 0;
+  const anyFilterActive = qParam.trim() !== "" || quick.length > 0 || attrs.length > 0 || !bot;
 
   // Whether ANY browse search param is off its default — gates the "Reset" chip
   // (repo-owner mobile feedback). Broader than `anyFilterActive` above (which only
@@ -443,6 +491,7 @@ function BrowseListings() {
     radius,
     quick: quickParam,
     saved,
+    bot,
     lat,
     lng,
   });
@@ -469,25 +518,47 @@ function BrowseListings() {
           <FilterChips
             attrs={attrs}
             onToggleAttr={toggleAttribute}
-            onClearAttrs={clearAttributes}
             quick={quick}
             onQuickToggle={toggleQuick}
             search={searchInput}
             onSearchChange={setSearchInput}
             saved={saved}
             onSavedToggle={toggleSaved}
+            bot={bot}
+            onBotToggle={toggleBot}
+            sort={sort}
+            onSortChange={changeSort}
             isAnyFilterActive={isAnyFilterActive}
             onResetAll={resetAll}
-            sheetExtras={
-              <DirectoryServerControls
-                sort={sort}
-                onSortChange={changeSort}
-                prompting={geo.status === "prompting"}
-                geoError={geo.error}
-                data={data}
-              />
-            }
           />
+          {/* Geolocation feedback for the "Near me" sort (formerly inside the
+              retired Filters sheet). The `<output>` status region is ALWAYS
+              MOUNTED with only its text swapped — a live region inserted together
+              with its content is commonly NOT announced by screen readers
+              (matches the pre-refactor DirectoryServerControls pattern). While
+              empty it drops to `sr-only` (absolutely positioned, still rendered
+              and in the accessibility tree — never `display:none`, which silences
+              live regions) so the idle bar gains no visible flex-gap row. The
+              denial message stays a separate, conditionally-rendered
+              `role="alert"` — alerts announce on insertion by design. */}
+          <output className="text-body-sm text-muted-foreground empty:sr-only">
+            {geo.status === "prompting" ? "Finding your location…" : null}
+          </output>
+          {geo.error ? (
+            // Text is `text-stale` ON `bg-stale-soft` — the exact pairing the
+            // SafetySignal `soft` variant uses. The `-soft` fills deliberately
+            // stay LIGHT in dark mode (styling.md) while `text-foreground`
+            // flips near-white, so the previous foreground pairing was
+            // unreadable on dark (Vercel feedback, iPhone/dark). `--color-stale`
+            // is not overridden in `.dark` (dark slate, L0.45), giving ~6:1 on
+            // the L0.90–0.95 soft fill in BOTH themes — WCAG AA.
+            <p
+              role="alert"
+              className="rounded-card border border-stale bg-stale-soft px-3 py-2 text-body-sm font-medium text-stale"
+            >
+              {geo.error}
+            </p>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             {/* The distance-radius filter takes the count's old slot (user
                 feedback #7): a neutral geo control (pin + border), NOT a safety
@@ -530,7 +601,15 @@ function BrowseListings() {
             <DirectoryMap entries={mapEntries} selectedId={selectedId} onSelect={setSelectedId} />
           </div>
         ) : (
-          <DirectoryList cards={vms} />
+          <>
+            <DirectoryList cards={vms} />
+            {/* Visible pagination (AUB-200) at the end of the results: honest
+                "Page N of M" from the server's total, URL-driven `?page=` links.
+                LIST VIEW ONLY — the map renders the same server page as pins with
+                its own carousel over a viewport-filling canvas, where a pager band
+                would sit off-screen (see DirectoryPager). */}
+            <DirectoryPager page={data.page} pageSize={data.pageSize} total={data.total} />
+          </>
         )}
       </div>
 
@@ -538,96 +617,6 @@ function BrowseListings() {
           pinned at any scroll position / viewport height and never overlaps the
           cards. */}
       <AddSpotFab />
-    </div>
-  );
-}
-
-/**
- * The server-driven sort + pagination controls, hosted inside the Filters sheet.
- *
- * These are the SERVER capabilities the redesign doesn't surface as visible chips
- * but which must stay reachable and URL-driven (`?sort=`, `?page=`). Keeping them
- * here preserves the shareable/back-forward-correct behaviour without cluttering
- * the mobile header.
- */
-function DirectoryServerControls({
-  sort,
-  onSortChange,
-  prompting,
-  geoError,
-  data,
-}: {
-  sort: BrowseSort;
-  onSortChange: (next: BrowseSort) => void;
-  prompting: boolean;
-  geoError: string | null;
-  data: BrowseListingsPage;
-}) {
-  const hasPrev = data.page > 1;
-  const hasNext = data.hasMore;
-
-  return (
-    <div className="flex flex-col gap-3 border-t border-border pt-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor="browse-sort" className="text-body-sm font-medium text-foreground">
-          Sort by
-        </label>
-        <select
-          id="browse-sort"
-          value={sort}
-          onChange={(event) => onSortChange(event.target.value as BrowseSort)}
-          className="rounded-card border border-border bg-surface px-3 py-2 text-body-sm font-medium text-foreground focus-visible:border-brand-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
-        >
-          {BROWSE_SORT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <output className="text-body-sm text-muted-foreground">
-          {prompting ? "Finding your location…" : null}
-        </output>
-      </div>
-
-      {geoError ? (
-        <p
-          role="alert"
-          className="rounded-card border border-stale bg-stale-soft px-3 py-2 text-body-sm text-foreground"
-        >
-          {geoError}
-        </p>
-      ) : null}
-
-      {hasPrev || hasNext ? (
-        <nav
-          aria-label="Pagination"
-          className="flex items-center justify-between gap-3 text-body-sm"
-        >
-          {hasPrev ? (
-            <Link
-              to="/"
-              search={(prev) => ({ ...prev, page: data.page - 1 })}
-              className="font-semibold text-brand hover:text-brand-strong"
-            >
-              ← Previous
-            </Link>
-          ) : (
-            <span aria-hidden="true" />
-          )}
-          <span className="text-muted-foreground">Page {data.page}</span>
-          {hasNext ? (
-            <Link
-              to="/"
-              search={(prev) => ({ ...prev, page: data.page + 1 })}
-              className="font-semibold text-brand hover:text-brand-strong"
-            >
-              Next →
-            </Link>
-          ) : (
-            <span aria-hidden="true" />
-          )}
-        </nav>
-      ) : null}
     </div>
   );
 }
