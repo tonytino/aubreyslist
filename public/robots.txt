@@ -1,0 +1,19 @@
+# Robots.txt for Aubrey's List
+# https://www.robotstxt.org/robotstxt.html
+
+# Default: allow crawl of public pages
+User-agent: *
+Allow: /
+
+# Disallow internal/admin routes
+Disallow: /admin
+Disallow: /style-guide
+
+# Disallow /favorites (user-specific, sign-in required)
+Disallow: /favorites
+
+# Disallow API endpoints (no indexing of server functions)
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://aubreyslist.com/sitemap.xml

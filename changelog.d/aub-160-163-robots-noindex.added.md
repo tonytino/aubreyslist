@@ -1,0 +1,2 @@
+- `[manual]` Added `public/robots.txt` with crawl directives to allow public pages, disallow internal routes (/admin, /style-guide, /favorites), and disallow /api/ endpoints (AUB-160).
+- `[manual]` Added `noindex,nofollow` robots meta tag to /style-guide, /admin, and /favorites routes via head() to prevent search indexing of internal/user-specific pages (AUB-163).

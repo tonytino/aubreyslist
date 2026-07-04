@@ -58,16 +58,6 @@ export const BROWSE_SORT_OPTIONS = [
   },
 ] as const;
 
-/** One selectable browse sort, with its UI label and a short description. */
-export interface BrowseSortOption {
-  /** URL/value token used in `?sort=` and the `<option value>`. */
-  value: BrowseSort;
-  /** Human-readable control label. */
-  label: string;
-  /** One-line description of the ordering rule (for tooltips / docs / tests). */
-  help: string;
-}
-
 /** The union of valid `?sort=` tokens, derived from the registry. */
 export type BrowseSort = (typeof BROWSE_SORT_OPTIONS)[number]["value"];
 

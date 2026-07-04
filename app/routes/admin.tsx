@@ -24,6 +24,9 @@ import { fetchAdminView } from "~/server/admin/admin-view.fn";
  * management (#16) and app-settings write/toggle (#24) also live in this shell.
  */
 export const Route = createFileRoute("/admin")({
+  head: () => ({
+    meta: [{ name: "robots", content: "noindex,nofollow" }],
+  }),
   loader: async ({ context }) => {
     const view = await fetchAdminView();
     // Anonymous visitors are sent to sign in; the OAuth initiation route is a

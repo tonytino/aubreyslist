@@ -270,6 +270,127 @@ describe("GET /callback/google (OAuth callback)", () => {
     expect(res.status).toBe(400);
     expect(upsertUserFromGoogle).not.toHaveBeenCalled();
   });
+
+  it("rejects sign-in without upserting when Google reports email_verified: false (AUB-183)", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.fake-access-token" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("openidconnect.googleapis.com/v1/userinfo")) {
+        return new Response(
+          JSON.stringify({
+            sub: "google-sub-unverified",
+            email: "unverified@example.com",
+            email_verified: false,
+            name: "Unverified Person",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await authRoutes.request(
+      "http://localhost/callback/google?code=auth-code&state=xyz",
+      {
+        headers: { cookie: "al_oauth_state=xyz; al_oauth_verifier=verifier-123" },
+      }
+    );
+
+    // The email-verification failure surfaces through the same generic-500
+    // path as other Google-side failures in this handler (malformed
+    // responses, failed token exchange) — see app/server/auth/google.ts.
+    expect(res.status).toBe(500);
+    expect(upsertUserFromGoogle).not.toHaveBeenCalled();
+  });
+
+  it('rejects sign-in without upserting when Google reports email_verified as the string "false" (AUB-183)', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.fake-access-token" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("openidconnect.googleapis.com/v1/userinfo")) {
+        return new Response(
+          JSON.stringify({
+            sub: "google-sub-unverified-str",
+            email: "unverified-str@example.com",
+            email_verified: "false",
+            name: "Unverified Person",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await authRoutes.request(
+      "http://localhost/callback/google?code=auth-code&state=xyz",
+      {
+        headers: { cookie: "al_oauth_state=xyz; al_oauth_verifier=verifier-123" },
+      }
+    );
+
+    expect(res.status).toBe(500);
+    expect(upsertUserFromGoogle).not.toHaveBeenCalled();
+  });
+
+  it('accepts sign-in when Google reports email_verified as the string "true" (AUB-183)', async () => {
+    upsertUserFromGoogle.mockResolvedValue({
+      id: "user-str-true",
+      googleSub: "google-sub-str-true",
+      email: "str-true@example.com",
+      name: "String True Person",
+      avatarUrl: null,
+      role: "user",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "ya29.fake-access-token" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("openidconnect.googleapis.com/v1/userinfo")) {
+        return new Response(
+          JSON.stringify({
+            sub: "google-sub-str-true",
+            email: "str-true@example.com",
+            email_verified: "true",
+            name: "String True Person",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      throw new Error(`Unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await authRoutes.request(
+      "http://localhost/callback/google?code=auth-code&state=xyz",
+      {
+        headers: { cookie: "al_oauth_state=xyz; al_oauth_verifier=verifier-123" },
+      }
+    );
+
+    expect(res.status).toBe(302);
+    expect(upsertUserFromGoogle).toHaveBeenCalledWith(
+      expect.objectContaining({ sub: "google-sub-str-true", email: "str-true@example.com" })
+    );
+  });
 });
 
 describe("POST /sign-out", () => {

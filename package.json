@@ -20,7 +20,7 @@
     "changelog:check": "node scripts/changelog.mjs check",
     "changelog:release": "node scripts/changelog.mjs release",
     "typecheck": "tsc --noEmit",
-    "knip": "knip --include dependencies,unlisted",
+    "deadcode": "knip",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",

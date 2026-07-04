@@ -27,12 +27,15 @@ import { canonicalLink, pageSeoMeta } from "~/lib/seo";
  */
 export const Route = createFileRoute("/favorites")({
   head: () => ({
-    meta: pageSeoMeta({
-      title: "Your saved spots · Aubrey's List",
-      description:
-        "The gluten-free and celiac-safe spots you've saved on Aubrey's List, with the same community trust signals as the directory.",
-      path: "/favorites",
-    }),
+    meta: [
+      ...pageSeoMeta({
+        title: "Your saved spots · Aubrey's List",
+        description:
+          "The gluten-free and celiac-safe spots you've saved on Aubrey's List, with the same community trust signals as the directory.",
+        path: "/favorites",
+      }),
+      { name: "robots", content: "noindex,nofollow" },
+    ],
     links: [canonicalLink("/favorites")],
   }),
   loader: async ({ context }) => {

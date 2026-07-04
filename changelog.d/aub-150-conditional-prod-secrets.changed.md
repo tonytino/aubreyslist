@@ -1,0 +1,1 @@
+- `[manual]` `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `SESSION_SECRET` are now required (with a descriptive error) whenever `VERCEL_ENV=production`, and stay optional in development/preview/test — closing the gap where a production deploy could silently boot without them (AUB-150).

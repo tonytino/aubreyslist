@@ -1,0 +1,129 @@
+name: Post-deploy smoke test
+
+# Verifies the LIVE production deployment actually serves traffic, not just a
+# locally-built one. `ci.yml`'s "Production build smoke" job only curls
+# `localhost:3000` against a build produced in the CI runner (see that job's
+# comments) — it can be green while the real Vercel deployment is 500ing, DNS
+# is broken, or the deploy silently failed to promote. This workflow closes
+# that gap by curling the actual production URL after a deploy (AUB-157).
+#
+# This is NOT the same thing as continuous uptime monitoring (AUB-155, tracked
+# separately as a third-party service — UptimeRobot/Better Uptime/etc. polling
+# every few minutes with alerting). This workflow is deploy-triggered (a
+# release gate) plus a sparse scheduled backstop for deploys that don't emit a
+# GitHub deployment_status event; it is not meant to replace or duplicate the
+# always-on external monitor. Once AUB-155 lands, this workflow's job is
+# narrowly "did THIS deploy come up ok", not "is prod up right now".
+#
+# --- Production URL source (read this before touching PRODUCTION_URL) ---
+# Per ADR-009 (docs/decisions/009-vercel-hosting-v1.md), v1 ships on a free
+# `*.vercel.app` subdomain; a custom domain is attached later. Meanwhile
+# `app/lib/seo.ts` hardcodes `SITE_URL = "https://aubreyslist.com"` for
+# canonical/OG URLs — that is the ASPIRATIONAL public domain for SEO markup,
+# NOT necessarily where the app is actually reachable today. Defaulting this
+# workflow to SITE_URL would silently curl a domain that may not resolve to
+# the live deployment yet (or, worse, may resolve to something else once it's
+# parked/attached), and the job would look green for the wrong reason (or fail
+# for an unrelated DNS reason).
+#
+# So the URL this workflow checks comes from, in order:
+#   1. The `PRODUCTION_URL` repository VARIABLE (Settings > Secrets and
+#      variables > Actions > Variables) — the explicit, human-set source of
+#      truth. Set this once the real Vercel production URL is known and
+#      update it if the custom domain in ADR-009 is ever attached. Not a
+#      secret: it's a public URL, hence a Variable, not a Secret.
+#   2. If unset, and this run was triggered by a successful production
+#      `deployment_status` event, fall back to that event's own
+#      `target_url` — Vercel's GitHub integration supplies the exact URL it
+#      just deployed, which is correct by construction for that one run.
+#   3. Otherwise (schedule/workflow_dispatch with no variable configured):
+#      FAIL LOUDLY with an explanatory error rather than silently guessing
+#      SITE_URL or any other default. Configuring the variable is a one-time
+#      human/`safe:human` step (ADR-009 already marks Vercel provisioning
+#      itself as human-owned).
+on:
+  deployment_status: {}
+  # Sparse backstop only — NOT the continuous monitor (that's AUB-155). Covers
+  # deploys that don't fire a GitHub deployment_status event at all.
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch: {}
+
+# Least privilege: this workflow only reads the repo and makes outbound HTTP
+# requests; it needs no write access.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Smoke-test live production URL
+    runs-on: ubuntu-latest
+    # Only act on deployment_status events for a SUCCESSFUL PRODUCTION
+    # deployment. Ignore preview/other environments and non-success states
+    # (pending/failure/error/queued/in_progress) — those aren't "just
+    # deployed, go check it" signals. schedule/workflow_dispatch runs are
+    # always relevant (no deployment_status payload to filter on).
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (
+        github.event.deployment_status.state == 'success' &&
+        contains(fromJSON('["production", "Production"]'), github.event.deployment.environment)
+      )
+
+    steps:
+      - name: Resolve production URL
+        id: url
+        env:
+          PRODUCTION_URL_VAR: ${{ vars.PRODUCTION_URL }}
+          DEPLOYMENT_TARGET_URL: ${{ github.event.deployment_status.target_url }}
+        run: |
+          if [ -n "$PRODUCTION_URL_VAR" ]; then
+            URL="$PRODUCTION_URL_VAR"
+            echo "Using the 'PRODUCTION_URL' repository variable: $URL"
+          elif [ -n "$DEPLOYMENT_TARGET_URL" ]; then
+            URL="$DEPLOYMENT_TARGET_URL"
+            echo "::warning::'PRODUCTION_URL' repo variable is not set; falling back to this deployment_status event's target_url ($URL) for this run only. Set the 'PRODUCTION_URL' repo variable so schedule/workflow_dispatch runs (which have no deployment event to fall back on) also work — see this workflow's header comment."
+          else
+            echo "::error::No production URL available. Set the 'PRODUCTION_URL' repository variable (Settings > Secrets and variables > Actions > Variables) to the live Vercel production URL. Per ADR-009 (docs/decisions/009-vercel-hosting-v1.md) that is currently a '*.vercel.app' domain, NOT the aspirational 'aubreyslist.com' hardcoded in app/lib/seo.ts's SITE_URL — refusing to guess and silently check the wrong environment."
+            exit 1
+          fi
+          # Strip a trailing slash so path concatenation below never double-slashes.
+          echo "url=${URL%/}" >> "$GITHUB_OUTPUT"
+
+      # Dependency-free liveness probe (app/server/routes/health.ts) — same
+      # endpoint AUB-155's external uptime monitor will poll continuously;
+      # this run just checks it once, right after a deploy.
+      - name: Smoke-test /api/health
+        env:
+          TARGET_BASE: ${{ steps.url.outputs.url }}
+        run: |
+          TARGET="$TARGET_BASE/api/health"
+          CODE=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 15 "$TARGET") || CODE=000
+          if [ "$CODE" != "200" ]; then
+            echo "::error::$TARGET returned HTTP $CODE (expected 200) — production health check failed."
+            cat /tmp/health.json 2>/dev/null
+            exit 1
+          fi
+          echo "✓ $TARGET returned 200: $(cat /tmp/health.json)"
+
+      # A real rendered page, not just the JSON health probe — catches
+      # failures that a dependency-free liveness check can't (e.g. the DB-
+      # backed homepage 500ing while /api/health still reports "ok"). /about
+      # is static/DB-free (see ci.yml's build-smoke job comments for why it's
+      # the chosen static route), so a failure here isolates to the app shell
+      # itself, not database availability.
+      - name: Smoke-test /about
+        env:
+          TARGET_BASE: ${{ steps.url.outputs.url }}
+        run: |
+          TARGET="$TARGET_BASE/about"
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$TARGET") || CODE=000
+          if [ "$CODE" != "200" ]; then
+            echo "::error::$TARGET returned HTTP $CODE (expected 200) — production page check failed."
+            exit 1
+          fi
+          echo "✓ $TARGET returned 200"

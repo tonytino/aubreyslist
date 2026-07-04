@@ -55,7 +55,7 @@ Recommended for the `main` branch:
 | ---------------------------- | --------------------- |
 | `Lint & format`              | `ci.yml`              |
 | `Type check`                 | `ci.yml`              |
-| `Unused deps`                | `ci.yml`              |
+| `Dead code`                  | `ci.yml`              |
 | `Changelog fragments valid`  | `ci.yml`              |
 | `Unit tests`                 | `ci.yml`              |
 | `Integration & E2E`          | `ci.yml`              |

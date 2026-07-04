@@ -1,0 +1,1 @@
+- `[manual]` Removed dead code found in the initial dead-code sweep: the superseded `TrustPlaceholder` component (and its test), no longer wired into the listing-detail page, and the unused `BrowseSortOption` type.

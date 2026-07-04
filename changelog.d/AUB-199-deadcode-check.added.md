@@ -1,0 +1,1 @@
+- `[manual]` Added a whole-repo dead-code check (`pnpm deadcode`, knip — ADR-013) with its own **Dead code** CI job that fails PRs on unused files, exports, types, and dependencies. Config moved to `knip.jsonc` with inline rationale for every entry point and ignore.

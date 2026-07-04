@@ -1,0 +1,1 @@
+- `[manual]` Added migration rollback runbook (`docs/setup/migration-rollback-runbook.md`), documenting forward-fix and Neon PITR restore recovery paths with concrete examples.

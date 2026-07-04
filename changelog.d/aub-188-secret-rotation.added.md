@@ -1,0 +1,1 @@
+- `[manual]` Added secret rotation runbook (`docs/setup/secret-rotation-runbook.md`), covering SESSION_SECRET, GOOGLE_CLIENT_SECRET, and PREVIEW_LOGIN_SECRET rotation procedures.

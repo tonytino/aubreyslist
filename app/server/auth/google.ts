@@ -129,6 +129,7 @@ const userInfoSchema = z.object({
   sub: z.string().min(1),
   email: z.string().email(),
   // `email_verified` can arrive as a boolean or the string "true"/"false".
+  // Enforced (not just parsed) below — see `isEmailVerified` (AUB-183).
   email_verified: z.union([z.boolean(), z.string()]).optional(),
   name: z.string().optional(),
   picture: z.string().url().optional(),
@@ -136,7 +137,27 @@ const userInfoSchema = z.object({
 
 export type GoogleUserInfo = z.infer<typeof userInfoSchema>;
 
-/** Fetch the authenticated user's profile from Google's userinfo endpoint. */
+/**
+ * Normalize Google's `email_verified` (boolean OR the string "true"/"false",
+ * observed in the wild across Google's endpoints/SDKs) to a real boolean.
+ * Anything other than `true` / `"true"` — including `false`, `"false"`,
+ * absent, or an unrecognized string — normalizes to `false` (fail closed).
+ */
+export function isEmailVerified(value: boolean | string | undefined): boolean {
+  return value === true || value === "true";
+}
+
+/**
+ * Fetch the authenticated user's profile from Google's userinfo endpoint.
+ *
+ * AUB-183: rejects the sign-in outright (throws) when Google has not verified
+ * the email address. Chosen failure mode is fail-closed rather than
+ * "sign in anyway but flag it" — we key identity/session on this email
+ * (see `upsertUserFromGoogle`), so trusting an unverified address would let
+ * an attacker claim an email they don't control (e.g. before the real owner
+ * ever signs up) and hijack whatever access that email implies. There is no
+ * recovery flow here; the user must verify the address with Google and retry.
+ */
 export async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
   const res = await fetch(GOOGLE_USERINFO_ENDPOINT, {
     headers: { authorization: `Bearer ${accessToken}` },
@@ -149,6 +170,11 @@ export async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUs
   const parsed = userInfoSchema.safeParse(await res.json());
   if (!parsed.success) {
     throw new Error("Google userinfo response was malformed");
+  }
+  if (!isEmailVerified(parsed.data.email_verified)) {
+    throw new Error(
+      "Google account email is not verified. Please verify your email with Google and try signing in again."
+    );
   }
   return parsed.data;
 }

@@ -1,0 +1,1 @@
+- `[manual]` Google sign-in now rejects the identity outright when Google reports `email_verified: false` (boolean or the `"false"` string form) — previously the flag was parsed but never checked, so an unverified email could be trusted and upserted as a user (AUB-183).
