@@ -1,3 +1,11 @@
+## TL;DR
+<!-- 1–3 plain sentences that anyone in the business can understand: what changed
+and why it matters to users or the product. No jargon, no internal codenames, no
+file paths — it's OK to sacrifice specificity for clarity. This gets posted to
+Slack when the PR merges. See docs/agents/merge-updates.md. -->
+
+-
+
 ## Summary
 <!-- What does this PR do? Bullet points preferred. -->
 

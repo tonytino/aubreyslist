@@ -73,6 +73,34 @@ jobs:
           fi
           echo "✓ PR carries type:*, size:*, and safe:* labels"
 
+  pr-tldr:
+    name: Plain-language TL;DR
+    # Every PR must lead with a filled-in `## TL;DR` section — the 1–3 plain
+    # sentences a non-engineer can understand. slack-merge-updates.yml posts it
+    # to Slack when the PR merges, so this gate is what guarantees the feed has
+    # real material to work with (see docs/agents/merge-updates.md).
+    #
+    # Dependabot is the ONLY exemption: its PR bodies are bot-generated release
+    # notes and it cannot author our template sections — the same reason its PRs
+    # carry `skip-changelog` for the changelog gate (see .github/dependabot.yml).
+    # Unlike the changelog gate, release/* branches stay in scope on purpose: a
+    # release PR can trivially say what's shipping, and that's exactly what the
+    # Slack feed is for. No skip label exists for this gate.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      # The validator is a zero-dep ESM script; node is already on ubuntu-latest,
+      # so we only need a checkout to read the script file — no pnpm/setup-node.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Pass the body via env (not inline ${{ }}) to avoid shell injection via an
+      # attacker-controlled PR body — exactly like the adversarial-review job.
+      - name: Validate the TL;DR block in the PR body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node .github/scripts/check-tldr-block.mjs
+
   adversarial-review:
     name: Adversarial review gate
     # Enforces the 2-round adversarial review loop in docs/agents/orchestration.md.

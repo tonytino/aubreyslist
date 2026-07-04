@@ -1,0 +1,61 @@
+name: Slack merge updates
+
+# Posts a plain-language "we shipped X" message to Slack whenever a PR merges to
+# the default branch, so non-engineers can follow what's landing. The message is
+# built from the PR's `## TL;DR` section (CI-enforced by pr-conventions.yml's
+# pr-tldr job), optionally rewritten by Claude for a business audience — see
+# docs/agents/merge-updates.md for the pipeline and provisioning steps.
+#
+# Why `pull_request_target` (and why it is safe here):
+# - The job needs repo secrets (SLACK_WEBHOOK_URL, ANTHROPIC_API_KEY). A plain
+#   `pull_request` run triggered from a FORK gets no secrets, so a merged fork
+#   PR would silently never post. `pull_request_target` runs in the base repo's
+#   context and always has secrets.
+# - `pull_request_target` is dangerous ONLY when the workflow checks out or
+#   executes the PR head's code. We never do: the checkout below is the BASE
+#   repo's default branch, solely to read our own committed script, and the PR
+#   title/body/author are consumed strictly via env vars — never interpolated
+#   inline into `run:` — mirroring pr-conventions.yml's injection posture.
+on:
+  pull_request_target:
+    types: [closed]
+
+# Least privilege: only needs to read the repo (the webhook URL and API key are
+# secrets, not permissions).
+permissions:
+  contents: read
+
+# No concurrency group: `closed` fires exactly once per PR, so there is nothing
+# to supersede or cancel.
+
+jobs:
+  notify:
+    name: Post merge update to Slack
+    # Only merged PRs (not merely closed ones), and only merges into the default
+    # branch — feature-branch merges are not "shipped".
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+
+    steps:
+      # Base-repo checkout (this is pull_request_target: the default ref IS the
+      # base repo's default branch — never the PR head). Needed only so node can
+      # read our own committed script.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Zero-dep ESM script; node is already on ubuntu-latest — no pnpm/setup-node.
+      # All PR-derived values go through env vars (never inline ${{ }} in `run:`)
+      # so an attacker-controlled title/body can't inject into the shell.
+      #
+      # The script no-ops GREEN (with a ::notice::) while SLACK_WEBHOOK_URL is
+      # unprovisioned, so this workflow is safe to merge before the secret exists.
+      - name: Build and post the Slack update
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_UPDATE_MODEL: ${{ vars.SLACK_UPDATE_MODEL }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: node .github/scripts/slack-merge-update.mjs
