@@ -1,1 +1,0 @@
-- `[manual]` Browse cards now show a public save-count pill — an attributed, ADR-007-distinct signal (lavender accent + "saves" label, visually subordinate to and never adjacent to the safety signal, hidden when zero). The count is a batched public aggregate threaded as a plain number through the card view-model, structurally separate from the celiac-safety verdict.

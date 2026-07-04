@@ -288,10 +288,15 @@ describe("INVARIANT 2b — a bot suggestion never influences the verdict or evid
     expect(glance.evidence).toBeNull();
   });
 
-  it("a voted-out celiac suggestion never badges the card (the vote cleared it)", () => {
+  it("a voted-out celiac suggestion never badges the card via the FALLBACK flag (the vote cleared it)", () => {
     // The celiac claim was suggested, then voted: `suggested` may still read
     // true on a stale aggregate snapshot, but the fold-in is per-claim gated on
-    // "no votes on THAT claim", so the badge honestly disappears.
+    // "no votes on THAT claim", so the badge honestly disappears. SCOPE: this
+    // exercises the pure FALLBACK path only; the batched per-attribute set is
+    // vote-gated in SQL too (the correlated NOT EXISTS attestations guard in
+    // `getBotSuggestedAttributesByListing`, pinned in browse.test.ts), so a
+    // voted claim cannot enter `suggestedAttributes` from that path either —
+    // even inside castVote's non-atomic clear window.
     const glance = deriveListingTrustGlance(
       { ...aggregate(3, 0, new Date(NOW.getTime() - DAY_MS)), suggested: true },
       3,

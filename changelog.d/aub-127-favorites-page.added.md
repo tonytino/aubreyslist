@@ -1,1 +1,1 @@
-- `[manual]` Added a `/favorites` page listing the viewer's saved spots (newest first, with the same cards + public save-count pill as browse), a signed-in nav link, plus anonymous and empty states — backed by a new server-only `getViewerFavorites` read that reuses the shared browse card derivation.
+- `[manual]` Added a `/favorites` page listing the viewer's saved spots (newest first, with the same cards as browse), a signed-in nav link, plus anonymous and empty states — backed by a new server-only `getViewerFavorites` read that reuses the shared browse card derivation.

@@ -1062,13 +1062,19 @@ describe("browse visibility filtering (#41)", () => {
     expect(renderArg(state.incidentWhere)).toContain("moderation_status");
     expect(dialect.sqlToQuery(state.incidentWhere as SQL).params).toContain("visible");
 
-    // The bot-suggestion existence check (AUB-193) counts only VISIBLE claims
+    // The bot-suggested-attribute check (AUB-193) counts only VISIBLE claims
     // with a live `suggested_by`, so a hidden/removed suggested claim can never
-    // drive the "Suggested by Aubrey's Bot" chip.
+    // drive the "Suggested by Aubrey's Bot" cue.
     expect(renderArg(state.suggestionWhere)).toContain("moderation_status");
     expect(renderArg(state.suggestionWhere)).toContain("suggested_by");
     expect(renderArg(state.suggestionWhere)).toContain("is not null");
     expect(dialect.sqlToQuery(state.suggestionWhere as SQL).params).toContain("visible");
+    // ...AND only UNVOTED claims (the correlated NOT EXISTS attestations vote
+    // gate): castVote's clear of `suggested_by` is not atomic with the
+    // attestation upsert, so a transiently-stale suggestion on a voted claim
+    // must never badge the card as suggested (ADR-007, belt-and-braces).
+    expect(renderArg(state.suggestionWhere)).toContain("not exists");
+    expect(renderArg(state.suggestionWhere)).toContain("attestations");
   });
 
   it("recomputes the recent-incident flag from VISIBLE incidents only — none survive → no flag", async () => {

@@ -691,9 +691,15 @@ async function getCeliacAggregatesByListing(
  *
  * The first real vote on a claim clears its `suggested_by` server-side
  * (`castVote`), so that attribute drops out of the set — and out of its card
- * badge — the moment real evidence arrives on it. A listing with no remaining
- * live suggestions is absent from the map entirely, which also clears the
- * card's "Suggested by Aubrey's Bot" label.
+ * badge — the moment real evidence arrives on it. Because that clear is NOT
+ * atomic with the attestation upsert (a documented crash window in `castVote`
+ * can transiently leave a claim with BOTH a vote and a stale `suggested_by`),
+ * the query ALSO gates on "no attestation rows on this claim" (`NOT EXISTS`),
+ * mirroring the belt-and-braces zero-evidence guard in `summarizeClaim` and
+ * `buildLiveSuggestionHaving` — a voted claim can never badge the card as
+ * suggested, even mid-window. A listing with no remaining live suggestions is
+ * absent from the map entirely, which also clears the card's "Suggested by
+ * Aubrey's Bot" label.
  *
  * Returns a map from listing id → its live-suggested attributes (unordered;
  * the pure glance derivation dedupes and normalizes to taxonomy order).
@@ -708,7 +714,13 @@ async function getBotSuggestedAttributesByListing(
       and(
         inArray(claims.listingId, listingIds),
         isNotNull(claims.suggestedBy),
-        eq(claims.moderationStatus, "visible")
+        eq(claims.moderationStatus, "visible"),
+        // Vote gate (belt-and-braces): a suggestion is live only while the claim
+        // has ZERO attestations — the same "suggested AND no votes" rule
+        // buildLiveSuggestionHaving encodes for filter matching. A raw
+        // correlated NOT EXISTS (rather than a nested query builder) keeps this
+        // a single expression on the one batched query.
+        sql`not exists (select 1 from ${attestations} where ${attestations.claimId} = ${claims.id})`
       )
     );
 

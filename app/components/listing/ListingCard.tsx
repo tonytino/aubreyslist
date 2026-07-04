@@ -52,8 +52,9 @@ export interface RestaurantCardVM {
   suggestedByBot: boolean;
   /**
    * The claim attributes the bot suggested that are still live (deduped, in
-   * taxonomy order). Each renders as a bot-provenance badge (lavender +
-   * Sparkles) in the badge row — clearly distinct from real evidence signals
+   * taxonomy order). Each renders as a bot-provenance badge in the badge row
+   * with a VISIBLE "Suggested:" prefix plus the lavender + Sparkles treatment —
+   * clearly distinct from real evidence signals without relying on colour
    * (ADR-007: a suggestion must never read as a community-confirmed verdict).
    */
   suggestedAttributes: ClaimAttribute[];
@@ -141,9 +142,10 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  * bot suggestions shows a "Suggested by Aubrey's Bot" label in the meta row's
  * freshness slot (so bot-suggested cards read uniformly with verified ones —
  * when a real freshness cue exists it wins the slot, evidence over provenance)
- * plus one lavender + Sparkles badge per suggested attribute in the badge row.
- * Suggestions are provenance, never evidence: styled distinctly from
- * {@link SafetySignal} and never read as a community-confirmed verdict.
+ * plus one lavender + Sparkles badge per suggested attribute in the badge row,
+ * each with a VISIBLE "Suggested:" prefix. Suggestions are provenance, never
+ * evidence: distinguishable from {@link SafetySignal} by text alone (never
+ * colour alone) and never read as a community-confirmed verdict.
  *
  * CONSISTENT HEIGHT (AUB-194): every card in a directory grid renders at the
  * same height regardless of which optional attributes its VM carries. Two
@@ -271,10 +273,13 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
 
           {/* Curator-bot suggested claims (AUB-31, owner nit 7): one badge per
               live-suggested attribute — PROVENANCE, never evidence (ADR-007).
-              The bot-provenance treatment (lavender + Sparkles) is deliberately
-              distinct from SafetySignal's evidence chips, and each badge carries
-              screen-reader text naming the source, so a suggestion can never
-              read as a community-confirmed verdict (never colour alone). */}
+              Every badge carries a VISIBLE "Suggested:" prefix, so the
+              distinction from a real verdict never rests on colour or a screen
+              reader (styling.md) — without it, the celiac badge's ShieldCheck +
+              "Celiac-safe" would mirror the SafetySignal verdict chip exactly,
+              and a celiac could be hurt by misreading a suggestion as
+              community-confirmed. The lavender + Sparkles bot-provenance
+              treatment stays as the secondary visual cue. */}
           {vm.suggestedAttributes.map((attribute) => {
             const AttributeIcon = CLAIM_ATTRIBUTE_ICONS[attribute];
             return (
@@ -286,9 +291,9 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
               >
                 <Sparkles className="h-3 w-3" aria-hidden="true" />
                 <AttributeIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{CLAIM_ATTRIBUTE_LABELS[attribute]}</span>
-                <span className="sr-only">
-                  (suggested by Aubrey's Bot, not community-confirmed)
+                <span>
+                  <span className="font-normal">Suggested:</span>{" "}
+                  {CLAIM_ATTRIBUTE_LABELS[attribute]}
                 </span>
               </Badge>
             );
