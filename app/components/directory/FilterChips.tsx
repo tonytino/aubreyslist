@@ -285,10 +285,12 @@ export function FilterChips({
 
       {/* "Hide bot suggestions" chip (AUB-31 filter participation): by default a
           LIVE curator-bot suggestion also satisfies the taxonomy/quick-celiac
-          filters (a discovery aid). Card-cue scope: a headline (celiac-path)
-          suggestion match shows the "Suggested by Aubrey's Bot" badge on its
-          card; a non-headline attr match surfaces its provenance on the listing
-          detail's claim rows, not the browse card (owner follow-up). This chip
+          filters (a discovery aid). Card-cue scope (AUB-193): the card's bot
+          badge covers a live suggestion on ANY visible claim while the listing
+          has no real celiac evidence — so suggestion matches carry the badge
+          except a listing with community celiac evidence matching a
+          non-headline attr via suggestion (provenance then lives on the listing
+          detail's claim rows; owner follow-up). This chip
           excludes them (`?bot=false`), reverting filters to community-evidence-
           only matching. Sparkles is the established bot glyph (ListingCard /
           ClaimTrustSummary), so the same provenance reads with the same shape.

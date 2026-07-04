@@ -133,6 +133,17 @@ jobs:
         env:
           DATABASE_URL: ${{ steps.resolve.outputs.url }}
 
+      # Guard against drizzle's silent skip (AUB-195): the preview branch forks
+      # from PRODUCTION history, so it is exactly the kind of long-lived-history
+      # DB where a renumbered/re-timestamped migration gets skipped forever while
+      # `db:migrate` exits 0 (this is how `favorites` went missing on a preview).
+      # Verify every journal entry is actually recorded as applied.
+      - name: Verify applied migrations on the preview branch
+        if: steps.cfg.outputs.enabled == 'true' && steps.resolve.outputs.found == 'true'
+        run: pnpm db:verify
+        env:
+          DATABASE_URL: ${{ steps.resolve.outputs.url }}
+
       # Seed the freshly-migrated preview branch with the baked Denver listings.
       # API-free (no Places key), idempotent, and a no-op when the baked file is
       # empty — so the preview shows real density for schema PRs.

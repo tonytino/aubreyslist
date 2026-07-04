@@ -91,6 +91,16 @@ writes to the database must manage its own data:
   orphaned fixtures.
 - Never assume an empty database or a fixed row count.
 
+**One carve-out: the curated seed dataset.** The baked set in
+`scripts/seed-data.ts` is standing, intentional data — every environment
+(including the persistent CI branch) is meant to carry it. It's seeded
+idempotently (Place-ID dedup on listings, `onConflictDoNothing` on claims) by
+`tests/e2e/seeded-listings.spec.ts` via `scripts/seed.ts`'s `seedListings` core,
+and is deliberately **never** deleted by that spec. This exemption covers only
+those baked rows — everything else a spec creates (its own users, listings,
+claims, settings) must still follow the rules above: unique identifiers,
+cleanup, and no assumptions about an empty database or fixed row count.
+
 ### Authenticated + DB-seeded E2E (the shared fixtures)
 
 `tests/e2e/fixtures.ts` is the one place to seed data and establish an

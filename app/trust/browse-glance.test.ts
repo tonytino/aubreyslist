@@ -71,6 +71,51 @@ describe("deriveListingTrustGlance", () => {
     expect(glance.suggestedByBot).toBe(false);
   });
 
+  it("flags suggestedByBot from a NON-celiac bot suggestion with no celiac claim (AUB-193)", () => {
+    // A seeded listing whose bot labels are all non-celiac attributes: there is
+    // no celiac aggregate at all, but the listing-level suggestion flag is set.
+    const glance = deriveListingTrustGlance(null, 0, null, NOW, undefined, true);
+    expect(glance.suggestedByBot).toBe(true);
+    // Still the honest empty state — provenance, never a verdict.
+    expect(glance.safetyState).toBeNull();
+    expect(glance.evidence).toBeNull();
+  });
+
+  it("flags suggestedByBot from a non-celiac suggestion when the celiac claim exists but has no votes", () => {
+    const glance = deriveListingTrustGlance(
+      { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null },
+      0,
+      null,
+      NOW,
+      undefined,
+      true
+    );
+    expect(glance.suggestedByBot).toBe(true);
+    expect(glance.safetyState).toBeNull();
+  });
+
+  it("does NOT flag suggestedByBot from a non-celiac suggestion once real celiac evidence exists", () => {
+    // A bot-suggested non-celiac claim can never decorate a card that shows a
+    // REAL verdict — the suggestion is provenance, not evidence (ADR-007).
+    const glance = deriveListingTrustGlance(
+      { confirmCount: 3, disputeCount: 0, lastConfirmedAt: new Date("2026-06-25T00:00:00Z") },
+      3,
+      null,
+      NOW,
+      undefined,
+      true
+    );
+    expect(glance.suggestedByBot).toBe(false);
+    expect(glance.safetyState).toBe("celiac-safe");
+  });
+
+  it("does NOT flag suggestedByBot when the listing-level suggestion flag is false and nothing is suggested", () => {
+    // Models the "suggestion cleared by a real vote" case: `suggested_by` was
+    // nulled server-side, so the batched existence check comes back false.
+    const glance = deriveListingTrustGlance(null, 0, null, NOW, undefined, false);
+    expect(glance.suggestedByBot).toBe(false);
+  });
+
   it("derives celiac-safe + fresh cue + evidence counts when confirms lead and fresh", () => {
     const glance = deriveListingTrustGlance(
       { confirmCount: 8, disputeCount: 1, lastConfirmedAt: new Date("2026-06-25T00:00:00Z") },

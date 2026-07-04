@@ -257,6 +257,17 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
 
+      # Guard against drizzle's silent skip (AUB-195): the migrator only applies
+      # journal entries newer than the last applied timestamp, so a renumbered /
+      # re-timestamped migration can be skipped forever while `db:migrate` still
+      # exits 0. Verify every journal entry is actually recorded as applied on
+      # the persistent CI branch before the DB-touching jobs run against it.
+      - name: Verify applied migrations
+        if: steps.e2e.outputs.enabled == 'true'
+        run: pnpm db:verify
+        env:
+          DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
+
   integration-e2e:
     name: Integration & E2E
     runs-on: ubuntu-latest

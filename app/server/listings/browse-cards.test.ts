@@ -15,10 +15,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * mocking `~/db/client` the SAME way `browse.test.ts` does — a `getDb()` whose
  * `select()` chains resolve to fixture rows — so we assert the assembled cards
  * without a live database (docs/agents/testing.md). `buildBrowseCards` issues
- * exactly two batched queries (celiac aggregate + incidents); the mock routes
- * each by its `select()` projection and returns the fixtures verbatim, so the
- * IN(...) filter is irrelevant to what a row maps to (the row's own `listingId`
- * keys it).
+ * exactly three batched queries (celiac aggregate + incidents + the AUB-193
+ * bot-suggestion existence check); the mock routes each by its `select()`
+ * projection and returns the fixtures verbatim, so the IN(...) filter is
+ * irrelevant to what a row maps to (the row's own `listingId` keys it).
  *
  * The helper is DISTANCE-AGNOSTIC (the "0.4 mi" label lives in
  * `getBrowseListings`), so no distance is asserted here — that path stays pinned
@@ -29,6 +29,7 @@ const h = vi.hoisted(() => {
   const state = {
     celiacRows: [] as Array<Record<string, unknown>>,
     incidentRows: [] as Array<Record<string, unknown>>,
+    suggestionRows: [] as Array<Record<string, unknown>>,
   };
 
   // The celiac-aggregate chain: select(proj).from().leftJoin().where().groupBy()
@@ -41,11 +42,17 @@ const h = vi.hoisted(() => {
   const incidentWhereMock = vi.fn(() => Promise.resolve(state.incidentRows));
   const incidentFromMock = vi.fn(() => ({ where: incidentWhereMock }));
 
+  // The bot-suggestion existence chain (AUB-193): select(proj).from().where()
+  const suggestionWhereMock = vi.fn(() => Promise.resolve(state.suggestionRows));
+  const suggestionFromMock = vi.fn(() => ({ where: suggestionWhereMock }));
+
   // Route each query to the right chain by its select() projection:
-  //  - has `occurredOn`       → incidents
-  //  - otherwise (claim cols) → celiac aggregate
+  //  - has `occurredOn`           → incidents
+  //  - has `suggestedListingId`   → bot-suggestion existence (AUB-193)
+  //  - otherwise (claim cols)     → celiac aggregate
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
     if (projection && "occurredOn" in projection) return { from: incidentFromMock };
+    if (projection && "suggestedListingId" in projection) return { from: suggestionFromMock };
     return { from: aggFromMock };
   });
 
@@ -87,6 +94,7 @@ function mkListing(overrides: Partial<Listing> & Pick<Listing, "id" | "name">): 
 beforeEach(() => {
   state.celiacRows = [];
   state.incidentRows = [];
+  state.suggestionRows = [];
 });
 
 afterEach(() => {
@@ -249,6 +257,62 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
       freshness: null,
       suggestedByBot: false,
     });
+  });
+
+  it("flags suggestedByBot for a listing whose ONLY suggestion is a non-celiac claim (AUB-193)", async () => {
+    // The shipped regression: 25 of the 46 seeded listings suggest only
+    // non-celiac attributes (e.g. dedicated_fryer), so they have NO celiac
+    // aggregate row — but the batched suggestion-existence query still finds
+    // their live bot suggestion, so the card shows its provenance instead of a
+    // bare "Not yet attested".
+    const listing = mkListing({ id: "l-seeded", name: "Seeded Non-Celiac" });
+    state.celiacRows = []; // no celiac claim at all
+    state.suggestionRows = [{ suggestedListingId: "l-seeded" }];
+
+    const cards = await buildBrowseCards([listing], NOW, 6);
+
+    expect(cards[0]?.glance).toEqual({
+      safetyState: null,
+      hasRecentIncident: false,
+      evidence: null,
+      freshness: null,
+      suggestedByBot: true,
+    });
+  });
+
+  it("keeps suggestedByBot false once REAL celiac evidence exists, even with a live suggestion", async () => {
+    // A bot-suggested (non-celiac) claim plus a real celiac verdict: the verdict
+    // wins and the provenance chip never sits beside it (ADR-007).
+    const listing = mkListing({ id: "l-mixed", name: "Mixed Evidence" });
+    state.celiacRows = [
+      {
+        listingId: "l-mixed",
+        claimId: "c-mixed",
+        lastConfirmedAt: new Date("2026-06-20T00:00:00Z"),
+        confirmCount: "4",
+        disputeCount: "0",
+        contributors: "4",
+      },
+    ];
+    state.suggestionRows = [{ suggestedListingId: "l-mixed" }];
+
+    const cards = await buildBrowseCards([listing], NOW, 6);
+
+    expect(cards[0]?.glance.safetyState).toBe("celiac-safe");
+    expect(cards[0]?.glance.suggestedByBot).toBe(false);
+  });
+
+  it("keeps suggestedByBot false when no live suggestion survives (cleared by a real vote)", async () => {
+    // `castVote` nulls `suggested_by` server-side, so the existence query
+    // returns no row for this listing — the chip honestly disappears.
+    const listing = mkListing({ id: "l-cleared", name: "Cleared Suggestion" });
+    state.celiacRows = [];
+    state.suggestionRows = []; // suggestion cleared server-side
+
+    const cards = await buildBrowseCards([listing], NOW, 6);
+
+    expect(cards[0]?.glance.suggestedByBot).toBe(false);
+    expect(cards[0]?.glance.safetyState).toBeNull();
   });
 
   it("threads the staleness window so the SAME confirmation flips fresh↔stale", async () => {

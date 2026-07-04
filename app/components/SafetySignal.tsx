@@ -66,7 +66,11 @@ interface SafetySignalProps extends Omit<React.ComponentProps<"span">, "children
   state: SafetyState;
   /** `solid` for high emphasis, `soft` for inline/pastel chips. Defaults to `soft`. */
   variant?: "solid" | "soft";
-  /** Override the default label text (e.g. "Recent incident · 3 days ago"). */
+  /**
+   * Override the default label text (e.g. "Verified celiac-safe"). Keep it
+   * short — a long interpolated label wraps the pill on mobile (the old
+   * "Recent incident · N days ago" banner pill did exactly that).
+   */
   label?: string;
 }
 

@@ -65,3 +65,13 @@ jobs:
         run: pnpm db:migrate
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+
+      # Guard against drizzle's silent skip (AUB-195): the migrator only applies
+      # journal entries newer than the last applied timestamp, so a renumbered /
+      # re-timestamped migration can be skipped forever while `db:migrate` still
+      # exits 0. Verify every journal entry is actually recorded as applied.
+      - name: Verify applied migrations
+        if: steps.db.outputs.enabled == 'true'
+        run: pnpm db:verify
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}

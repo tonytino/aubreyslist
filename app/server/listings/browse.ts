@@ -1,4 +1,4 @@
-import { type SQL, and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import {
@@ -36,9 +36,12 @@ import { buildSearchPredicate } from "./search";
  *   2. the `celiac_safe_vs_gluten_friendly` claim aggregate for THAT page's
  *      listings, batched with one grouped query (mirrors
  *      `getListingClaimAggregates`'s conditional-count pattern, scoped by
- *      `listingId IN (…)`), and
+ *      `listingId IN (…)`),
  *   3. each page-listing's incidents, batched with one `IN (…)` query, reduced
- *      to a recent-incident boolean per listing via #30's `findRecentIncident`.
+ *      to a recent-incident boolean per listing via #30's `findRecentIncident`,
+ *      and
+ *   4. whether ANY visible claim on each page-listing still carries a live
+ *      curator-bot suggestion (AUB-193), batched with one `IN (…)` query.
  * The trust glance is then derived purely (`deriveListingTrustGlance`) from
  * those visible aggregates — a roll-up of visible evidence, never a score.
  *
@@ -129,11 +132,13 @@ export const browseListingsInputSchema = z.object({
    * Whether curator-bot SUGGESTIONS (AUB-31) participate in filter matching.
    * Default TRUE (a live, unvoted suggestion also satisfies the taxonomy
    * `attrs` filter and the `quick=celiac` chip — a discovery aid that surfaces
-   * candidates worth validating). Card-cue scope: only the HEADLINE celiac
-   * path guarantees the "Suggested by Aubrey's Bot" badge on the matched
-   * browse card; a non-headline `attrs` suggestion match shows its provenance
-   * on the listing detail's claim rows instead (browse-card cue = owner
-   * follow-up). FALSE (the
+   * candidates worth validating). Card-cue scope (AUB-193): the browse card's
+   * "Suggested by Aubrey's Bot" badge covers a live suggestion on ANY visible
+   * claim, gated on "no real headline celiac evidence" — so a suggestion-
+   * matched card carries the badge except the narrow case of a listing with
+   * community celiac evidence matching a non-headline `attrs` filter via that
+   * attribute's suggestion; there the provenance is visible on the listing
+   * detail's claim rows only (owner follow-up). FALSE (the
    * `?bot=` URL param's "Hide bot suggestions" chip) reverts to
    * community-evidence-only matching. Affects only filter MATCHING — never the
    * trust glance, counts, or sort (ADR-007: a suggestion is provenance, not
@@ -360,9 +365,10 @@ export async function getBrowseListings(
 /**
  * Build browse cards — each listing paired with its at-a-glance trust — from a
  * set of listings. Owns ONLY the trust-glance derivation (ADR-007): it batches
- * the two visible-evidence signals for these listings (the headline celiac
- * aggregate and the recent-incident dates) and reduces each to a pure
- * {@link ListingTrustGlance} via {@link deriveListingTrustGlance}.
+ * the three visible signals for these listings (the headline celiac aggregate,
+ * the recent-incident dates, and the live curator-bot-suggestion flag) and
+ * reduces each to a pure {@link ListingTrustGlance} via
+ * {@link deriveListingTrustGlance}.
  *
  * DISTANCE-AGNOSTIC by design: the "0.4 mi" `distanceLabel` is a browse-only
  * concern (the near-me sort) and stays in {@link getBrowseListings}, so this
@@ -370,7 +376,7 @@ export async function getBrowseListings(
  * viewer-favorites loader with no distance origin) without change. Cards come
  * back in the SAME order as `listings`.
  *
- * NO N+1: the two signal queries are batched across ALL `listings` at once,
+ * NO N+1: the three signal queries are batched across ALL `listings` at once,
  * regardless of how many there are.
  *
  * SERVER-ONLY: it drives the db-backed aggregate helpers below, so it must never
@@ -393,9 +399,10 @@ export async function buildBrowseCards(
 
   const listingIds = listings.map((listing) => listing.id);
 
-  const [celiacAggregates, recentIncidentDates] = await Promise.all([
+  const [celiacAggregates, recentIncidentDates, botSuggestedListingIds] = await Promise.all([
     getCeliacAggregatesByListing(listingIds),
     getRecentIncidentDatesByListing(listingIds, now),
+    getBotSuggestedListingIds(listingIds),
   ]);
 
   return listings.map((listing) => {
@@ -405,7 +412,8 @@ export async function buildBrowseCards(
       celiac?.contributors ?? 0,
       recentIncidentDates.get(listing.id) ?? null,
       now,
-      stalenessMonths
+      stalenessMonths,
+      botSuggestedListingIds.has(listing.id)
     );
     return { listing, glance };
   });
@@ -681,6 +689,35 @@ async function getCeliacAggregatesByListing(
     });
   }
   return byListing;
+}
+
+/**
+ * Batch-load which of `listingIds` still carry a LIVE curator-bot suggestion
+ * (AUB-193): a VISIBLE claim — on ANY taxonomy attribute, not just the headline
+ * celiac one — whose `suggested_by` is set. One `IN (…)` query for the whole
+ * page (NO N+1), mirroring the moderation-visibility predicate the sibling
+ * batched queries apply (only `visible` claims count, so a hidden/removed
+ * suggested claim stops driving the badge; the parent listing's own visibility
+ * is already enforced by the page query that produced `listingIds`).
+ *
+ * The first real vote clears `suggested_by` server-side (`castVote`), so a
+ * listing drops out of this set — and out of the "Suggested by Aubrey's Bot"
+ * chip — the moment real evidence arrives on its only suggested claim.
+ *
+ * Returns the set of listing ids with at least one live suggestion.
+ */
+async function getBotSuggestedListingIds(listingIds: string[]): Promise<Set<string>> {
+  const rows = await getDb()
+    .select({ suggestedListingId: claims.listingId })
+    .from(claims)
+    .where(
+      and(
+        inArray(claims.listingId, listingIds),
+        isNotNull(claims.suggestedBy),
+        eq(claims.moderationStatus, "visible")
+      )
+    );
+  return new Set(rows.map((row) => row.suggestedListingId));
 }
 
 /**
