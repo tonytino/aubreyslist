@@ -34,6 +34,15 @@ interface SafetySummaryProps {
 }
 
 /**
+ * The plain-language guidance for the honest "Not yet attested" empty state —
+ * a single constant so the full-box and compact (hero + incident) renders of
+ * the empty state can never drift apart in wording.
+ */
+const NOT_YET_ATTESTED_GUIDANCE =
+  "No one has confirmed yet whether this restaurant is celiac-safe or only gluten-friendly. " +
+  "Verify cross-contamination practices with the restaurant directly.";
+
+/**
  * The prominent, headline celiac-safe vs. gluten-friendly signal for a listing —
  * and, in the `"hero"` variant, the WHOLE safety-badge row for the listing detail
  * page's hero card (repo-owner feedback, nits-detail-badges-once): previously a
@@ -46,9 +55,11 @@ interface SafetySummaryProps {
  * this most prominently"). It is accessible by construction: the populated case
  * delegates to {@link SafetySignal}, which always pairs COLOUR + ICON + TEXT
  * LABEL, and the empty case states "Not yet attested" in plain text so the
- * meaning never depends on colour or styling. Each badge also carries a
- * supplementary tooltip (the shared {@link SAFETY_TOOLTIP} copy) on a keyboard-
- * focusable trigger, so the extra gloss is reachable without a pointer.
+ * meaning never depends on colour or styling. In the hero, each badge also
+ * carries a supplementary tooltip (the shared {@link SAFETY_TOOLTIP} copy) on a
+ * keyboard-focusable trigger, so the extra gloss is reachable without a
+ * pointer. The `"default"` variant stays the bare chip — no tooltip wrapper —
+ * exactly as before the hero row absorbed the badges.
  *
  * IMPORTANT: we deliberately do NOT invent a safety rating — an old or fabricated
  * consensus could put a celiac at real risk. The `state` prop is the single seam
@@ -60,13 +71,21 @@ interface SafetySummaryProps {
  * state) sit in ONE row that scrolls horizontally on overflow instead of
  * wrapping — `overflow-x-auto` with a hidden scrollbar and `shrink-0` chips
  * (the same pattern as the directory's `FilterChips` row) — so the row never
- * pushes the page wider at the 375px minimum width. The row is exposed to
- * assistive tech as a labelled "Safety status" group (a chrome-reset
- * `<fieldset>` + sr-only `<legend>`, the repo's `ViewToggle` pattern), distinct
- * from this section's own "Gluten-free safety" region name. The `aria-labelledby`
- * section + its heading are kept in both variants (the heading is visually
- * hidden in `"hero"` since the hero band already reads as the headline), so the
- * accessible "Gluten-free safety" region name is stable across the redesign.
+ * pushes the page wider at the 375px minimum width. The scroll container
+ * carries compensating `-m-1`/`p-1` so each trigger's `focus-visible` ring
+ * draws INSIDE the scrollable area instead of being clipped by `overflow-x-auto`
+ * (FilterChips solves the same clipping with its `-mx-gutter`/`px-gutter`
+ * bleed). When the row must hold BOTH the empty state and the incident badge,
+ * the empty state compacts to a dashed "Not yet attested" chip (its guidance
+ * sentence moves into the chip's tooltip) so the incident badge is never pushed
+ * off-screen at 375px — recent harm stays visible, never buried (ADR-007). The
+ * row is exposed to assistive tech as a labelled "Safety status" group (a
+ * chrome-reset `<fieldset>` + sr-only `<legend>`, the repo's `ViewToggle`
+ * pattern), distinct from this section's own "Gluten-free safety" region name.
+ * The `aria-labelledby` section + its heading are kept in both variants (the
+ * heading is visually hidden in `"hero"` since the hero band already reads as
+ * the headline), so the accessible "Gluten-free safety" region name is stable
+ * across the redesign.
  */
 export function SafetySummary({
   state,
@@ -82,29 +101,50 @@ export function SafetySummary({
     "inline-flex shrink-0 rounded-chip cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
 
   const headlineBadge = state ? (
+    isHero ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className={tooltipButtonClassName}>
+            <SafetySignal state={state} variant="solid" className="text-lead gap-2 px-4 py-2" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{SAFETY_TOOLTIP[state]}</TooltipContent>
+      </Tooltip>
+    ) : (
+      <SafetySignal state={state} variant="solid" className="text-body self-start px-3 py-1.5" />
+    )
+  ) : isHero && hasRecentIncident ? (
+    // Compact empty state, ONLY when it must share the never-wrapping hero row
+    // with the incident badge: the full two-paragraph box (below) would push
+    // the incident chip off-screen at the 375px minimum width, and recent harm
+    // must stay visible (ADR-007). The honest "Not yet attested" text label
+    // stays visible; the guidance sentence moves into the chip's tooltip
+    // (keyboard-reachable like the other badges, and announced on focus via
+    // the tooltip's aria-describedby wiring).
     <Tooltip>
       <TooltipTrigger asChild>
         <button type="button" className={tooltipButtonClassName}>
-          <SafetySignal
-            state={state}
-            variant="solid"
-            className={isHero ? "text-lead gap-2 px-4 py-2" : "text-body px-3 py-1.5"}
-          />
+          <span className="inline-flex items-center rounded-chip border border-dashed border-border bg-muted px-2.5 py-1 text-body-sm font-medium text-foreground">
+            Not yet attested
+          </span>
         </button>
       </TooltipTrigger>
-      <TooltipContent>{SAFETY_TOOLTIP[state]}</TooltipContent>
+      <TooltipContent>{NOT_YET_ATTESTED_GUIDANCE}</TooltipContent>
     </Tooltip>
   ) : (
+    // Full empty-state box: the default variant, and the hero WITHOUT an
+    // incident (the row then holds only this box, so there is nothing to push
+    // off-screen). In the hero's overflow row the box is `shrink-0`, so it
+    // needs a width cap — without one a flex item's base size is its
+    // max-content width (the whole guidance sentence unwrapped) and the row
+    // would scroll for no reason at the 375px minimum width.
     <div
-      className={`flex shrink-0 flex-col gap-1 rounded-card border border-dashed border-border bg-muted p-gutter ${
-        isHero ? "max-w-xs sm:max-w-sm" : ""
+      className={`flex shrink-0 flex-col gap-1 rounded-card border border-dashed border-border bg-muted p-gutter${
+        isHero ? " max-w-xs sm:max-w-sm" : ""
       }`}
     >
       <p className="text-body font-semibold text-foreground">Not yet attested</p>
-      <p className="text-body-sm text-muted-foreground">
-        No one has confirmed yet whether this restaurant is celiac-safe or only gluten-friendly.
-        Verify cross-contamination practices with the restaurant directly.
-      </p>
+      <p className="text-body-sm text-muted-foreground">{NOT_YET_ATTESTED_GUIDANCE}</p>
     </div>
   );
 
@@ -144,8 +184,11 @@ export function SafetySummary({
         // role-less (generic) div is ignored by most AT. `min-w-0` overrides a
         // <fieldset>'s UA-stylesheet auto min-width so the row can actually
         // shrink and hand overflow to `overflow-x-auto` instead of forcing the
-        // hero wider than the viewport at the 375px minimum width.
-        <fieldset className="m-0 flex min-w-0 items-center gap-2 overflow-x-auto border-0 p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        // hero wider than the viewport at the 375px minimum width. The `p-1`
+        // padding (compensated by `-m-1` so the layout doesn't shift) keeps
+        // each trigger's 2px focus-visible ring inside the scroll container —
+        // without it, `overflow-x-auto` clips the ring's box-shadow.
+        <fieldset className="-m-1 flex min-w-0 items-center gap-2 overflow-x-auto border-0 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <legend className="sr-only">Safety status</legend>
           {headlineBadge}
           {incidentBadge}

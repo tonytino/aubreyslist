@@ -77,12 +77,62 @@ describe("SafetySummary", () => {
     expect(screen.queryByText(safetyLabel("incident"))).not.toBeInTheDocument();
   });
 
+  it("renders ONLY the gluten-friendly badge in hero when that's the headline state", () => {
+    render(<SafetySummary state="gluten-friendly" variant="hero" hasRecentIncident={false} />);
+    expect(screen.getByText(safetyLabel("gluten-friendly"))).toBeInTheDocument();
+    expect(screen.queryByText(safetyLabel("celiac-safe"))).not.toBeInTheDocument();
+    expect(screen.queryByText(safetyLabel("stale"))).not.toBeInTheDocument();
+    expect(screen.queryByText(safetyLabel("incident"))).not.toBeInTheDocument();
+  });
+
+  it("renders ONLY the stale badge in hero when that's the headline state", () => {
+    render(<SafetySummary state="stale" variant="hero" hasRecentIncident={false} />);
+    expect(screen.getByText(safetyLabel("stale"))).toBeInTheDocument();
+    expect(screen.queryByText(safetyLabel("celiac-safe"))).not.toBeInTheDocument();
+    expect(screen.queryByText(safetyLabel("gluten-friendly"))).not.toBeInTheDocument();
+    expect(screen.queryByText(safetyLabel("incident"))).not.toBeInTheDocument();
+  });
+
+  it("combines the stale badge WITH the incident badge in hero when both apply", () => {
+    render(<SafetySummary state="stale" variant="hero" hasRecentIncident={true} />);
+    expect(screen.getByText(safetyLabel("stale"))).toBeInTheDocument();
+    expect(screen.getByText(safetyLabel("incident"))).toBeInTheDocument();
+  });
+
   it("renders ONLY the incident badge in hero when there's no headline state yet (unattested)", () => {
     render(<SafetySummary state={null} variant="hero" hasRecentIncident={true} />);
     expect(screen.getByText(safetyLabel("incident"))).toBeInTheDocument();
     expect(screen.getByText("Not yet attested")).toBeInTheDocument();
     expect(screen.queryByText(safetyLabel("celiac-safe"))).not.toBeInTheDocument();
     expect(screen.queryByText(safetyLabel("gluten-friendly"))).not.toBeInTheDocument();
+  });
+
+  it("compacts the empty state to a focusable chip when it shares the hero row with the incident badge", () => {
+    render(<SafetySummary state={null} variant="hero" hasRecentIncident={true} />);
+    // The honest "Not yet attested" label stays visible; its guidance sentence
+    // moves into a tooltip (so the never-wrapping row can't push the incident
+    // badge off-screen at 375px) on a keyboard-focusable button trigger.
+    const compactTrigger = screen.getByText("Not yet attested").closest("button");
+    expect(compactTrigger).not.toBeNull();
+    expect(
+      screen.queryByText(/No one has confirmed yet whether this restaurant/)
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the FULL empty-state guidance visible in hero when there is no incident badge to crowd out", () => {
+    render(<SafetySummary state={null} variant="hero" hasRecentIncident={false} />);
+    expect(screen.getByText("Not yet attested")).toBeInTheDocument();
+    expect(
+      screen.getByText(/No one has confirmed yet whether this restaurant/)
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the default-variant headline chip bare — no tooltip trigger button", () => {
+    render(<SafetySummary state="celiac-safe" />);
+    // Only the hero row wraps badges in tooltip triggers; the default variant
+    // stays the plain self-positioned chip it was before the hero absorbed the
+    // badge row (round-2 review finding B).
+    expect(screen.getByText(safetyLabel("celiac-safe")).closest("button")).toBeNull();
   });
 
   it("combines the headline badge WITH the incident badge in hero when both apply", () => {
