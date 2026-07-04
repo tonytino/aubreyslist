@@ -482,11 +482,15 @@ function BrowseListings() {
    * Reset EVERY browse search param to its default in one navigation (repo-owner
    * mobile feedback): unlike `clearAll` above (which preserves `saved`/`sort`/
    * `radius` — it's scoped to "filters" only), this backs all the way out —
-   * search, quick chips, taxonomy attrs, saved mode, sort, radius, page, and any
-   * near-me coordinate pair. `search: () => ({})` is a deliberate FULL REPLACE
-   * (not the usual functional updater that carries `prev` forward) — every param
-   * goes away, `validateSearch` refills `BROWSE_SEARCH_DEFAULTS`, and
-   * `stripSearchParams` keeps the URL bare, exactly like a fresh `/` visit.
+   * search, quick chips, taxonomy attrs, saved mode, sort, radius, page, any
+   * near-me coordinate pair, AND the client-only List/Map `?view=` (back to
+   * List). `search: () => ({})` is a deliberate FULL REPLACE (not the usual
+   * functional updater that carries `prev` forward) — every param goes away,
+   * `validateSearch` refills `BROWSE_SEARCH_DEFAULTS`, and `stripSearchParams`
+   * keeps the URL bare, exactly like a fresh `/` visit. That fresh-visit
+   * semantic is why `view` resets too, even though `view` alone never LIGHTS
+   * the Reset chip (it's excluded from `isAnyBrowseFilterActive` — a
+   * content-view choice isn't a filter; see the NOTE in browse-search.ts).
    * `geo.reset()` mirrors `changeSort`'s non-distance branch so a stale "near me"
    * prompt/error state doesn't linger once the sort is back to alphabetical.
    */

@@ -91,11 +91,14 @@ export interface BrowseSearchLike {
 }
 // NOTE: `view` (the List/Map toggle) is deliberately NOT part of this interface
 // or `isAnyBrowseFilterActive` below. It's a content-VIEW choice, not a filter/
-// sort/search constraint — the "Reset" chip is scoped to backing out of a
-// stacked search + quick filter + saved mode + sort + radius + page (see its
-// call site), and switching to Map view changes none of those. It's still a
-// full BROWSE_SEARCH_DEFAULTS entry so `stripSearchParams` keeps it out of the
-// URL at rest.
+// sort/search constraint — so being in Map view ALONE never lights the "Reset"
+// chip (which is scoped to backing out of a stacked search + quick filter +
+// saved mode + sort + radius + page; see its call site). The contract is
+// deliberately asymmetric on the WRITE side, though: when Reset IS shown (some
+// filter is active) and clicked, `resetAll` in `app/routes/index.tsx` does a
+// FULL search replace — fresh-visit semantics — so it returns `view` to "list"
+// along with everything else. `view` is still a full BROWSE_SEARCH_DEFAULTS
+// entry so `stripSearchParams` keeps it out of the URL at rest.
 
 /**
  * True when at least one browse search param is off its default — gates the

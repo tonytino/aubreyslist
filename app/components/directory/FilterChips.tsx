@@ -232,15 +232,25 @@ export function FilterChips({
    */
   onSortChange: (next: BrowseSort) => void;
   /**
-   * Whether ANY browse search param (search, quick, taxonomy attrs, saved mode,
-   * sort, radius, or page) is off its default — the route computes this across the
-   * WHOLE param set, not just the subset this component renders chips for.
+   * Whether any FILTER-LIKE browse search param (search, quick, taxonomy attrs,
+   * saved mode, sort, radius, page, or a near-me coordinate pair) is off its
+   * default — the route computes this via `isAnyBrowseFilterActive`
+   * (browse-search.ts) across every server-affecting param, not just the subset
+   * this component renders chips for. The ONE exclusion is the client-only
+   * `?view=` (List/Map) toggle: being in Map view alone never lights the Reset
+   * chip (a content-view choice, not a filter). Deliberate asymmetry: when
+   * Reset IS shown and clicked, its full-replace navigation still returns the
+   * view to List — see `onResetAll` below.
    * Gates the trailing "Reset" chip (repo-owner mobile feedback: previously only
    * the taxonomy filter's own "Clear" existed, with no single affordance to back
    * out of a stacked search + quick filter + saved mode + sort + radius + page).
    */
   isAnyFilterActive: boolean;
-  /** Reset EVERY browse search param to its default in one navigation. */
+  /**
+   * Reset EVERY browse search param to its default in one navigation —
+   * fresh-visit semantics, INCLUDING the client-only `?view=` (back to List),
+   * even though `?view=` alone never shows this chip (see `isAnyFilterActive`).
+   */
   onResetAll: () => void;
 }) {
   // The taxonomy chips to show: every attribute EXCEPT the headline one — the

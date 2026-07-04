@@ -92,8 +92,14 @@ test("the list/map view toggle persists in the URL and across a reload", async (
   await page.goto("/");
   await waitForBrowseReady(page);
 
-  const listButton = page.getByRole("button", { name: "List" });
-  const mapButton = page.getByRole("button", { name: "Map" });
+  // Scope to the toggle's own group (named by its sr-only <legend>) AND use
+  // exact names. Playwright's `name` is a case-insensitive SUBSTRING match by
+  // default, so a bare `name: "Map"` would ALSO match the map view's "Recenter
+  // map" button (DirectoryMap.tsx) once pins render, and `name: "List"` would
+  // match the "Add listing" FAB — both strict-mode violations.
+  const toggle = page.getByRole("group", { name: "Choose list or map view" });
+  const listButton = toggle.getByRole("button", { name: "List", exact: true });
+  const mapButton = toggle.getByRole("button", { name: "Map", exact: true });
   await expect(listButton).toHaveAttribute("aria-pressed", "true");
 
   await mapButton.click();
@@ -108,10 +114,10 @@ test("the list/map view toggle persists in the URL and across a reload", async (
   await page.reload();
   await waitForBrowseReady(page);
   await expect(page).toHaveURL(/[?&]view=map/);
-  await expect(page.getByRole("button", { name: "Map" })).toHaveAttribute("aria-pressed", "true");
+  await expect(mapButton).toHaveAttribute("aria-pressed", "true");
 
   // Back to List strips the default param entirely (stripSearchParams).
-  await page.getByRole("button", { name: "List" }).click();
+  await listButton.click();
   await expect(page).not.toHaveURL(/view=/);
 });
 
