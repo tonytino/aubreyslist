@@ -40,6 +40,36 @@ export default defineConfig({
         "app/routes/**",
         "app/**/*.d.ts",
       ],
+      // Absolute coverage floor (AUB-169), on top of the existing
+      // changed-lines-only diff-coverage gate (issue #183,
+      // .github/scripts/check-diff-coverage.mjs). Diff coverage alone lets
+      // AGGREGATE coverage drift down over many PRs that each individually clear
+      // 80% on their own changed lines; this whole-repo floor catches that decay.
+      //
+      // Where this runs: Vitest enforces `coverage.thresholds` (failing the
+      // process) any time `--coverage` is passed. In this repo that is the
+      // `pnpm test:coverage` script, which runs in CI in the "Diff coverage" job's
+      // "Test with coverage" step (.github/workflows/ci.yml) — so a whole-repo
+      // regression below the floor fails that job before the diff-coverage script
+      // even runs. It also fires locally for anyone who runs `pnpm test:coverage`.
+      // The fast `unit` CI job does not pass `--coverage`, so it is unaffected.
+      //
+      // Baseline measured 2026-07-03 on a from-scratch DB-free run (no
+      // DATABASE_URL/TEST_DATABASE_URL — matches this repo's sandboxed/no-secret
+      // CI path, which is the LOWER of the two coverage modes since the
+      // integration suite only ever adds coverage, never removes it):
+      //   statements 93.59% | branches 92.13% | functions 87.45% | lines 93.59%
+      // Thresholds below sit ~2-3 points under that measured baseline —
+      // deliberate headroom so unrelated in-flight work doesn't trip this floor
+      // the moment it lands, while still catching a real regression. Re-measure
+      // with `pnpm test:coverage` and ratchet these up over time as coverage
+      // improves; do not lower them to make a failing PR pass.
+      thresholds: {
+        statements: 91,
+        branches: 90,
+        functions: 85,
+        lines: 91,
+      },
     },
   },
 });

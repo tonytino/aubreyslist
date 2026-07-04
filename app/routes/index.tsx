@@ -224,6 +224,16 @@ function BrowseListings() {
 
   // Remaining directory UI state is purely ephemeral (not shareable): the list/map
   // view toggle and the map's selected pin.
+  //
+  // AUB-164: the map view is a CSS placeholder with no real map provider wired up
+  // (see `DirectoryMap.tsx`) — wiring one up is deferred to AUB-111. `view` still
+  // defaults to (and today can only ever be) "list": `ViewToggle` below is
+  // rendered with its Map segment gated off (`mapEnabled` defaults to `false`),
+  // so there is no UI path that ever calls `setView("map")`. This is the ONLY
+  // entry point into the map view, so gating it here is sufficient — do NOT
+  // delete the `view === "map"` branch, `ViewToggle`'s Map segment, or
+  // `DirectoryMap` itself; AUB-111 re-enables all of it by passing
+  // `mapEnabled` once a real map provider ships.
   const [view, setView] = useState<DirectoryView>("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -485,6 +495,9 @@ function BrowseListings() {
                 constrains the count too), so removing the count text loses no
                 truthfulness — the filtered results themselves are the answer. */}
             <DistanceSelector value={radius} onChange={changeRadius} />
+            {/* AUB-164: `mapEnabled` intentionally omitted (defaults to `false`) —
+                the Map segment stays hidden on the public directory until AUB-111
+                wires up a real map provider. See the comment on `view` above. */}
             <ViewToggle view={view} onChange={setView} />
           </div>
         </div>
@@ -502,6 +515,11 @@ function BrowseListings() {
             <DirectoryEmpty onBrowseCeliac={() => toggleQuick("celiac")} />
           )
         ) : view === "map" ? (
+          // AUB-164: unreachable on the public directory today — `ViewToggle`'s
+          // Map segment is hidden (see the comment on `view` above), so `view`
+          // never becomes "map". Left in place (not deleted) for AUB-111, which
+          // re-enables this branch by re-exposing the Map segment.
+          //
           // The map is absolutely positioned (`inset-0`) inside its own root, so
           // under natural document scroll it needs a BOUNDED, positioned box to
           // fill. A viewport-relative height (minus the sticky header's footprint)

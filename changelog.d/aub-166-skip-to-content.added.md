@@ -1,0 +1,1 @@
+- `[manual]` Added a "Skip to main content" link as the first focusable element in `AppShell` (`app/routes/__root.tsx`), before `SiteHeader` — visually hidden until it receives keyboard focus, then jumps to a newly-focusable `<main id="main-content" tabIndex={-1}>`, so keyboard and screen-reader users can bypass the repeated header nav on every page (AUB-166).

@@ -98,3 +98,12 @@ DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 2. Click **New repository secret**.
 3. Name: `CI_E2E_DATABASE_URL`, Value: the same connection string from above.
 4. The CI workflow at `.github/workflows/ci.yml` reads `secrets.CI_E2E_DATABASE_URL` and injects it as `DATABASE_URL` for the E2E job. E2E steps are skipped when the secret is absent.
+
+---
+
+## Secret Rotation
+
+When a secret needs to be rotated for security or operational reasons, see the
+**[Secret Rotation Runbook](../setup/secret-rotation-runbook.md)** (AUB-188).
+It covers SESSION_SECRET, GOOGLE_CLIENT_SECRET, and PREVIEW_LOGIN_SECRET
+rotation procedures, including impact and verification steps.

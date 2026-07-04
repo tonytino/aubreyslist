@@ -413,6 +413,14 @@ jobs:
       # suite self-skips and we get DB-free unit/component coverage (the floor).
       # NOTE: this is a third full-suite run in CI (alongside `unit` and
       # `integration-e2e`); deduplicating it is out of scope (issue #183).
+      #
+      # This step ALSO enforces the whole-repo absolute coverage floor
+      # (`coverage.thresholds` in vitest.config.ts, issue AUB-169): `pnpm
+      # test:coverage` passes `--coverage`, so Vitest itself fails the process
+      # (before the diff-coverage script below even runs) if aggregate coverage
+      # drops below the floor. That floor is a backstop against slow aggregate
+      # decay across many individually-80%-compliant PRs; see vitest.config.ts
+      # for the measured baseline and rationale.
       - name: Test with coverage
         run: pnpm test:coverage
         env:

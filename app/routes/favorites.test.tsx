@@ -15,7 +15,7 @@ import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { viewerFavoritesQuery } from "~/favorites/viewer-favorites-query";
 import type { BrowseListingCard } from "~/server/listings/browse";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
-import { FavoritesPage } from "./favorites";
+import { FavoritesPage, Route } from "./favorites";
 
 /**
  * Route smoke test for `/favorites` (AUB-127 / F9). `FavoritesPage` reads three
@@ -113,5 +113,20 @@ describe("FavoritesPage — three states", () => {
     expect(await screen.findByText("Blue Sparrow")).toBeInTheDocument();
     // The save-count pill (F10) rides along from `favoriteCount`.
     expect(screen.getByTestId("save-count")).toHaveTextContent("3");
+  });
+});
+
+describe("FavoritesPage — head() meta tags (AUB-163)", () => {
+  it("includes noindex,nofollow robots meta tag in head", async () => {
+    const headCtx = {} as Parameters<NonNullable<typeof Route.options.head>>[0];
+    const headDataOrPromise = Route.options.head?.(headCtx);
+    const headData =
+      headDataOrPromise instanceof Promise ? await headDataOrPromise : headDataOrPromise;
+    expect(headData).toBeDefined();
+    expect(headData?.meta).toBeDefined();
+
+    const robotsMeta = (headData?.meta ?? []).find((m) => m?.name === "robots");
+    expect(robotsMeta).toBeDefined();
+    expect(robotsMeta?.content).toBe("noindex,nofollow");
   });
 });

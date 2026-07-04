@@ -1,0 +1,1 @@
+- `[manual]` Added security response headers (Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, and production-only HSTS) across both backend surfaces — the Hono `/api/*` routes and SSR/document + server-function responses — from a single shared source (`app/server/security/headers.ts`), with no new dependency.

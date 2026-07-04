@@ -107,9 +107,42 @@ dev), source-map upload is skipped and the plugin effectively no-ops.
   `app/start.ts` are excluded from coverage in `vitest.config.ts` — they are
   thin init/wiring modules with no branching logic to test.
 
+## Post-Deploy Smoke Check (AUB-157)
+
+`.github/workflows/post-deploy-smoke.yml` curls the **live** production
+deployment's `/api/health` and `/about` right after a deploy (on a successful
+production `deployment_status` event), plus a sparse 6-hourly `schedule`
+backstop and `workflow_dispatch` for manual runs. This is distinct from
+`ci.yml`'s "Production build smoke" job, which only ever tests a
+locally-built instance on `localhost:3000` in the CI runner — it cannot catch
+a deploy that builds fine but fails to actually serve traffic (bad DNS, a
+failed promotion, a runtime-only crash).
+
+**Production URL source:** the workflow reads the `PRODUCTION_URL` **repo
+variable** (Settings > Secrets and variables > Actions > Variables — a
+Variable, not a Secret, since it's a public URL), falling back to the
+triggering deployment's own `target_url` when the variable is unset, and
+failing loudly otherwise. It deliberately does **not** default to
+`SITE_URL` (`app/lib/seo.ts`, hardcoded to `https://aubreyslist.com`): per
+ADR-009 the site currently runs on a free `*.vercel.app` subdomain, so
+`SITE_URL` is the aspirational SEO domain, not necessarily where the app is
+live today. Update the `PRODUCTION_URL` variable if/when a custom domain is
+attached. See the workflow file's header comment for the full precedence
+rule.
+
+**Relationship to AUB-155 (uptime monitoring):** AUB-155 tracks configuring a
+third-party always-on monitor (e.g. UptimeRobot / Better Uptime) polling
+`/api/health` continuously with alerting — the steady-state safety net. This
+workflow is a narrower, deploy-triggered gate ("did *this* deploy come up
+ok"), not a replacement for it. Once AUB-155's monitor is configured, note its
+service + alert destination in this doc (this section is the intended home
+for that).
+
 ## See Also
 
 - `docs/decisions/009-vercel-hosting-v1.md` (ADR-009) — hosting and Nitro
   presets; Sentry source-map upload runs in the Vercel/CI build.
 - `docs/agents/environment.md` — env-var rules and the build-tooling secret
   exception that `SENTRY_AUTH_TOKEN` relies on.
+- `.github/workflows/post-deploy-smoke.yml` — the post-deploy smoke check
+  (AUB-157) described above.

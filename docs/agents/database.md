@@ -317,3 +317,10 @@ legacy format with no Place ID are reported and left untouched, never guessed.
 New listings don't need it: the Places provider now stores Google's own share
 link (`googleMapsUri` from Place Details) and only falls back to the built
 Maps URLs API link when that field is absent.
+
+## Production Incidents
+
+When a migration breaks production or data is at risk, see the **[Migration
+Rollback Runbook](../setup/migration-rollback-runbook.md)** (AUB-154) for
+recovery procedures: forward-fixing migrations (most common) and Neon PITR
+restore as a fallback for destructive changes.

@@ -2,10 +2,24 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
+import { honoSecurityHeaders } from "./security/headers";
+import { honoOriginCheck } from "./security/origin";
 
 // All API routes are mounted under /api
 // This app is handed off from TanStack Start's catch-all API route
 const app = new Hono().basePath("/api");
+
+// Security response headers on every /api response (AUB-162). Mounted FIRST so
+// it wraps all downstream handlers and stamps headers even on error/404
+// responses. Same header set is applied to SSR/document responses in
+// `app/start.ts` — see `app/server/security/headers.ts`.
+app.use("*", honoSecurityHeaders());
+
+// CSRF defense-in-depth (AUB-174): reject state-changing cross-origin requests
+// with 403 BEFORE any route/DB work. Central here for /api mutations; the
+// server-function surface is guarded in `app/start.ts`. See
+// `app/server/security/origin.ts`.
+app.use("*", honoOriginCheck());
 
 // Health check — a useful liveness probe. Keep it.
 app.route("/health", healthRoutes);

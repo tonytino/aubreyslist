@@ -1,0 +1,1 @@
+- `[manual]` The directory's List/Map view toggle no longer exposes the Map segment — the map view is still a CSS placeholder with no real map provider wired up, so it's hidden until AUB-111 ships one. `ViewToggle` gains a `mapEnabled` prop (defaults to `false`); the underlying map code is untouched.
