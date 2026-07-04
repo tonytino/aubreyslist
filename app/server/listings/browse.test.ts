@@ -693,7 +693,10 @@ describe("getBrowseListings", () => {
   // Pins that `getBrowseListings` actually THREADS `input.includeSuggested` into
   // BOTH predicate builders — dropping the argument at either call site in
   // browse.ts would silently turn `?bot=false` into a no-op while every
-  // builder-level test stayed green.
+  // builder-level test stayed green. `?bot=false` has TWO effects: it strips
+  // the live-suggestion OR-branch from filter MATCHING, and it folds the
+  // bot-suggested-only RESULT-SET exclusion (owner bug report: the chip must
+  // actually HIDE the "Suggested by Aubrey's Bot" cards) into the shared WHERE.
 
   it("threads includeSuggested=true (the default) into the taxonomy AND quick filter SQL", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
@@ -712,7 +715,7 @@ describe("getBrowseListings", () => {
     expect((sql.match(/suggested_by" is not null/g) ?? []).length).toBe(2);
   });
 
-  it("includeSuggested=false strips the suggestion branch from the shared WHERE (?bot=false is not a no-op)", async () => {
+  it("includeSuggested=false strips the suggestion branch from filter matching AND adds the exclusion", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
 
@@ -723,7 +726,52 @@ describe("getBrowseListings", () => {
 
     expect(state.pageWhere).toBeDefined();
     expect(state.countWhere).toBe(state.pageWhere);
-    expect(renderArg(state.pageWhere)).not.toContain("suggested_by");
+    const sql = renderArg(state.pageWhere);
+    // Matching is community-evidence-only: neither the taxonomy EXISTS nor the
+    // quick=celiac EXISTS carries a live-suggestion OR-branch anymore. The ONE
+    // remaining `suggested_by` reference is the result-set exclusion's
+    // live-suggestion branch.
+    expect((sql.match(/suggested_by/g) ?? []).length).toBe(1);
+    // The bot-suggested-only exclusion: NOT (live-suggestion EXISTS AND NOT
+    // any-evidence EXISTS) — see filter.test.ts for its exact shape.
+    expect(sql).toContain("not (exists");
+    expect(sql).toContain('inner join "attestations"');
+  });
+
+  it("includeSuggested=false EXCLUDES bot-suggested-only listings from page AND count even with NO other filter (the owner bug)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    // Nothing else active — no q, attrs, quick, radius, saved. Previously this
+    // rendered ONLY the visibility predicate, making the chip a visible no-op.
+    await getBrowseListings({ ...baseInput, includeSuggested: false }, NOW);
+
+    expect(state.pageWhere).toBeDefined();
+    // The SAME predicate object constrains the page and the count query, so the
+    // total/hasMore honestly reflect the exclusion (pagination stays correct).
+    expect(state.countWhere).toBe(state.pageWhere);
+    const sql = renderArg(state.pageWhere);
+    // Visibility (#41) still applies…
+    expect(sql).toContain("moderation_status");
+    // …AND the exclusion is present: a live suggestion with no community
+    // evidence anywhere means the listing is dropped from the result set.
+    expect(sql).toContain("not (exists");
+    expect(sql).toContain("suggested_by");
+    expect(sql).toContain("and not exists");
+    expect(sql).toContain('inner join "attestations"');
+  });
+
+  it("default (includeSuggested=true) folds NO exclusion into the WHERE — behavior unchanged", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(baseInput, NOW);
+
+    // A bare default browse: only the visibility predicate — no correlated
+    // EXISTS, no `suggested_by` anywhere.
+    const sql = renderArg(state.pageWhere);
+    expect(sql).not.toContain("exists");
+    expect(sql).not.toContain("suggested_by");
   });
 
   it("applies the search predicate to BOTH the page and count queries", async () => {

@@ -1,4 +1,4 @@
-import { and, eq, gt, type SQL, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, type SQL, sql } from "drizzle-orm";
 import type { ClaimAttribute } from "~/db/schema";
 import { attestations, claims, listings } from "~/db/schema";
 
@@ -21,9 +21,13 @@ import { attestations, claims, listings } from "~/db/schema";
  * the exact badge rule, see {@link buildLiveSuggestionHaving}) ALSO matches as
  * an OR-branch. This is a discovery aid, on by default; the `?bot=false` browse
  * param (`includeSuggested: false`) reverts to community-evidence-only
- * matching. Any real vote — including a dispute — kills the suggestion branch
- * instantly. A bare, non-suggested `claims` row with no votes still never
- * matches under either mode.
+ * matching AND additionally HIDES bot-suggested-only listings from the result
+ * set entirely (see {@link buildSuggestedOnlyExclusion}) — the "Hide bot
+ * suggestions" chip removes the listings whose browse card is driven by
+ * suggestion alone, not just their filter participation. Any real vote —
+ * including a dispute — kills the suggestion branch instantly. A bare,
+ * non-suggested `claims` row with no votes still never matches under either
+ * mode.
  *
  * Recency is deliberately NOT part of the SQL match: a stale-but-uncontested
  * consensus still represents real visible evidence and should surface (the
@@ -142,7 +146,10 @@ function buildAttributeConsensusExists(attribute: ClaimAttribute, includeSuggest
  *
  * `includeSuggested` (default true) also matches attributes whose claim is a
  * LIVE curator-bot suggestion (AUB-31) — the `?bot=` browse param turns this
- * off, reverting to community-evidence-only matching.
+ * off, reverting this predicate to community-evidence-only matching. (The
+ * flag's OTHER effect — hiding bot-suggested-only listings from the result set
+ * — lives in `buildBrowseWhere` via {@link buildSuggestedOnlyExclusion}, not
+ * here: this predicate only ever NARROWS matching for the selected attrs.)
  */
 export function buildTaxonomyFilterPredicate(
   attributes: readonly ClaimAttribute[],
@@ -158,9 +165,58 @@ export function buildTaxonomyFilterPredicate(
 }
 
 /**
+ * The "Hide bot suggestions" RESULT-SET exclusion (`?bot=false`,
+ * `includeSuggested: false`): drop every listing that is BOT-SUGGESTED-ONLY —
+ * i.e. it carries a live curator-bot suggestion on some visible claim
+ * (`getBotSuggestedListingIds`'s existence rule in `./browse.ts`, AUB-193)
+ * AND has NO real community attestation evidence on ANY visible claim. Those are exactly the listings whose browse card is driven by
+ * suggestion alone (the "Suggested by Aubrey's Bot" cards) — the ones the chip
+ * exists to hide. A listing with ANY real community evidence stays visible
+ * regardless of also carrying live suggestions: real evidence is never hidden
+ * (ADR-007 — this changes only which listings are RETURNED, never how trust is
+ * derived or displayed).
+ *
+ * "Live/unvoted" is implied by the composition: the no-evidence-anywhere
+ * conjunct means every suggested claim here has ZERO attestations, so this is
+ * the same live-suggestion reading as {@link buildLiveSuggestionHaving}
+ * without needing per-claim tallies. The first real vote on ANY claim moves
+ * the listing out of the excluded set immediately (and `castVote` clears
+ * `suggested_by` on the voted claim besides).
+ *
+ * Visibility (#41): both existence checks are bounded to `visible` claims —
+ * a hidden/removed suggested claim cannot cause an exclusion, and a
+ * hidden/removed claim's attestations cannot rescue one.
+ *
+ * Rendered as `NOT (has-live-suggestion AND NOT has-any-evidence)` — plain
+ * correlated `EXISTS` subqueries over the outer `listings` row, so the caller
+ * can AND-fold it into the SHARED browse `where` (page query AND count query
+ * alike; a post-query JS filter would break pagination and the honest total).
+ */
+export function buildSuggestedOnlyExclusion(): SQL {
+  const liveSuggestionExists = sql`exists (
+    select 1
+    from ${claims}
+    where ${and(eq(claims.listingId, listings.id), isNotNull(claims.suggestedBy), eq(claims.moderationStatus, "visible"))}
+  )`;
+  const anyEvidenceExists = sql`exists (
+    select 1
+    from ${claims}
+    inner join ${attestations} on ${eq(attestations.claimId, claims.id)}
+    where ${and(eq(claims.listingId, listings.id), eq(claims.moderationStatus, "visible"))}
+  )`;
+  return sql`not (${liveSuggestionExists} and not ${anyEvidenceExists})`;
+}
+
+/**
  * Compose the full browse `WHERE` from the optional text-search predicate and
  * the optional GF-taxonomy filter predicate, AND-combined. Returns `undefined`
  * when neither constrains anything (drizzle then applies no `WHERE`).
+ *
+ * `includeSuggested: false` (the `?bot=false` "Hide bot suggestions" chip)
+ * contributes a THIRD term: the {@link buildSuggestedOnlyExclusion} result-set
+ * exclusion, so bot-suggested-only listings disappear from the page even when
+ * no other filter is active (previously the flag only changed filter MATCHING,
+ * which made the chip a visible no-op on an unfiltered browse).
  *
  * This is the single composition seam the browse loader uses for BOTH its
  * paged-listings query and its total-count query, so the count always reflects
@@ -173,5 +229,9 @@ export function buildBrowseWhere(
   attributes: readonly ClaimAttribute[],
   includeSuggested = true
 ): SQL | undefined {
-  return and(searchPredicate, buildTaxonomyFilterPredicate(attributes, includeSuggested));
+  return and(
+    searchPredicate,
+    buildTaxonomyFilterPredicate(attributes, includeSuggested),
+    includeSuggested ? undefined : buildSuggestedOnlyExclusion()
+  );
 }

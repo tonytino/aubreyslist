@@ -44,10 +44,12 @@ export const BROWSE_SEARCH_DEFAULTS = {
   // SERVER-SIDE "Saved" filter (AUB-129 / F11): defaults to off, so a bare visit
   // never carries `?saved=` and `stripSearchParams` drops it at rest.
   saved: false,
-  // Curator-bot suggestions participate in filter matching (AUB-31): default ON
+  // Curator-bot suggestions participate in the browse (AUB-31): default ON
   // (`true` = include), so a bare visit never carries `?bot=` and
   // `stripSearchParams` drops it at rest. `?bot=false` (the "Hide bot
-  // suggestions" chip) reverts filters to community-evidence-only matching.
+  // suggestions" chip) reverts filters to community-evidence-only matching AND
+  // hides bot-suggested-only listings (a live suggestion with no community
+  // evidence on any claim) from the results.
   bot: true,
 } as const;
 
@@ -145,7 +147,8 @@ export const browseSearchSchema = z.object({
     .catch(BROWSE_SEARCH_DEFAULTS.saved)
     .default(BROWSE_SEARCH_DEFAULTS.saved),
   // Curator-bot suggestion PARTICIPATION flag (AUB-31): `?bot=false` (or `0`)
-  // excludes live bot suggestions from filter matching ("Hide bot suggestions"
+  // excludes live bot suggestions from filter matching AND hides
+  // bot-suggested-only listings from the results ("Hide bot suggestions"
   // chip); anything else — including absence — degrades to the inclusive
   // default, which `stripSearchParams` keeps out of the URL at rest. Mirrors
   // `saved`'s coercion (the router parses `false`/`0` to their JS values, but
