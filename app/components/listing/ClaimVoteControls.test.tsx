@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -244,5 +244,61 @@ describe("ClaimVoteControls", () => {
     expect(dispute.className).toContain("bg-incident");
     expect(confirm).toHaveAttribute("aria-pressed", "false");
     expect(confirm.className).not.toContain("bg-celiac-safe");
+  });
+
+  it("shows a visible ownership caption for the viewer's own vote, and none without one", () => {
+    renderWithQuery(
+      <ClaimVoteControls
+        listingId="listing-1"
+        attribute="dedicated_fryer"
+        viewerVote="confirm"
+        isSignedIn={true}
+      />
+    );
+    // The pressed badge shares SafetySignal's badge language, so a visible text
+    // cue distinguishes "your vote" from a community verdict chip (ADR-007).
+    expect(screen.getByText("You confirmed this.")).toBeInTheDocument();
+    cleanup();
+
+    renderWithQuery(
+      <ClaimVoteControls
+        listingId="listing-1"
+        attribute="dedicated_fryer"
+        viewerVote={null}
+        isSignedIn={true}
+      />
+    );
+    expect(screen.queryByText("You confirmed this.")).not.toBeInTheDocument();
+    expect(screen.queryByText("You disputed this.")).not.toBeInTheDocument();
+  });
+
+  it("keeps both buttons disabled until the roll-up invalidation settles", async () => {
+    // The toggle branches on `viewerVote`, which the roll-up query provides —
+    // so `busy` must hold through the refetch, not just the write. Simulate a
+    // slow refetch with a never-resolving invalidateQueries.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.spyOn(queryClient, "invalidateQueries").mockReturnValue(new Promise<void>(() => {}));
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ClaimVoteControls
+          listingId="listing-1"
+          attribute="dedicated_fryer"
+          viewerVote={null}
+          isSignedIn={true}
+        />
+      </QueryClientProvider>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Dedicated fryer" }));
+
+    await waitFor(() => {
+      expect(submitVoteMock).toHaveBeenCalledTimes(1);
+    });
+    // The write resolved, but the invalidation hasn't — the controls stay
+    // disabled so a second click cannot act on a stale viewerVote.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Dedicated fryer" })).toBeDisabled();
+    });
+    expect(screen.getByRole("button", { name: "Dispute" })).toBeDisabled();
   });
 });

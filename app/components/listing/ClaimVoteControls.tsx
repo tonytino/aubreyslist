@@ -60,17 +60,20 @@ export function ClaimVoteControls({
 }: ClaimVoteControlsProps) {
   const queryClient = useQueryClient();
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: claimsQueryKey(listingId) });
-  };
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: claimsQueryKey(listingId) });
 
+  // Both onSuccess handlers RETURN the invalidation promise so `isPending`
+  // (and thus `busy`) holds until the roll-up refetch settles. The toggle
+  // branches on `viewerVote`, which comes from that query — re-enabling before
+  // it lands would let a quick second click act on a stale vote (e.g. re-submit
+  // a confirm it should retract).
   const vote = useMutation({
     mutationFn: (value: AttestationValue) => submitVote({ data: { listingId, attribute, value } }),
     onSuccess: () => {
-      invalidate();
       // A single neutral message regardless of confirm vs dispute — the button's
       // own pressed state already conveys which one was cast.
       toast.success("Vote recorded");
+      return invalidate();
     },
     onError: () => {
       toast.error("Could not record your vote. Please try again.");
@@ -80,8 +83,8 @@ export function ClaimVoteControls({
   const retract = useMutation({
     mutationFn: () => removeVote({ data: { listingId, attribute } }),
     onSuccess: () => {
-      invalidate();
       toast.success("Vote retracted");
+      return invalidate();
     },
     onError: () => {
       toast.error("Could not retract your vote. Please try again.");
@@ -140,6 +143,15 @@ export function ClaimVoteControls({
           disabled={busy}
           onClick={() => toggle("dispute")}
         />
+        {/* Visible ownership cue: a pressed vote badge is deliberately the same
+            badge language as a SafetySignal verdict chip, so this caption keeps
+            "your vote" from reading as the community verdict (ADR-007). Screen
+            readers already get the ownership from the toggle's `aria-pressed`. */}
+        {viewerVote !== null ? (
+          <span className="text-caption text-muted-foreground">
+            {viewerVote === "confirm" ? "You confirmed this." : "You disputed this."}
+          </span>
+        ) : null}
       </div>
 
       {error ? (

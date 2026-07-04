@@ -16,8 +16,8 @@ import { waitForHydration } from "./helpers";
  * `celiac_safe_vs_gluten_friendly` attribute — a real `submitVote` write that
  * CREATES the claim then records the attestation (ADR-007) — and assert the
  * transparent trust summary updates: the per-claim roll-up shows
- * "1 confirm / 0 dispute", the Confirm control reflects the viewer's own vote
- * (`aria-pressed`), and the headline summary flips from the honest
+ * "1 confirm / 0 dispute", the Celiac-safe badge toggle reflects the viewer's
+ * own vote (`aria-pressed`), and the headline summary flips from the honest
  * "Not yet attested" empty state to "Celiac-safe" (fresh confirm-majority →
  * `deriveHeadlineSafetyState`). It also persists a `claims` row that was never
  * pre-seeded — proving the lazy create.
@@ -59,15 +59,19 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
     // "Claims" label plus the count chip (e.g. "Claims 0") — which the
     // unanchored /Claims/ regex matches.
     const claimsSection = page.getByRole("tabpanel", { name: /Claims/ });
-    // Exact match: the row label is "Celiac-safe" (issue #175); the row's
-    // confirm/dispute clarifier copy also contains "celiac-safe" lower-cased.
-    await expect(claimsSection.getByText("Celiac-safe", { exact: true })).toBeVisible();
+    // The headline row's title is "Celiac-safe" (issue #175). The confirm
+    // control now carries the SAME accessible name (it renders as the
+    // Celiac-safe badge), so anchor the title assertion to the row-title
+    // paragraph — a bare getByText would match both and trip strict mode.
+    await expect(claimsSection.locator("p", { hasText: /^Celiac-safe$/ })).toBeVisible();
     const safety = page.getByRole("region", { name: "Gluten-free safety" });
     await expect(safety.getByText("Not yet attested")).toBeVisible();
 
-    // Confirm the headline attribute. The control is rendered for a signed-in
-    // viewer even though NO claim row exists yet — the write creates it.
-    const confirm = page.getByRole("button", { name: "Confirm" }).first();
+    // Confirm the headline attribute via its badge toggle — the confirm control
+    // IS the Celiac-safe badge (there is no generic "Confirm" button). It is
+    // rendered for a signed-in viewer even though NO claim row exists yet — the
+    // write creates it.
+    const confirm = claimsSection.getByRole("button", { name: "Celiac-safe" });
     await expect(confirm).toBeVisible();
     await confirm.click();
 
