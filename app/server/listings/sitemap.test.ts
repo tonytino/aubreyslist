@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * Tests for `/sitemap.xml` (AUB-161).
  *
  * Exercises `buildSitemapXml` directly (mocking `~/db/client` the same way
- * `get-listing.test.ts` does) rather than invoking the route's `GET` handler
+ * `get-listing.test.ts` does) rather than invoking the route’s `GET` handler
  * through a mounted router — no live DB, no router-tree wiring needed to
  * assert the XML shape.
  */
@@ -27,7 +27,7 @@ vi.mock("~/db/client", () => ({
 
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { buildSitemapXml } from "./sitemap[.]xml";
+import { buildSitemapXml } from "./sitemap";
 
 const { state } = h;
 const dialect = new PgDialect();
