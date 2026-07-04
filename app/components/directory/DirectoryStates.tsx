@@ -44,7 +44,7 @@ export function DirectoryEmpty({ onBrowseCeliac }: { onBrowseCeliac: () => void 
       iconWrapClass="bg-brand-soft"
       icon={<MapPin className="size-9 text-brand" strokeWidth={2} aria-hidden="true" />}
       headline="Let's find your safe table in Denver"
-      body="Search a restaurant by name or address — or browse celiac-safe spots verified by the community."
+      body="Search by name or address, or browse celiac-safe spots verified by the community."
       action={
         <button
           type="button"
@@ -70,7 +70,7 @@ export function DirectoryNoResults({ onClearAll }: { onClearAll: () => void }) {
       iconWrapClass="bg-muted"
       icon={<Search className="size-9 text-muted-foreground" strokeWidth={2} aria-hidden="true" />}
       headline="No spots match those filters"
-      body="Try removing a filter or searching a nearby neighborhood — the map covers all of metro Denver."
+      body="Try removing a filter or searching a nearby neighborhood. The map covers all of metro Denver."
       action={
         <button
           type="button"

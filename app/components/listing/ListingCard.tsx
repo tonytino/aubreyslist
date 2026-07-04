@@ -228,7 +228,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
                       <span className="font-normal text-muted-foreground">saves</span>
                     </AttributedPill>
                   </TooltipTrigger>
-                  <TooltipContent>Community saves — not a safety score.</TooltipContent>
+                  <TooltipContent>Community saves, not a safety score.</TooltipContent>
                 </Tooltip>
               ) : null}
 
@@ -242,9 +242,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
                       <span className="font-normal text-muted-foreground">Google</span>
                     </AttributedPill>
                   </TooltipTrigger>
-                  <TooltipContent>
-                    Google rating — not an Aubrey's List safety score.
-                  </TooltipContent>
+                  <TooltipContent>Google rating, not an Aubrey's List safety score.</TooltipContent>
                 </Tooltip>
               ) : null}
             </div>

@@ -78,7 +78,7 @@ function SectionFor({
       return (
         <AdminSection
           title="Role management"
-          description="Grant or revoke the moderator role for any signed-in account. Admins are seeded out-of-band and cannot be granted here."
+          description="Grant or revoke the moderator role for any signed-in account. Admins are seeded out-of-band and can't be granted here."
         >
           <RoleManagement />
         </AdminSection>
@@ -87,7 +87,7 @@ function SectionFor({
       return (
         <AdminSection
           title="Moderation queue"
-          description="Open flags on listings, claims, and incident reports awaiting review. Each flagged item has Dismiss, Hide, and Remove actions for triage."
+          description="Open flags on listings, claims, and incident reports. Triage each with Dismiss, Hide, or Remove."
         >
           <ModerationQueue />
         </AdminSection>
@@ -119,7 +119,7 @@ function SettingsSection({ settings }: { settings: AdminSettingsView | null }) {
   return (
     <AdminSection
       title="App settings"
-      description="Runtime configuration. Flip the listing-intake mode if the Places API nears its limit — the manual form is always a safe fallback (ADR-008)."
+      description="Flip the listing-intake mode if the Places API nears its limit. The manual form is always a safe fallback (ADR-008)."
     >
       {settings ? (
         <div className="flex flex-col gap-3">
@@ -206,7 +206,7 @@ const ROLE_LABEL: Record<Role, string> = {
 const ROLE_TOOLTIP: Record<Role, string> = {
   admin: "Full access, including role management and app settings. Seeded out-of-band.",
   moderator: "Can view the moderation queue and hide, remove, or dismiss flagged content.",
-  user: "A standard signed-in account with no moderation access.",
+  user: "A signed-in account with no moderation access.",
 };
 
 /**
@@ -395,8 +395,8 @@ function RoleChangeControl({
           </DialogTitle>
           <DialogDescription>
             {isModerator
-              ? `${account.name} (${account.email}) will lose access to the moderation queue and all moderation actions. They will become a regular user.`
-              : `${account.name} (${account.email}) will be able to view the moderation queue and hide, remove, or dismiss any content. Only grant this to people you trust.`}
+              ? `${account.name} (${account.email}) will lose all moderation access and become a regular user.`
+              : `${account.name} (${account.email}) will be able to hide, remove, or dismiss any content. Only grant this to people you trust.`}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

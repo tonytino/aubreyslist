@@ -21,7 +21,7 @@ export const Route = createFileRoute("/about")({
     meta: pageSeoMeta({
       title: "About · Aubrey's List",
       description:
-        "Aubrey's List is a community-driven directory of how safe restaurants are for gluten-free and celiac needs. Learn how its transparent trust model works and how to contribute.",
+        "Aubrey's List is a community directory of gluten-free and celiac-safe restaurants. Learn how the trust model works and how to contribute.",
       path: "/about",
     }),
     links: [canonicalLink("/about")],
@@ -40,9 +40,8 @@ function AboutPage() {
           Restaurants you can actually trust to be gluten-free.
         </h1>
         <p className="text-lead text-muted-foreground">
-          Aubrey's List is a community-driven directory of how safe restaurants really are for
-          people with a gluten-free or celiac need — information that is contributed, attested,
-          dated, and kept fresh by people who live with the same stakes.
+          A community directory of how safe restaurants really are for gluten-free and celiac
+          diners, kept current by people who share the need.
         </p>
       </header>
 
@@ -51,23 +50,18 @@ function AboutPage() {
           Our mission
         </h2>
         <p className="text-body text-muted-foreground">
-          Generic reviews and map listings bury the questions that actually matter to someone with a
-          gluten allergy: does the kitchen use a dedicated fryer, will they prepare an off-menu dish
-          gluten-free on request, and does the staff genuinely understand cross-contamination? That
-          knowledge lives in the community, and it decays — a place that was safe last year may have
-          changed its fryer, menu, or staff.
+          Generic reviews bury the details that matter with a gluten allergy, like whether the fryer
+          is dedicated or the staff understands cross-contamination. That knowledge lives in the
+          community, and it goes stale: a kitchen that was safe last year may have changed.
         </p>
         <p className="text-body text-muted-foreground">
-          So we built a directory where people who share the need can record what they know, vouch
-          for what others have reported, and keep it current. Trust is not a feature of this
-          product. Trust <strong className="font-semibold text-foreground">is</strong> the product —
-          every decision is judged against one question: does this help a person with a gluten
-          allergy decide, with confidence, whether to eat here?
+          So we built a directory where celiac and gluten-free diners record what they know and keep
+          it current. Everything here exists to help you decide, with confidence, whether to eat
+          somewhere.
         </p>
         <p className="text-body text-muted-foreground">
-          v1 is a focused public pilot seeded in Denver, Colorado. For a trust-driven product,
-          density beats breadth — a handful of well-attested local listings is worth far more than a
-          scattering of thin ones nationwide.
+          We're starting with a public pilot in Denver, Colorado. A few well-attested local listings
+          beat a thin national scattering.
         </p>
       </section>
 
@@ -76,35 +70,31 @@ function AboutPage() {
           How trust works
         </h2>
         <p className="text-body text-muted-foreground">
-          Every listing's trust summary is a transparent roll-up of evidence you can see for
-          yourself — never a secret score. For each attribute we show the distribution and recency
-          of community input, for example{" "}
+          A listing's trust summary is a roll-up of evidence you can see for yourself, never a
+          hidden score. Each attribute shows the count and recency of community input, like{" "}
           <span className="text-foreground">
-            "Dedicated fryer — 8 confirm / 1 dispute · last confirmed 3 weeks ago."
+            "Dedicated fryer: 8 confirm / 1 dispute · last confirmed 3 weeks ago."
           </span>{" "}
-          The underlying evidence stays visible beneath the summary.
+          The evidence stays visible below the summary.
         </p>
         <ul className="flex flex-col gap-2 text-body text-muted-foreground">
           <li>
             <strong className="font-semibold text-foreground">Confirm or dispute, openly.</strong>{" "}
-            Each GF attribute can be confirmed or disputed — one vote per person per claim, always
-            changeable or retractable. No ballot-stuffing, no hidden formula.
+            One vote per person per claim, changeable or retractable anytime. No hidden formula.
           </li>
           <li>
-            <strong className="font-semibold text-foreground">Recency is weighted.</strong> An old
-            consensus is weaker than a fresh one. A claim not confirmed within the six-month
-            staleness window is flagged "may be stale" — it is surfaced, not hidden.
+            <strong className="font-semibold text-foreground">Recency counts.</strong> A claim not
+            confirmed within six months is flagged "may be stale", not hidden.
           </li>
           <li>
             <strong className="font-semibold text-foreground">Recent harm is never buried.</strong>{" "}
-            A recent "got glutened here" incident prominently flags a listing regardless of how many
-            older confirmations it has. Fresh harm always rises to the top.
+            A recent "got glutened" report flags a listing no matter how many older confirmations it
+            has.
           </li>
         </ul>
         <p className="text-body text-muted-foreground">
-          Safety signals never rely on color alone — the celiac-safe vs. gluten-friendly
-          distinction, staleness, and recent incidents are each shown with a distinct icon and text
-          label so the meaning survives color-vision differences and greyscale.
+          Safety signals never rely on color alone. Each state gets its own icon and text label, so
+          the meaning survives greyscale and color-vision differences.
         </p>
         {/* The concrete legend behind that claim (migrated from the retired home
             hero, AUB-116): the headline trust verdicts plus one NEUTRAL GF
@@ -142,16 +132,15 @@ function AboutPage() {
         <p className="text-body text-muted-foreground">
           The headline distinction is{" "}
           <strong className="font-semibold text-foreground">celiac-safe vs. gluten-friendly</strong>
-          : does the restaurant take cross-contamination seriously (celiac-safe), or merely offer
-          GF-ish options (gluten-friendly)? Conflating the two is the exact failure mode this
-          product exists to prevent, so we surface it most prominently. Beneath it, every listing
-          tracks the same fixed set of attributes so listings stay comparable and filterable:
+          : a kitchen that takes cross-contamination seriously versus one that just offers GF
+          options. Mixing those up is the failure this site exists to prevent, so we surface it
+          first. Every listing also tracks the same fixed attributes, so listings stay comparable:
         </p>
         <ul className="flex list-disc flex-col gap-1.5 pl-5 text-body text-muted-foreground">
-          <li>Dedicated or separate fryer — yes, no, or shared oil.</li>
+          <li>Dedicated or separate fryer (yes, no, or shared oil).</li>
           <li>A dedicated, labeled gluten-free menu.</li>
-          <li>Off-menu gluten-free on request — will adapt non-labeled dishes when asked.</li>
-          <li>Gluten-free substitutes available — bread, buns, pizza crust, pasta, and more.</li>
+          <li>Off-menu gluten-free on request: they'll adapt dishes when asked.</li>
+          <li>Gluten-free substitutes: bread, buns, pizza crust, pasta.</li>
         </ul>
       </section>
 
@@ -160,14 +149,14 @@ function AboutPage() {
           How to contribute
         </h2>
         <p className="text-body text-muted-foreground">
-          Browsing and searching are open to everyone — no account needed. Every contribution is
-          attributable, so adding to the record takes a quick sign-in with Google. Once you're in:
+          Browsing is open to everyone, no account needed. Contributions carry a name, so adding to
+          the record takes a quick sign-in. Once you're in:
         </p>
         <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-body text-muted-foreground">
           <li>Sign in with Google.</li>
-          <li>Add a listing for a restaurant the community should vet.</li>
-          <li>Attest its GF attributes — confirm or dispute what others have reported.</li>
-          <li>Report an incident if you got glutened, so recent harm is visible.</li>
+          <li>Add a restaurant the community should vet.</li>
+          <li>Attest its GF attributes: confirm or dispute what others report.</li>
+          <li>Report it if you got glutened, so recent harm stays visible.</li>
         </ol>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Link

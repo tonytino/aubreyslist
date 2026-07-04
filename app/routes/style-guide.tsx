@@ -142,7 +142,7 @@ function StyleGuide() {
         </div>
       </Section>
 
-      <Section title="Safety signals — soft">
+      <Section title="Safety signals (soft)">
         <div className="flex flex-wrap gap-3">
           {SAFETY_STATES.map((state) => (
             <SafetySignal key={state} state={state} variant="soft" />
@@ -150,7 +150,7 @@ function StyleGuide() {
         </div>
       </Section>
 
-      <Section title="Safety signals — solid">
+      <Section title="Safety signals (solid)">
         <div className="flex flex-wrap gap-3">
           {SAFETY_STATES.map((state) => (
             <SafetySignal key={state} state={state} variant="solid" />
@@ -160,9 +160,9 @@ function StyleGuide() {
 
       <Section title="Badge with tooltip">
         <p className="text-body-sm text-muted-foreground">
-          A status chip whose meaning is fully carried by its colour, icon, and text label — the
-          tooltip is supplementary explainer copy (the centralized <code>SAFETY_TOOLTIP</code>),
-          reachable on hover AND keyboard focus, and never the sole carrier of meaning.
+          A status chip whose meaning is carried by its colour, icon, and text label. The tooltip
+          adds explainer copy (the centralized <code>SAFETY_TOOLTIP</code>), reachable on hover and
+          keyboard focus, never the sole carrier of meaning.
         </p>
         <div className="flex flex-wrap gap-3">
           {SAFETY_STATES.map((state) => (

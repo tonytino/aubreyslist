@@ -19,10 +19,10 @@ export const SITE_URL = "https://aubreyslist.com";
 export const SITE_NAME = "Aubrey's List";
 
 /** Descriptive title used for link previews (the browser tab title stays "Aubrey's List"). */
-export const SITE_SOCIAL_TITLE = "Aubrey's List — gluten-free restaurants you can trust";
+export const SITE_SOCIAL_TITLE = "Aubrey's List: gluten-free restaurants you can trust";
 
 export const SITE_DESCRIPTION =
-  "A community directory of how safe restaurants really are for gluten-free and celiac needs — every listing is contributed, attested, and kept fresh by people who live with the same stakes.";
+  "A community directory of gluten-free and celiac-safe restaurants, kept honest by diners who share the need.";
 
 /** 1200×630 social share card (Open Graph / Twitter summary_large_image). */
 export const OG_IMAGE_PATH = "/og-image.png";
@@ -162,7 +162,7 @@ export function defaultSeoMeta(): MetaTag[] {
     { property: "og:image", content: ogImage },
     { property: "og:image:width", content: "1200" },
     { property: "og:image:height", content: "630" },
-    { property: "og:image:alt", content: `${SITE_NAME} — gluten-free restaurants you can trust` },
+    { property: "og:image:alt", content: `${SITE_NAME}: gluten-free restaurants you can trust` },
 
     // Twitter / X.
     { name: "twitter:card", content: "summary_large_image" },

@@ -95,7 +95,7 @@ describe("FavoriteButton", () => {
     expect(unfavoriteListingMock).not.toHaveBeenCalled();
 
     // The label + aria-pressed flip to the "saved" state.
-    expect(screen.getByRole("button", { name: /saved — remove blue sparrow/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /saved, remove blue sparrow/i })).toHaveAttribute(
       "aria-pressed",
       "true"
     );
@@ -111,7 +111,7 @@ describe("FavoriteButton", () => {
       ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" />,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /saved — remove blue sparrow/i }));
+    fireEvent.click(screen.getByRole("button", { name: /saved, remove blue sparrow/i }));
 
     await waitFor(() => {
       expect(queryClient.getQueryData<string[]>(favoriteIdsQuery.queryKey)).not.toContain(
@@ -157,13 +157,13 @@ describe("FavoriteButton", () => {
 
     cleanup();
 
-    // Favorited: aria-pressed=true, "Saved — remove …" label.
+    // Favorited: aria-pressed=true, "Saved, remove …" label.
     renderButton({
       signedIn: true,
       favoriteIds: ["listing-1"],
       ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" />,
     });
-    const savedBtn = screen.getByRole("button", { name: "Saved — remove Blue Sparrow" });
+    const savedBtn = screen.getByRole("button", { name: "Saved, remove Blue Sparrow" });
     expect(savedBtn).toHaveAttribute("aria-pressed", "true");
   });
 

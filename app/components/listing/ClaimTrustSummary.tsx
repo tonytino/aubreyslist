@@ -91,9 +91,8 @@ export function ClaimTrustSummaryRow({
         // never fabricate a verdict (a celiac could be hurt) — domain.md. The
         // "Not yet attested" lead mirrors the browse card's empty chip (AUB-131).
         <p className="text-body-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Not yet attested</span>
-          <span aria-hidden="true"> — </span>
-          no confirmations or disputes yet
+          <span className="font-medium text-foreground">Not yet attested</span>, no confirmations or
+          disputes yet
         </p>
       )}
     </div>

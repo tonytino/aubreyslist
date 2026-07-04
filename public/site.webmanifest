@@ -1,7 +1,7 @@
 {
   "name": "Aubrey's List",
   "short_name": "Aubrey's List",
-  "description": "A community directory of how safe restaurants really are for gluten-free and celiac needs.",
+  "description": "A community directory of gluten-free and celiac-safe restaurants, kept honest by diners who share the need.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

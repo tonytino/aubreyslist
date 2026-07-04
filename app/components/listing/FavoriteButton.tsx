@@ -73,7 +73,7 @@ function buildReturnTo(listingId: string): string {
  * `returnTo` that returns the diner here with a `?save=<listingId>` marker.
  *
  * ACCESSIBILITY (styling.md — never colour alone): `aria-pressed` reflects the
- * favorited state, and the accessible label FLIPS ("Save …" ↔ "Saved — remove
+ * favorited state, and the accessible label FLIPS ("Save …" ↔ "Saved, remove
  * …"); the filled heart (`fill-current`) is a redundant cue on top of the label,
  * never the sole signal.
  *
@@ -139,7 +139,7 @@ export function FavoriteButton({ listingId, listingName, className }: FavoriteBu
     toggleFavorite.mutate(!isFavorited);
   };
 
-  const accessibleLabel = isFavorited ? `Saved — remove ${name}` : `Save ${name}`;
+  const accessibleLabel = isFavorited ? `Saved, remove ${name}` : `Save ${name}`;
   const signInHref = `/api/auth/google?returnTo=${encodeURIComponent(buildReturnTo(listingId))}`;
 
   return (
@@ -166,10 +166,7 @@ export function FavoriteButton({ listingId, listingName, className }: FavoriteBu
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Sign in to save spots</DialogTitle>
-            <DialogDescription>
-              Favorites let you keep a personal list of gluten-free spots you trust. Sign in to save{" "}
-              {name} and find it again later.
-            </DialogDescription>
+            <DialogDescription>Sign in to save {name} and find it again later.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button asChild>

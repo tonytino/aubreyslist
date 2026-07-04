@@ -60,7 +60,7 @@ describe("ClaimAttestStep", () => {
         onBack={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: /Skip — I'm not sure/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Skip \(not sure\)/ }));
     expect(onAnswer).toHaveBeenCalledWith("skip");
     expect(submitVoteMock).not.toHaveBeenCalled();
   });
