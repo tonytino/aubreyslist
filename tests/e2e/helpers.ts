@@ -30,12 +30,35 @@ export async function waitForHydration(page: Page): Promise<void> {
 }
 
 /**
+ * Wait for the BROWSE ROUTE'S OWN hydration commit (see the `data-browse-hydrated`
+ * stamp in app/routes/index.tsx).
+ *
+ * The root `data-hydrated` marker is stamped from OUTSIDE the router's per-route
+ * Suspense boundary, so it proves only that the SHELL committed — the directory
+ * content inside the boundary hydrates in a LATER, lower-priority commit. In that
+ * window every browse control is visible (SSR HTML) but dehydrated, and a
+ * programmatic `selectOption` fired then is clobbered: the discrete `input` event
+ * makes React hydrate the boundary synchronously mid-event, hydration re-syncs the
+ * controlled `<select>` back to its rendered prop, and the retried `change` reports
+ * the OLD value — so `?sort=`/`?radius=` never changes (the deterministic CI
+ * failure behind the browse sort/radius specs; clicks survive because React
+ * re-dispatches them after hydrating and they carry no DOM value to clobber).
+ */
+async function waitForBrowseHydration(page: Page): Promise<void> {
+  await page.waitForFunction(() => document.documentElement.dataset.browseHydrated === "true");
+}
+
+/**
  * Wait for the browse route to be ready for control interaction.
  *
  * Two things must finish before clicking a URL-driving control on `/listings`:
  *
- *  1. Hydration — until the client bundle runs the controls' onChange handlers
- *     aren't wired (see {@link waitForHydration}).
+ *  1. Hydration of the ROUTE'S Suspense boundary, not just the shell — until the
+ *     boundary's own commit lands, a `selectOption` on the sort/radius chips is
+ *     clobbered by hydration's controlled-value re-sync (see
+ *     {@link waitForBrowseHydration}; {@link waitForHydration} is kept first so a
+ *     total no-JS regression still fails with the same signature as
+ *     hydration.spec.ts).
  *  2. The directory's controls being interactive. The route strips default params
  *     from the URL (`stripSearchParams`), so a bare visit settles to `/` with NO
  *     query string — there is no longer a `?sort=alpha…` canonicalization to wait
@@ -46,6 +69,7 @@ export async function waitForHydration(page: Page): Promise<void> {
  */
 export async function waitForBrowseReady(page: Page): Promise<void> {
   await waitForHydration(page);
+  await waitForBrowseHydration(page);
   await expect(page.getByRole("button", { name: "Search restaurants" })).toBeVisible();
 }
 
@@ -62,5 +86,6 @@ export async function waitForBrowseReady(page: Page): Promise<void> {
  */
 export async function waitForBrowseSearchApplied(page: Page, query: string): Promise<void> {
   await waitForHydration(page);
+  await waitForBrowseHydration(page);
   await expect(page.getByRole("button", { name: `Search: ${query}` })).toBeVisible();
 }

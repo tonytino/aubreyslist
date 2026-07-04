@@ -238,6 +238,29 @@ function BrowseListings() {
   );
   const geo = useGeolocation();
 
+  // Post-hydration marker for the BROWSE ROUTE'S Suspense boundary (companion
+  // to the root `data-hydrated` stamp in __root.tsx, and the fix behind the
+  // browse sort/radius `<select>` E2E failures). The router wraps this route's
+  // match in a Suspense boundary, and React hydrates a server-rendered boundary
+  // in its OWN, lower-priority commit AFTER the shell commit that stamps
+  // `data-hydrated` — so there is a window where the root marker is set and the
+  // directory chrome is VISIBLE (it's all in the SSR HTML) but none of it is
+  // hydrated yet. A discrete event fired into that dehydrated subtree makes
+  // React hydrate the boundary synchronously MID-EVENT, and hydration re-syncs
+  // every controlled `<select>` from its rendered prop — so a programmatic
+  // `input`→`change` pair (Playwright's `selectOption`) has its chosen value
+  // clobbered back to the prop before `onChange` can read it, and the sort/
+  // radius never reaches the URL. Clicks survive (React re-dispatches them
+  // after hydrating and a click carries no DOM value to clobber), which is why
+  // only the `<select>` specs failed. This effect runs only after THIS
+  // boundary's hydration commits, so it is the honest "the directory controls
+  // are live" signal `waitForBrowseReady` (tests/e2e/helpers.ts) waits on.
+  // Idempotent under StrictMode; never removed (same rationale as the root
+  // marker — a full reload re-stamps it after re-hydration).
+  useEffect(() => {
+    document.documentElement.dataset.browseHydrated = "true";
+  }, []);
+
   // Remaining directory UI state is purely ephemeral (not shareable): the list/map
   // view toggle and the map's selected pin.
   const [view, setView] = useState<DirectoryView>("list");
