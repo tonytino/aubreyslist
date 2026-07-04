@@ -30,6 +30,7 @@ describe("browseSearchSchema", () => {
       quick: "",
       saved: false,
       bot: true,
+      view: "list",
     });
   });
 
@@ -57,6 +58,7 @@ describe("browseSearchSchema", () => {
         quick: "celiac,recent",
         saved: true,
         bot: false,
+        view: "map",
       })
     ).toEqual({
       page: 3,
@@ -69,7 +71,19 @@ describe("browseSearchSchema", () => {
       quick: "celiac,recent",
       saved: true,
       bot: false,
+      view: "map",
     });
+  });
+
+  it("validates ?view=: passes through known tokens, degrades anything else to 'list'", () => {
+    // A garbage/unknown token, or the field's absence, degrades to the stable
+    // "list" default via `.catch`/`.default` (owner override of AUB-164 — the
+    // Map segment is back on the public directory; see ViewToggle.tsx).
+    expect(browseSearchSchema.parse({ view: "map" }).view).toBe("map");
+    expect(browseSearchSchema.parse({ view: "list" }).view).toBe("list");
+    expect(browseSearchSchema.parse({ view: "satellite" }).view).toBe("list");
+    expect(browseSearchSchema.parse({ view: 42 }).view).toBe("list");
+    expect(browseSearchSchema.parse({}).view).toBe("list");
   });
 
   it("degrades a non-positive or non-numeric page to 1", () => {

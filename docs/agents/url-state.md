@@ -111,8 +111,11 @@ route's filter chip row) has no scroll-jump to fix either way, and a param that
 DOES change the result set generally wants the default top-of-results reset. Use
 judgment per call site, the same way you'd judge any other UX default.
 
-## Known follow-up
+## Resolved follow-up
 
-The directory's list/map **view toggle** is still `useState` (`view` in
-`app/routes/index.tsx`). It is arguably shareable state and a candidate to move
-to `?view=`; call it out in review rather than silently blessing it.
+The directory's list/map **view toggle** used to be `useState`. It has since
+moved to `?view=` (`app/listings/browse-search.ts`'s `browseSearchSchema`,
+consumed by `app/routes/index.tsx`) — a validated, `stripSearchParams`-defaulted
+param like the rest, deliberately excluded from `loaderDeps` since it's
+client-only (changes no server query). See the comments on `view`/`setView` in
+`app/routes/index.tsx` for the owner-override context (AUB-164/AUB-111).

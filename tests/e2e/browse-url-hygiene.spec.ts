@@ -5,9 +5,9 @@ import { waitForBrowseReady } from "./helpers";
 /**
  * URL hygiene for the directory (AUB-134). The directory route applies
  * `stripSearchParams(BROWSE_SEARCH_DEFAULTS)`, so params equal to their default
- * (`page=1`, `attrs=`, `q=`, `sort=alpha`, `radius=25`) never appear in the URL —
- * at rest, after an interaction, or on a shared link. These assert the URL stays
- * clean; the schema-vs-strip-map drift guard is a unit test
+ * (`page=1`, `attrs=`, `q=`, `sort=alpha`, `radius=25`, `view=list`) never appear
+ * in the URL — at rest, after an interaction, or on a shared link. These assert
+ * the URL stays clean; the schema-vs-strip-map drift guard is a unit test
  * (`app/listings/browse-search.test.ts`).
  *
  * Matches the DB-agnostic style of `browse.spec.ts`: we only assert URL shape and
@@ -42,7 +42,7 @@ test("a shared link carrying default params is canonicalized to a clean URL", as
   // the old default noise. It must still load, and the router normalizes it to the
   // stripped, canonical shape on the way in (search middleware runs on initial
   // location build, not just explicit navigations).
-  await page.goto("/?page=1&attrs=&q=&sort=alpha&radius=25");
+  await page.goto("/?page=1&attrs=&q=&sort=alpha&radius=25&view=list");
   await waitForBrowseReady(page);
 
   await expect(page).toHaveURL(/^[^?]*\/$/);

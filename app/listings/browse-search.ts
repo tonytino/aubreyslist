@@ -1,9 +1,10 @@
 /**
  * The browse/directory search-param schema — the ONE definition of how the
  * directory's URL params (`?page=`, `?attrs=`, `?sort=`, `?q=`, `?lat=`/`?lng=`,
- * `?radius=`) are validated. Shared so BOTH the directory route (now `/`, the
- * home page) and the `/listings` → `/` redirect stub validate the incoming
- * search identically, and the redirect forwards a well-formed, canonical search.
+ * `?radius=`, `?quick=`, `?saved=`, `?bot=`, `?view=`) are validated. Shared so
+ * BOTH the directory route (now `/`, the home page) and the `/listings` → `/`
+ * redirect stub validate the incoming search identically, and the redirect
+ * forwards a well-formed, canonical search.
  *
  * CLIENT-SAFE: pure Zod + client-safe constants (`~/listings/sort`,
  * `~/listings/distance`). No `db` client / server-only imports. Lives in a shared
@@ -14,6 +15,17 @@
 import { z } from "zod";
 import { DEFAULT_RADIUS_MILES, parseRadiusMiles } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
+
+/**
+ * The directory's content-view vocabulary (List vs Map, AUB-61 Phase 2b). Kept
+ * here (mirroring `sort.ts`'s canonical-registry pattern) so the schema and
+ * `ViewToggle` share ONE definition instead of two hand-kept `"list" | "map"`
+ * literals drifting apart. `ViewToggle.tsx` imports `DirectoryView` from here.
+ */
+export const DIRECTORY_VIEW_VALUES = ["list", "map"] as const;
+
+/** One directory content view: the results list or the (placeholder) map. */
+export type DirectoryView = (typeof DIRECTORY_VIEW_VALUES)[number];
 
 /**
  * The canonical DEFAULT value of every browse search param that carries one.
@@ -49,6 +61,14 @@ export const BROWSE_SEARCH_DEFAULTS = {
   // `stripSearchParams` drops it at rest. `?bot=false` (the "Hide bot
   // suggestions" chip) reverts filters to community-evidence-only matching.
   bot: true,
+  // The List/Map content-view toggle (owner override of AUB-164 — the Map
+  // segment is back on the public directory; see ViewToggle.tsx). CLIENT-ONLY:
+  // it changes no server query (unlike every other entry in this map), so it is
+  // deliberately absent from `loaderDeps` in `app/routes/index.tsx` — flipping it
+  // never refetches or resets `page`. It still belongs in the URL (shareable/
+  // restorable per the Hard Rule) and in this map so `stripSearchParams` keeps a
+  // bare/list visit at a clean `/`.
+  view: "list" as DirectoryView,
 } as const;
 
 /**
@@ -69,6 +89,13 @@ export interface BrowseSearchLike {
   lat?: number | undefined;
   lng?: number | undefined;
 }
+// NOTE: `view` (the List/Map toggle) is deliberately NOT part of this interface
+// or `isAnyBrowseFilterActive` below. It's a content-VIEW choice, not a filter/
+// sort/search constraint — the "Reset" chip is scoped to backing out of a
+// stacked search + quick filter + saved mode + sort + radius + page (see its
+// call site), and switching to Map view changes none of those. It's still a
+// full BROWSE_SEARCH_DEFAULTS entry so `stripSearchParams` keeps it out of the
+// URL at rest.
 
 /**
  * True when at least one browse search param is off its default — gates the
@@ -155,4 +182,13 @@ export const browseSearchSchema = z.object({
     .transform((value) => !(value === false || value === 0 || value === "0" || value === "false"))
     .catch(BROWSE_SEARCH_DEFAULTS.bot)
     .default(BROWSE_SEARCH_DEFAULTS.bot),
+  // The List/Map content-view toggle (`?view=`). CLIENT-ONLY UI state — see the
+  // note on `BROWSE_SEARCH_DEFAULTS.view` above and `app/routes/index.tsx` (it is
+  // NOT in `loaderDeps`; changing it never refetches or resets `page`). Still
+  // validated + URL-driven per the Hard Rule (shareable/restorable view state):
+  // an unknown/garbage token degrades to the stable "list" default via `.catch`.
+  view: z
+    .enum(DIRECTORY_VIEW_VALUES)
+    .catch(BROWSE_SEARCH_DEFAULTS.view)
+    .default(BROWSE_SEARCH_DEFAULTS.view),
 });

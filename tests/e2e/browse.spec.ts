@@ -81,6 +81,41 @@ test("a quick chip persists in the URL and across a reload", async ({ page }) =>
 });
 
 /**
+ * List/Map view toggle (owner override of AUB-164 — the Map segment is back on
+ * the public directory; the map itself stays a placeholder pending AUB-111).
+ * `view` is CLIENT-ONLY URL state (never in `loaderDeps`), but it's still a
+ * validated search param per the Hard Rule, so it must persist across a reload
+ * exactly like the quick-filter chip above, and the default ("list") must be
+ * stripped from the URL at rest.
+ */
+test("the list/map view toggle persists in the URL and across a reload", async ({ page }) => {
+  await page.goto("/");
+  await waitForBrowseReady(page);
+
+  const listButton = page.getByRole("button", { name: "List" });
+  const mapButton = page.getByRole("button", { name: "Map" });
+  await expect(listButton).toHaveAttribute("aria-pressed", "true");
+
+  await mapButton.click();
+  await expect(page).toHaveURL(/[?&]view=map/);
+  await expect(mapButton).toHaveAttribute("aria-pressed", "true");
+  // Content is DB-agnostic here (test data may be empty): the map view only
+  // renders in place of an honest empty/no-results state, so we don't assert the
+  // placeholder map's carousel — just the toggle + URL wiring (see the smoke
+  // test above for the DB-agnostic content pattern).
+
+  // Reload: the view must come back from the URL, not vanish to a local default.
+  await page.reload();
+  await waitForBrowseReady(page);
+  await expect(page).toHaveURL(/[?&]view=map/);
+  await expect(page.getByRole("button", { name: "Map" })).toHaveAttribute("aria-pressed", "true");
+
+  // Back to List strips the default param entirely (stripSearchParams).
+  await page.getByRole("button", { name: "List" }).click();
+  await expect(page).not.toHaveURL(/view=/);
+});
+
+/**
  * Sort control (#36, chip row since AUB-198). The labelled `<select>` chip sits
  * directly in the filter row; choosing a sort drives the URL (`?sort=`) so the
  * view stays linkable, mirroring the `?page=`/`?attrs=` pattern. We assert the
