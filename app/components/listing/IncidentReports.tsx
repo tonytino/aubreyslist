@@ -480,8 +480,8 @@ function ReportIncidentDialog({ listingId }: { listingId: string }) {
         <DialogHeader>
           <DialogTitle>Report a glutened incident</DialogTitle>
           <DialogDescription>
-            Share when it happened so other diners are warned. A recent report flags this listing at
-            the top of the page.
+            Share when it happened to warn other diners. A recent report flags this listing at the
+            top of the page.
           </DialogDescription>
         </DialogHeader>
         <IncidentForm listingId={listingId} onSuccess={() => setOpen(false)} />

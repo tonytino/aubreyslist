@@ -106,7 +106,7 @@ describe("ClaimTrustSummaryRow", () => {
     // also contains "celiac-safe" lower-cased).
     expect(screen.getByText("Celiac-safe", { exact: true })).toBeInTheDocument();
     // The clarifier disambiguates what a vote means, so "confirm" is never vague.
-    expect(screen.getByText(/Confirm if the community vouches/)).toBeInTheDocument();
+    expect(screen.getByText(/Confirm if this place is celiac-safe/)).toBeInTheDocument();
   });
 
   it("renders the honest one-line fact for a non-headline attribute", () => {
@@ -117,7 +117,7 @@ describe("ClaimTrustSummaryRow", () => {
         now={NOW}
       />
     );
-    expect(screen.queryByText(/Confirm if the community vouches/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Confirm if this place is celiac-safe/)).not.toBeInTheDocument();
     expect(
       screen.getByText(/shared fryer oil is a major cross-contamination risk/)
     ).toBeInTheDocument();

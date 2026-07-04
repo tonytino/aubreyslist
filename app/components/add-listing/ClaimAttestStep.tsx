@@ -117,7 +117,7 @@ export function ClaimAttestStep({
           )}
         >
           <HelpCircle aria-hidden="true" className="size-5 shrink-0" strokeWidth={2.25} />
-          Skip — I'm not sure
+          Skip (not sure)
         </Button>
       </fieldset>
 

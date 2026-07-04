@@ -152,7 +152,7 @@ export const Route = createFileRoute("/")({
     meta: pageSeoMeta({
       title: "Browse gluten-free restaurants in Denver · Aubrey's List",
       description:
-        "Browse Denver's community-vetted directory of gluten-free and celiac-safe restaurants — every listing is contributed, attested, and kept fresh by people who live with the same stakes.",
+        "Browse gluten-free and celiac-safe restaurants in Denver, vetted and kept current by diners who share the need.",
       path: "/",
     }),
     links: [canonicalLink("/")],

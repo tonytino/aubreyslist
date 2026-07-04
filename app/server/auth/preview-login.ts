@@ -244,7 +244,7 @@ export function renderDevLoginPage(options: DevLoginPageOptions): string {
 <body>
 <main>
   <h1>Preview dev sign-in</h1>
-  <p class="hint">Preview-only. Enter the <code>PREVIEW_LOGIN_SECRET</code> to sign in as a non-privileged preview tester — no Google needed. This page does not exist in production.</p>
+  <p class="hint">Preview-only. Enter the <code>PREVIEW_LOGIN_SECRET</code> to sign in as a non-privileged preview tester. No Google needed. This page does not exist in production.</p>
   ${errorBanner}
   <form method="post" action="/api/auth/dev-login">
     <label for="secret">Preview login secret</label>

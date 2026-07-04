@@ -63,9 +63,9 @@ export function RecentIncidentBanner({ occurredOn, nowMs }: RecentIncidentBanner
           sentence below, which wraps naturally instead of breaking the pill. */}
       <SafetySignal state="incident" variant="solid" className="self-start whitespace-nowrap" />
       <p className="text-body-sm text-incident">
-        A diner reported getting glutened here on {formatIncidentDate(occurredOn)} — {relative}.
-        Recent reports are shown regardless of older confirmations — check the incident reports
-        below before you decide.
+        A diner reported getting glutened here on {formatIncidentDate(occurredOn)} ({relative}).
+        Recent reports show regardless of older confirmations. Check the reports below before you
+        decide.
       </p>
     </output>
   );

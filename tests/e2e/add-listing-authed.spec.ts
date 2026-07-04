@@ -72,15 +72,13 @@ test.describe("add a listing (authenticated, manual intake)", () => {
     // Steps 1–5 — skip every attribute. Skip writes nothing (first-class), and
     // the create must still succeed with all five left "Not yet attested".
     for (let index = 0; index < 5; index += 1) {
-      await page.getByRole("button", { name: /Skip — I'm not sure/ }).click();
+      await page.getByRole("button", { name: /Skip \(not sure\)/ }).click();
     }
 
     // Review → submit. We never auto-redirect: the wizard ends on a success
     // screen, from which the contributor chooses to view the new listing.
     await page.getByRole("button", { name: "Submit listing" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Listing added — thanks for contributing" })
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Listing added, thanks!" })).toBeVisible();
     await page.getByRole("link", { name: "View your listing" }).click();
 
     // Lands on the listing-detail page for the new row (a real id, not back on

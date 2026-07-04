@@ -125,13 +125,13 @@ export function SafetySignal({
  */
 export const SAFETY_TOOLTIP: Record<SafetyState, string> = {
   "celiac-safe":
-    "Takes cross-contamination seriously — the kitchen is set up to serve people with celiac disease safely.",
+    "Takes cross-contamination seriously. The kitchen is set up to serve people with celiac disease safely.",
   "gluten-friendly":
-    "Offers gluten-free options but does not guarantee against cross-contamination — not a celiac-safe promise.",
+    "Offers gluten-free options but doesn't guarantee against cross-contamination. Not a celiac-safe promise.",
   stale:
-    "Not confirmed within the six-month staleness window, so this may be out of date — it is surfaced, not hidden.",
+    "Not confirmed in the last six months, so this may be out of date. We show that rather than hide it.",
   incident:
-    'A recent "got glutened here" report flags this listing regardless of how many older confirmations it has.',
+    'A recent "got glutened here" report flags this listing no matter how many older confirmations it has.',
 };
 
 /** Exposed so consumers (filters, legends, the style guide) can enumerate states. */

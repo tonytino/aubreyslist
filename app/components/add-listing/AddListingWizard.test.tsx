@@ -90,14 +90,14 @@ describe("AddListingWizard", () => {
 
     // Step 1 headline → confirm; 2 → skip; 3 → dispute; 4 → skip; 5 → confirm.
     fireEvent.click(await screen.findByRole("button", { name: /Confirm/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Skip — I'm not sure/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Dispute/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Skip — I'm not sure/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Confirm/ }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
 
-    await screen.findByText("Listing added — thanks for contributing");
+    await screen.findByText("Listing added, thanks!");
 
     expect(createListingMock).toHaveBeenCalledTimes(1);
     // Only the three attested attributes were voted — never the two skips.
@@ -122,11 +122,11 @@ describe("AddListingWizard", () => {
     await pickPlaceManually();
 
     for (let index = 0; index < 5; index += 1) {
-      fireEvent.click(await screen.findByRole("button", { name: /Skip — I'm not sure/ }));
+      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
     }
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
 
-    await screen.findByText("Listing added — thanks for contributing");
+    await screen.findByText("Listing added, thanks!");
 
     expect(createListingMock).toHaveBeenCalledTimes(1);
     expect(submitVoteMock).not.toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe("AddListingWizard", () => {
 
     await pickPlaceManually();
     for (let index = 0; index < 5; index += 1) {
-      fireEvent.click(await screen.findByRole("button", { name: /Skip — I'm not sure/ }));
+      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
     }
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
 
@@ -153,7 +153,7 @@ describe("AddListingWizard", () => {
     expect(screen.getByRole("link", { name: /View the existing listing/ })).toBeInTheDocument();
     // No votes and no success on a blocked duplicate.
     expect(submitVoteMock).not.toHaveBeenCalled();
-    expect(screen.queryByText("Listing added — thanks for contributing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Listing added, thanks!")).not.toBeInTheDocument();
   });
 
   it("resets to the start when 'Add another listing' is chosen", async () => {
@@ -165,16 +165,16 @@ describe("AddListingWizard", () => {
 
     await pickPlaceManually();
     for (let index = 0; index < 5; index += 1) {
-      fireEvent.click(await screen.findByRole("button", { name: /Skip — I'm not sure/ }));
+      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
     }
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
-    await screen.findByText("Listing added — thanks for contributing");
+    await screen.findByText("Listing added, thanks!");
 
     fireEvent.click(screen.getByRole("button", { name: "Add another listing" }));
 
     // Back to step 0 with an empty manual finder (no place carried over).
     expect(await screen.findByLabelText("Restaurant name")).toHaveValue("");
-    expect(screen.queryByText("Listing added — thanks for contributing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Listing added, thanks!")).not.toBeInTheDocument();
   });
 
   it("is honest when the place already existed (created:false) and still records attestations", async () => {
@@ -189,13 +189,13 @@ describe("AddListingWizard", () => {
     // Confirm the headline attribute, skip the rest, then submit.
     fireEvent.click(await screen.findByRole("button", { name: /Confirm/ }));
     for (let index = 0; index < 4; index += 1) {
-      fireEvent.click(await screen.findByRole("button", { name: /Skip — I'm not sure/ }));
+      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
     }
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
 
     // No fabricated "added" — honest that it already existed, attestations kept.
     await screen.findByText("This place was already listed");
-    expect(screen.queryByText("Listing added — thanks for contributing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Listing added, thanks!")).not.toBeInTheDocument();
     expect(
       screen.getByText("We saved your attestations to the existing listing.")
     ).toBeInTheDocument();

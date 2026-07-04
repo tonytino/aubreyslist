@@ -89,7 +89,7 @@ function PlacesFinder({ onSelect }: { onSelect: (place: WizardPlace) => void }) 
     suggestions.data && !suggestions.data.ok
       ? suggestions.data.message
       : suggestions.isError
-        ? "Place search is temporarily unavailable. Please try again."
+        ? "Place search isn't working right now. Try again."
         : undefined;
 
   if (manual) {

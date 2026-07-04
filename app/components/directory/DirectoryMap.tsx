@@ -110,7 +110,7 @@ export function DirectoryMap({
               <button
                 type="button"
                 aria-pressed={selected}
-                aria-label={`${vm.name} — ${style.label}`}
+                aria-label={`${vm.name}, ${style.label}`}
                 onClick={() => onSelect(vm.id)}
                 // Runtime-computed left/top from the projection — the sanctioned
                 // inline-style exception (dynamic positioning).
@@ -161,7 +161,7 @@ export function DirectoryMap({
               <button
                 type="button"
                 aria-pressed={selected}
-                aria-label={`${vm.name} — ${style.label}`}
+                aria-label={`${vm.name}, ${style.label}`}
                 onClick={() => onSelect(vm.id)}
                 className={`flex w-full overflow-hidden rounded-card border bg-surface text-left shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
                   selected ? "border-2 border-brand" : "border border-border"
