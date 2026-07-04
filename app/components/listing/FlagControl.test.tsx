@@ -116,6 +116,19 @@ describe("FlagControl", () => {
     });
   });
 
+  it("renders Cancel before Submit flag, both stretched to fill the row", () => {
+    renderWithQuery(<FlagControl target="listing" listingId="listing-1" isSignedIn={true} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /flag/i }));
+    const cancel = screen.getByRole("button", { name: /cancel/i });
+    const submit = screen.getByRole("button", { name: /submit flag/i });
+
+    // Dismiss-left / primary-right ordering, and both buttons stretch full width.
+    expect(cancel.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(cancel).toHaveClass("flex-1");
+    expect(submit).toHaveClass("flex-1");
+  });
+
   it("shows an error toast when the flag submission fails", async () => {
     submitFlagMock.mockRejectedValueOnce(new Error("boom"));
     renderWithQuery(<FlagControl target="listing" listingId="listing-1" isSignedIn={true} />);

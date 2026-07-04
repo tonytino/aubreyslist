@@ -131,17 +131,18 @@ export function FlagControl(
       ) : null}
 
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={!canSubmit}>
-          {flag.isPending ? "Submitting…" : "Submit flag"}
-        </Button>
         <Button
           type="button"
           size="sm"
           variant="outline"
+          className="flex-1"
           disabled={flag.isPending}
           onClick={closeAndReset}
         >
           Cancel
+        </Button>
+        <Button type="submit" size="sm" className="flex-1" disabled={!canSubmit}>
+          {flag.isPending ? "Submitting…" : "Submit flag"}
         </Button>
       </div>
     </form>
