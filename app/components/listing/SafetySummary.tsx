@@ -1,4 +1,5 @@
-import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
+import { SAFETY_TOOLTIP, SafetySignal, type SafetyState } from "~/components/SafetySignal";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 
 interface SafetySummaryProps {
   /**
@@ -16,34 +17,113 @@ interface SafetySummaryProps {
    * heading's visibility differ.
    */
   variant?: "default" | "hero";
+  /**
+   * Whether a recent "got glutened" report is on file for this listing (see
+   * `findRecentIncident` in `~/trust/incident-recency.ts`). Independent of
+   * `state` — a listing can have a fresh celiac-safe consensus AND a recent
+   * incident at the same time, so both badges render side by side.
+   *
+   * Only rendered in the `"hero"` variant — repo-owner feedback was that the
+   * detail page showed the headline safety state TWICE (once here, once in a
+   * standalone `SafetyBadges` row below the hero). This component now owns the
+   * WHOLE badge row for the hero card — the headline badge (or the honest empty
+   * state) plus the incident badge, exactly once, together. Ignored in the
+   * `"default"` variant, which stays a single headline verdict.
+   */
+  hasRecentIncident?: boolean;
 }
 
 /**
- * The prominent, headline celiac-safe vs. gluten-friendly signal for a listing.
+ * The prominent, headline celiac-safe vs. gluten-friendly signal for a listing —
+ * and, in the `"hero"` variant, the WHOLE safety-badge row for the listing detail
+ * page's hero card (repo-owner feedback, nits-detail-badges-once): previously a
+ * separate `SafetyBadges` row duplicated this same headline state below the
+ * hero. That standalone component is retired; its incident-badge + tooltip +
+ * "Safety status" labelled-group behaviour now lives here, folded into the hero
+ * presentation, so every applicable badge renders exactly once.
  *
  * This is the most important cue on the page (docs/agents/domain.md → "surface
  * this most prominently"). It is accessible by construction: the populated case
  * delegates to {@link SafetySignal}, which always pairs COLOUR + ICON + TEXT
  * LABEL, and the empty case states "Not yet attested" in plain text so the
- * meaning never depends on colour or styling.
+ * meaning never depends on colour or styling. Each badge also carries a
+ * supplementary tooltip (the shared {@link SAFETY_TOOLTIP} copy) on a keyboard-
+ * focusable trigger, so the extra gloss is reachable without a pointer.
  *
  * IMPORTANT: we deliberately do NOT invent a safety rating — an old or fabricated
  * consensus could put a celiac at real risk. The `state` prop is the single seam
  * EPIC 4 wires up; everything else here already handles the populated render.
  *
- * The `"hero"` variant (AUB-131) renders the SAME cue at hero scale inside the
- * listing hero's solid bar. The `aria-labelledby` section + its heading are kept
- * in both variants (the heading is visually hidden in `"hero"` since the hero
- * band already reads as the headline), so the accessible "Gluten-free safety"
- * region name is stable across the redesign.
+ * The `"hero"` variant (AUB-131) renders the SAME headline cue at hero scale
+ * inside the listing hero's solid bar, plus the incident badge when
+ * `hasRecentIncident` is true. Both badges (or the badge + the honest empty
+ * state) sit in ONE row that scrolls horizontally on overflow instead of
+ * wrapping — `overflow-x-auto` with a hidden scrollbar and `shrink-0` chips
+ * (the same pattern as the directory's `FilterChips` row) — so the row never
+ * pushes the page wider at the 375px minimum width. The row is exposed to
+ * assistive tech as a labelled "Safety status" group (a chrome-reset
+ * `<fieldset>` + sr-only `<legend>`, the repo's `ViewToggle` pattern), distinct
+ * from this section's own "Gluten-free safety" region name. The `aria-labelledby`
+ * section + its heading are kept in both variants (the heading is visually
+ * hidden in `"hero"` since the hero band already reads as the headline), so the
+ * accessible "Gluten-free safety" region name is stable across the redesign.
  */
-export function SafetySummary({ state, variant = "default" }: SafetySummaryProps) {
+export function SafetySummary({
+  state,
+  variant = "default",
+  hasRecentIncident = false,
+}: SafetySummaryProps) {
   const isHero = variant === "hero";
+
+  // A native `<button>` trigger makes each tooltip keyboard-reachable (Tab +
+  // focus) without an a11y-smell tabIndex on a non-interactive element, while
+  // the chip inside keeps its colour + icon + label contract.
+  const tooltipButtonClassName =
+    "inline-flex shrink-0 rounded-chip cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
+
+  const headlineBadge = state ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" className={tooltipButtonClassName}>
+          <SafetySignal
+            state={state}
+            variant="solid"
+            className={isHero ? "text-lead gap-2 px-4 py-2" : "text-body px-3 py-1.5"}
+          />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{SAFETY_TOOLTIP[state]}</TooltipContent>
+    </Tooltip>
+  ) : (
+    <div
+      className={`flex shrink-0 flex-col gap-1 rounded-card border border-dashed border-border bg-muted p-gutter ${
+        isHero ? "max-w-xs sm:max-w-sm" : ""
+      }`}
+    >
+      <p className="text-body font-semibold text-foreground">Not yet attested</p>
+      <p className="text-body-sm text-muted-foreground">
+        No one has confirmed yet whether this restaurant is celiac-safe or only gluten-friendly.
+        Verify cross-contamination practices with the restaurant directly.
+      </p>
+    </div>
+  );
+
+  const incidentBadge =
+    isHero && hasRecentIncident ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className={tooltipButtonClassName}>
+            <SafetySignal state="incident" variant="soft" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{SAFETY_TOOLTIP.incident}</TooltipContent>
+      </Tooltip>
+    ) : null;
 
   return (
     <section
       aria-labelledby="safety-summary-heading"
-      className={isHero ? "flex flex-col" : "flex flex-col gap-3"}
+      className={isHero ? "flex min-w-0 flex-col" : "flex flex-col gap-3"}
     >
       <h2
         id="safety-summary-heading"
@@ -56,22 +136,22 @@ export function SafetySummary({ state, variant = "default" }: SafetySummaryProps
         Gluten-free safety
       </h2>
 
-      {state ? (
-        <SafetySignal
-          state={state}
-          variant="solid"
-          className={
-            isHero ? "text-lead self-start px-4 py-2 gap-2" : "text-body self-start px-3 py-1.5"
-          }
-        />
+      {isHero ? (
+        // Chrome-reset <fieldset> + sr-only <legend> (the repo's ViewToggle
+        // pattern, and what Biome's useSemanticElements rule prefers over
+        // role="group") gives the badge row an exposed group role + accessible
+        // name distinct from the section's own name — an aria-label on a
+        // role-less (generic) div is ignored by most AT. `min-w-0` overrides a
+        // <fieldset>'s UA-stylesheet auto min-width so the row can actually
+        // shrink and hand overflow to `overflow-x-auto` instead of forcing the
+        // hero wider than the viewport at the 375px minimum width.
+        <fieldset className="m-0 flex min-w-0 items-center gap-2 overflow-x-auto border-0 p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <legend className="sr-only">Safety status</legend>
+          {headlineBadge}
+          {incidentBadge}
+        </fieldset>
       ) : (
-        <div className="flex flex-col gap-1 rounded-card border border-dashed border-border bg-muted p-gutter">
-          <p className="text-body font-semibold text-foreground">Not yet attested</p>
-          <p className="text-body-sm text-muted-foreground">
-            No one has confirmed yet whether this restaurant is celiac-safe or only gluten-friendly.
-            Verify cross-contamination practices with the restaurant directly.
-          </p>
-        </div>
+        headlineBadge
       )}
     </section>
   );

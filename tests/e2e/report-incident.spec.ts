@@ -23,7 +23,9 @@ import { waitForHydration } from "./helpers";
  * `<output>` polite live region (implicit `role="status"`, named by
  * `aria-label="Recent incident warning"`), and the pill/badge assertions below
  * are ROLE-SCOPED to that name because two identical "Recent incident" chips
- * exist on the page (the banner pill + the SafetyBadges row chip) — an
+ * exist on the page (the banner pill + the hero's own incident badge, rendered
+ * by `SafetySummary`'s `"hero"` variant — nits-detail-badges-once retired the
+ * standalone `SafetyBadges` row that used to duplicate it below the hero) — an
  * unscoped text locator would trip Playwright's strict mode.
  *
  * (The data-layer guarantee that `occurredOn` round-trips as a `YYYY-MM-DD`
@@ -97,18 +99,18 @@ test.describe("report an incident", () => {
     // The pill is a single-line "Recent incident" label (the relative recency
     // now lives in the body sentence asserted above via `bannerText`) — see
     // RecentIncidentBanner's mobile-wrap fix. Scoped to the banner's live
-    // region because the SafetyBadges row below also renders an identical
-    // "Recent incident" chip once the incident lands — an unscoped exact-text
-    // locator would match both and trip Playwright's strict mode. The exact
-    // match stays so the old interpolated "Recent incident · N days ago" pill
-    // text can never regress.
+    // region because the hero's own incident badge (in its "Safety status"
+    // group) also renders an identical "Recent incident" chip once the
+    // incident lands — an unscoped exact-text locator would match both and
+    // trip Playwright's strict mode. The exact match stays so the old
+    // interpolated "Recent incident · N days ago" pill text can never regress.
     await expect(
       page
         .getByRole("status", { name: "Recent incident warning" })
         .getByText("Recent incident", { exact: true })
     ).toBeVisible();
-    // The same fresh report also lights up the SafetyBadges status row (its
-    // own incident chip, scoped via the labelled group) — the second surface
+    // The same fresh report also lights up the hero's own safety-badge row
+    // (its incident chip, scoped via the labelled group) — the second surface
     // that "a recent report flags the listing".
     await expect(
       page
