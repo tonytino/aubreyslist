@@ -35,7 +35,10 @@ type _AssertSeveritiesMatch = [
   (typeof DbIncidentSeverities)[number] extends IncidentSeverity ? true : never,
   IncidentSeverity extends (typeof DbIncidentSeverities)[number] ? true : never,
 ];
-// Referenced so the unused-type rule keeps the assertion alive.
+// Exported so the compile-time drift guard `_AssertSeveritiesMatch` is not
+// itself flagged unused; the export has no importer by design — it exists purely
+// to fail typecheck if the client-safe literal drifts from the DB enum.
+/** @knippublic intentional compile-time drift guard, no runtime importer */
 export type IncidentSeveritiesInSyncWithDb = _AssertSeveritiesMatch;
 
 // ---------------------------------------------------------------------------

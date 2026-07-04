@@ -213,7 +213,18 @@ export async function getListingClaimAggregates(
   });
 }
 
-/** Server function entry point the listing-detail loader calls. */
+/**
+ * Client-callable server-function seam for the listing-detail claim roll-up.
+ *
+ * The route loader (`app/routes/listings.$id.tsx`) calls the plain
+ * `getListingClaimAggregates` directly on the server, so this `createServerFn`
+ * wrapper has no importer today — but it is the client-side RPC entry point kept
+ * for on-demand refetches (e.g. after a vote), referenced via TanStack Start's
+ * generated server-function manifest rather than a normal import knip can trace.
+ * Unlike the sibling seams it lives outside a `*.fn.ts` file, so it needs this
+ * explicit tag rather than knip's `*.fn.ts` entry glob.
+ * @knippublic server-function seam (see docs/agents/tooling.md → dead-code check)
+ */
 export const fetchListingClaimAggregates = createServerFn({ method: "GET" })
   .validator(listingClaimsInputSchema)
   .handler(({ data }) => getListingClaimAggregates(data));

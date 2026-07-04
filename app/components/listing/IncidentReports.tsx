@@ -52,8 +52,9 @@ interface IncidentReportsProps {
 /**
  * The "Incident reports" body: the list of a listing's "got glutened" reports
  * (most-recent first, with dates + optional severity/note) plus the submission
- * form for signed-in visitors. Rendered inside the listing-detail
- * `TrustPlaceholder` slot (issue #30).
+ * form for signed-in visitors. Rendered in the listing-detail trust section
+ * (issue #30; the original `TrustPlaceholder` scaffold was removed once real
+ * claim/incident evidence landed — EPIC 4).
  *
  * Recent harm is also surfaced prominently at the top of the page via
  * `RecentIncidentBanner`; this section is the full, always-visible evidence

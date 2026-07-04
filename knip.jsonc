@@ -1,0 +1,58 @@
+{
+  // knip is the repo's dead-code guard (ADR-013): it fails CI on unused files
+  // (unreachable modules), unused exports/types, and unused/unlisted
+  // dependencies. Run it with `pnpm deadcode`. See docs/agents/tooling.md for
+  // how to handle false positives (the short version: prefer an entry glob or a
+  // `@knippublic` tag WITH a rationale comment over deleting a symbol that is
+  // plausibly reached dynamically — routes, server-fn seams, schema surface).
+  //
+  // NOTE: this is `knip.jsonc` (not `.json`) specifically so each ignore can
+  // carry an inline // comment explaining WHY it is here.
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+
+  // ---- Entry points -------------------------------------------------------
+  // knip cannot infer TanStack Start's framework entrypoints or the codegen
+  // seams on its own, so we list them. Anything reachable from an entry is
+  // "used"; an entry's own exports are treated as public API (not flagged).
+  "entry": [
+    "app/client.tsx", // browser hydration entry (StartClient)
+    "app/router.tsx", // getRouter — the framework's router factory
+    "app/routes/**/*.{ts,tsx}", // file-based routes: each `export const Route` is wired by the generated routeTree.gen.ts (gitignored, untraceable). Includes .ts server routes like sitemap[.]xml.ts.
+    "app/**/*.fn.ts", // *.fn.ts server-function seams: `createServerFn` exports are invoked via TanStack Start's generated server-fn manifest, not a normal import knip can follow. Client-callable seams may legitimately have no importer yet.
+    "app/server/index.ts", // Hono app + server-only barrel
+    "app/server/places.ts", // Places provider seam
+    "app/server/listings/search.ts", // listings search seam
+    "app/start.ts", // createStart() global middleware config — a framework entry the Vite plugin loads
+    "app/server.ts", // custom SSR request handler (Sentry-wrapped) — a framework entry the Vite plugin loads
+    "db/schema.ts", // Drizzle schema is the DB source of truth; its full table/enum/inferred-type surface is intentional public API (consumed across server modules + migrations conceptually). Treated as an entry so its exports are never flagged — we never prune the schema surface to chase a knip finding.
+    "tests/server-fn.ts", // server-fn unit-test helper (runWithStartContext); see docs/agents/dependencies.md
+    "scripts/labels.mjs", // standalone label-sync script
+    "scripts/remove-example.mjs", // standalone scaffolding-removal script
+    "scripts/alias-resolve-hook.mjs", // loaded dynamically by register-aliases.mjs via node --import register("./alias-resolve-hook.mjs", ...) — the string specifier is untraceable, so it must be an explicit entry
+    "app/components/ui/**" // shadcn/ui is copy-in vendored source (ADR-011): its component API surface deliberately mirrors upstream, so unused sub-exports (DialogPortal, DropdownMenuSub, SheetFooter, …) are kept on purpose, not dead code
+  ],
+  "project": ["app/**/*.{ts,tsx}", "db/**/*.ts", "scripts/*.mjs"],
+
+  // Don't flag an export merely because its ONLY consumer is its own file
+  // (e.g. db/schema pgEnums referenced by columns in schema.ts, or the trust
+  // literal-mirror guards). These are legitimately exported for co-located use.
+  "ignoreExportsUsedInFile": true,
+
+  // Exports tagged `@knippublic` are intentional public seams with no importer
+  // today (server-fn RPC entry points; compile-time drift-guard types). The tag
+  // sits next to a comment explaining why — grep `@knippublic` to find them.
+  "tags": ["-knippublic"],
+
+  "ignoreDependencies": [
+    "tailwindcss", // consumed via `@import "tailwindcss"` + @tailwindcss/vite, which knip doesn't trace
+    "tw-animate-css" // consumed via a CSS `@import` in app/styles, not a JS import
+  ],
+
+  // The GitHub CLI is an external tool invoked by scripts/labels.mjs (execSync),
+  // not an npm-installed binary — knip can't resolve it, so we allow it.
+  "ignoreBinaries": ["gh"],
+
+  // Disable the drizzle plugin so knip doesn't execute drizzle.config.ts (it
+  // throws without DATABASE_URL). drizzle-kit is still detected via db:* scripts.
+  "drizzle": false
+}

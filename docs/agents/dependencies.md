@@ -123,26 +123,24 @@ the `"lucide-react"` barrel — it is SSR-safe, no special entrypoint needed).
 
 ## Unused Dependency Check
 
-CI runs [`knip`](https://knip.dev) via `pnpm knip` to fail the build when a
-declared dependency is imported nowhere (or an import has no corresponding
-dependency). This is the guardrail that would have caught `@tanstack/react-query`
+The unused-dependency guard is now one facet of the repo's full dead-code check
+([`knip`](https://knip.dev), ADR-013). CI runs `pnpm deadcode` to fail the build
+when a declared dependency is imported nowhere (or an import has no corresponding
+dependency) — **plus** when a file becomes unreachable or an export/type goes
+unused. This is the guardrail that would have caught `@tanstack/react-query`
 sitting in the stack unused before it was wired up.
 
-Config lives in `knip.json`. Three repo-specific settings keep false positives at zero:
+For the full config model, entry-point rationale, and how to handle false
+positives (`@knippublic` tags, entry globs, ignores), see
+**`docs/agents/tooling.md` → Dead-code check**. Config lives in `knip.jsonc`
+(JSONC so every entry/ignore carries an inline `//` rationale).
 
-- **Entry points** list the TanStack Start Vite-plugin entries (`app/client.tsx`,
-  `app/router.tsx`, `app/routes/**`, `app/server/index.ts`) plus the server-fn
-  test helper (`tests/server-fn.ts`) and the standalone scripts — knip can't infer
-  the framework's entrypoints on its own. (`vite.config.ts` is auto-detected by
-  knip's vite plugin, so it is not listed. The old vinxi `app/ssr.tsx` / `app/api.ts`
-  entries were removed in the migration — issue #198.)
-- **`tailwindcss` is in `ignoreDependencies`** — it's consumed via
-  `@import "tailwindcss"` in `app/styles/app.css` and the `@tailwindcss/vite`
-  plugin, neither of which knip traces, so it would otherwise be a false "unused".
-- **The drizzle plugin is disabled** (`"drizzle": false`) so knip doesn't execute
-  `drizzle.config.ts` (which throws without `DATABASE_URL`). `drizzle-kit` is still
-  detected via the `db:*` scripts.
+The dependency-specific rules: `tailwindcss` and `tw-animate-css` are in
+`ignoreDependencies` (consumed via CSS `@import`, which knip doesn't trace), and
+the drizzle plugin is disabled (`"drizzle": false`) so knip doesn't execute
+`drizzle.config.ts` (which throws without `DATABASE_URL`; `drizzle-kit` is still
+detected via the `db:*` scripts).
 
-Run it locally with `pnpm knip`. If knip flags a dependency you intend to keep
-unused, add it to `ignoreDependencies` in `knip.json` and note why in this
-section — don't silence the whole check.
+Run it locally with `pnpm deadcode`. If knip flags a dependency you intend to
+keep unused, add it to `ignoreDependencies` in `knip.jsonc` with an inline
+comment saying why — don't silence the whole check.

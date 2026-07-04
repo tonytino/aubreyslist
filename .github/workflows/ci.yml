@@ -61,8 +61,8 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
-  knip:
-    name: Unused deps
+  deadcode:
+    name: Dead code
     runs-on: ubuntu-latest
 
     steps:
@@ -79,8 +79,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Unused dependency check
-        run: pnpm knip
+      # Full knip sweep (ADR-013): fails the PR on unused files (unreachable
+      # modules), unused exports/types, AND unused/unlisted dependencies — the
+      # per-PR regression guard for the AUB-199 dead-code sweep. Config +
+      # rationale for every ignore live in knip.jsonc; false-positive handling is
+      # documented in docs/agents/tooling.md. knip is fast, so we run the full
+      # check (not a dependency-only subset) on every PR.
+      - name: Dead-code check
+        run: pnpm deadcode
 
   changelog-validate:
     name: Changelog fragments valid
