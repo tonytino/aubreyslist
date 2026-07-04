@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * `select()` chains resolve to fixture rows — so we assert the assembled cards
  * without a live database (docs/agents/testing.md). `buildBrowseCards` issues
  * exactly three batched queries (celiac aggregate + incidents + the AUB-193
- * bot-suggestion existence check); the mock routes each by its `select()`
+ * bot-suggested-attribute set); the mock routes each by its `select()`
  * projection and returns the fixtures verbatim, so the IN(...) filter is
  * irrelevant to what a row maps to (the row's own `listingId` keys it).
  *
@@ -192,6 +192,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         evidence: { confirmations: 8, contributors: 6 },
         freshness: { kind: "fresh", label: "Verified 27d ago" },
         suggestedByBot: false,
+        suggestedAttributes: [],
       },
       // stale: confirm-majority aged past the window → "stale" + "Updated".
       {
@@ -200,6 +201,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         evidence: { confirmations: 30, contributors: 12 },
         freshness: { kind: "stale", label: "Updated 6mo ago" },
         suggestedByBot: false,
+        suggestedAttributes: [],
       },
       // contested: disputes lead → gluten-friendly; the fresh confirm still
       // reads as a "Verified" freshness cue (an independent display signal).
@@ -209,6 +211,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         evidence: { confirmations: 2, contributors: 7 },
         freshness: { kind: "fresh", label: "Verified 8d ago" },
         suggestedByBot: false,
+        suggestedAttributes: [],
       },
       // recent-incident: fresh confirm-majority (celiac-safe) BUT a recent report
       // flags the card and the incident cue wins the freshness slot.
@@ -218,6 +221,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         evidence: { confirmations: 8, contributors: 5 },
         freshness: { kind: "incident", label: "Reported 10d ago" },
         suggestedByBot: false,
+        suggestedAttributes: [],
       },
       // unattested: no celiac claim → honest empty state, no evidence, no cue.
       {
@@ -226,6 +230,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         evidence: null,
         freshness: null,
         suggestedByBot: false,
+        suggestedAttributes: [],
       },
     ];
 
@@ -256,18 +261,21 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
       evidence: null,
       freshness: null,
       suggestedByBot: false,
+      suggestedAttributes: [],
     });
   });
 
   it("flags suggestedByBot for a listing whose ONLY suggestion is a non-celiac claim (AUB-193)", async () => {
     // The shipped regression: 25 of the 46 seeded listings suggest only
     // non-celiac attributes (e.g. dedicated_fryer), so they have NO celiac
-    // aggregate row — but the batched suggestion-existence query still finds
+    // aggregate row — but the batched suggested-attribute query still finds
     // their live bot suggestion, so the card shows its provenance instead of a
     // bare "Not yet attested".
     const listing = mkListing({ id: "l-seeded", name: "Seeded Non-Celiac" });
     state.celiacRows = []; // no celiac claim at all
-    state.suggestionRows = [{ suggestedListingId: "l-seeded" }];
+    state.suggestionRows = [
+      { suggestedListingId: "l-seeded", suggestedAttribute: "dedicated_fryer" },
+    ];
 
     const cards = await buildBrowseCards([listing], NOW, 6);
 
@@ -277,12 +285,14 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
       evidence: null,
       freshness: null,
       suggestedByBot: true,
+      suggestedAttributes: ["dedicated_fryer"],
     });
   });
 
-  it("keeps suggestedByBot false once REAL celiac evidence exists, even with a live suggestion", async () => {
-    // A bot-suggested (non-celiac) claim plus a real celiac verdict: the verdict
-    // wins and the provenance chip never sits beside it (ADR-007).
+  it("KEEPS suggestedByBot true when live suggestions coexist with real celiac evidence (owner nit 7)", async () => {
+    // A bot-suggested (non-celiac) claim plus a real celiac verdict: the label
+    // is PROVENANCE and stays visible — but the verdict/evidence still derive
+    // from evidence only (ADR-007: the suggestion never alters them).
     const listing = mkListing({ id: "l-mixed", name: "Mixed Evidence" });
     state.celiacRows = [
       {
@@ -294,12 +304,34 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         contributors: "4",
       },
     ];
-    state.suggestionRows = [{ suggestedListingId: "l-mixed" }];
+    state.suggestionRows = [
+      { suggestedListingId: "l-mixed", suggestedAttribute: "gf_substitutes" },
+    ];
 
     const cards = await buildBrowseCards([listing], NOW, 6);
 
     expect(cards[0]?.glance.safetyState).toBe("celiac-safe");
-    expect(cards[0]?.glance.suggestedByBot).toBe(false);
+    expect(cards[0]?.glance.evidence).toEqual({ confirmations: 4, contributors: 4 });
+    expect(cards[0]?.glance.suggestedByBot).toBe(true);
+    expect(cards[0]?.glance.suggestedAttributes).toEqual(["gf_substitutes"]);
+  });
+
+  it("normalizes a listing's suggested attributes to taxonomy order (deduped)", async () => {
+    const listing = mkListing({ id: "l-multi", name: "Multi Suggested" });
+    state.celiacRows = [];
+    state.suggestionRows = [
+      { suggestedListingId: "l-multi", suggestedAttribute: "gf_substitutes" },
+      { suggestedListingId: "l-multi", suggestedAttribute: "celiac_safe_vs_gluten_friendly" },
+      { suggestedListingId: "l-multi", suggestedAttribute: "dedicated_fryer" },
+    ];
+
+    const cards = await buildBrowseCards([listing], NOW, 6);
+
+    expect(cards[0]?.glance.suggestedAttributes).toEqual([
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_fryer",
+      "gf_substitutes",
+    ]);
   });
 
   it("keeps suggestedByBot false when no live suggestion survives (cleared by a real vote)", async () => {

@@ -22,8 +22,7 @@ import { canonicalLink, pageSeoMeta } from "~/lib/seo";
  *    `returnTo` brings the diner back here after login).
  *  - SIGNED-IN, EMPTY → a "nothing saved yet" nudge back to the directory.
  *  - SIGNED-IN, POPULATED → the shared {@link DirectoryList} of cards, each mapped
- *    via `listingToCardVM` with NO distance (favorites have no origin) but WITH the
- *    public save-count so the pill renders exactly as it does on browse.
+ *    via `listingToCardVM` with NO distance (favorites have no origin).
  */
 export const Route = createFileRoute("/favorites")({
   head: () => ({
@@ -96,9 +95,8 @@ export function FavoritesPage() {
         ) : (
           <DirectoryList
             cards={favorites.map((card) =>
-              // No distance origin for favorites (distance stays absent); pass the
-              // save-count so the "saves" pill renders exactly as on browse.
-              listingToCardVM(card.listing, card.glance, undefined, card.favoriteCount)
+              // No distance origin for favorites (distance stays absent).
+              listingToCardVM(card.listing, card.glance)
             )}
           />
         )}

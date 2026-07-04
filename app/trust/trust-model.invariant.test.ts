@@ -218,47 +218,61 @@ describe("INVARIANT 2 — a recent incident flags the summary regardless of conf
 
 // ───────────────────────────────────────────────────────────────────────────
 // INVARIANT 2b — A bot suggestion is PROVENANCE, never a verdict (ADR-007 /
-// AUB-31 / AUB-193). The browse glance's `suggestedByBot` may only ever be true
-// on the honest empty-state path: no headline safety verdict and no evidence
-// counts. It must never sit beside — or imply — real community evidence,
-// whether the suggestion comes from the headline celiac claim's own `suggested`
-// flag or from the listing-level "any visible bot-suggested claim" input.
+// AUB-31 / AUB-193, revised by owner nit 7). The label/badges are provenance
+// and show WHENEVER live suggestions exist — including alongside real community
+// evidence on other claims — but a suggestion must NEVER influence the safety
+// verdict or the evidence counts: `safetyState`/`evidence` are a pure function
+// of the visible evidence alone, identical with or without suggestions. The
+// headline celiac claim's own `suggested` fallback flag stays live only while
+// THAT claim has no votes (a vote clears the suggestion server-side).
+//
+// (History: before owner nit 7 this invariant additionally gated the label on
+// "no evidence at all". The owner explicitly removed that gate — provenance
+// stays visible — while the safety core, "a suggestion never fabricates or
+// alters a verdict", is unchanged and pinned below.)
 // ───────────────────────────────────────────────────────────────────────────
 
-describe("INVARIANT 2b — suggestedByBot only ever accompanies the no-evidence empty state", () => {
-  it("suggestedByBot ⇒ safetyState is null AND evidence is null, across the evidence grid", () => {
-    // Property-style: sweep counts × both suggestion inputs × both flag sources.
-    // Whenever ANY evidence exists, the suggestion must be suppressed; whenever
-    // the glance flags a suggestion, it must be showing the empty state.
+describe("INVARIANT 2b — a bot suggestion never influences the verdict or evidence", () => {
+  it("safetyState and evidence are IDENTICAL with and without live suggestions, across the grid", () => {
+    // Property-style: sweep counts × both fallback-flag values × both suggested
+    // attribute sets. The verdict/evidence half of the glance must be byte-equal
+    // to the suggestion-free derivation — a suggestion can never upgrade,
+    // downgrade, or fabricate a verdict or a count.
     const freshConfirm = new Date(NOW.getTime() - DAY_MS);
     for (const confirmCount of COUNT_GRID) {
       for (const disputeCount of COUNT_GRID) {
         for (const celiacSuggested of [true, false]) {
-          for (const anyVisibleSuggestion of [true, false]) {
-            const agg = {
-              ...aggregate(confirmCount, disputeCount, confirmCount > 0 ? freshConfirm : null),
-              suggested: celiacSuggested,
-            };
+          for (const suggestedAttributes of [[], ["dedicated_fryer" as const]]) {
+            const evidenceOnly = aggregate(
+              confirmCount,
+              disputeCount,
+              confirmCount > 0 ? freshConfirm : null
+            );
+            const agg = { ...evidenceOnly, suggested: celiacSuggested };
             const glance = deriveListingTrustGlance(
               agg,
               1,
               null,
               NOW,
               undefined,
-              anyVisibleSuggestion
+              suggestedAttributes
             );
+            const baseline = deriveListingTrustGlance(evidenceOnly, 1, null, NOW, undefined, []);
 
-            if (glance.suggestedByBot) {
-              expect(glance.safetyState).toBeNull();
-              expect(glance.evidence).toBeNull();
-            }
-            if (confirmCount + disputeCount > 0) {
-              // Real evidence always suppresses the provenance chip.
-              expect(glance.suggestedByBot).toBe(false);
-            } else if (celiacSuggested || anyVisibleSuggestion) {
-              // No evidence + a live suggestion (either source) → the chip shows.
-              expect(glance.suggestedByBot).toBe(true);
-            }
+            // The suggestion inputs change NOTHING about the evidence reading.
+            expect(glance.safetyState).toEqual(baseline.safetyState);
+            expect(glance.evidence).toEqual(baseline.evidence);
+            expect(glance.freshness).toEqual(baseline.freshness);
+
+            // The label tracks live suggestions verbatim (provenance stays
+            // visible, owner nit 7): any batched suggested attribute keeps it
+            // on; the celiac fallback flag stays live only while the celiac
+            // claim itself has no votes.
+            const celiacStillLive = celiacSuggested && confirmCount + disputeCount === 0;
+            expect(glance.suggestedByBot).toBe(suggestedAttributes.length > 0 || celiacStillLive);
+            // And the label is always exactly "suggestedAttributes is non-empty"
+            // — the badges and the label can never disagree.
+            expect(glance.suggestedByBot).toBe(glance.suggestedAttributes.length > 0);
           }
         }
       }
@@ -266,10 +280,29 @@ describe("INVARIANT 2b — suggestedByBot only ever accompanies the no-evidence 
   });
 
   it("a listing with NO celiac claim still surfaces a live non-celiac suggestion honestly", () => {
-    const glance = deriveListingTrustGlance(null, 0, null, NOW, undefined, true);
+    const glance = deriveListingTrustGlance(null, 0, null, NOW, undefined, ["dedicated_fryer"]);
     expect(glance.suggestedByBot).toBe(true);
+    expect(glance.suggestedAttributes).toEqual(["dedicated_fryer"]);
+    // No fabricated verdict: the suggestion decorates the honest empty state.
     expect(glance.safetyState).toBeNull();
     expect(glance.evidence).toBeNull();
+  });
+
+  it("a voted-out celiac suggestion never badges the card (the vote cleared it)", () => {
+    // The celiac claim was suggested, then voted: `suggested` may still read
+    // true on a stale aggregate snapshot, but the fold-in is per-claim gated on
+    // "no votes on THAT claim", so the badge honestly disappears.
+    const glance = deriveListingTrustGlance(
+      { ...aggregate(3, 0, new Date(NOW.getTime() - DAY_MS)), suggested: true },
+      3,
+      null,
+      NOW,
+      undefined,
+      []
+    );
+    expect(glance.suggestedByBot).toBe(false);
+    expect(glance.suggestedAttributes).toEqual([]);
+    expect(glance.safetyState).toBe("celiac-safe");
   });
 });
 

@@ -40,8 +40,8 @@ export const fetchViewerFavoriteIds = createServerFn({ method: "GET" }).handler(
  *
  * Resolves "now" ONCE on the server and reads the admin-tunable `staleness_months`
  * setting the SAME way `fetchBrowseListings` does, then threads both into the
- * shared card builder so the `/favorites` cards match browse exactly (glance +
- * save-count pill). Anonymous callers resolve to `[]` with no DB hit.
+ * shared card builder so the `/favorites` cards match browse exactly (same trust
+ * glance). Anonymous callers resolve to `[]` with no DB hit.
  */
 export const fetchViewerFavorites = createServerFn({ method: "GET" }).handler(
   async (): Promise<BrowseListingCard[]> => {

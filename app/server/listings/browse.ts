@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb } from "~/db/client";
 import {
   attestations,
+  type ClaimAttribute,
   claimAttributes,
   claims,
   incidents,
@@ -14,7 +15,7 @@ import { type Coords, EARTH_RADIUS_KM, milesToKm } from "~/listings/distance";
 import { QUICK_FILTER_VALUES, type QuickFilterValue } from "~/listings/quick";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
-import { getFavoriteCounts, getViewerFavoriteIds } from "~/server/favorites/index";
+import { getViewerFavoriteIds } from "~/server/favorites/index";
 import { formatDistanceLabel } from "~/trust/browse-card-format";
 import { deriveListingTrustGlance, type ListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident, toCalendarDayString } from "~/trust/incident-recency";
@@ -40,8 +41,9 @@ import { buildSearchPredicate } from "./search";
  *   3. each page-listing's incidents, batched with one `IN (…)` query, reduced
  *      to a recent-incident boolean per listing via #30's `findRecentIncident`,
  *      and
- *   4. whether ANY visible claim on each page-listing still carries a live
- *      curator-bot suggestion (AUB-193), batched with one `IN (…)` query.
+ *   4. which claim attributes on each page-listing still carry a live
+ *      curator-bot suggestion (AUB-193, owner nit 7), batched with one
+ *      `IN (…)` query.
  * The trust glance is then derived purely (`deriveListingTrustGlance`) from
  * those visible aggregates — a roll-up of visible evidence, never a score.
  *
@@ -132,22 +134,20 @@ export const browseListingsInputSchema = z.object({
    * Whether curator-bot SUGGESTIONS (AUB-31) participate in the browse.
    * Default TRUE (a live, unvoted suggestion also satisfies the taxonomy
    * `attrs` filter and the `quick=celiac` chip — a discovery aid that surfaces
-   * candidates worth validating). Card-cue scope (AUB-193): the browse card's
-   * "Suggested by Aubrey's Bot" badge covers a live suggestion on ANY visible
-   * claim, gated on "no real headline celiac evidence" — so a suggestion-
-   * matched card carries the badge except the narrow case of a listing with
-   * community celiac evidence matching a non-headline `attrs` filter via that
-   * attribute's suggestion; there the provenance is visible on the listing
-   * detail's claim rows only (owner follow-up). FALSE (the `?bot=` URL param's
-   * "Hide bot suggestions" chip) does TWO things: (1) reverts filter MATCHING
-   * to community-evidence-only, and (2) EXCLUDES bot-suggested-only listings —
+   * candidates worth validating). Card-cue scope (AUB-193, owner nit 7): the
+   * browse card labels EVERY listing with a live suggestion on ANY visible
+   * claim "Suggested by Aubrey's Bot" and badges each suggested attribute —
+   * provenance is always visible, so a suggestion-matched card always shows
+   * where its labels came from. FALSE (the `?bot=` URL param's "Hide bot
+   * suggestions" chip) does TWO things: (1) reverts filter MATCHING to
+   * community-evidence-only, and (2) EXCLUDES bot-suggested-only listings —
    * those with a live suggestion and NO real community attestation evidence on
-   * any visible claim, i.e. the "Suggested by Aubrey's Bot" cards — from the
-   * result set itself (`buildSuggestedOnlyExclusion` in `./filter.ts`,
-   * AND-folded into the SHARED where so the page AND the honest total both
-   * reflect it). A listing with any real community evidence stays visible
-   * either way. Affects only which listings are RETURNED — never the trust
-   * glance, its counts, or the sort (ADR-007: a suggestion is provenance, not
+   * any visible claim — from the result set itself
+   * (`buildSuggestedOnlyExclusion` in `./filter.ts`, AND-folded into the
+   * SHARED where so the page AND the honest total both reflect it). A listing
+   * with any real community evidence stays visible either way. Affects only
+   * filter matching and which listings are RETURNED — never the trust glance,
+   * its counts, or the sort (ADR-007: a suggestion is provenance, not
    * evidence, and trust derivation/display is untouched).
    */
   includeSuggested: z.boolean().default(true),
@@ -156,9 +156,9 @@ export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
 /**
  * The trust CORE of a browse card — the listing plus its precomputed trust
- * glance — before any browse-only concerns (distance, save-count) are layered
- * on. This is what the distance-agnostic {@link buildBrowseCards} produces; the
- * browse-only fields below are attached by {@link getBrowseListings}.
+ * glance — before any browse-only concerns (distance) are layered on. This is
+ * what the distance-agnostic {@link buildBrowseCards} produces; the browse-only
+ * fields below are attached by {@link getBrowseListings}.
  */
 export interface BrowseListingCardCore {
   listing: Listing;
@@ -173,13 +173,6 @@ export interface BrowseListingCard extends BrowseListingCardCore {
    * haversine (never recomputed client-side); omitted for every other sort.
    */
   distanceLabel?: string;
-  /**
-   * PUBLIC, user-agnostic count of how many people have saved this listing —
-   * the grouped `favorites` aggregate ({@link getFavoriteCounts}), `0` when the
-   * listing has no favorites. A plain number on the (client-safe) card, never a
-   * viewer-scoped or safety signal (ADR-007): it is attributed as "saves".
-   */
-  favoriteCount: number;
 }
 
 /** A page of browse cards plus the cursor info the UI needs to paginate. */
@@ -339,30 +332,19 @@ export async function getBrowseListings(
   }
 
   // 2. + 3. Derive each card's listing + at-a-glance trust. `buildBrowseCards`
-  //    owns the trust-glance tail (celiac aggregate + recent incident → glance)
-  //    and is DISTANCE-AGNOSTIC so a distance-less caller can reuse it. The
-  //    public save-count aggregate is batched ALONGSIDE it (one grouped query
-  //    for the whole page, NO N+1) — a browse concern like distance, so it stays
-  //    HERE rather than in the reusable, distance-agnostic helper.
-  const pageListingIds = pageRows.map((listing) => listing.id);
-  const [baseCards, favoriteCounts] = await Promise.all([
-    buildBrowseCards(pageRows, now, resolvedStalenessMonths),
-    getFavoriteCounts(pageListingIds),
-  ]);
+  //    owns the trust-glance tail (celiac aggregate + recent incident +
+  //    suggested attributes → glance) and is DISTANCE-AGNOSTIC so a
+  //    distance-less caller can reuse it.
+  const baseCards = await buildBrowseCards(pageRows, now, resolvedStalenessMonths);
 
-  // Attach the public save-count and the "0.4 mi" distance label AFTER the
-  // (distance-agnostic) glance derivation — both are browse-only concerns, never
-  // part of the reusable trust glance. The count defaults to 0 for a listing with
-  // no favorites (absent from the grouped aggregate). The distance label is spread
-  // in conditionally so the optional prop is truly absent (not `undefined`) under
-  // `exactOptionalPropertyTypes` — and only when distance-sorting produced a value
-  // for this row.
+  // Attach the "0.4 mi" distance label AFTER the (distance-agnostic) glance
+  // derivation — a browse-only concern, never part of the reusable trust glance.
+  // Spread in conditionally so the optional prop is truly absent (not
+  // `undefined`) under `exactOptionalPropertyTypes` — and only when
+  // distance-sorting produced a value for this row.
   const cards: BrowseListingCard[] = baseCards.map((card) => {
-    const favoriteCount = favoriteCounts.get(card.listing.id) ?? 0;
     const km = distanceByListing.get(card.listing.id);
-    return km !== undefined
-      ? { ...card, favoriteCount, distanceLabel: formatDistanceLabel(km) }
-      : { ...card, favoriteCount };
+    return km !== undefined ? { ...card, distanceLabel: formatDistanceLabel(km) } : card;
   });
 
   return { cards, page, pageSize, sort, total, hasMore: offset + pageRows.length < total };
@@ -372,8 +354,8 @@ export async function getBrowseListings(
  * Build browse cards — each listing paired with its at-a-glance trust — from a
  * set of listings. Owns ONLY the trust-glance derivation (ADR-007): it batches
  * the three visible signals for these listings (the headline celiac aggregate,
- * the recent-incident dates, and the live curator-bot-suggestion flag) and
- * reduces each to a pure {@link ListingTrustGlance} via
+ * the recent-incident dates, and the live curator-bot-suggested attribute set)
+ * and reduces each to a pure {@link ListingTrustGlance} via
  * {@link deriveListingTrustGlance}.
  *
  * DISTANCE-AGNOSTIC by design: the "0.4 mi" `distanceLabel` is a browse-only
@@ -405,10 +387,10 @@ export async function buildBrowseCards(
 
   const listingIds = listings.map((listing) => listing.id);
 
-  const [celiacAggregates, recentIncidentDates, botSuggestedListingIds] = await Promise.all([
+  const [celiacAggregates, recentIncidentDates, botSuggestedAttributes] = await Promise.all([
     getCeliacAggregatesByListing(listingIds),
     getRecentIncidentDatesByListing(listingIds, now),
-    getBotSuggestedListingIds(listingIds),
+    getBotSuggestedAttributesByListing(listingIds),
   ]);
 
   return listings.map((listing) => {
@@ -419,7 +401,7 @@ export async function buildBrowseCards(
       recentIncidentDates.get(listing.id) ?? null,
       now,
       stalenessMonths,
-      botSuggestedListingIds.has(listing.id)
+      botSuggestedAttributes.get(listing.id) ?? []
     );
     return { listing, glance };
   });
@@ -698,23 +680,29 @@ async function getCeliacAggregatesByListing(
 }
 
 /**
- * Batch-load which of `listingIds` still carry a LIVE curator-bot suggestion
- * (AUB-193): a VISIBLE claim — on ANY taxonomy attribute, not just the headline
- * celiac one — whose `suggested_by` is set. One `IN (…)` query for the whole
- * page (NO N+1), mirroring the moderation-visibility predicate the sibling
- * batched queries apply (only `visible` claims count, so a hidden/removed
- * suggested claim stops driving the badge; the parent listing's own visibility
- * is already enforced by the page query that produced `listingIds`).
+ * Batch-load which claim ATTRIBUTES of each of `listingIds` still carry a LIVE
+ * curator-bot suggestion (AUB-193, owner nit 7): a VISIBLE claim — on ANY
+ * taxonomy attribute, not just the headline celiac one — whose `suggested_by`
+ * is set. One `IN (…)` query for the whole page (NO N+1), mirroring the
+ * moderation-visibility predicate the sibling batched queries apply (only
+ * `visible` claims count, so a hidden/removed suggested claim stops driving
+ * the badge; the parent listing's own visibility is already enforced by the
+ * page query that produced `listingIds`).
  *
- * The first real vote clears `suggested_by` server-side (`castVote`), so a
- * listing drops out of this set — and out of the "Suggested by Aubrey's Bot"
- * chip — the moment real evidence arrives on its only suggested claim.
+ * The first real vote on a claim clears its `suggested_by` server-side
+ * (`castVote`), so that attribute drops out of the set — and out of its card
+ * badge — the moment real evidence arrives on it. A listing with no remaining
+ * live suggestions is absent from the map entirely, which also clears the
+ * card's "Suggested by Aubrey's Bot" label.
  *
- * Returns the set of listing ids with at least one live suggestion.
+ * Returns a map from listing id → its live-suggested attributes (unordered;
+ * the pure glance derivation dedupes and normalizes to taxonomy order).
  */
-async function getBotSuggestedListingIds(listingIds: string[]): Promise<Set<string>> {
+async function getBotSuggestedAttributesByListing(
+  listingIds: string[]
+): Promise<Map<string, ClaimAttribute[]>> {
   const rows = await getDb()
-    .select({ suggestedListingId: claims.listingId })
+    .select({ suggestedListingId: claims.listingId, suggestedAttribute: claims.attribute })
     .from(claims)
     .where(
       and(
@@ -723,7 +711,17 @@ async function getBotSuggestedListingIds(listingIds: string[]): Promise<Set<stri
         eq(claims.moderationStatus, "visible")
       )
     );
-  return new Set(rows.map((row) => row.suggestedListingId));
+
+  const byListing = new Map<string, ClaimAttribute[]>();
+  for (const row of rows) {
+    const attributes = byListing.get(row.suggestedListingId);
+    if (attributes) {
+      attributes.push(row.suggestedAttribute);
+    } else {
+      byListing.set(row.suggestedListingId, [row.suggestedAttribute]);
+    }
+  }
+  return byListing;
 }
 
 /**

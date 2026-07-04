@@ -47,14 +47,10 @@ const h = vi.hoisted(() => {
     subqueryWhere: undefined as unknown,
     /** The WHERE predicate handed to the incidents query (#41 visibility). */
     incidentWhere: undefined as unknown,
-    /** Rows returned by the bot-suggestion existence query (AUB-193). */
+    /** Rows returned by the bot-suggested-attribute query (AUB-193). */
     suggestionRows: [] as Array<Record<string, unknown>>,
     /** The WHERE predicate handed to the bot-suggestion query (visibility). */
     suggestionWhere: undefined as unknown,
-    /** Public per-listing save counts returned by the (mocked) favorites layer. */
-    favoriteCounts: new Map<string, number>(),
-    /** The listing ids passed to `getFavoriteCounts` (asserted batched, not N+1). */
-    favoriteCountIds: undefined as string[] | undefined,
     /**
      * The viewer's VISIBLE favorite ids returned by the (mocked)
      * `getViewerFavoriteIds` — drives the F11 `savedOnly` path. `[]` models both
@@ -134,6 +130,8 @@ const h = vi.hoisted(() => {
     return Promise.resolve(state.suggestionRows);
   });
   const suggestionFromMock = vi.fn(() => ({ where: suggestionWhereMock }));
+  // (The suggestion chain, above, routes by the `suggestedListingId` projection
+  // key and now also carries a `suggestedAttribute` per row — AUB-193/owner nit 7.)
 
   // The count chain: select({ total }).from().where()  (awaited)
   const countWhereMock = vi.fn((predicate?: unknown) => {
@@ -167,18 +165,10 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({ select: h.selectMock }),
 }));
 
-// The public save-count aggregate is a SEPARATE server-only helper
-// (`~/server/favorites`) that `getBrowseListings` batches alongside the trust
-// signals. We stub it here so this loader test stays focused on the loader's
-// composition/attachment (the aggregate's own SQL is pinned in the favorites
-// tests), and capture the ids to assert the call is batched (one call, all ids).
+// The favorites layer is a SEPARATE server-only helper (`~/server/favorites`).
+// The F11 `savedOnly` path resolves the viewer's VISIBLE favorite ids here.
+// `[]` (anonymous OR empty favorites) must SHORT-CIRCUIT to an empty page.
 vi.mock("~/server/favorites/index", () => ({
-  getFavoriteCounts: (listingIds: string[]) => {
-    h.state.favoriteCountIds = listingIds;
-    return Promise.resolve(h.state.favoriteCounts);
-  },
-  // The F11 `savedOnly` path resolves the viewer's VISIBLE favorite ids here.
-  // `[]` (anonymous OR empty favorites) must SHORT-CIRCUIT to an empty page.
   getViewerFavoriteIds: () => Promise.resolve(h.state.viewerFavoriteIds),
 }));
 
@@ -213,8 +203,6 @@ beforeEach(() => {
   state.incidentWhere = undefined;
   state.suggestionRows = [];
   state.suggestionWhere = undefined;
-  state.favoriteCounts = new Map();
-  state.favoriteCountIds = undefined;
   state.viewerFavoriteIds = [];
   h.resetCallCounters();
 });
@@ -319,19 +307,20 @@ describe("getBrowseListings", () => {
     expect(result.cards[0]?.glance.safetyState).toBeNull();
   });
 
-  it("flags suggestedByBot for a listing whose only bot suggestion is non-celiac (AUB-193)", async () => {
+  it("flags suggestedByBot (with its attribute set) for a listing whose only bot suggestion is non-celiac (AUB-193)", async () => {
     state.pageListings = [{ id: "l1", name: "Seeded Spot", address: "5 Main St" }];
     state.total = 1;
     state.celiacRows = []; // no celiac claim — the bot suggested only other attributes
-    state.suggestionRows = [{ suggestedListingId: "l1" }];
+    state.suggestionRows = [{ suggestedListingId: "l1", suggestedAttribute: "dedicated_fryer" }];
 
     const result = await getBrowseListings(baseInput, NOW);
 
     expect(result.cards[0]?.glance.safetyState).toBeNull();
     expect(result.cards[0]?.glance.suggestedByBot).toBe(true);
+    expect(result.cards[0]?.glance.suggestedAttributes).toEqual(["dedicated_fryer"]);
   });
 
-  it("keeps suggestedByBot false once real celiac evidence exists, despite a live suggestion", async () => {
+  it("keeps suggestedByBot true once real celiac evidence exists — provenance is not gated (owner nit 7)", async () => {
     state.pageListings = [{ id: "l1", name: "Voted Spot", address: "6 Main St" }];
     state.total = 1;
     state.celiacRows = [
@@ -344,12 +333,15 @@ describe("getBrowseListings", () => {
         contributors: "3",
       },
     ];
-    state.suggestionRows = [{ suggestedListingId: "l1" }];
+    state.suggestionRows = [{ suggestedListingId: "l1", suggestedAttribute: "gf_substitutes" }];
 
     const result = await getBrowseListings(baseInput, NOW);
 
+    // The verdict/evidence derive from evidence only; the live suggestion keeps
+    // the provenance label + badge data alongside them (never altering them).
     expect(result.cards[0]?.glance.safetyState).toBe("celiac-safe");
-    expect(result.cards[0]?.glance.suggestedByBot).toBe(false);
+    expect(result.cards[0]?.glance.suggestedByBot).toBe(true);
+    expect(result.cards[0]?.glance.suggestedAttributes).toEqual(["gf_substitutes"]);
   });
 
   it("flags a recent incident regardless of confirmations", async () => {
@@ -610,52 +602,6 @@ describe("getBrowseListings", () => {
     const result = await getBrowseListings({ ...baseInput, sort: "alpha" }, NOW);
 
     expect(result.cards[0]?.distanceLabel).toBeUndefined();
-  });
-
-  // --- F10: public, user-agnostic save-count attachment ---------------------
-
-  it("attaches the public favorite count to each card from the batched aggregate", async () => {
-    state.pageListings = [
-      { id: "l1", name: "A", address: "a" },
-      { id: "l2", name: "B", address: "b" },
-    ];
-    state.total = 2;
-    state.favoriteCounts = new Map([
-      ["l1", 12],
-      ["l2", 3],
-    ]);
-
-    const result = await getBrowseListings(baseInput, NOW);
-
-    expect(result.cards[0]?.favoriteCount).toBe(12);
-    expect(result.cards[1]?.favoriteCount).toBe(3);
-    // Batched (NO N+1): the count helper is called ONCE with ALL page listing ids.
-    expect(state.favoriteCountIds).toEqual(["l1", "l2"]);
-  });
-
-  it("defaults the favorite count to 0 for a listing absent from the aggregate", async () => {
-    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
-    state.total = 1;
-    // No entry for l1 → it has no favorites → the card reports 0 (never undefined).
-    state.favoriteCounts = new Map();
-
-    const result = await getBrowseListings(baseInput, NOW);
-
-    expect(result.cards[0]?.favoriteCount).toBe(0);
-  });
-
-  it("attaches BOTH the save count and the distance label when distance-sorting", async () => {
-    state.pageListings = [{ id: "l1", name: "A", address: "a", distanceKm: 0.643_738 }];
-    state.total = 1;
-    state.favoriteCounts = new Map([["l1", 7]]);
-
-    const result = await getBrowseListings(
-      { ...baseInput, sort: "distance", userLat: 39.7392, userLng: -104.9903 },
-      NOW
-    );
-
-    expect(result.cards[0]?.favoriteCount).toBe(7);
-    expect(result.cards[0]?.distanceLabel).toBe("0.4 mi");
   });
 
   // --- #34/#35: WHERE composition (search + taxonomy filter) ----------------

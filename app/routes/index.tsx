@@ -316,13 +316,9 @@ function BrowseListings() {
 
   // The server page as VMs (mapped once, via the shared `listingToCardVM`). Search
   // AND the quick chip are both applied SERVER-side now, so `data.cards` is already
-  // the exact set to show — no client-side refinement. The public save-count (F10)
-  // is threaded straight through as the trailing VM arg.
+  // the exact set to show — no client-side refinement.
   const vms = useMemo(
-    () =>
-      data.cards.map((card) =>
-        listingToCardVM(card.listing, card.glance, card.distanceLabel, card.favoriteCount)
-      ),
+    () => data.cards.map((card) => listingToCardVM(card.listing, card.glance, card.distanceLabel)),
     [data.cards]
   );
 

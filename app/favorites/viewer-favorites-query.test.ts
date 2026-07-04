@@ -35,7 +35,7 @@ describe("viewerFavoritesQuery", () => {
   });
 
   it("resolves via fetchViewerFavorites", async () => {
-    const card = { favoriteCount: 2 } as BrowseListingCard;
+    const card = { listing: { id: "listing-1" } } as BrowseListingCard;
     fetchViewerFavoritesMock.mockResolvedValueOnce([card]);
 
     const result = await newClient().ensureQueryData(viewerFavoritesQuery);

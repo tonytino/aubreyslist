@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
+import { Check, Clock, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
 import type { ComponentProps } from "react";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
@@ -7,7 +7,9 @@ import { Badge } from "~/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
 import { cn } from "~/lib/utils";
+import type { ClaimAttribute } from "~/listings/taxonomy";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
+import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
 
 /**
  * The photo-placeholder accent (a decorative pastel gradient, never load-bearing
@@ -40,11 +42,21 @@ export interface RestaurantCardVM {
   /** The headline safety verdict, or `null` for the honest "Not yet attested" chip. */
   safetyState: SafetyState | null;
   /**
-   * True when the headline celiac claim is a curator-bot suggestion (AUB-31) with
-   * no real evidence yet — the empty state reads "Suggested by Aubrey's Bot"
-   * instead of "Not yet attested". Only meaningful when `safetyState === null`.
+   * True when the listing carries ANY live (unvoted) curator-bot suggestion
+   * (AUB-31/AUB-193, owner nit 7). PROVENANCE, not a verdict: the card shows a
+   * "Suggested by Aubrey's Bot" label in the meta row's freshness slot (owner
+   * nit 8) whenever suggestions are live — including alongside a real
+   * `safetyState`, because the provenance of the suggested labels stays true
+   * regardless of evidence. It never alters the safety verdict itself.
    */
   suggestedByBot: boolean;
+  /**
+   * The claim attributes the bot suggested that are still live (deduped, in
+   * taxonomy order). Each renders as a bot-provenance badge (lavender +
+   * Sparkles) in the badge row — clearly distinct from real evidence signals
+   * (ADR-007: a suggestion must never read as a community-confirmed verdict).
+   */
+  suggestedAttributes: ClaimAttribute[];
   /** A recent "got glutened" report flags the card regardless of confirmations. */
   hasRecentIncident: boolean;
   /** Freshness/recency cue, e.g. `{ kind: "fresh", label: "Verified 3d ago" }`. */
@@ -58,14 +70,6 @@ export interface RestaurantCardVM {
    * when present — never styled or labelled as a safety/celiac score (ADR-007).
    */
   googleRating?: { value: number; count: number } | null;
-  /**
-   * OPTIONAL public, user-agnostic count of people who have saved this listing.
-   * Rendered as an ATTRIBUTED "saves" pill only when > 0 (hidden at 0, matching
-   * how `googleRating` hides when absent). Like `googleRating`, it is a community
-   * signal, NOT a safety/celiac verdict (ADR-007) — all safety meaning stays in
-   * {@link SafetySignal}, so this pill NEVER sits in the safety-signal row.
-   */
-  saveCount?: number;
   /** A real food photo when available; otherwise the placeholder tile is shown. */
   photoUrl?: string | null;
 }
@@ -92,8 +96,8 @@ const FRESHNESS = {
 } as const;
 
 /**
- * An attributed community pill — the shared shell for the save-count and
- * Google-rating pills, each wrapped in a supplementary ADR-007 tooltip.
+ * An attributed community pill — the shell for the Google-rating pill, wrapped
+ * in a supplementary ADR-007 tooltip.
  *
  * A real, non-submitting `<button type="button">`: a legitimately-focusable
  * `TooltipTrigger` (fires on hover AND keyboard focus) with proper interactive
@@ -125,12 +129,21 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  *
  * ACCESSIBLE TRUST GLANCE (NON-NEGOTIABLE, docs/agents/styling.md): the safety
  * state renders via {@link SafetySignal} (colour + icon + text label — never
- * colour alone). `safetyState === null` shows an honest "Not yet attested" chip,
- * never a fabricated verdict. A recent incident adds the `incident` signal.
+ * colour alone). `safetyState === null` shows an honest "Not yet attested" chip
+ * (for a non-bot-suggested listing), never a fabricated verdict. A recent
+ * incident adds the `incident` signal.
  *
  * TRUST MODEL (ADR-007): the optional Google rating pill is an EXTERNAL Google
  * rating, explicitly attributed ("Google"), and is NOT a safety score — all
  * safety meaning stays in {@link SafetySignal}.
+ *
+ * BOT PROVENANCE (AUB-31/AUB-193, owner nits 7+8): a listing with live curator-
+ * bot suggestions shows a "Suggested by Aubrey's Bot" label in the meta row's
+ * freshness slot (so bot-suggested cards read uniformly with verified ones —
+ * when a real freshness cue exists it wins the slot, evidence over provenance)
+ * plus one lavender + Sparkles badge per suggested attribute in the badge row.
+ * Suggestions are provenance, never evidence: styled distinctly from
+ * {@link SafetySignal} and never read as a community-confirmed verdict.
  *
  * CONSISTENT HEIGHT (AUB-194): every card in a directory grid renders at the
  * same height regardless of which optional attributes its VM carries. Two
@@ -139,12 +152,12 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  *     media Link) stretches with `flex-1`, so cards fill their grid cell and
  *     equalize within a row even when a name/address wraps to two lines — the
  *     meta row is pinned to the bottom with an `mt-auto` wrapper.
- *  2. The freshness/evidence meta row's space is ALWAYS reserved: when a VM has
- *     neither (e.g. a freshly seeded, bot-suggested listing), the row renders an
- *     `invisible` placeholder line of the same composition (icon + caption text)
- *     instead of collapsing — so a row of all-seeded cards still matches the
- *     height of fully-attested ones. Reserved space, never a fixed total height,
- *     so wrapped text is never clipped.
+ *  2. The meta row's space is ALWAYS reserved: when a VM has no freshness cue,
+ *     no evidence counts, AND no bot label, the row renders an `invisible`
+ *     placeholder line of the same composition (icon + caption text) instead of
+ *     collapsing — so every card in a row matches the height of fully-attested
+ *     ones. Reserved space, never a fixed total height, so wrapped text is
+ *     never clipped.
  *
  * CLIENT-SAFE: imports only pure/client-safe/type-only modules — no
  * `getDb`/server-only import — so it is safe in the browse route's client bundle.
@@ -207,44 +220,26 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             {vm.name}
           </h3>
 
-          {/* Attributed community pills (save-count + external Google rating). In
-              flow in the title row, but raised above the stretched-link overlay
-              with `relative z-10` so hover/focus reaches them — the ONLY reason
-              they can be real tooltip triggers is that they are NOT descendants of
-              the <a>. ADR-007: EXTERNAL / community signals, explicitly attributed,
-              NEVER a safety verdict — all safety meaning stays in SafetySignal (a
-              separate row below). Each pill's meaning lives in its visible text
-              ("saves" / "Google"); the tooltip is only supplementary. */}
-          {(vm.saveCount && vm.saveCount > 0) || vm.googleRating ? (
+          {/* Attributed external Google-rating pill. In flow in the title row,
+              but raised above the stretched-link overlay with `relative z-10` so
+              hover/focus reaches it — the ONLY reason it can be a real tooltip
+              trigger is that it is NOT a descendant of the <a>. ADR-007: an
+              EXTERNAL signal, explicitly attributed, NEVER a safety verdict —
+              all safety meaning stays in SafetySignal (a separate row below).
+              The pill's meaning lives in its visible text ("Google"); the
+              tooltip is only supplementary. */}
+          {vm.googleRating ? (
             <div className="relative z-10 flex shrink-0 items-center gap-1.5">
-              {/* Public save-count — ATTRIBUTED ("saves"), hidden at 0. A distinct
-                  accent (lavender) from the safety-state colours (ADR-007). */}
-              {vm.saveCount && vm.saveCount > 0 ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <AttributedPill data-testid="save-count" className="bg-accent-lavender/50">
-                      <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                      <span>{vm.saveCount}</span>
-                      <span className="font-normal text-muted-foreground">saves</span>
-                    </AttributedPill>
-                  </TooltipTrigger>
-                  <TooltipContent>Community saves, not a safety score.</TooltipContent>
-                </Tooltip>
-              ) : null}
-
-              {/* External Google Places rating — ATTRIBUTED, never a safety score (ADR-007). */}
-              {vm.googleRating ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <AttributedPill data-testid="google-rating" className="bg-accent-peach/50">
-                      <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                      <span>{vm.googleRating.value.toFixed(1)}</span>
-                      <span className="font-normal text-muted-foreground">Google</span>
-                    </AttributedPill>
-                  </TooltipTrigger>
-                  <TooltipContent>Google rating, not an Aubrey's List safety score.</TooltipContent>
-                </Tooltip>
-              ) : null}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AttributedPill data-testid="google-rating" className="bg-accent-peach/50">
+                    <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                    <span>{vm.googleRating.value.toFixed(1)}</span>
+                    <span className="font-normal text-muted-foreground">Google</span>
+                  </AttributedPill>
+                </TooltipTrigger>
+                <TooltipContent>Google rating, not an Aubrey's List safety score.</TooltipContent>
+              </Tooltip>
             </div>
           ) : null}
         </div>
@@ -257,20 +252,12 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {vm.safetyState ? (
             <SafetySignal state={vm.safetyState} />
-          ) : vm.suggestedByBot ? (
-            // Curator-bot suggestion (AUB-31): a seeded starter label, NOT a
-            // verdict. Meaning is in text + icon (never colour alone) and clears
-            // the moment a real user attests. Distinct from "Not yet attested".
-            <Badge
-              variant="outline"
-              className="gap-1.5 border-accent-lavender bg-accent-lavender/30 px-2.5 py-1 text-body-sm font-medium text-foreground"
-            >
-              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-              Suggested by Aubrey's Bot
-            </Badge>
-          ) : (
-            // Honest empty state: no celiac claim / no attestation evidence yet.
-            // Plain text label — meaning never rests on colour (styling.md).
+          ) : vm.suggestedByBot ? null : (
+            // Honest empty state: no celiac claim / no attestation evidence yet
+            // AND nothing bot-suggested. Plain text label — meaning never rests
+            // on colour (styling.md). A bot-suggested empty listing instead
+            // shows its suggested-attribute badges below plus the "Suggested by
+            // Aubrey's Bot" label in the meta row (owner nits 7+8).
             <Badge
               variant="outline"
               className="border-dashed px-2.5 py-1 text-body-sm font-medium text-muted-foreground"
@@ -281,17 +268,48 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
 
           {/* Recent harm flags the card regardless of older confirmations. */}
           {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
+
+          {/* Curator-bot suggested claims (AUB-31, owner nit 7): one badge per
+              live-suggested attribute — PROVENANCE, never evidence (ADR-007).
+              The bot-provenance treatment (lavender + Sparkles) is deliberately
+              distinct from SafetySignal's evidence chips, and each badge carries
+              screen-reader text naming the source, so a suggestion can never
+              read as a community-confirmed verdict (never colour alone). */}
+          {vm.suggestedAttributes.map((attribute) => {
+            const AttributeIcon = CLAIM_ATTRIBUTE_ICONS[attribute];
+            return (
+              <Badge
+                key={attribute}
+                variant="outline"
+                data-testid="suggested-attribute"
+                className="gap-1 border-accent-lavender bg-accent-lavender/30 px-2 py-0.5 text-caption font-medium text-foreground"
+              >
+                <Sparkles className="h-3 w-3" aria-hidden="true" />
+                <AttributeIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{CLAIM_ATTRIBUTE_LABELS[attribute]}</span>
+                <span className="sr-only">
+                  (suggested by Aubrey's Bot, not community-confirmed)
+                </span>
+              </Badge>
+            );
+          })}
         </div>
 
-        {/* Meta row — freshness cue (left) + evidence counts (right). ALWAYS
-            rendered so every card reserves the same bottom-row height (AUB-194):
-            a VM with neither signal gets an `invisible` placeholder line of the
-            same composition (icon + caption text) and a transparent divider, so
-            seeded/bot-suggested cards match the height of fully-attested ones
-            without any content clipping. The `mt-auto` wrapper pins the row to
-            the card bottom when a neighbour's name or address wraps taller. */}
+        {/* Meta row — freshness cue (left) + evidence counts (right). The left
+            slot doubles as the bot-provenance slot (owner nit 8): when there is
+            no real freshness cue but live bot suggestions exist, it shows the
+            "Suggested by Aubrey's Bot" label, so bot-suggested cards read
+            uniformly with verified ones. A real freshness cue always WINS the
+            slot (evidence over provenance) — the suggested-attribute badges
+            above still carry the provenance. ALWAYS rendered so every card
+            reserves the same bottom-row height (AUB-194): a VM with no signal at
+            all gets an `invisible` placeholder line of the same composition
+            (icon + caption text) and a transparent divider, so empty cards match
+            the height of fully-attested ones without any content clipping. The
+            `mt-auto` wrapper pins the row to the card bottom when a neighbour's
+            name or address wraps taller. */}
         <div className="mt-auto">
-          {freshness || vm.evidence ? (
+          {freshness || vm.evidence || vm.suggestedByBot ? (
             <div
               data-testid="card-meta-row"
               className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-caption"
@@ -302,6 +320,17 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
                 >
                   <freshness.Icon className="h-4 w-4" aria-hidden="true" />
                   <span>{vm.freshness.label}</span>
+                </span>
+              ) : vm.suggestedByBot ? (
+                // Bot provenance in the freshness slot (owner nit 8). Meaning is
+                // in the text + Sparkles icon, never colour alone (styling.md);
+                // `text-brand` is distinct from every safety-state colour.
+                <span
+                  data-testid="bot-provenance"
+                  className="inline-flex items-center gap-1.5 font-semibold text-brand"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  <span>Suggested by Aubrey's Bot</span>
                 </span>
               ) : (
                 <span />
@@ -386,22 +415,6 @@ interface ListingCardProps {
 }
 
 /**
- * Thin wrapper preserving the browse route's call site
- * (`<ListingCard listing={…} glance={…} distanceLabel={…} />`) and mapping the
- * real {@link Listing} + {@link ListingTrustGlance} (+ an optional, already-
- * derived distance label) into the full {@link RestaurantCardVM} the card renders.
- *
- * The glance carries the ALREADY-DERIVED evidence counts and freshness cue
- * (computed server-side in the batched browse query set), so this wrapper only
- * MAPS them onto the VM — it never touches `db` or re-derives trust. `accent` is
- * a stable per-listing gradient hashed from `listing.id`; `googleRating`/`photoUrl`
- * are left undefined until a later phase supplies them.
- *
- * CLIENT-SAFE: imports only pure/client-safe/type-only modules (the `Listing`
- * type, the pure `ListingTrustGlance` type, and the presentational card) — no
- * `getDb`/server-only import — so it is safe in the browse route's client bundle.
- */
-/**
  * Map the real {@link Listing} + {@link ListingTrustGlance} (+ optional distance
  * label) into the flat, client-safe {@link RestaurantCardVM} the presentational
  * card consumes.
@@ -409,14 +422,19 @@ interface ListingCardProps {
  * Exported as the SINGLE mapping site so every browse surface (the list card, the
  * map pins, and the map carousel) derives its VM the same way — no duplicated
  * trust/accent logic. The glance already carries the server-derived evidence
- * counts and freshness cue, so this only maps them onto the VM; it never touches
- * `db` or re-derives trust.
+ * counts, freshness cue, and bot-suggested attribute set, so this only maps them
+ * onto the VM; it never touches `db` or re-derives trust. `accent` is a stable
+ * per-listing gradient hashed from `listing.id`; `googleRating`/`photoUrl` are
+ * left undefined until a later phase supplies them.
+ *
+ * CLIENT-SAFE: imports only pure/client-safe/type-only modules (the `Listing`
+ * type, the pure `ListingTrustGlance` type, and the presentational card) — no
+ * `getDb`/server-only import — so it is safe in the browse route's client bundle.
  */
 export function listingToCardVM(
   listing: Listing,
   glance: ListingTrustGlance,
-  distanceLabel?: string | undefined,
-  saveCount?: number | undefined
+  distanceLabel?: string | undefined
 ): RestaurantCardVM {
   return {
     id: listing.id,
@@ -424,6 +442,7 @@ export function listingToCardVM(
     address: listing.address,
     safetyState: glance.safetyState,
     suggestedByBot: glance.suggestedByBot,
+    suggestedAttributes: glance.suggestedAttributes,
     hasRecentIncident: glance.hasRecentIncident,
     accent: accentForId(listing.id),
     // Already-derived on the server (batched query set); mapped straight through.
@@ -432,14 +451,14 @@ export function listingToCardVM(
     ...(glance.evidence ? { evidence: glance.evidence } : {}),
     ...(glance.freshness ? { freshness: glance.freshness } : {}),
     ...(distanceLabel !== undefined ? { distanceLabel } : {}),
-    // The public save-count is OPTIONAL and trailing so callers that don't have
-    // it (e.g. the map carousel) still compile and simply render no pill. Spread
-    // in only when provided so the prop stays truly absent under
-    // `exactOptionalPropertyTypes`.
-    ...(saveCount !== undefined ? { saveCount } : {}),
   };
 }
 
+/**
+ * Thin list-item wrapper preserving the browse route's call site
+ * (`<ListingCard listing={…} glance={…} distanceLabel={…} />`): it maps the pair
+ * through {@link listingToCardVM} and renders the presentational card in an `<li>`.
+ */
 export function ListingCard({ listing, glance, distanceLabel }: ListingCardProps) {
   const vm = listingToCardVM(listing, glance, distanceLabel);
 
