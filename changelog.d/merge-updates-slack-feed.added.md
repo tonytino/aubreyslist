@@ -1,0 +1,1 @@
+- `[manual]` Every PR now leads with a plain-language `## TL;DR` section (CI-enforced by the `pr-tldr` job; dependabot exempt), and every merge to `main` posts a business-audience update to Slack via `slack-merge-updates.yml` (Claude rewrite → TL;DR → title fallback chain; no-ops green until `SLACK_WEBHOOK_URL` is provisioned). See `docs/agents/merge-updates.md`.
