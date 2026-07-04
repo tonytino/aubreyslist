@@ -240,20 +240,20 @@ function SuccessScreen({
       </span>
       <div className="flex flex-col gap-1">
         <h2 id="wizard-success-heading" className="text-title font-semibold">
-          {created ? "Listing added — thanks for contributing" : "This place was already listed"}
+          {created ? "Listing added, thanks!" : "This place was already listed"}
         </h2>
         <p className="text-body text-muted-foreground">{name}</p>
         {created ? null : (
           <p className="text-body-sm text-muted-foreground">
             {attestedCount > 0
               ? "We saved your attestations to the existing listing."
-              : "It's already on the map — you can attest it any time."}
+              : "It's already on the map. You can attest it any time."}
           </p>
         )}
       </div>
       {unattestedCount > 0 ? (
         <p className="w-full rounded-card border border-border bg-muted/40 p-card text-body-sm text-muted-foreground">
-          {unattestedCount} of {CLAIM_ATTRIBUTES.length} attributes stayed "Not yet attested" — you
+          {unattestedCount} of {CLAIM_ATTRIBUTES.length} attributes stayed "Not yet attested". You
           can attest them any time from the listing.
         </p>
       ) : null}

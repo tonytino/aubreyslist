@@ -35,6 +35,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Database, schema, migrations                  | `docs/agents/database.md`     |
 | Tests (unit, component, E2E)                  | `docs/agents/testing.md`      |
 | Visual identity, design language, briefing Claude Design | `docs/agents/design.md` |
+| User-facing copy, voice, microcopy            | `docs/agents/copy.md`         |
 | Styling, Tailwind, CSS                        | `docs/agents/styling.md`      |
 | Environment variables                         | `docs/agents/environment.md`  |
 | Secrets for manual local commands (1Password) | `docs/agents/local-secrets.md` |

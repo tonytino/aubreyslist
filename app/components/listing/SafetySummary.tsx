@@ -69,8 +69,7 @@ export function SafetySummary({ state, variant = "default" }: SafetySummaryProps
           <p className="text-body font-semibold text-foreground">Not yet attested</p>
           <p className="text-body-sm text-muted-foreground">
             No one has confirmed yet whether this restaurant is celiac-safe or only gluten-friendly.
-            Community trust data is coming soon — until then, please verify cross-contamination
-            practices directly with the restaurant.
+            Verify cross-contamination practices with the restaurant directly.
           </p>
         </div>
       )}

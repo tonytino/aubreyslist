@@ -65,21 +65,21 @@ describe("DirectoryMap — pins", () => {
   it("labels each pin with the restaurant name AND its safety state", () => {
     renderMap();
     // Both the pin and the mini-card share the accessible name, so there are two.
-    expect(screen.getAllByRole("button", { name: "Root & Rye — Celiac-safe" }).length).toBe(2);
-    expect(
-      screen.getAllByRole("button", { name: "Lucia Trattoria — Recent incident" }).length
-    ).toBe(2);
+    expect(screen.getAllByRole("button", { name: "Root & Rye, Celiac-safe" }).length).toBe(2);
+    expect(screen.getAllByRole("button", { name: "Lucia Trattoria, Recent incident" }).length).toBe(
+      2
+    );
   });
 
   it("renders an honest 'Not yet attested' label for a null safety state (no fake verdict)", () => {
     renderMap();
-    expect(screen.getAllByRole("button", { name: "New Spot — Not yet attested" }).length).toBe(2);
+    expect(screen.getAllByRole("button", { name: "New Spot, Not yet attested" }).length).toBe(2);
   });
 
   it("marks the selected entry via aria-pressed on both its pin and mini-card", () => {
     renderMap("b");
     const pressed = screen
-      .getAllByRole("button", { name: "Lucia Trattoria — Recent incident" })
+      .getAllByRole("button", { name: "Lucia Trattoria, Recent incident" })
       .filter((el) => el.getAttribute("aria-pressed") === "true");
     // Both the pin and the carousel card reflect the selection.
     expect(pressed).toHaveLength(2);
@@ -87,7 +87,7 @@ describe("DirectoryMap — pins", () => {
 
   it("selects the same restaurant whether its pin or its mini-card is tapped", () => {
     const { onSelect } = renderMap("a");
-    const targets = screen.getAllByRole("button", { name: "Lucia Trattoria — Recent incident" });
+    const targets = screen.getAllByRole("button", { name: "Lucia Trattoria, Recent incident" });
     fireEvent.click(targets[0] as HTMLElement);
     fireEvent.click(targets[1] as HTMLElement);
     // Pin and mini-card both request the same id (selection stays in sync).
@@ -111,7 +111,7 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
     const carousel = screen.getByTestId("map-carousel");
     // Root & Rye's carousel button contains ONLY its own celiac-safe chip, never
     // another restaurant's incident signal.
-    const rootCard = within(carousel).getByRole("button", { name: "Root & Rye — Celiac-safe" });
+    const rootCard = within(carousel).getByRole("button", { name: "Root & Rye, Celiac-safe" });
     expect(within(rootCard).getByText("Celiac-safe")).toBeInTheDocument();
     expect(within(rootCard).queryByText("Recent incident")).not.toBeInTheDocument();
   });
@@ -134,7 +134,7 @@ describe("DirectoryMap — carousel FavoriteButton (F6, AUB-125)", () => {
     const carousel = screen.getByTestId("map-carousel");
     // A <button> inside the mini-card <button> would be invalid HTML + nested
     // interactive; the heart must be a sibling, not a descendant.
-    const miniCard = within(carousel).getByRole("button", { name: "Root & Rye — Celiac-safe" });
+    const miniCard = within(carousel).getByRole("button", { name: "Root & Rye, Celiac-safe" });
     const heart = within(carousel).getByRole("button", { name: "Save Root & Rye" });
     expect(miniCard).not.toContainElement(heart);
     expect(heart).not.toContainElement(miniCard);

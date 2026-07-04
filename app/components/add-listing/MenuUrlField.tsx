@@ -36,7 +36,7 @@ export function MenuUrlField({
         aria-describedby={hintId}
       />
       <span id={hintId} className="text-caption text-muted-foreground">
-        A link to the restaurant's menu. No uploads — paste a URL.
+        Paste a link to the restaurant's menu. No uploads.
       </span>
     </div>
   );

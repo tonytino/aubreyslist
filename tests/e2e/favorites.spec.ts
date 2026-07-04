@@ -80,14 +80,14 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
     await waitForBrowseReady(page);
 
     // (1) Favorite from the card. The heart starts unsaved (aria-pressed=false);
-    // clicking it flips the accessible label ("Save …" → "Saved — remove …") and
+    // clicking it flips the accessible label ("Save …" → "Saved, remove …") and
     // aria-pressed to true. We wait for it to re-enable (the write is disabled
     // while pending) so the server write has SETTLED before we navigate.
     const saveBtn = page.getByRole("button", { name: `Save ${savedName}` });
     await expect(saveBtn).toHaveAttribute("aria-pressed", "false");
     await saveBtn.click();
 
-    const savedBtn = page.getByRole("button", { name: `Saved — remove ${savedName}` });
+    const savedBtn = page.getByRole("button", { name: `Saved, remove ${savedName}` });
     await expect(savedBtn).toBeVisible();
     await expect(savedBtn).toHaveAttribute("aria-pressed", "true");
     await expect(savedBtn).toBeEnabled();
@@ -97,7 +97,7 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
     await expect(page.getByRole("link", { name: unsavedName })).toBeVisible();
 
     // (3) The "Saved" filter (server-side `?saved=1`). Click the sign-in-gated
-    // chip (exact name "Saved" — never the cards' "Saved — remove …" hearts).
+    // chip (exact name "Saved" — never the cards' "Saved, remove …" hearts).
     await page.getByRole("button", { name: "Saved", exact: true }).click();
     // The app serializes the boolean search param as `saved=true` (TanStack Router);
     // a hand-typed `?saved=1` also works (the schema coerces both) — accept either.
@@ -120,7 +120,7 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
 
     // (4) Unfavorite from the /favorites card — the label flips back to "Save …"
     // and aria-pressed to false. Wait for it to re-enable so the delete SETTLED.
-    const removeBtn = page.getByRole("button", { name: `Saved — remove ${savedName}` });
+    const removeBtn = page.getByRole("button", { name: `Saved, remove ${savedName}` });
     await removeBtn.click();
     const reSaveBtn = page.getByRole("button", { name: `Save ${savedName}` });
     await expect(reSaveBtn).toBeVisible();
@@ -183,7 +183,7 @@ test.describe("favorites — anonymous heart opens sign-in dialog, no write", ()
     expect(rows).toHaveLength(0);
 
     // A reload confirms nothing persisted: the heart is still the unsaved "Save …"
-    // affordance with aria-pressed=false (never "Saved — remove …").
+    // affordance with aria-pressed=false (never "Saved, remove …").
     await page.reload();
     await waitForBrowseReady(page);
     const heart = page.getByRole("button", { name: `Save ${listingName}` });

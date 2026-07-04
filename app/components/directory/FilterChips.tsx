@@ -148,8 +148,7 @@ function SavedChip({ saved, onToggle }: { saved: boolean; onToggle: () => void }
           <DialogHeader>
             <DialogTitle>Sign in to see your saved spots</DialogTitle>
             <DialogDescription>
-              Favorites let you keep a personal list of gluten-free spots you trust. Sign in to save
-              spots and filter the directory to just your saved places.
+              Sign in to save spots you trust and filter the directory to just those places.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -240,7 +239,7 @@ export function FilterChips({
           <SheetHeader>
             <SheetTitle>Filter listings</SheetTitle>
             <SheetDescription>
-              Narrow the list to places affirmed for the attributes you pick.
+              Show only places the community has confirmed for the attributes you pick.
             </SheetDescription>
           </SheetHeader>
           <div className="flex flex-col gap-4 px-4 pb-4">

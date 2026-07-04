@@ -267,6 +267,6 @@ describe("ModerationQueue", () => {
 
   it("shows a no-access message when the verdict is not granted", async () => {
     renderQueue({ access: "forbidden" });
-    expect(await screen.findByText(/do not have access/i)).toBeInTheDocument();
+    expect(await screen.findByText(/don't have access/i)).toBeInTheDocument();
   });
 });

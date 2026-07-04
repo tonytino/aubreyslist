@@ -30,7 +30,7 @@ export const Route = createFileRoute("/favorites")({
     meta: pageSeoMeta({
       title: "Your saved spots · Aubrey's List",
       description:
-        "Your personal list of gluten-free and celiac-safe spots on Aubrey's List — every restaurant you've saved, kept fresh with the same community trust signals as the directory.",
+        "The gluten-free and celiac-safe spots you've saved on Aubrey's List, with the same community trust signals as the directory.",
       path: "/favorites",
     }),
     links: [canonicalLink("/favorites")],
@@ -66,7 +66,7 @@ export function FavoritesPage() {
         {user === null ? (
           <FavoritesEmptyState
             title="Sign in to save spots"
-            body="Favorites let you keep a personal list of gluten-free spots you trust. Sign in to start saving."
+            body="Keep a personal list of gluten-free spots you trust. Sign in to start saving."
             action={
               // Full-page OAuth redirect (not an RPC), returning the diner here.
               <a

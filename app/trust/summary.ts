@@ -85,9 +85,9 @@ export const CLAIM_ATTRIBUTE_ICONS: Record<ClaimAttribute, LucideIcon> = {
  */
 export const CLAIM_ATTRIBUTE_DESCRIPTIONS: Record<ClaimAttribute, string> = {
   celiac_safe_vs_gluten_friendly:
-    "Confirm if the community vouches this place is celiac-safe — it takes cross-contamination seriously. Dispute if it's only gluten-friendly.",
+    "Confirm if this place is celiac-safe (takes cross-contamination seriously). Dispute if it's only gluten-friendly.",
   dedicated_fryer:
-    "A separate fryer for gluten-free food — shared fryer oil is a major cross-contamination risk.",
+    "A separate fryer for gluten-free food (shared fryer oil is a major cross-contamination risk).",
   dedicated_gf_menu: "A dedicated gluten-free menu, not just a few marked items on the main one.",
   off_menu_gf_on_request:
     "Staff will prepare gluten-free options on request even if they aren't listed.",

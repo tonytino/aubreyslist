@@ -170,8 +170,7 @@ export function FlagControl(
             <DialogHeader>
               <DialogTitle>{accessibleLabel}</DialogTitle>
               <DialogDescription>
-                Tell a moderator why — inappropriate, spam, or wrong information. It enters the
-                moderation queue for review.
+                Tell a moderator why: inappropriate, spam, or wrong information.
               </DialogDescription>
             </DialogHeader>
             {reasonForm}
@@ -185,7 +184,7 @@ export function FlagControl(
     return (
       <output className="inline-flex items-center gap-1.5 text-caption text-muted-foreground">
         <FlagIcon />
-        Reported. Thanks — a moderator will review it.
+        Reported. A moderator will review it.
       </output>
     );
   }

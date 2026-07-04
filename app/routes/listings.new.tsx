@@ -35,7 +35,7 @@ export const Route = createFileRoute("/listings/new")({
     meta: pageSeoMeta({
       title: "Add a restaurant · Aubrey's List",
       description:
-        "Add a gluten-free or celiac-safe restaurant to Aubrey's List so the community can vet it — then attest to how safe it really is.",
+        "Add a gluten-free or celiac-safe restaurant to Aubrey's List so the community can vet it.",
       path: "/listings/new",
     }),
     links: [canonicalLink("/listings/new")],
@@ -52,8 +52,7 @@ function AddListing() {
       <header className="flex flex-col gap-2">
         <h1 className="text-headline font-bold tracking-tight">Add a restaurant</h1>
         <p className="text-body text-muted-foreground">
-          Help the community find gluten-free-safe places. Add a restaurant, then attest to how safe
-          it is as you go — skip anything you're not sure of.
+          Add a restaurant, then attest to what you know. Skip anything you're not sure of.
         </p>
       </header>
 
