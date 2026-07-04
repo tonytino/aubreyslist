@@ -1,20 +1,32 @@
 import { type Page, expect } from "@playwright/test";
 
 /**
- * Wait for client hydration to actually complete before interacting.
+ * Wait for client hydration to actually COMMIT before interacting.
  *
- * TanStack Router assigns `window.__TSR_ROUTER__` in its constructor, which only
- * runs when the client bundle executes (i.e. `hydrateRoot` ran). In the `pnpm dev`
- * harness Playwright uses (see playwright.config.ts), the client bundle is compiled
- * and fetched on demand, so this can take a moment after first paint — interacting
- * with a control before it resolves would hit a not-yet-hydrated element (e.g. a
- * <select> or checkbox whose onChange isn't wired yet) and the URL would never
- * update. Awaiting this condition makes control interactions deterministic.
+ * Waits for the `data-hydrated` attribute the root route stamps on `<html>`
+ * from a post-mount effect (app/routes/__root.tsx) — effects only run after
+ * React commits the hydration render, so this is a true "the page is
+ * interactive" signal.
+ *
+ * Deliberately NOT `window.__TSR_ROUTER__` (the old signal): the router
+ * assigns that in its CONSTRUCTOR, when the client bundle merely starts
+ * executing — in the `pnpm dev` harness Playwright uses (playwright.config.ts)
+ * that can be seconds before the concurrent (`startTransition`-wrapped)
+ * hydration commit, because route chunks compile on demand. Interacting in
+ * that gap is treacherously asymmetric: a real CLICK is queued and replayed by
+ * React's discrete-event replay (so chip clicks "worked"), but a programmatic
+ * `change` on an SSR-rendered `<select>` (Playwright's `selectOption`) is
+ * swallowed — by commit time React has re-synced the controlled value and
+ * installed its input value-tracker, so `onChange` never fires and the URL
+ * never updates. That was the deterministic CI failure behind the browse
+ * sort-chip specs (sort select as the FIRST interaction on a fresh load
+ * failed every retry, while the same select after any prior navigation
+ * passed). If hydration never happens at all (the no-JS regression,
+ * hydration.spec.ts), this never resolves and the test fails here — the guard
+ * is preserved.
  */
 export async function waitForHydration(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => typeof (window as unknown as { __TSR_ROUTER__?: unknown }).__TSR_ROUTER__ !== "undefined"
-  );
+  await page.waitForFunction(() => document.documentElement.dataset.hydrated === "true");
 }
 
 /**

@@ -50,13 +50,15 @@ test("the app hydrates: a <Link> does client-side navigation, not a full reload"
 }) => {
   await page.goto("/");
 
-  // Wait for hydration to actually complete before interacting. TanStack Router
-  // assigns `window.__TSR_ROUTER__` in its constructor, which only runs when the
-  // client bundle executes (i.e. hydrateRoot ran). In dev the bundle is compiled
-  // and fetched on demand, so this can take a moment after first paint — clicking
-  // before it resolves would hit a not-yet-hydrated <Link> (a dead <a>) and read
-  // as a full reload. If hydration never happens (the bug), this never resolves
-  // and the test fails here, which is the regression we guard.
+  // Wait for hydration to actually COMMIT before interacting: the helper waits
+  // for the `data-hydrated` attribute the root route stamps from a post-mount
+  // effect (see helpers.ts for why the old `__TSR_ROUTER__` signal was too
+  // early). In dev the client bundle is compiled and fetched on demand, so this
+  // can take a moment after first paint — clicking before the commit would hit
+  // a not-yet-hydrated <Link> (a dead <a>) and read as a full reload. If
+  // hydration never happens (the bug), the effect never runs, the attribute
+  // never appears, this never resolves, and the test fails here — which is the
+  // regression we guard.
   await waitForHydration(page);
 
   // Plant a sentinel on the live JS context. A real SPA navigation preserves the

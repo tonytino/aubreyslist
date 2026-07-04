@@ -73,6 +73,25 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
+  // Post-hydration marker. `useEffect` runs only AFTER React COMMITS the
+  // hydration render, so this stamp is the earliest honest "the page is
+  // interactive" signal. `window.__TSR_ROUTER__` (which the E2E helpers used
+  // to wait on) is assigned in the Router CONSTRUCTOR — i.e. when the client
+  // bundle merely starts executing, potentially long before the concurrent
+  // (`startTransition`-wrapped) hydration commit in dev, where route chunks
+  // compile on demand. In that gap, a real click is queued and REPLAYED by
+  // React's discrete-event replay, but a programmatic `change` on an
+  // SSR-rendered `<select>` (Playwright `selectOption`) is swallowed: by
+  // commit time React has re-synced the controlled value and installed its
+  // input value-tracker, so the pre-commit change never reaches `onChange`
+  // (the CI failure mode behind the browse sort-chip specs). The E2E
+  // `waitForHydration` helper waits for this attribute instead. Idempotent
+  // under StrictMode's double-invoke; never removed (the document outlives
+  // SPA navigations, and a full reload re-stamps it after re-hydration).
+  useEffect(() => {
+    document.documentElement.dataset.hydrated = "true";
+  }, []);
+
   return (
     <html lang="en">
       <head>
