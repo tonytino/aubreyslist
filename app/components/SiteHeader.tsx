@@ -64,11 +64,21 @@ export function SiteHeader() {
         <nav aria-label="Primary" className="justify-self-start">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" aria-label="Open menu">
+              {/* Touch ergonomics: >= 44px hit area on coarse pointers (the
+                  icon-size Button is 36px, fine for a mouse but tight for a
+                  thumb). Item/panel touch sizing lives in ui/dropdown-menu. */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="pointer-coarse:size-11"
+                aria-label="Open menu"
+              >
                 <Menu aria-hidden className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
+            {/* Wider panel on touch so icons + labels breathe at 375px. */}
+            <DropdownMenuContent align="start" className="w-48 pointer-coarse:w-60">
               {NAV_ITEMS.map((item) => (
                 <DropdownMenuItem key={item.label} asChild>
                   <Link to={item.to}>

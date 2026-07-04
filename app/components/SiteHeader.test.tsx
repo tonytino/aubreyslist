@@ -70,4 +70,16 @@ describe("SiteHeader — mobile hamburger menu", () => {
     expect(screen.getByRole("menuitem", { name: "Add a listing" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "About" })).toBeInTheDocument();
   });
+
+  it("keeps the Primary nav landmark and gives the trigger a >=44px touch hit area", async () => {
+    renderHeader();
+
+    const trigger = await screen.findByRole("button", { name: "Open menu" });
+    // jsdom can't evaluate `(pointer: coarse)`; assert the Tailwind utility as
+    // a regression guard (size-11 = 44px, matching the avatar trigger).
+    expect(trigger.className).toContain("pointer-coarse:size-11");
+    // The nav landmark must keep wrapping the trigger even though the items
+    // live in a portaled menu.
+    expect(trigger.closest("nav")).toHaveAttribute("aria-label", "Primary");
+  });
 });

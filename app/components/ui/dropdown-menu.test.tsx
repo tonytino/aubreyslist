@@ -62,4 +62,29 @@ describe("DropdownMenu", () => {
     expect(screen.getByRole("menuitem", { name: "Profile" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Settings" })).toBeInTheDocument();
   });
+
+  it("bakes touch ergonomics into items and panel on coarse pointers", () => {
+    // jsdom can't evaluate `(pointer: coarse)` media queries, so assert the
+    // Tailwind `pointer-coarse:` utilities are present as a regression guard:
+    // >= 44px item hit height (min-h-11), larger text, and panel padding are
+    // what make both header menus usable on mobile (owner feedback).
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>Menu</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>Profile</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+
+    const trigger = screen.getByRole("button", { name: "Menu" });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "Enter" });
+
+    const item = screen.getByRole("menuitem", { name: "Profile" });
+    expect(item.className).toContain("pointer-coarse:min-h-11");
+    expect(item.className).toContain("pointer-coarse:text-base");
+    expect(item.className).toContain("pointer-coarse:gap-3");
+    expect(screen.getByRole("menu").className).toContain("pointer-coarse:p-1.5");
+  });
 });
