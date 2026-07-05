@@ -80,12 +80,16 @@ export const CLAIM_ATTRIBUTE_ICONS: Record<ClaimAttribute, LucideIcon> = {
  * source of truth for both surfaces. Keyed by the `claim_attribute` enum so
  * the mapping is exhaustive at compile time — add a taxonomy value and
  * TypeScript forces a description here too. `celiac_safe_vs_gluten_friendly`
- * carries the confirm/dispute gloss a bare vote would otherwise leave
- * ambiguous (issue #175); the other four are honest one-line facts.
+ * carries the gloss a bare vote would otherwise leave ambiguous (issue #175);
+ * the other four are honest one-line facts. The headline gloss names the two
+ * STATES rather than button captions, because the two surfaces label their
+ * controls differently: the listing-detail vote toggles ARE the Celiac-safe /
+ * Gluten-friendly badges, while the add-listing wizard step keeps literal
+ * Confirm/Dispute buttons (with its own "what your answer records" preview).
  */
 export const CLAIM_ATTRIBUTE_DESCRIPTIONS: Record<ClaimAttribute, string> = {
   celiac_safe_vs_gluten_friendly:
-    "Confirm if this place is celiac-safe (takes cross-contamination seriously). Dispute if it's only gluten-friendly.",
+    "Celiac-safe means the kitchen takes cross-contamination seriously. Gluten-friendly means gluten-free options without that guarantee.",
   dedicated_fryer:
     "A separate fryer for gluten-free food (shared fryer oil is a major cross-contamination risk).",
   dedicated_gf_menu: "A dedicated gluten-free menu, not just a few marked items on the main one.",

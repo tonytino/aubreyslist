@@ -53,10 +53,13 @@ describe("claimAttributeLabel", () => {
 });
 
 describe("claimAttributeDescription", () => {
-  it("returns the confirm/dispute clarifier for an ambiguous attribute (Celiac-safe, #175)", () => {
+  it("returns the two-state clarifier for the ambiguous headline attribute (Celiac-safe, #175)", () => {
+    // The gloss names BOTH states (the vote toggles are the badges themselves),
+    // so a headline vote is never ambiguous on either surface.
     const description = claimAttributeDescription("celiac_safe_vs_gluten_friendly");
     expect(description).toMatch(/celiac-safe/i);
-    expect(description).toMatch(/dispute/i);
+    expect(description).toMatch(/gluten-friendly/i);
+    expect(description).toMatch(/cross-contamination/i);
   });
 
   it("returns the honest one-line fact for the other four attributes", () => {

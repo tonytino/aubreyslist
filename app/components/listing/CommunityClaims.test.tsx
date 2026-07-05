@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ListingClaimAggregate } from "~/server/attestations/listing-summary";
@@ -41,6 +41,15 @@ const TAXONOMY = [
   "dedicated_gf_menu",
   "off_menu_gf_on_request",
   "gf_substitutes",
+] as const;
+
+// Each attribute's confirm affordance is its own badge (icon + taxonomy label).
+const CONFIRM_BADGE_NAMES = [
+  "Celiac-safe",
+  "Dedicated fryer",
+  "Dedicated GF menu",
+  "Off-menu GF on request",
+  "GF substitutes",
 ] as const;
 
 const fullTaxonomy = (): ListingClaimAggregate[] =>
@@ -98,9 +107,14 @@ describe("CommunityClaims", () => {
     // attested — no confirmations or disputes yet"), never a fabricated rating.
     expect(screen.getAllByText(/no confirmations or disputes yet/).length).toBe(TAXONOMY.length);
     expect(screen.getAllByText("Not yet attested").length).toBe(TAXONOMY.length);
-    // Every attribute is attestable: confirm/dispute controls on each row.
-    expect(screen.getAllByRole("button", { name: "Confirm" })).toHaveLength(TAXONOMY.length);
-    expect(screen.getAllByRole("button", { name: "Dispute" })).toHaveLength(TAXONOMY.length);
+    // Every attribute is attestable via its own confirm badge...
+    for (const name of CONFIRM_BADGE_NAMES) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    // ...and disputes: the headline's dispute is the Gluten-friendly badge; the
+    // other four share the consistent X + "Dispute" badge.
+    expect(screen.getByRole("button", { name: "Gluten-friendly" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Dispute" })).toHaveLength(TAXONOMY.length - 1);
     // No claim row exists yet, so no "Flag claim" control is offered.
     expect(screen.queryByRole("button", { name: "Flag claim" })).not.toBeInTheDocument();
   });
@@ -115,7 +129,7 @@ describe("CommunityClaims", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    fireEvent.click(screen.getByRole("button", { name: "GF substitutes" }));
 
     await waitFor(() => {
       expect(submitVoteMock).toHaveBeenCalledTimes(1);
@@ -138,11 +152,12 @@ describe("CommunityClaims", () => {
         claims={[claim({ claimId: "c1" })]}
       />
     );
-    expect(screen.queryByRole("button", { name: "Confirm" })).not.toBeInTheDocument();
+    // No vote badges and no flag control — FlagControl login-gates itself too.
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("shows confirm/dispute controls for a signed-in viewer", () => {
+  it("shows the badge toggle controls for a signed-in viewer, with no Retract link", () => {
     renderWithQuery(
       <CommunityClaims
         listingId="listing-1"
@@ -151,13 +166,13 @@ describe("CommunityClaims", () => {
         claims={[claim({ claimId: "c1" })]}
       />
     );
-    expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dedicated fryer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Dispute" })).toBeInTheDocument();
-    // No vote yet → no retract affordance.
+    // Votes are toggles now — there is never a separate retract affordance.
     expect(screen.queryByRole("button", { name: "Retract" })).not.toBeInTheDocument();
   });
 
-  it("marks the viewer's own vote and offers a retract control", () => {
+  it("marks the viewer's own vote as pressed and retracts it on a second press", async () => {
     renderWithQuery(
       <CommunityClaims
         listingId="listing-1"
@@ -166,8 +181,39 @@ describe("CommunityClaims", () => {
         claims={[claim({ claimId: "c1", confirmCount: 1, viewerVote: "confirm" })]}
       />
     );
-    expect(screen.getByRole("button", { name: "Confirm" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Retract" })).toBeInTheDocument();
+    const confirm = screen.getByRole("button", { name: "Dedicated fryer" });
+    expect(confirm).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "Retract" })).not.toBeInTheDocument();
+
+    fireEvent.click(confirm);
+
+    await waitFor(() => {
+      expect(removeVoteMock).toHaveBeenCalledTimes(1);
+    });
+    expect(removeVoteMock).toHaveBeenCalledWith({
+      data: { listingId: "listing-1", attribute: "dedicated_fryer" },
+    });
+    expect(submitVoteMock).not.toHaveBeenCalled();
+  });
+
+  it("puts the flag icon-button on the claim's title row when a claim row exists (#39)", () => {
+    renderWithQuery(
+      <CommunityClaims
+        listingId="listing-1"
+        viewerId="user-1"
+        now={NOW}
+        claims={[claim({ claimId: "c1", attribute: "dedicated_fryer" })]}
+      />
+    );
+    const flagButton = screen.getByRole("button", { name: "Flag claim" });
+    // Right-aligned on the SAME header row as the claim's title: the flag
+    // control and the title share the header container, and the vote badges
+    // live outside it.
+    const headerRow = flagButton.parentElement;
+    expect(headerRow).not.toBeNull();
+    if (headerRow === null) throw new Error("unreachable");
+    expect(within(headerRow).getByText("Dedicated fryer")).toBeInTheDocument();
+    expect(within(headerRow).queryByRole("button", { name: "Dispute" })).not.toBeInTheDocument();
   });
 
   it("derives each row's recency + staleness from the injected `now`, not a live clock (#115)", () => {

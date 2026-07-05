@@ -94,7 +94,7 @@ describe("ClaimTrustSummaryRow", () => {
     expect(screen.queryByText("Needs update")).not.toBeInTheDocument();
   });
 
-  it("renders the confirm/dispute clarifier for an attribute that has one (Celiac-safe, #175)", () => {
+  it("renders the two-state clarifier for the headline attribute (Celiac-safe, #175)", () => {
     render(
       <ClaimTrustSummaryRow
         attribute="celiac_safe_vs_gluten_friendly"
@@ -103,10 +103,13 @@ describe("ClaimTrustSummaryRow", () => {
       />
     );
     // The row label is the reframed "Celiac-safe" (exact — the clarifier below
-    // also contains "celiac-safe" lower-cased).
+    // also leads with "Celiac-safe").
     expect(screen.getByText("Celiac-safe", { exact: true })).toBeInTheDocument();
-    // The clarifier disambiguates what a vote means, so "confirm" is never vague.
-    expect(screen.getByText(/Confirm if this place is celiac-safe/)).toBeInTheDocument();
+    // The clarifier names both states (the vote toggles are the badges
+    // themselves), so a headline vote is never vague.
+    expect(
+      screen.getByText(/Celiac-safe means the kitchen takes cross-contamination seriously/)
+    ).toBeInTheDocument();
   });
 
   it("renders the honest one-line fact for a non-headline attribute", () => {
@@ -117,7 +120,9 @@ describe("ClaimTrustSummaryRow", () => {
         now={NOW}
       />
     );
-    expect(screen.queryByText(/Confirm if this place is celiac-safe/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Celiac-safe means the kitchen takes cross-contamination seriously/)
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText(/shared fryer oil is a major cross-contamination risk/)
     ).toBeInTheDocument();

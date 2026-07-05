@@ -1,0 +1,5 @@
+- `[manual]` Community-claim votes are now toggles: press your current vote's badge again to retract it, press the other side to switch. The separate "Retract" link is gone.
+- `[manual]` Confirm/dispute buttons now present as the claim's badge: the headline claim shows Celiac-safe / Gluten-friendly badge toggles, and every other attribute confirms as its own taxonomy badge with a consistent X + "Dispute" badge. Icon + text label always carry the meaning, never colour alone.
+- `[manual]` The "Flag claim" control moved from below the vote buttons to a compact icon button right-aligned on each claim's title row.
+- `[manual]` A visible "You confirmed this." / "You disputed this." caption marks the viewer's own vote, so a pressed vote badge never reads as the community verdict. Voting stays disabled until the roll-up refetch lands.
+- `[manual]` The headline claim's clarifier now names the two states ("Celiac-safe means... Gluten-friendly means...") instead of referencing Confirm/Dispute buttons that no longer exist on listing detail.
