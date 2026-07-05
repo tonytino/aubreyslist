@@ -54,21 +54,26 @@ export default defineConfig({
       // even runs. It also fires locally for anyone who runs `pnpm test:coverage`.
       // The fast `unit` CI job does not pass `--coverage`, so it is unaffected.
       //
-      // Baseline measured 2026-07-03 on a from-scratch DB-free run (no
+      // Baseline measured 2026-07-05 on a from-scratch DB-free run (no
       // DATABASE_URL/TEST_DATABASE_URL — matches this repo's sandboxed/no-secret
       // CI path, which is the LOWER of the two coverage modes since the
       // integration suite only ever adds coverage, never removes it):
-      //   statements 93.59% | branches 92.13% | functions 87.45% | lines 93.59%
-      // Thresholds below sit ~2-3 points under that measured baseline —
+      //   statements 91.62% | branches 88.04% | functions 86.02% | lines 91.59%
+      // RE-BASELINED for Vitest 4 (2026-07-05): @vitest/coverage-v8 v4 remaps
+      // V8 coverage via the AST (Istanbul-like semantics), so the SAME code +
+      // tests measure a few points lower than v3 did (2026-07-03 v3 baseline:
+      // statements 93.59 | branches 92.13 | functions 87.45 | lines 93.59).
+      // This is a measurement-methodology change, not a coverage regression.
+      // Thresholds below sit ~2-3 points under the measured baseline —
       // deliberate headroom so unrelated in-flight work doesn't trip this floor
       // the moment it lands, while still catching a real regression. Re-measure
       // with `pnpm test:coverage` and ratchet these up over time as coverage
       // improves; do not lower them to make a failing PR pass.
       thresholds: {
-        statements: 91,
-        branches: 90,
-        functions: 85,
-        lines: 91,
+        statements: 89,
+        branches: 85,
+        functions: 83,
+        lines: 89,
       },
     },
   },
