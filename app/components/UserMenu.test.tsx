@@ -105,6 +105,31 @@ describe("UserMenu", () => {
     expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
   });
 
+  it("renders Sign out as a submit button inside the POST sign-out form", async () => {
+    const user: SessionUser = { ...baseUser, role: "user" };
+    renderMenu(user);
+    await openMenu(user);
+
+    // The submit BUTTON itself is the menu item (the form wraps it), so the
+    // item's entire padded hit area triggers the POST — no dead padding.
+    const signOut = screen.getByRole("menuitem", { name: "Sign out" });
+    expect(signOut.tagName).toBe("BUTTON");
+    expect(signOut).toHaveAttribute("type", "submit");
+    const form = signOut.closest("form");
+    expect(form).toHaveAttribute("method", "post");
+    expect(form).toHaveAttribute("action", "/api/auth/sign-out");
+  });
+
+  it("gives the avatar trigger a >=44px hit area on coarse pointers", async () => {
+    const user: SessionUser = { ...baseUser, role: "user" };
+    renderMenu(user);
+
+    // jsdom can't evaluate `(pointer: coarse)`; assert the Tailwind utility as
+    // a regression guard (size-11 = 44px, matching the hamburger trigger).
+    const trigger = await screen.findByRole("button", { name: `Account menu for ${user.name}` });
+    expect(trigger.className).toContain("pointer-coarse:size-11");
+  });
+
   it("shows a Favorites link to /favorites for any logged-in user", async () => {
     const user: SessionUser = { ...baseUser, role: "user" };
     renderMenu(user);

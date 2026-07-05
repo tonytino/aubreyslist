@@ -67,11 +67,13 @@ export function UserMenu({ user, previewLoginEnabled = false }: UserMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* Touch ergonomics: >= 44px hit area on coarse pointers (matches the
+            hamburger trigger in SiteHeader; the 32px avatar stays centred). */}
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="rounded-full"
+          className="rounded-full pointer-coarse:size-11"
           aria-label={`Account menu for ${user.name}`}
         >
           {user.avatarUrl ? (
@@ -88,7 +90,9 @@ export function UserMenu({ user, previewLoginEnabled = false }: UserMenuProps) {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-56">
+      {/* Wider panel on touch so icons + labels breathe at 375px (mirrors the
+          SiteHeader nav menu; item touch sizing lives in ui/dropdown-menu). */}
+      <DropdownMenuContent align="end" className="w-56 pointer-coarse:w-64">
         <DropdownMenuLabel className="flex flex-col gap-0.5">
           <span className="font-medium text-foreground">{user.name}</span>
           <span className="truncate text-caption font-normal text-muted-foreground">
@@ -123,15 +127,20 @@ export function UserMenu({ user, previewLoginEnabled = false }: UserMenuProps) {
 
         {/* Sign-out clears the session server-side then redirects home; a form
             POST is the right mechanism for a state-changing, full-page action
-            (not an RPC). The submit button is the menu item itself. */}
-        <DropdownMenuItem asChild>
-          <form method="post" action="/api/auth/sign-out">
-            <button type="submit" className="flex w-full items-center gap-2">
+            (not an RPC). The submit BUTTON is the menu item (the form wraps it),
+            so the item's entire padded hit area submits — previously the form
+            was the item and taps on its padding did nothing. The separator adds
+            breathing room so a thumb aiming at the row above can't mis-tap
+            sign-out. */}
+        <DropdownMenuSeparator />
+        <form method="post" action="/api/auth/sign-out">
+          <DropdownMenuItem asChild>
+            <button type="submit" className="w-full">
               <LogOut aria-hidden className="h-4 w-4" />
               Sign out
             </button>
-          </form>
-        </DropdownMenuItem>
+          </DropdownMenuItem>
+        </form>
       </DropdownMenuContent>
     </DropdownMenu>
   );
