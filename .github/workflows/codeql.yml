@@ -50,7 +50,7 @@ jobs:
       # and TS in one analysis. CodeQL extracts JS/TS without a build step, so no
       # autobuild/manual build is needed for this repo.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@19b2f06db2b6f5108140aeb04014ef02b648f789 # v4.31.11
+        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           languages: javascript-typescript
 
@@ -59,4 +59,4 @@ jobs:
       # blocking requires the "CodeQL" check to be a REQUIRED status check in
       # branch protection (a repo-admin / safe:human setting).
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@19b2f06db2b6f5108140aeb04014ef02b648f789 # v4.31.11
+        uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
