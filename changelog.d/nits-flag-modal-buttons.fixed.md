@@ -1,0 +1,1 @@
+- `[manual]` Fixed the flag-report form's footer buttons: Cancel and Submit flag now stretch to fill the full row width and follow the conventional dismiss-left / primary-right order, in both the inline and dialog presentations.
