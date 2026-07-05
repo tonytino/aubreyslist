@@ -67,6 +67,14 @@ import { fetchBrowseListings } from "~/server/listings/browse.fn";
  * community banner is gone (#6); and a distance-radius filter (`?radius=`, #7)
  * replaces the old count line — anchored to the visitor's coords or Denver Union
  * Station, applied server-side to BOTH the page and the honest total.
+ *
+ * LIST/MAP VIEW — URL STATE, CLIENT-ONLY (owner override of AUB-164). Unlike the
+ * server-affecting params above, `?view=` ("list" | "map") changes no query —
+ * it's excluded from `loaderDeps` on purpose, so toggling it never refetches or
+ * resets `page`. It's still a validated search param (not local `useState`)
+ * because the Hard Rule treats a selected tab/view as shareable/restorable UI
+ * state: refresh, back/forward, and a pasted `?view=map` link all restore it.
+ * The map itself is still a placeholder (`DirectoryMap.tsx`) pending AUB-111.
  */
 
 function browseQueryOptions(
@@ -222,6 +230,7 @@ function BrowseListings() {
     saved,
     quick: quickParam,
     bot,
+    view,
   } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
@@ -264,20 +273,36 @@ function BrowseListings() {
     document.documentElement.dataset.browseHydrated = "true";
   }, []);
 
-  // Remaining directory UI state is purely ephemeral (not shareable): the list/map
-  // view toggle and the map's selected pin.
+  // The list/map view toggle is SHAREABLE/restorable UI state (Hard Rule), so it
+  // is derived straight from the URL (`?view=`, validated by `browseSearchSchema`)
+  // rather than local `useState` — refresh/back-forward/a shared link all restore
+  // it by construction. `setView` below writes it via `navigate`.
   //
-  // AUB-164: the map view is a CSS placeholder with no real map provider wired up
-  // (see `DirectoryMap.tsx`) — wiring one up is deferred to AUB-111. `view` still
-  // defaults to (and today can only ever be) "list": `ViewToggle` below is
-  // rendered with its Map segment gated off (`mapEnabled` defaults to `false`),
-  // so there is no UI path that ever calls `setView("map")`. This is the ONLY
-  // entry point into the map view, so gating it here is sufficient — do NOT
-  // delete the `view === "map"` branch, `ViewToggle`'s Map segment, or
-  // `DirectoryMap` itself; AUB-111 re-enables all of it by passing
-  // `mapEnabled` once a real map provider ships.
-  const [view, setView] = useState<DirectoryView>("list");
+  // OWNER OVERRIDE of AUB-164: the map view is still a CSS placeholder with no
+  // real map provider wired up (see `DirectoryMap.tsx`) — a real provider remains
+  // deferred to AUB-111 — but the repo owner has explicitly asked for the Map
+  // segment to come back on the public directory ahead of that, accepting the
+  // placeholder for now. `ViewToggle` below is rendered with `mapEnabled`, so
+  // `view === "map"` is reachable again. AUB-111 swaps in a real map behind the
+  // same `DirectoryMap` component; do NOT delete the `view === "map"` branch,
+  // `ViewToggle`'s Map segment, or `DirectoryMap` itself.
+  //
+  // The map's selected pin stays genuinely ephemeral local state (not shareable
+  // — it's a transient in-view selection, like the URL-state doc's own example).
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  /**
+   * Write the List/Map choice to `?view=`. CLIENT-ONLY: `view` is intentionally
+   * absent from `loaderDeps`, so this never refetches the loader or touches
+   * `page` — it only swaps which content block renders below. Sits in the
+   * top-of-page sticky filter bar (alongside `DistanceSelector`), so — like that
+   * row's other controls — there's no below-the-fold scroll-jump to guard
+   * against (contrast the listing detail page's `?tab=`, which does need
+   * `resetScroll: false`).
+   */
+  function setView(next: DirectoryView) {
+    navigate({ search: (prev) => ({ ...prev, view: next }) });
+  }
 
   // The search box is a controlled local input mirrored to the URL `?q=` with a
   // debounce, so typing stays smooth while the SERVER search covers every listing
@@ -463,11 +488,15 @@ function BrowseListings() {
    * Reset EVERY browse search param to its default in one navigation (repo-owner
    * mobile feedback): unlike `clearAll` above (which preserves `saved`/`sort`/
    * `radius` — it's scoped to "filters" only), this backs all the way out —
-   * search, quick chips, taxonomy attrs, saved mode, sort, radius, page, and any
-   * near-me coordinate pair. `search: () => ({})` is a deliberate FULL REPLACE
-   * (not the usual functional updater that carries `prev` forward) — every param
-   * goes away, `validateSearch` refills `BROWSE_SEARCH_DEFAULTS`, and
-   * `stripSearchParams` keeps the URL bare, exactly like a fresh `/` visit.
+   * search, quick chips, taxonomy attrs, saved mode, sort, radius, page, any
+   * near-me coordinate pair, AND the client-only List/Map `?view=` (back to
+   * List). `search: () => ({})` is a deliberate FULL REPLACE (not the usual
+   * functional updater that carries `prev` forward) — every param goes away,
+   * `validateSearch` refills `BROWSE_SEARCH_DEFAULTS`, and `stripSearchParams`
+   * keeps the URL bare, exactly like a fresh `/` visit. That fresh-visit
+   * semantic is why `view` resets too, even though `view` alone never LIGHTS
+   * the Reset chip (it's excluded from `isAnyBrowseFilterActive` — a
+   * content-view choice isn't a filter; see the NOTE in browse-search.ts).
    * `geo.reset()` mirrors `changeSort`'s non-distance branch so a stale "near me"
    * prompt/error state doesn't linger once the sort is back to alphabetical.
    */
@@ -572,10 +601,11 @@ function BrowseListings() {
                 constrains the count too), so removing the count text loses no
                 truthfulness — the filtered results themselves are the answer. */}
             <DistanceSelector value={radius} onChange={changeRadius} />
-            {/* AUB-164: `mapEnabled` intentionally omitted (defaults to `false`) —
-                the Map segment stays hidden on the public directory until AUB-111
-                wires up a real map provider. See the comment on `view` above. */}
-            <ViewToggle view={view} onChange={setView} />
+            {/* OWNER OVERRIDE of AUB-164: `mapEnabled` passed explicitly so the Map
+                segment is back on the public directory ahead of AUB-111's real map
+                provider (the placeholder is accepted for now). See the comment on
+                `view`/`setView` above. */}
+            <ViewToggle view={view} onChange={setView} mapEnabled />
           </div>
         </div>
       </div>
@@ -592,10 +622,11 @@ function BrowseListings() {
             <DirectoryEmpty onBrowseCeliac={() => toggleQuick("celiac")} />
           )
         ) : view === "map" ? (
-          // AUB-164: unreachable on the public directory today — `ViewToggle`'s
-          // Map segment is hidden (see the comment on `view` above), so `view`
-          // never becomes "map". Left in place (not deleted) for AUB-111, which
-          // re-enables this branch by re-exposing the Map segment.
+          // OWNER OVERRIDE of AUB-164: reachable again on the public directory —
+          // `ViewToggle`'s Map segment is enabled (see the comment on `view`/
+          // `setView` above), so `view` can be "map" via `?view=map`. Still a CSS
+          // placeholder (`DirectoryMap.tsx`); a real map provider remains
+          // deferred to AUB-111.
           //
           // The map is absolutely positioned (`inset-0`) inside its own root, so
           // under natural document scroll it needs a BOUNDED, positioned box to

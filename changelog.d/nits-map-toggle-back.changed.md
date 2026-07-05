@@ -1,0 +1,2 @@
+- `[manual]` Brought back the List/Map segmented control on the browse page (owner override of the AUB-164 gate); the map view is still a placeholder pending AUB-111's real map provider.
+- `[manual]` Moved the directory's list/map choice from local component state into a validated `?view=` search param, so it survives refresh, back/forward, and a shared link, without triggering a loader refetch or resetting the page.

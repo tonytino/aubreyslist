@@ -1,7 +1,8 @@
 import { List, Map as MapIcon } from "lucide-react";
+import type { DirectoryView } from "~/listings/browse-search";
 
-/** The two directory content modes. */
-export type DirectoryView = "list" | "map";
+/** The two directory content modes. Canonical definition: `~/listings/browse-search`. */
+export type { DirectoryView };
 
 /**
  * List/Map segmented control (AUB-61, Phase 2b).
@@ -10,13 +11,17 @@ export type DirectoryView = "list" | "map";
  * active view is announced (state never rests on the pill fill alone). Selecting
  * a segment swaps the content view instantly (no shimmer).
  *
- * AUB-164: the Map segment is gated behind `mapEnabled` (defaults to `false` —
- * fail-closed) because the current map view is a CSS placeholder with no real
- * map provider wired up (see `DirectoryMap.tsx`); a real provider is deferred to
- * AUB-111. The public directory (`app/routes/index.tsx`) leaves `mapEnabled`
- * unset, so the Map segment stays hidden and visitors can never reach the
- * placeholder. Do NOT delete this component or the Map segment below — AUB-111
- * builds on it directly by passing `mapEnabled` once a real map ships.
+ * AUB-164 / OWNER OVERRIDE: the Map segment is gated behind `mapEnabled`
+ * (defaults to `false` — fail-closed) because the map view is a CSS placeholder
+ * with no real map provider wired up (see `DirectoryMap.tsx`); a real provider is
+ * still deferred to AUB-111. The repo owner has since explicitly asked for the
+ * Map segment to come back on the public directory ahead of AUB-111 — the
+ * placeholder is accepted for now — so the directory route
+ * (`app/routes/index.tsx`) passes `mapEnabled` and the selected view round-trips
+ * through `?view=`. `mapEnabled` itself stays available (defaulting to hidden)
+ * for any other consumer that isn't ready to show the placeholder. Do NOT delete
+ * this component or the Map segment below — AUB-111 swaps in a real map behind
+ * the same prop.
  */
 export function ViewToggle({
   view,
