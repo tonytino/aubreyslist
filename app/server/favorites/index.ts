@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/tanstackstart-react";
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { getDb } from "~/db/client";
 import { favorites, listings } from "~/db/schema";
@@ -29,22 +29,22 @@ import { enforceWriteLimit } from "~/server/rate-limit";
  * {@link removeFavorite}) are login-gated via {@link requireCurrentUser} (401 for
  * anonymous) and then rate-limited per user via {@link enforceWriteLimit} (#18;
  * 429 on an abusive burst), applied in that order and BEFORE any DB work — the
- * gate fires exactly once. The viewer reads ({@link getViewerFavoriteIds},
- * {@link getViewerFavorites}) are scoped to the current user (empty for
- * anonymous, with no DB hit).
+ * gate fires exactly once. The viewer read ({@link getViewerFavoriteIds}) is
+ * scoped to the current user (empty for anonymous, with no DB hit); the count
+ * aggregate ({@link getFavoriteCounts}) is public and user-agnostic.
  */
 
 /**
  * Run a NON-ESSENTIAL favorites READ, degrading to `fallback` if it throws.
  *
- * Favorites are an enhancement layered over the core directory — the viewer's
- * saved set. A read failure here must NEVER 500 the browse loader or the
- * `__root` prefetch that runs on every page. The realistic
+ * Favorites are an enhancement layered over the core directory — the public
+ * save-count and the viewer's saved set. A read failure here must NEVER 500 the
+ * browse loader or the `__root` prefetch that runs on every page. The realistic
  * failure is the `favorites` table being briefly unavailable: a fresh/preview DB
  * that hasn't had the migration applied, or the deploy window on a schema
  * release BEFORE `migrate.yml` finishes applying it. We report the error (so it
  * stays visible in Sentry + server logs) and fall back, so the core page still
- * renders — cards simply show no saved state.
+ * renders — cards simply show no save-count and no saved state.
  *
  * Only READS degrade. The gated WRITES ({@link addFavorite}/{@link removeFavorite})
  * still throw — a failed save must surface to the user (the island toasts + rolls
@@ -163,7 +163,10 @@ export async function getViewerFavoriteIds(): Promise<string[]> {
  * The resulting listings run through the SHARED, distance-agnostic
  * {@link buildBrowseCards} so each card's trust glance is byte-identical to the
  * browse page (same celiac aggregate + recent-incident + suggested-attribute
- * derivation). No distance is computed (favorites have no distance origin), so
+ * derivation). We then attach the public save-count aggregate
+ * ({@link getFavoriteCounts}) for those ids — batched alongside the glance (NO
+ * N+1) — so the save-count pill renders on `/favorites` exactly as it does on
+ * browse. No distance is computed (favorites have no distance origin), so
  * `distanceLabel` stays absent.
  *
  * v1 loads the FULL favorite set unbounded — favorites lists are small.
@@ -194,12 +197,60 @@ export async function getViewerFavorites(
       .orderBy(desc(favorites.createdAt));
 
     const viewerListings = rows.map((row) => row.listing);
+    const listingIds = viewerListings.map((listing) => listing.id);
 
-    // Build the cards through the SAME helper the browse page uses (so the
-    // glance matches byte-for-byte). No distance origin here, so
-    // `distanceLabel` is intentionally absent.
-    return buildBrowseCards(viewerListings, now, stalenessMonths);
+    // Build the trust cores through the SAME helper the browse page uses (so the
+    // glance matches byte-for-byte), and batch the public save-counts alongside it
+    // (one grouped query, NO N+1) — mirroring how getBrowseListings assembles a card.
+    const [baseCards, favoriteCounts] = await Promise.all([
+      buildBrowseCards(viewerListings, now, stalenessMonths),
+      getFavoriteCounts(listingIds),
+    ]);
+
+    // Attach the save-count (defaulting to 0 for a listing absent from the grouped
+    // aggregate). No distance origin here, so `distanceLabel` is intentionally absent.
+    return baseCards.map((card) => ({
+      ...card,
+      favoriteCount: favoriteCounts.get(card.listing.id) ?? 0,
+    }));
   }, []);
+}
+
+/**
+ * Public, user-agnostic favorite counts for the given listing ids: a grouped
+ * `count(*)` over `favorites`.
+ *
+ * Empty input yields an empty map WITHOUT a DB hit. The returned map contains
+ * only listings that have at least one favorite (a listing with none is simply
+ * absent — callers default it to 0), keyed by listing id.
+ */
+export async function getFavoriteCounts(listingIds: string[]): Promise<Map<string, number>> {
+  if (listingIds.length === 0) {
+    return new Map();
+  }
+
+  // Runs on EVERY browse render (public, user-agnostic) and on `/favorites` —
+  // degrade to an empty map (cards default each count to 0) rather than 500 the
+  // directory if the aggregate fails.
+  return readOrDegrade(
+    "getFavoriteCounts",
+    async () => {
+      const db = getDb();
+
+      const rows = await db
+        .select({ listingId: favorites.listingId, n: count() })
+        .from(favorites)
+        .where(inArray(favorites.listingId, listingIds))
+        .groupBy(favorites.listingId);
+
+      const counts = new Map<string, number>();
+      for (const row of rows) {
+        counts.set(row.listingId, row.n);
+      }
+      return counts;
+    },
+    new Map<string, number>()
+  );
 }
 
 // The client-callable `createServerFn` wrappers (favoriteListing /

@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *   insert favorite: getDb().insert().values().onConflictDoNothing({ target })
  *   delete favorite: getDb().delete().where()
  *   viewer ids:      getDb().select().from().innerJoin().where()       -> [{ listingId }]
- *   viewer cards:    getDb().select().from().innerJoin().where().orderBy() -> [{ listing }]
+ *   counts:          getDb().select().from().where().groupBy()         -> grouped rows
  */
 const h = vi.hoisted(() => {
   const state = {
@@ -26,23 +26,28 @@ const h = vi.hoisted(() => {
     viewerRows: [] as Array<{ listingId: string }>,
     // The `.orderBy()` chain backs getViewerFavorites (rows projected as { listing }).
     favoriteListingRows: [] as Array<{ listing: { id: string } }>,
+    // The `.groupBy()` chain backs getFavoriteCounts.
+    groupByRows: [] as Array<{ listingId: string; n: number }>,
     lastInsertValues: undefined as unknown,
     lastDoNothingArgs: undefined as unknown,
     signedIn: true,
   };
 
   const limitMock = vi.fn(() => Promise.resolve(state.limitRows));
+  const groupByMock = vi.fn(() => Promise.resolve(state.groupByRows));
   const orderByMock = vi.fn(() => Promise.resolve(state.favoriteListingRows));
   // `.where()` is shared by all reads/deletes. It resolves to the viewer rows
   // (so `await select().from().innerJoin().where()` works for getViewerFavoriteIds),
-  // with `.limit()` (listing lookup) and `.orderBy()` (getViewerFavorites)
-  // attached for the reads that chain further.
+  // with `.limit()` (listing lookup), `.groupBy()` (counts), and `.orderBy()`
+  // (getViewerFavorites) attached for the reads that chain further.
   const selectWhereMock = vi.fn(() => {
     const result = Promise.resolve(state.viewerRows) as Promise<Array<{ listingId: string }>> & {
       limit: typeof limitMock;
+      groupBy: typeof groupByMock;
       orderBy: typeof orderByMock;
     };
     result.limit = limitMock;
+    result.groupBy = groupByMock;
     result.orderBy = orderByMock;
     return result;
   });
@@ -93,6 +98,7 @@ const h = vi.hoisted(() => {
   return {
     state,
     limitMock,
+    groupByMock,
     orderByMock,
     innerJoinMock,
     selectMock,
@@ -137,7 +143,13 @@ vi.mock("@sentry/tanstackstart-react", () => ({
   captureException: h.captureExceptionMock,
 }));
 
-import { addFavorite, getViewerFavoriteIds, getViewerFavorites, removeFavorite } from "./index";
+import {
+  addFavorite,
+  getFavoriteCounts,
+  getViewerFavoriteIds,
+  getViewerFavorites,
+  removeFavorite,
+} from "./index";
 
 const {
   state,
@@ -154,6 +166,7 @@ beforeEach(() => {
   state.limitRows = [{ moderationStatus: "visible" }];
   state.viewerRows = [];
   state.favoriteListingRows = [];
+  state.groupByRows = [];
   state.lastInsertValues = undefined;
   state.lastDoNothingArgs = undefined;
   state.signedIn = true;
@@ -164,17 +177,27 @@ afterEach(() => {
 });
 
 describe("read degradation — a favorites read failure never 500s the page", () => {
-  // The favorites reads run on hot paths (getViewerFavoriteIds on the __root
-  // prefetch for every signed-in page; getViewerFavorites on /favorites). A read
-  // failure — e.g. the `favorites` table briefly unavailable on a fresh/preview
-  // DB, or the deploy window before a schema migration applies — must degrade,
-  // not crash the page.
+  // The favorites reads run on hot paths (getFavoriteCounts on EVERY browse
+  // render + /favorites; getViewerFavoriteIds on the __root prefetch for every
+  // signed-in page; getViewerFavorites on /favorites). A read failure — e.g. the
+  // `favorites` table briefly unavailable on a fresh/preview DB, or the deploy
+  // window before a schema migration applies — must degrade, not crash the page.
   let errorSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => {
     errorSpy.mockRestore();
+  });
+
+  it("getFavoriteCounts degrades to an empty map (not a throw) when the aggregate query fails", async () => {
+    selectMock.mockImplementationOnce(() => {
+      throw new Error('relation "favorites" does not exist');
+    });
+    const result = await getFavoriteCounts(["listing-1", "listing-2"]);
+    expect(result.size).toBe(0);
+    // Still reported — degradation is not silent.
+    expect(h.captureExceptionMock).toHaveBeenCalledTimes(1);
   });
 
   it("getViewerFavoriteIds degrades to [] when the read fails (never 500s the root prefetch)", async () => {
@@ -355,11 +378,13 @@ describe("getViewerFavorites — viewer cards, newest-saved first", () => {
     expect(h.buildBrowseCardsMock).not.toHaveBeenCalled();
   });
 
-  it("builds cards via buildBrowseCards, newest-saved first", async () => {
+  it("builds cards via buildBrowseCards and attaches the public save-count per listing", async () => {
     state.favoriteListingRows = [
       { listing: { id: "listing-1" } },
       { listing: { id: "listing-2" } },
     ];
+    // listing-1 has 5 saves; listing-2 is absent from the aggregate → defaults to 0.
+    state.groupByRows = [{ listingId: "listing-1", n: 5 }];
 
     const now = new Date("2026-07-03T00:00:00Z");
     const cards = await getViewerFavorites(now, 6);
@@ -373,6 +398,8 @@ describe("getViewerFavorites — viewer cards, newest-saved first", () => {
     // Order is preserved from the query's `favorites.createdAt DESC` ordering.
     expect(h.orderByMock).toHaveBeenCalledTimes(1);
     expect(cards.map((c) => c.listing.id)).toEqual(["listing-1", "listing-2"]);
+    expect(cards[0]?.favoriteCount).toBe(5);
+    expect(cards[1]?.favoriteCount).toBe(0);
   });
 
   it("returns [] (no cards) when the viewer has no visible favorites", async () => {
@@ -381,7 +408,31 @@ describe("getViewerFavorites — viewer cards, newest-saved first", () => {
     const cards = await getViewerFavorites(new Date(), 6);
 
     expect(cards).toEqual([]);
-    // buildBrowseCards short-circuits an empty set.
+    // buildBrowseCards short-circuits an empty set; no counts query is needed.
     expect(h.buildBrowseCardsMock).toHaveBeenCalledWith([], expect.any(Date), 6);
+  });
+});
+
+describe("getFavoriteCounts — public, user-agnostic aggregate", () => {
+  it("returns an empty map for empty input WITHOUT hitting the DB", async () => {
+    const counts = await getFavoriteCounts([]);
+
+    expect(counts.size).toBe(0);
+    expect(selectMock).not.toHaveBeenCalled();
+  });
+
+  it("rolls grouped counts into a map keyed by listing id", async () => {
+    state.groupByRows = [
+      { listingId: "listing-1", n: 5 },
+      { listingId: "listing-2", n: 1 },
+    ];
+
+    const counts = await getFavoriteCounts(["listing-1", "listing-2", "listing-3"]);
+
+    expect(counts.get("listing-1")).toBe(5);
+    expect(counts.get("listing-2")).toBe(1);
+    // A listing with no favorites is simply absent (callers default to 0).
+    expect(counts.has("listing-3")).toBe(false);
+    expect(counts.size).toBe(2);
   });
 });

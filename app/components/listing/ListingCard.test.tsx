@@ -281,53 +281,104 @@ describe("RestaurantCard", () => {
     expect(pill).not.toHaveAttribute("data-safety-state");
   });
 
-  it("never renders a save-count pill (owner nit 10 removed it)", async () => {
-    renderCard({ safetyState: "celiac-safe", googleRating: { value: 4.8, count: 128 } });
+  it("does not render a save-count pill when saveCount is 0", async () => {
+    renderCard({ saveCount: 0 });
     await screen.findByText("Celiac-safe");
-    // The "saves" pill is gone entirely — no markup, no attribution text — while
-    // the Google-rating pill and the FavoriteButton heart remain.
+    // Hidden at 0 (matches how googleRating hides when absent) — no fabricated
+    // "0 saves" pill.
     expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
-    expect(screen.queryByText("saves")).not.toBeInTheDocument();
-    expect(screen.getByTestId("google-rating")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save Acme Gluten-Free" })).toBeInTheDocument();
   });
 
-  it("renders the Google pill as a real <button> tooltip trigger OUTSIDE the anchor (a11y)", async () => {
-    renderCard({ googleRating: { value: 4.8, count: 128 } });
+  it("does not render a save-count pill when saveCount is absent (undefined)", async () => {
+    renderCard();
+    await screen.findByText("Celiac-safe");
+    expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
+  });
+
+  it("renders a compact save-count pill — heart + count, NO visible 'saves' word (owner, PR #274)", async () => {
+    renderCard({ saveCount: 12 });
+    const pill = await screen.findByTestId("save-count");
+    // The count renders...
+    expect(pill).toHaveTextContent("12");
+    // ...but the owner dropped the visible "saves" word — the pill is heart
+    // glyph + number only...
+    expect(pill).not.toHaveTextContent("saves");
+    expect(screen.queryByText("saves")).not.toBeInTheDocument();
+    // ...with the meaning carried by an explicit accessible name instead
+    // (styling.md/ADR-007: never the tooltip or colour alone).
+    expect(pill).toHaveAccessibleName("12 saves");
+    // And it is NOT presented as a safety verdict (ADR-007): no safety label,
+    // no SafetySignal state marker.
+    expect(pill).not.toHaveTextContent(/celiac|safe|gluten/i);
+    expect(pill).not.toHaveAttribute("data-safety-state");
+  });
+
+  it("keeps the save-count pill SEPARATE from the SafetySignal row (ADR-007)", async () => {
+    renderCard({ saveCount: 8, safetyState: "celiac-safe" });
+    const pill = await screen.findByTestId("save-count");
+    // The SafetySignal chip carries a `data-safety-state` marker; the attributed
+    // pill must never nest, be nested by, or share a row with it — safety meaning
+    // stays exclusively in SafetySignal.
+    const safety = document.querySelector('[data-safety-state="celiac-safe"]');
+    expect(safety).not.toBeNull();
+    expect(pill).not.toContainElement(safety as HTMLElement);
+    expect(safety as HTMLElement).not.toContainElement(pill);
+    // Not siblings: the pill and the safety signal live in different containers.
+    expect(pill.parentElement).not.toBe((safety as HTMLElement).parentElement);
+  });
+
+  it("renders the pills as real <button> tooltip triggers OUTSIDE the anchor (a11y)", async () => {
+    renderCard({ saveCount: 8, googleRating: { value: 4.8, count: 128 } });
     const link = await screen.findByRole("link");
+    const save = screen.getByTestId("save-count");
     const google = screen.getByTestId("google-rating");
     // Nesting a focusable/interactive element inside an <a> is invalid HTML + an
-    // a11y defect, so the pill must be a SIBLING of the link, not a descendant.
+    // a11y defect, so the pills must be SIBLINGS of the link, not descendants.
+    expect(link).not.toContainElement(save);
     expect(link).not.toContainElement(google);
-    // It is an honest, natively-focusable, non-submitting <button> trigger (not a
+    // They are honest, natively-focusable, non-submitting <button> triggers (not a
     // tabindex-hacked span) — giving keyboard users real trigger semantics for the
     // ADR-007 tooltip.
+    expect(save.tagName).toBe("BUTTON");
     expect(google.tagName).toBe("BUTTON");
+    expect(save).toHaveAttribute("type", "button");
     expect(google).toHaveAttribute("type", "button");
   });
 
-  it("keeps the pill IN-FLOW in the title row so it reflows and never overlaps the name", async () => {
-    // The long-name path is the regression the review flagged: an absolute
-    // overlay would let the name slide UNDER the pill at 375px. With the pill
-    // in-flow in the SAME flex row as the name, flexbox reflows them
+  it("keeps BOTH pills IN-FLOW in the title row so they reflow and never overlap the name", async () => {
+    // The both-pills path with a long name is the regression the review flagged:
+    // an absolute overlay would let the name slide UNDER the pills at 375px. With
+    // the pills in-flow in the SAME flex row as the name, flexbox reflows them
     // side-by-side — structurally impossible to overlap, and no magic offsets.
     renderCard({
       name: "The Extraordinarily Long Gluten-Free Bakery And Coffee House Name",
+      saveCount: 8,
       googleRating: { value: 4.8, count: 128 },
     });
     const heading = await screen.findByRole("heading");
+    const save = screen.getByTestId("save-count");
     const google = screen.getByTestId("google-rating");
     const titleRow = heading.parentElement as HTMLElement;
-    // Name + pill share ONE in-flow row container, never an absolute layer.
+    // Name + both pills share ONE in-flow row container, never an absolute layer.
     expect(titleRow).toContainElement(heading);
+    expect(titleRow).toContainElement(save);
     expect(titleRow).toContainElement(google);
-    // ...and the pill stays OUT of the anchor.
+    // ...and the pills stay OUT of the anchor even in the both-pills case.
     const link = screen.getByRole("link");
+    expect(link).not.toContainElement(save);
     expect(link).not.toContainElement(google);
   });
 
+  it("exposes the save-count ADR-007 tooltip on keyboard focus", async () => {
+    renderCard({ saveCount: 12 });
+    const pill = await screen.findByTestId("save-count");
+    fireEvent.focus(pill);
+    const tip = await screen.findByRole("tooltip");
+    expect(tip).toHaveTextContent("Community saves, not a safety score.");
+  });
+
   it("keeps the card ONE link with an accessible name after moving the body out", async () => {
-    renderCard({ googleRating: { value: 4.8, count: 128 } });
+    renderCard({ saveCount: 8, googleRating: { value: 4.8, count: 128 } });
     // Exactly one anchor, still pointing at the detail page. The <h3> is no longer
     // inside the anchor, so the link takes its accessible name from `aria-label`.
     const links = await screen.findAllByRole("link");
@@ -523,7 +574,14 @@ describe("listingToCardVM (bot-provenance threading)", () => {
     expect(vm.suggestedAttributes).toEqual(["dedicated_fryer", "gf_substitutes"]);
   });
 
-  it("carries no saveCount field — the saves pill was removed (owner nit 10)", () => {
+  it("threads a provided save count onto the VM (trailing param)", () => {
+    const vm = listingToCardVM(baseListing, glance, undefined, 9);
+    expect(vm.saveCount).toBe(9);
+  });
+
+  it("leaves saveCount absent when not supplied (optional trailing param)", () => {
+    // Callers that don't have a count (e.g. the map carousel) omit it and simply
+    // render no pill — the prop stays truly absent, not `undefined`.
     const vm = listingToCardVM(baseListing, glance);
     expect("saveCount" in vm).toBe(false);
   });

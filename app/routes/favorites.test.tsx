@@ -62,7 +62,7 @@ function makeCard(id: string, name: string): BrowseListingCard {
     evidence: null,
     freshness: null,
   };
-  return { listing, glance };
+  return { listing, glance, favoriteCount: 3 };
 }
 
 function renderFavorites(opts: {
@@ -111,12 +111,15 @@ describe("FavoritesPage — three states", () => {
     expect(screen.getByRole("link", { name: /browse listings/i })).toBeInTheDocument();
   });
 
-  it("SIGNED-IN POPULATED: renders the saved cards (no saves pill — owner nit 10)", async () => {
+  it("SIGNED-IN POPULATED: renders the saved cards with the compact save-count pill", async () => {
     renderFavorites({ currentUser: user, favorites: [makeCard("listing-1", "Blue Sparrow")] });
 
     expect(await screen.findByText("Blue Sparrow")).toBeInTheDocument();
-    // The save-count pill was removed from the card entirely.
-    expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
+    // The save-count pill (F10) rides along from `favoriteCount` — heart + count
+    // only, no visible "saves" word (owner, PR #274).
+    const pill = screen.getByTestId("save-count");
+    expect(pill).toHaveTextContent("3");
+    expect(pill).not.toHaveTextContent("saves");
   });
 });
 

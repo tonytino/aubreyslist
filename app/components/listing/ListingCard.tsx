@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Check, Clock, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
+import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
 import type { ComponentProps } from "react";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
@@ -71,6 +71,17 @@ export interface RestaurantCardVM {
    * when present — never styled or labelled as a safety/celiac score (ADR-007).
    */
   googleRating?: { value: number; count: number } | null;
+  /**
+   * OPTIONAL public, user-agnostic count of people who have saved this listing.
+   * Rendered as a compact heart-glyph + number pill only when > 0 (hidden at 0,
+   * matching how `googleRating` hides when absent). The owner explicitly chose
+   * to drop the visible "saves" word (PR #274); the pill's meaning is carried by
+   * the heart glyph + count + an `aria-label` + the ADR-007 tooltip. Like
+   * `googleRating`, it is a community signal, NOT a safety/celiac verdict
+   * (ADR-007) — all safety meaning stays in {@link SafetySignal}, so this pill
+   * NEVER sits in the safety-signal row.
+   */
+  saveCount?: number;
   /** A real food photo when available; otherwise the placeholder tile is shown. */
   photoUrl?: string | null;
 }
@@ -97,8 +108,8 @@ const FRESHNESS = {
 } as const;
 
 /**
- * An attributed community pill — the shell for the Google-rating pill, wrapped
- * in a supplementary ADR-007 tooltip.
+ * An attributed community pill — the shared shell for the save-count and
+ * Google-rating pills, each wrapped in a supplementary ADR-007 tooltip.
  *
  * A real, non-submitting `<button type="button">`: a legitimately-focusable
  * `TooltipTrigger` (fires on hover AND keyboard focus) with proper interactive
@@ -106,7 +117,8 @@ const FRESHNESS = {
  * strips native button chrome (transparent background, zero border), so the pill's
  * own utility classes fully define its look. Callers pass the accent `className`
  * plus `data-testid`; the pill stays a NON-safety signal (ADR-007) — its meaning
- * always lives in the visible text it wraps, never in the tooltip alone.
+ * lives in the visible content it wraps plus its accessible name, never in the
+ * tooltip alone.
  */
 function AttributedPill({ className, type = "button", ...props }: ComponentProps<"button">) {
   return (
@@ -222,26 +234,52 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             {vm.name}
           </h3>
 
-          {/* Attributed external Google-rating pill. In flow in the title row,
-              but raised above the stretched-link overlay with `relative z-10` so
-              hover/focus reaches it — the ONLY reason it can be a real tooltip
-              trigger is that it is NOT a descendant of the <a>. ADR-007: an
-              EXTERNAL signal, explicitly attributed, NEVER a safety verdict —
-              all safety meaning stays in SafetySignal (a separate row below).
-              The pill's meaning lives in its visible text ("Google"); the
-              tooltip is only supplementary. */}
-          {vm.googleRating ? (
+          {/* Attributed community pills (save-count + external Google rating). In
+              flow in the title row, but raised above the stretched-link overlay
+              with `relative z-10` so hover/focus reaches them — the ONLY reason
+              they can be real tooltip triggers is that they are NOT descendants of
+              the <a>. ADR-007: EXTERNAL / community signals, explicitly
+              attributed, NEVER a safety verdict — all safety meaning stays in
+              SafetySignal (a separate row below); the tooltips are only
+              supplementary. */}
+          {(vm.saveCount && vm.saveCount > 0) || vm.googleRating ? (
             <div className="relative z-10 flex shrink-0 items-center gap-1.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <AttributedPill data-testid="google-rating" className="bg-accent-peach/50">
-                    <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                    <span>{vm.googleRating.value.toFixed(1)}</span>
-                    <span className="font-normal text-muted-foreground">Google</span>
-                  </AttributedPill>
-                </TooltipTrigger>
-                <TooltipContent>Google rating, not an Aubrey's List safety score.</TooltipContent>
-              </Tooltip>
+              {/* Public save-count — heart glyph + number, hidden at 0. The owner
+                  explicitly chose this compact presentation (PR #274: "just found
+                  the 'saves' text unnecessary"), so there is NO visible "saves"
+                  word; the meaning is carried by the filled-heart glyph + count,
+                  an explicit aria-label ("N saves"), and the ADR-007 tooltip —
+                  never by colour or the tooltip alone (styling.md). A distinct
+                  accent (lavender) from the safety-state colours (ADR-007). */}
+              {vm.saveCount && vm.saveCount > 0 ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AttributedPill
+                      data-testid="save-count"
+                      className="bg-accent-lavender/50"
+                      aria-label={`${vm.saveCount} saves`}
+                    >
+                      <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                      <span aria-hidden="true">{vm.saveCount}</span>
+                    </AttributedPill>
+                  </TooltipTrigger>
+                  <TooltipContent>Community saves, not a safety score.</TooltipContent>
+                </Tooltip>
+              ) : null}
+
+              {/* External Google Places rating — ATTRIBUTED, never a safety score (ADR-007). */}
+              {vm.googleRating ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AttributedPill data-testid="google-rating" className="bg-accent-peach/50">
+                      <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                      <span>{vm.googleRating.value.toFixed(1)}</span>
+                      <span className="font-normal text-muted-foreground">Google</span>
+                    </AttributedPill>
+                  </TooltipTrigger>
+                  <TooltipContent>Google rating, not an Aubrey's List safety score.</TooltipContent>
+                </Tooltip>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -439,7 +477,8 @@ interface ListingCardProps {
 export function listingToCardVM(
   listing: Listing,
   glance: ListingTrustGlance,
-  distanceLabel?: string | undefined
+  distanceLabel?: string | undefined,
+  saveCount?: number | undefined
 ): RestaurantCardVM {
   return {
     id: listing.id,
@@ -456,6 +495,11 @@ export function listingToCardVM(
     ...(glance.evidence ? { evidence: glance.evidence } : {}),
     ...(glance.freshness ? { freshness: glance.freshness } : {}),
     ...(distanceLabel !== undefined ? { distanceLabel } : {}),
+    // The public save-count is OPTIONAL and trailing so callers that don't have
+    // it (e.g. the map carousel) still compile and simply render no pill. Spread
+    // in only when provided so the prop stays truly absent under
+    // `exactOptionalPropertyTypes`.
+    ...(saveCount !== undefined ? { saveCount } : {}),
   };
 }
 
