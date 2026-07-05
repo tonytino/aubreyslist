@@ -25,6 +25,10 @@
       "~/*": ["./app/*"]
     },
 
+    // TS 6.0 no longer picks up @types/node's globals (process, Buffer) via
+    // automatic @types inclusion under moduleResolution "Bundler" — list it
+    // explicitly. Safe: react/react-dom types arrive via imports, not globals.
+    "types": ["node"],
     "skipLibCheck": true
   },
   "include": ["app", "tests", "db", "scripts"]
