@@ -57,7 +57,7 @@
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.25",
-    "iron-webcrypto": "^1.2.1",
+    "iron-webcrypto": "^2.0.0",
     "lucide-react": "^1.21.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

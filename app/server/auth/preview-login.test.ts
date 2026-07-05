@@ -1,3 +1,7 @@
+// @vitest-environment node
+// Server-only module — run in Node (like production), not jsdom. Under jsdom,
+// `crypto.subtle` results come from a different JS realm, tripping the strict
+// `instanceof Uint8Array` checks inside iron-webcrypto v2's base64 encoding.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**

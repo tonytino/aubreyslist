@@ -1,3 +1,7 @@
+// @vitest-environment node
+// Server-only module — run in Node (like production), not jsdom. Under jsdom,
+// `crypto.subtle` results come from a different JS realm, tripping the strict
+// `instanceof Uint8Array` checks inside iron-webcrypto v2's base64 encoding.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // `getEnv()` memoizes the first parse of `process.env`. To get deterministic
@@ -70,6 +74,28 @@ describe("session sealing round-trip", () => {
 
   it("exposes a stable cookie name", () => {
     expect(session.SESSION_COOKIE_NAME).toBe("al_session");
+  });
+
+  it("still unseals a cookie minted by iron-webcrypto 1.x (pre-2.0 seal format)", async () => {
+    // Fixture sealed by iron-webcrypto@1.2.1 with SECRET and the library
+    // defaults — the exact bytes a live session cookie issued before the
+    // 1.x → 2.x upgrade would carry. If the 2.x unseal path (or our options)
+    // ever breaks the Fe26.2 wire format, this fails and flags that shipping
+    // would log every existing user out. Regenerate (if ever needed) by
+    // sealing { userId: "user-legacy-1x", issuedAt: 1751500800 } with 1.x.
+    const sealedByV1 =
+      "Fe26.2**781f55721b40a1cad12803eb539c9e473f3ac426a0d0eb5c8d5b81561c7b7958*pcm74qNpCAQ7NtJh2kiLPw*YzayLwoZc8BANcOXACujIgbuJWm0YU9GVuJ0qXq7-Qxl7uaO_qWgxFjvAvmyThPccvT_-GUjqap8R1uVnGb5cg**4d7e957b9241a1fd7d590449e2747c544001ce8b5af43ed7d0ab7ebc5b04a793*wrMlSFnLmTo_spybRJVowbBfEim8KG4iwcLQMWTPGS4";
+
+    // Pin the clock just after the fixture's issuedAt (2025-07-03T00:00:00Z)
+    // so the app-level 30-day expiry check never rots this test.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-07-04T00:00:00Z"));
+    try {
+      const payload = await session.readSessionCookieValue(sealedByV1);
+      expect(payload).toEqual({ userId: "user-legacy-1x", issuedAt: 1751500800 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

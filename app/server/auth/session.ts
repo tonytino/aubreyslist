@@ -46,16 +46,11 @@ function getSessionSecret(): string {
   return secret;
 }
 
-// iron-webcrypto types its `_Crypto` parameter with `Uint8Array` data params,
-// while the DOM lib types the global `crypto.subtle` with `BufferSource`. The
-// two are runtime-identical (Web Crypto); the gap is purely a TS lib variance
-// quirk (ArrayBuffer vs SharedArrayBuffer). Narrow once here to the exact
-// parameter type iron expects rather than scattering casts at each call site.
-const ironCrypto = globalThis.crypto as unknown as Parameters<typeof seal>[0];
-
 /** Seal a session payload into an opaque cookie value. */
 export async function sealSessionPayload(payload: SessionPayload): Promise<string> {
-  return seal(ironCrypto, payload, getSessionSecret(), sealDefaults);
+  // iron-webcrypto v2 uses the global Web Crypto implementation directly — no
+  // more `_Crypto` first parameter (and no more cast to bridge its types).
+  return seal(payload, getSessionSecret(), sealDefaults);
 }
 
 /** Create a freshly-issued sealed session for a user id. */
@@ -71,7 +66,7 @@ export async function createSessionCookieValue(userId: string): Promise<string> 
 export async function readSessionCookieValue(sealed: string): Promise<SessionPayload | null> {
   let raw: unknown;
   try {
-    raw = await unseal(ironCrypto, sealed, getSessionSecret(), sealDefaults);
+    raw = await unseal(sealed, getSessionSecret(), sealDefaults);
   } catch {
     return null;
   }
