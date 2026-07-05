@@ -133,9 +133,8 @@ export const SETTINGS = {
 export type SettingKey = keyof typeof SETTINGS;
 
 /** The typed value for a given setting key, derived from the registry. */
-export type SettingValue<K extends SettingKey> = (typeof SETTINGS)[K] extends SettingDef<infer T>
-  ? T
-  : never;
+export type SettingValue<K extends SettingKey> =
+  (typeof SETTINGS)[K] extends SettingDef<infer T> ? T : never;
 
 /** The full set of keys (e.g. for seeding / iteration). */
 export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];

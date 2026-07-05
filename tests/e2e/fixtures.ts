@@ -1,9 +1,9 @@
 import { neon } from "@neondatabase/serverless";
 import type { BrowserContext } from "@playwright/test";
 import { sql } from "drizzle-orm";
-import { type NeonHttpDatabase, drizzle } from "drizzle-orm/neon-http";
-import * as schema from "~/db/schema";
+import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
 import type { AttestationValue, ClaimAttribute } from "~/db/schema";
+import * as schema from "~/db/schema";
 import { SESSION_COOKIE_NAME, sealSessionPayload } from "~/server/auth/session";
 import type { IntakeMode } from "~/server/settings";
 

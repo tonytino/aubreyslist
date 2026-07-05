@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   type Coords,
+  coordsSchema,
   DEFAULT_RADIUS_MILES,
   DISTANCE_RADIUS_OPTIONS,
   EARTH_RADIUS_KM,
-  UNION_STATION,
-  coordsSchema,
   haversineKm,
   milesToKm,
   parseRadiusMiles,
+  UNION_STATION,
 } from "./distance";
 
 /**

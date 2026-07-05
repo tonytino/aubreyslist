@@ -1,12 +1,12 @@
-import { type SQL, and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import {
-  type Listing,
   attestations,
   claimAttributes,
   claims,
   incidents,
+  type Listing,
   listings,
 } from "~/db/schema";
 import { BROWSE_PAGE_SIZE, MAX_PAGE_SIZE } from "~/listings/browse-params";
@@ -16,7 +16,7 @@ import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/list
 import type { ClaimAggregate } from "~/server/attestations";
 import { getFavoriteCounts, getViewerFavoriteIds } from "~/server/favorites/index";
 import { formatDistanceLabel } from "~/trust/browse-card-format";
-import { type ListingTrustGlance, deriveListingTrustGlance } from "~/trust/browse-glance";
+import { deriveListingTrustGlance, type ListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident, toCalendarDayString } from "~/trust/incident-recency";
 import { DEFAULT_STALENESS_MONTHS, stalenessCutoff } from "~/trust/summary";
 import { buildBrowseWhere } from "./filter";

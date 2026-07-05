@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   CLAIM_ATTRIBUTE_DESCRIPTIONS,
   CLAIM_ATTRIBUTE_LABELS,
-  DEFAULT_STALENESS_MONTHS,
   claimAttributeDescription,
   claimAttributeLabel,
+  DEFAULT_STALENESS_MONTHS,
   deriveHeadlineSafetyState,
   formatLastConfirmed,
   formatRelativeTime,

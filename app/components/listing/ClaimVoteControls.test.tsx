@@ -17,6 +17,7 @@ vi.mock("~/server/attestations/attestations.fn", () => ({
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 import { toast } from "sonner";
 
 import { ClaimVoteControls } from "./ClaimVoteControls";

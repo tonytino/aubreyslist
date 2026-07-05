@@ -1,13 +1,13 @@
 import * as Sentry from "@sentry/tanstackstart-react";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import {
+  createRootRouteWithContext,
   HeadContent,
   Link,
   Outlet,
   Scripts,
-  createRootRouteWithContext,
 } from "@tanstack/react-router";
-import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { useEffect } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";

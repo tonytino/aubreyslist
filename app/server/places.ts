@@ -6,11 +6,11 @@ import { appSettings } from "~/db/schema";
 import { getEnv } from "~/env";
 import {
   type AutocompleteInput,
+  autocompleteInputSchema,
   type PlaceDetails,
   type PlaceDetailsInput,
   type PlacePrediction,
   type PlacesResult,
-  autocompleteInputSchema,
   placeDetailsInputSchema,
 } from "~/listings/places-input";
 import { requireCurrentUser } from "~/server/auth/guards";
@@ -21,12 +21,12 @@ import { enforceWriteLimit } from "~/server/rate-limit";
 // live in `~/listings/places-input` (#141).
 export {
   type AutocompleteInput,
+  autocompleteInputSchema,
   type PlaceDetails,
   type PlaceDetailsInput,
   type PlacePrediction,
   type PlacesErrorReason,
   type PlacesResult,
-  autocompleteInputSchema,
   placeDetailsInputSchema,
 } from "~/listings/places-input";
 

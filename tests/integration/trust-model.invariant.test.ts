@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { sql } from "drizzle-orm";
-import { type NeonHttpDatabase, drizzle } from "drizzle-orm/neon-http";
+import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
 import { migrate } from "drizzle-orm/neon-http/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "~/db/schema";

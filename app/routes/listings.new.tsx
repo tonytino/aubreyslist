@@ -1,10 +1,10 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { AddListingWizard } from "~/components/add-listing/AddListingWizard";
 import { Button } from "~/components/ui/button";
 import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 import { getCurrentUser } from "~/server/auth/current-user";
-import { type IntakeMode, getSetting } from "~/server/settings";
+import { getSetting, type IntakeMode } from "~/server/settings";
 
 /**
  * Add-listing route (issue #26, ADR-008). An authenticated, end-to-end "add a

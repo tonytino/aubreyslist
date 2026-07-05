@@ -89,7 +89,7 @@ export async function addFavorite(input: FavoriteInput): Promise<void> {
     .limit(1);
 
   const listing = rows[0];
-  if (!listing || listing.moderationStatus !== "visible") {
+  if (listing?.moderationStatus !== "visible") {
     throw new HTTPException(404, { message: "Listing not found." });
   }
 
@@ -137,21 +137,17 @@ export async function getViewerFavoriteIds(): Promise<string[]> {
   // Runs on the `__root` prefetch for every signed-in page view — degrade to an
   // empty set (the viewer momentarily sees no saved state) rather than 500 the
   // whole app if the favorites read fails.
-  return readOrDegrade(
-    "getViewerFavoriteIds",
-    async () => {
-      const db = getDb();
+  return readOrDegrade("getViewerFavoriteIds", async () => {
+    const db = getDb();
 
-      const rows = await db
-        .select({ listingId: favorites.listingId })
-        .from(favorites)
-        .innerJoin(listings, eq(listings.id, favorites.listingId))
-        .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")));
+    const rows = await db
+      .select({ listingId: favorites.listingId })
+      .from(favorites)
+      .innerJoin(listings, eq(listings.id, favorites.listingId))
+      .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")));
 
-      return rows.map((row) => row.listingId);
-    },
-    []
-  );
+    return rows.map((row) => row.listingId);
+  }, []);
 }
 
 /**
@@ -188,39 +184,35 @@ export async function getViewerFavorites(
 
   // Backs the `/favorites` page — degrade to an empty set (the page shows its
   // empty state) rather than 500 if the favorites read fails.
-  return readOrDegrade(
-    "getViewerFavorites",
-    async () => {
-      const db = getDb();
+  return readOrDegrade("getViewerFavorites", async () => {
+    const db = getDb();
 
-      // The viewer's favorited listings, visibility-gated and newest-saved first.
-      const rows = await db
-        .select({ listing: listings })
-        .from(favorites)
-        .innerJoin(listings, eq(listings.id, favorites.listingId))
-        .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")))
-        .orderBy(desc(favorites.createdAt));
+    // The viewer's favorited listings, visibility-gated and newest-saved first.
+    const rows = await db
+      .select({ listing: listings })
+      .from(favorites)
+      .innerJoin(listings, eq(listings.id, favorites.listingId))
+      .where(and(eq(favorites.userId, user.id), eq(listings.moderationStatus, "visible")))
+      .orderBy(desc(favorites.createdAt));
 
-      const viewerListings = rows.map((row) => row.listing);
-      const listingIds = viewerListings.map((listing) => listing.id);
+    const viewerListings = rows.map((row) => row.listing);
+    const listingIds = viewerListings.map((listing) => listing.id);
 
-      // Build the trust cores through the SAME helper the browse page uses (so the
-      // glance matches byte-for-byte), and batch the public save-counts alongside it
-      // (one grouped query, NO N+1) — mirroring how getBrowseListings assembles a card.
-      const [baseCards, favoriteCounts] = await Promise.all([
-        buildBrowseCards(viewerListings, now, stalenessMonths),
-        getFavoriteCounts(listingIds),
-      ]);
+    // Build the trust cores through the SAME helper the browse page uses (so the
+    // glance matches byte-for-byte), and batch the public save-counts alongside it
+    // (one grouped query, NO N+1) — mirroring how getBrowseListings assembles a card.
+    const [baseCards, favoriteCounts] = await Promise.all([
+      buildBrowseCards(viewerListings, now, stalenessMonths),
+      getFavoriteCounts(listingIds),
+    ]);
 
-      // Attach the save-count (defaulting to 0 for a listing absent from the grouped
-      // aggregate). No distance origin here, so `distanceLabel` is intentionally absent.
-      return baseCards.map((card) => ({
-        ...card,
-        favoriteCount: favoriteCounts.get(card.listing.id) ?? 0,
-      }));
-    },
-    []
-  );
+    // Attach the save-count (defaulting to 0 for a listing absent from the grouped
+    // aggregate). No distance origin here, so `distanceLabel` is intentionally absent.
+    return baseCards.map((card) => ({
+      ...card,
+      favoriteCount: favoriteCounts.get(card.listing.id) ?? 0,
+    }));
+  }, []);
 }
 
 /**

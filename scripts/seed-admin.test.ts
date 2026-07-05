@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "~/db/schema";
 import {
   InvalidEmailArgError,
+  runCli,
   type SeedAdminDb,
+  seedAdmin,
   USAGE,
   UserNotFoundError,
-  runCli,
-  seedAdmin,
 } from "./seed-admin";
 
 /**

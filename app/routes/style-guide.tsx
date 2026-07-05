@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { SAFETY_STATES, SAFETY_TOOLTIP, SafetySignal } from "~/components/SafetySignal";
-import { Wordmark } from "~/components/Wordmark";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -36,6 +35,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
+import { Wordmark } from "~/components/Wordmark";
 
 export const Route = createFileRoute("/style-guide")({
   head: () => ({
@@ -77,13 +77,7 @@ const BUTTON_SIZES = ["sm", "default", "lg"] as const;
 
 const BADGE_VARIANTS = ["default", "secondary", "destructive", "outline"] as const;
 
-function Labeled({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col items-start gap-1.5">
       {children}
@@ -92,13 +86,7 @@ function Labeled({
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-card">
       <h2 className="text-title">{title}</h2>

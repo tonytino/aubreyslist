@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  EXCLUSIVE_QUICK_GROUPS,
-  QUICK_FILTER_GROUPS,
   applyQuickToggle,
+  EXCLUSIVE_QUICK_GROUPS,
   parseQuick,
+  QUICK_FILTER_GROUPS,
   serializeQuick,
 } from "./quick";
 

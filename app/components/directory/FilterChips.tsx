@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Check, Heart, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { Check, Heart, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { SearchChip } from "~/components/directory/SearchChip";

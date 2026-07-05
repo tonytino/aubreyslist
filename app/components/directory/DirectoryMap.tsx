@@ -1,10 +1,10 @@
-import { Clock, LocateFixed, ShieldCheck, TriangleAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { type SafetyState, safetyLabel } from "~/components/SafetySignal";
+import { Clock, LocateFixed, ShieldCheck, TriangleAlert } from "lucide-react";
 import { projectToMap } from "~/components/directory/map-projection";
 import { WheatStrike } from "~/components/icons/WheatStrike";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
+import { type SafetyState, safetyLabel } from "~/components/SafetySignal";
 
 /**
  * The Map view (AUB-61, Phase 2b) — a STYLIZED placeholder. The real map provider

@@ -1,5 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { DirectoryList } from "~/components/directory/DirectoryList";

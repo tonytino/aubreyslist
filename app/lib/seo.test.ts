@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  LOGO_PATH,
-  OG_IMAGE_PATH,
-  SITE_DESCRIPTION,
-  SITE_NAME,
-  SITE_URL,
   absoluteUrl,
   canonicalLink,
   defaultSeoMeta,
   jsonLdScript,
+  LOGO_PATH,
+  OG_IMAGE_PATH,
   pageSeoMeta,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_URL,
   serializeJsonLd,
   siteJsonLd,
 } from "./seo";

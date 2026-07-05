@@ -44,10 +44,11 @@ vi.mock("~/server/auth/current-user.fn", () => ({
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 import { toast } from "sonner";
 
 import { currentUserQuery } from "~/auth/current-user-query";
-import { PendingFavoriteHandler, __resetPendingFavoriteGuard } from "./use-pending-favorite";
+import { __resetPendingFavoriteGuard, PendingFavoriteHandler } from "./use-pending-favorite";
 
 const signedInUser: SessionUser = {
   id: "user-1",

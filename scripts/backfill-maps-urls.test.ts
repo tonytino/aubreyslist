@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { listings } from "~/db/schema";
 import {
   type BackfillMapsUrlsResult,
+  backfillMapsUrls,
   LEGACY_MAPS_URL_LIKE_PATTERN,
   LEGACY_MAPS_URL_PREFIX,
-  backfillMapsUrls,
 } from "./backfill-maps-urls";
 
 /**

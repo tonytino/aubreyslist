@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { type SQL, and, asc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, eq, ilike, or, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import { type Listing, listings } from "~/db/schema";

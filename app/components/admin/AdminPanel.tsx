@@ -21,8 +21,8 @@ import { setUserRole } from "~/server/admin/set-role.fn";
 import type { Role } from "~/server/auth/guards";
 import type { IntakeMode } from "~/server/settings";
 import { AdminSection } from "./AdminSection";
-import { ModerationQueue } from "./ModerationQueue";
 import { adminUsersQueryKey, adminUsersQueryOptions } from "./admin-users-query";
+import { ModerationQueue } from "./ModerationQueue";
 import { type AdminSectionId, visibleSections } from "./sections";
 
 interface AdminPanelProps {
@@ -64,13 +64,7 @@ export function AdminPanel({ viewerRole, settings }: AdminPanelProps) {
 }
 
 /** Maps a section id to its placeholder/read-only content. */
-function SectionFor({
-  id,
-  settings,
-}: {
-  id: AdminSectionId;
-  settings: AdminSettingsView | null;
-}) {
+function SectionFor({ id, settings }: { id: AdminSectionId; settings: AdminSettingsView | null }) {
   switch (id) {
     case "settings":
       return <SettingsSection settings={settings} />;

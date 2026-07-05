@@ -2,11 +2,11 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import {
   type AppliedMigrationRow,
-  type JournalMigration,
-  type SqlExecutor,
   hashMigrationSql,
+  type JournalMigration,
   readJournalMigrations,
   runCli,
+  type SqlExecutor,
   verifyMigrations,
 } from "./verify-migrations";
 

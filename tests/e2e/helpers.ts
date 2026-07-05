@@ -1,4 +1,4 @@
-import { type Page, expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 /**
  * Wait for client hydration to actually COMMIT before interacting.

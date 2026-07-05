@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
+  autocompleteInputSchema,
   type PlacePrediction,
   type PlacesResult,
-  autocompleteInputSchema,
 } from "~/listings/places-input";
 
 /**

@@ -1,6 +1,6 @@
 import { ArrowLeft, Check, HelpCircle, ShieldCheck, X } from "lucide-react";
-import { SafetySignal } from "~/components/SafetySignal";
 import { WheatStrike } from "~/components/icons/WheatStrike";
+import { SafetySignal } from "~/components/SafetySignal";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import type { ClaimAttribute } from "~/listings/taxonomy";

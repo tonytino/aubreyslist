@@ -30,9 +30,7 @@ import { type User, users } from "~/db/schema";
 export interface SeedAdminDb {
   query: {
     users: {
-      findFirst(args: {
-        where: ReturnType<typeof eq>;
-      }): Promise<User | undefined>;
+      findFirst(args: { where: ReturnType<typeof eq> }): Promise<User | undefined>;
     };
   };
   update(table: typeof users): {

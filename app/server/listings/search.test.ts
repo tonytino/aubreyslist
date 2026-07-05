@@ -18,10 +18,10 @@ const selectMock = vi.fn(() => ({ from: fromMock }));
 vi.mock("~/db/client", () => ({ getDb: () => ({ select: selectMock }) }));
 
 import {
-  SEARCH_PAGE_SIZE,
   buildSearchPredicate,
   listingSearchInputSchema,
   runListingSearch,
+  SEARCH_PAGE_SIZE,
 } from "./search";
 
 // Render a drizzle SQL node to a parameterized string so we can assert on the

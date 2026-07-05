@@ -29,7 +29,7 @@
 import { writeFileSync } from "node:fs";
 import { z } from "zod";
 import { getPlacesApiKey } from "~/env";
-import { type Coords, UNION_STATION, haversineKm, milesToKm } from "~/listings/distance";
+import { type Coords, haversineKm, milesToKm, UNION_STATION } from "~/listings/distance";
 import type { SeededListing } from "./seed-data";
 import { SEED_SOURCES, type SeedSource } from "./seed-sources";
 
@@ -172,7 +172,7 @@ export function makePlacesResolver(
 
     const parsed = searchTextResponseSchema.safeParse(raw);
     const place = parsed.success ? parsed.data.places?.[0] : undefined;
-    if (!place || !place.location || place.formattedAddress === undefined) {
+    if (!place?.location || place.formattedAddress === undefined) {
       return null;
     }
 

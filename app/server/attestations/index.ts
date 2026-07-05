@@ -1,7 +1,7 @@
 import { and, count, eq, max } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
-import { attestationValues, attestations, claimAttributes, claims, listings } from "~/db/schema";
+import { attestations, attestationValues, claimAttributes, claims, listings } from "~/db/schema";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { enforceWriteLimit } from "~/server/rate-limit";
 
@@ -146,11 +146,7 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
     .limit(1);
 
   const claimRow = claimRows[0];
-  if (
-    !claimRow ||
-    claimRow.moderationStatus !== "visible" ||
-    claimRow.listingModerationStatus !== "visible"
-  ) {
+  if (claimRow?.moderationStatus !== "visible" || claimRow.listingModerationStatus !== "visible") {
     return {
       claimId: input.claimId,
       confirmCount: 0,

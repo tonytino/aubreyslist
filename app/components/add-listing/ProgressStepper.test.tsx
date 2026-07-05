@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { AnswerMap } from "./AddListingWizard";
-import { ProgressStepper, deriveStepperNodes } from "./ProgressStepper";
+import { deriveStepperNodes, ProgressStepper } from "./ProgressStepper";
 
 /**
  * ProgressStepper tests: the pure status derivation (current / done / skipped /
