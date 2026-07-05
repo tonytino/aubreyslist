@@ -17,7 +17,6 @@ async function loadSession(secret: string | undefined): Promise<SessionModule> {
   process.env.DATABASE_URL = "postgres://user:pass@host/db";
   if (secret === undefined) {
     // Truly remove the key (assigning undefined would stringify to "undefined").
-    // biome-ignore lint/performance/noDelete: tests need the var genuinely absent.
     delete process.env.SESSION_SECRET;
   } else {
     process.env.SESSION_SECRET = secret;
