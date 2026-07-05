@@ -1,7 +1,11 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
-import { buildBrowseWhere, buildTaxonomyFilterPredicate } from "./filter";
+import {
+  buildBrowseWhere,
+  buildSuggestedOnlyExclusion,
+  buildTaxonomyFilterPredicate,
+} from "./filter";
 import { buildSearchPredicate } from "./search";
 
 /**
@@ -134,6 +138,60 @@ describe("buildTaxonomyFilterPredicate", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// "Hide bot suggestions" RESULT-SET exclusion (owner bug report)
+//
+// `?bot=false` used to affect only filter MATCHING, so with no other filter
+// active the chip visibly did nothing — bot-suggested listings stayed in the
+// results. The exclusion drops bot-suggested-ONLY listings (a live suggestion
+// on some visible claim + NO community attestation evidence on ANY visible
+// claim — exactly the listings whose card is driven by suggestion alone) from
+// the result set. A listing with ANY real evidence stays visible regardless of
+// live suggestions (ADR-007: returned-set only, trust derivation untouched).
+// ---------------------------------------------------------------------------
+describe("buildSuggestedOnlyExclusion — 'Hide bot suggestions' result-set exclusion", () => {
+  it("renders NOT(live-suggestion EXISTS AND NOT any-evidence EXISTS), visibility-bounded", () => {
+    const { sql, params } = renderSql(buildSuggestedOnlyExclusion());
+    const lower = sql.toLowerCase();
+
+    // The overall shape: a negated conjunction of two correlated EXISTS.
+    expect(lower).toMatch(/^not \(/);
+    expect(lower.match(/exists/g)?.length).toBe(2);
+    // Branch 1 — the live-suggestion existence rule (mirrors the badge's
+    // `getBotSuggestedListingIds`): a visible claim with `suggested_by` set.
+    expect(lower).toContain("suggested_by");
+    expect(lower).toContain("is not null");
+    // Branch 2 — "any real community evidence": an attestation row joined to a
+    // visible claim of the listing. INNER join, so a bare claim row (zero votes)
+    // is NOT evidence.
+    expect(lower).toContain('inner join "attestations"');
+    // The evidence branch is NEGATED inside the conjunction ("and not exists"):
+    // exclusion applies only when NO evidence exists anywhere on the listing.
+    expect(lower).toContain("and not exists");
+    // Visibility (#41): BOTH branches count only `visible` claims.
+    expect(params.filter((p) => p === "visible").length).toBe(2);
+  });
+
+  // JS mirror of the rendered boolean (kept literal so it can't drift; the
+  // structural pin above ties it to the real SQL): a listing is RETURNED iff
+  // NOT (has a live suggestion AND has no evidence).
+  const returned = (hasLiveSuggestion: boolean, hasAnyEvidence: boolean) =>
+    !(hasLiveSuggestion && !hasAnyEvidence);
+
+  it("excludes a bot-suggested-only listing (live suggestion, zero community evidence)", () => {
+    expect(returned(true, false)).toBe(false);
+  });
+
+  it("keeps a listing with real evidence even when it also carries a live suggestion", () => {
+    expect(returned(true, true)).toBe(true);
+  });
+
+  it("keeps ordinary listings — evidence-only and no-signal alike — untouched", () => {
+    expect(returned(false, true)).toBe(true);
+    expect(returned(false, false)).toBe(true);
+  });
+});
+
 describe("buildBrowseWhere — search + taxonomy composition", () => {
   it("is undefined when neither search nor filters constrain anything", () => {
     expect(buildBrowseWhere(buildSearchPredicate(""), [])).toBeUndefined();
@@ -170,10 +228,35 @@ describe("buildBrowseWhere — search + taxonomy composition", () => {
     expect(params).toContain("%taco%");
   });
 
-  it("threads includeSuggested=false through to the taxonomy predicate", () => {
+  it("threads includeSuggested=false through to the taxonomy predicate AND adds the exclusion", () => {
     const where = buildBrowseWhere(buildSearchPredicate(""), ["dedicated_fryer"], false);
     const lower = renderSql(where as SQL).sql.toLowerCase();
     expect(lower).toContain("exists");
-    expect(lower).not.toContain("suggested_by");
+    // The taxonomy EXISTS carries no suggestion OR-branch (community-evidence-
+    // only matching): the ONLY `suggested_by` reference is the result-set
+    // exclusion's live-suggestion branch, inside the negated conjunction.
+    expect((lower.match(/suggested_by/g) ?? []).length).toBe(1);
+    expect(lower).toContain("not (exists");
+    expect(lower).toContain('inner join "attestations"');
+  });
+
+  it("includeSuggested=false constrains EVEN with no search/attrs (the chip is never a no-op)", () => {
+    // The owner bug: with no other filter active, `?bot=false` produced NO
+    // predicate at all, so bot-suggested cards stayed visible. Now the bare
+    // exclusion alone constrains the browse.
+    const where = buildBrowseWhere(buildSearchPredicate(""), [], false);
+    expect(where).toBeDefined();
+    const lower = renderSql(where as SQL).sql.toLowerCase();
+    expect(lower).toContain("not (exists");
+    expect(lower).toContain("suggested_by");
+  });
+
+  it("default (includeSuggested=true) adds NO exclusion — behavior unchanged", () => {
+    // A bare default browse still composes to no WHERE at all…
+    expect(buildBrowseWhere(buildSearchPredicate(""), [])).toBeUndefined();
+    // …and a filtered default browse carries no result-set exclusion (its only
+    // `suggested_by` references are the taxonomy OR-branch, never a `not (exists`).
+    const where = buildBrowseWhere(buildSearchPredicate(""), ["dedicated_fryer"], true);
+    expect(renderSql(where as SQL).sql.toLowerCase()).not.toContain("not (exists");
   });
 });

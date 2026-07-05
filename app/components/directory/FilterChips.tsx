@@ -217,9 +217,11 @@ export function FilterChips({
    */
   onSavedToggle: () => void;
   /**
-   * Whether curator-bot suggestions PARTICIPATE in filter matching (AUB-31,
+   * Whether curator-bot suggestions PARTICIPATE in the browse (AUB-31,
    * URL-derived from `?bot=`; default true). The "Hide bot suggestions" chip is
-   * pressed when this is FALSE — i.e. filters are community-evidence-only.
+   * pressed when this is FALSE — filters are community-evidence-only AND
+   * bot-suggested-only listings (live suggestion, no community evidence) are
+   * hidden from the results.
    */
   bot: boolean;
   /** Toggle bot-suggestion participation; the route maps this to `?bot=`. */
@@ -283,18 +285,23 @@ export function FilterChips({
         );
       })}
 
-      {/* "Hide bot suggestions" chip (AUB-31 filter participation): by default a
-          LIVE curator-bot suggestion also satisfies the taxonomy/quick-celiac
-          filters (a discovery aid). Card-cue scope (AUB-193): the card's bot
-          badge covers a live suggestion on ANY visible claim while the listing
-          has no real celiac evidence — so suggestion matches carry the badge
-          except a listing with community celiac evidence matching a
-          non-headline attr via suggestion (provenance then lives on the listing
-          detail's claim rows; owner follow-up). This chip
-          excludes them (`?bot=false`), reverting filters to community-evidence-
-          only matching. Sparkles is the established bot glyph (ListingCard /
-          ClaimTrustSummary), so the same provenance reads with the same shape.
-          Pressed = suggestions HIDDEN (`aria-pressed`, never colour alone). */}
+      {/* "Hide bot suggestions" chip (AUB-31): by default a LIVE curator-bot
+          suggestion also satisfies the taxonomy/quick-celiac filters (a
+          discovery aid), and bot-suggested-only listings appear in the list.
+          Card-cue scope (AUB-193): the card's bot badge covers a live
+          suggestion on ANY visible claim while the listing has no real celiac
+          evidence — so suggestion matches carry the badge except a listing
+          with community celiac evidence matching a non-headline attr via
+          suggestion (provenance then lives on the listing detail's claim rows;
+          owner follow-up). Pressing this chip (`?bot=false`) reverts filters
+          to community-evidence-only matching AND hides the bot-suggested-only
+          listings themselves — the "Suggested by Aubrey's Bot" cards, i.e. a
+          live suggestion with NO community evidence on any claim — from the
+          results (server-side, so the honest total reflects it; listings with
+          real evidence always stay). Sparkles is the established bot glyph
+          (ListingCard / ClaimTrustSummary), so the same provenance reads with
+          the same shape. Pressed = suggestions HIDDEN (`aria-pressed`, never
+          colour alone). */}
       <button type="button" aria-pressed={!bot} onClick={onBotToggle} className={chipClasses(!bot)}>
         <Sparkles className="size-4" strokeWidth={2.25} aria-hidden="true" />
         <span>Hide bot suggestions</span>

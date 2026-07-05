@@ -129,7 +129,7 @@ export const browseListingsInputSchema = z.object({
     .array(z.enum(QUICK_FILTER_VALUES as unknown as [QuickFilterValue, ...QuickFilterValue[]]))
     .default([]),
   /**
-   * Whether curator-bot SUGGESTIONS (AUB-31) participate in filter matching.
+   * Whether curator-bot SUGGESTIONS (AUB-31) participate in the browse.
    * Default TRUE (a live, unvoted suggestion also satisfies the taxonomy
    * `attrs` filter and the `quick=celiac` chip — a discovery aid that surfaces
    * candidates worth validating). Card-cue scope (AUB-193): the browse card's
@@ -138,11 +138,17 @@ export const browseListingsInputSchema = z.object({
    * matched card carries the badge except the narrow case of a listing with
    * community celiac evidence matching a non-headline `attrs` filter via that
    * attribute's suggestion; there the provenance is visible on the listing
-   * detail's claim rows only (owner follow-up). FALSE (the
-   * `?bot=` URL param's "Hide bot suggestions" chip) reverts to
-   * community-evidence-only matching. Affects only filter MATCHING — never the
-   * trust glance, counts, or sort (ADR-007: a suggestion is provenance, not
-   * evidence).
+   * detail's claim rows only (owner follow-up). FALSE (the `?bot=` URL param's
+   * "Hide bot suggestions" chip) does TWO things: (1) reverts filter MATCHING
+   * to community-evidence-only, and (2) EXCLUDES bot-suggested-only listings —
+   * those with a live suggestion and NO real community attestation evidence on
+   * any visible claim, i.e. the "Suggested by Aubrey's Bot" cards — from the
+   * result set itself (`buildSuggestedOnlyExclusion` in `./filter.ts`,
+   * AND-folded into the SHARED where so the page AND the honest total both
+   * reflect it). A listing with any real community evidence stays visible
+   * either way. Affects only which listings are RETURNED — never the trust
+   * glance, its counts, or the sort (ADR-007: a suggestion is provenance, not
+   * evidence, and trust derivation/display is untouched).
    */
   includeSuggested: z.boolean().default(true),
 });

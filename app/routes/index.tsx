@@ -113,8 +113,9 @@ function browseQueryOptions(
       // a page's identity — a `?quick=` view caches independently. An empty set (no
       // chips) shares one cache entry. React Query hashes the array structurally.
       quick,
-      // Whether curator-bot suggestions participate in filter matching (AUB-31,
-      // `?bot=`). It changes the result SET + honest total, so it is part of a
+      // Whether curator-bot suggestions participate in the browse (AUB-31,
+      // `?bot=`): filter matching AND whether bot-suggested-only listings show
+      // at all. It changes the result SET + honest total, so it is part of a
       // page's identity.
       bot,
     ],
@@ -140,7 +141,9 @@ function browseQueryOptions(
           // constraints on the displayed safety glance. Empty set → no quick constraint.
           quick,
           // Curator-bot suggestion participation (AUB-31, `?bot=`): default ON;
-          // false reverts filters to community-evidence-only matching.
+          // false reverts filters to community-evidence-only matching AND hides
+          // bot-suggested-only listings (live suggestion, no community
+          // evidence) from the results.
           includeSuggested: bot,
         },
       }),
@@ -430,12 +433,15 @@ function BrowseListings() {
   }
 
   /**
-   * Toggle whether curator-bot suggestions participate in filter matching
-   * (AUB-31, `?bot=`). Default ON (a live suggestion also satisfies the
-   * taxonomy/quick-celiac filters); the "Hide bot suggestions" chip flips it to
-   * community-evidence-only matching. Resets to page 1 (the result SET changes)
-   * and preserves every other param. `stripSearchParams` drops the inclusive
-   * default from the URL at rest.
+   * Toggle whether curator-bot suggestions participate in the browse (AUB-31,
+   * `?bot=`). Default ON (a live suggestion also satisfies the taxonomy/
+   * quick-celiac filters, and bot-suggested-only listings show in the list);
+   * the "Hide bot suggestions" chip flips to community-evidence-only matching
+   * AND hides bot-suggested-only listings — those whose card is driven by a
+   * live suggestion alone, with no community evidence — from the results
+   * (server-side, so the page and honest total both reflect it). Resets to
+   * page 1 (the result SET changes) and preserves every other param.
+   * `stripSearchParams` drops the inclusive default from the URL at rest.
    */
   function toggleBot() {
     navigate({ search: (prev) => ({ ...prev, page: 1, bot: !bot }) });

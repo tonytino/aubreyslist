@@ -29,7 +29,10 @@ import { stalenessCutoff } from "~/trust/summary";
  * a live, unvoted curator-bot suggestion on the headline claim (the shared
  * `buildLiveSuggestionHaving` badge rule from `./filter.ts` — dateless, so no
  * freshness bound; any real vote kills it). Default on; the `?bot=false` param
- * (`includeSuggested: false`) reverts to community-evidence-only. `friendly` and
+ * (`includeSuggested: false`) reverts this token to community-evidence-only —
+ * and, separately, hides bot-suggested-only listings from the result set
+ * outright (`buildSuggestedOnlyExclusion` in `./filter.ts`, folded in by
+ * `buildBrowseWhere`; not this module's concern). `friendly` and
  * `recent` deliberately ignore suggestions (a suggestion asserts celiac-safe,
  * not the contested reading, and is not a verification).
  *
