@@ -4,8 +4,8 @@ import { z } from "zod";
 import { getDb } from "~/db/client";
 import {
   type AttestationValue,
-  type ClaimAttribute,
   attestations,
+  type ClaimAttribute,
   claimAttributes,
   claims,
   listings,

@@ -31,7 +31,7 @@
 //     only matches when the `/api` URL literal sits on the SAME line as
 //     `fetch(`.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
 
 // Repo root: this file is at <root>/.github/scripts/check-hard-rules.mjs.
@@ -107,7 +107,11 @@ export function checkProcessEnv(content, path) {
 }
 
 /**
- * Rule #2: No `@ts-ignore` / `@ts-expect-error` without an explanatory comment.
+ * Rule #2: No bare ts-ignore / @ts-expect-error suppression without an
+ * explanatory comment. (Written without the leading "@" on the first
+ * directive name here so biome's `noTsIgnore` lint rule — which flags actual
+ * suppression directives, not prose mentioning them — doesn't misfire on this
+ * doc comment.)
  * Scope: app/**, db/**, scripts/**, tests/** .ts/.tsx files. A directive with a
  * trailing explanation on the same line is OK; the bare directive is a
  * violation.

@@ -12,7 +12,6 @@ async function loadEnv(vercelEnv: string | undefined): Promise<EnvModule> {
   vi.resetModules();
   process.env.DATABASE_URL = "postgres://user:pass@host/db";
   if (vercelEnv === undefined) {
-    // biome-ignore lint/performance/noDelete: tests need the var genuinely absent.
     delete process.env.VERCEL_ENV;
   } else {
     process.env.VERCEL_ENV = vercelEnv;
@@ -21,7 +20,6 @@ async function loadEnv(vercelEnv: string | undefined): Promise<EnvModule> {
 }
 
 afterEach(() => {
-  // biome-ignore lint/performance/noDelete: restore the ambient test env to "unset".
   delete process.env.VERCEL_ENV;
 });
 
@@ -158,18 +156,19 @@ describe("parseEnv", () => {
       expect(message).toMatch(/SESSION_SECRET/);
     });
 
-    it.each(["development", "preview", undefined] as const)(
-      "passes without the three secrets when VERCEL_ENV=%s",
-      (vercelEnv) => {
-        const env = parseEnv({
-          DATABASE_URL: "postgres://user:pass@host/db",
-          ...(vercelEnv ? { VERCEL_ENV: vercelEnv } : {}),
-        });
-        expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
-        expect(env.GOOGLE_CLIENT_SECRET).toBeUndefined();
-        expect(env.SESSION_SECRET).toBeUndefined();
-      }
-    );
+    it.each([
+      "development",
+      "preview",
+      undefined,
+    ] as const)("passes without the three secrets when VERCEL_ENV=%s", (vercelEnv) => {
+      const env = parseEnv({
+        DATABASE_URL: "postgres://user:pass@host/db",
+        ...(vercelEnv ? { VERCEL_ENV: vercelEnv } : {}),
+      });
+      expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+      expect(env.GOOGLE_CLIENT_SECRET).toBeUndefined();
+      expect(env.SESSION_SECRET).toBeUndefined();
+    });
 
     it("does not require GOOGLE_PLACES_API_KEY or PREVIEW_LOGIN_SECRET in production (untouched by AUB-150)", () => {
       const env = parseEnv(fullProdEnv);
@@ -231,7 +230,6 @@ describe("isProductionEnvironment (AUB-170)", () => {
   it("fails closed to true if the environment can't be read/validated", async () => {
     vi.resetModules();
     // No DATABASE_URL — `getEnv()` throws on first access.
-    // biome-ignore lint/performance/noDelete: simulate a genuinely unreadable env.
     delete process.env.DATABASE_URL;
     const env = await import("./env");
     expect(env.isProductionEnvironment()).toBe(true);

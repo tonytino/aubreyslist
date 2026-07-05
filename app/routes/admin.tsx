@@ -1,4 +1,4 @@
-import { Link, createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { AdminPanel } from "~/components/admin/AdminPanel";
 import { moderationQueueQueryOptions } from "~/components/admin/moderation-queue-query";
 import { Button } from "~/components/ui/button";

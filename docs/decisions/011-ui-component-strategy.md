@@ -64,7 +64,7 @@ library.
   additional `@radix-ui/*` primitives per-component only when a component needs
   them (dialog, popover, dropdown, etc.) — do not add them speculatively.
 - **Dark mode is class-based, via a `.dark` runtime-override layer.** The
-  `@variant dark (&:where(.dark, .dark *))` directive in `app/styles/app.css`
+  `@custom-variant dark (&:where(.dark, .dark *))` directive in `app/styles/app.css`
   enables the class strategy, and a `.dark { … }` block overrides the runtime
   `--color-*` custom properties (neutrals + the shadcn semantic layer; brand
   lightened for legibility on dark, with `--color-primary` overridden

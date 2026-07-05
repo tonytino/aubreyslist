@@ -1,5 +1,5 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, createFileRoute, notFound, stripSearchParams } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, stripSearchParams } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { CircleCheck, MapPin, Menu, Users } from "lucide-react";
 import { z } from "zod";

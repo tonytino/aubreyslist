@@ -1,12 +1,10 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
+  "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "correctness": {
         "noUnusedVariables": "error",
         "noUnusedImports": "error"
@@ -29,21 +27,27 @@
       "semicolons": "always"
     }
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "files": {
-    "ignore": [
-      "app/routeTree.gen.ts",
-      "scripts/seed-listings.generated.json",
-      "node_modules",
-      ".output",
-      ".nitro",
-      ".tanstack",
-      "dist",
-      ".claude",
-      "test-results",
-      "playwright-report",
-      "coverage",
-      ".stryker-tmp",
-      "reports"
+    "includes": [
+      "**",
+      "!**/app/routeTree.gen.ts",
+      "!**/scripts/seed-listings.generated.json",
+      "!**/node_modules",
+      "!**/.output",
+      "!**/.nitro",
+      "!**/.tanstack",
+      "!**/dist",
+      "!**/.claude",
+      "!**/test-results",
+      "!**/playwright-report",
+      "!**/coverage",
+      "!**/.stryker-tmp",
+      "!**/reports"
     ]
   }
 }

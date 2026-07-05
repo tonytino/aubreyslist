@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  RouterProvider,
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
+  RouterProvider,
 } from "@tanstack/react-router";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -13,7 +13,7 @@ import { currentUserQuery } from "~/auth/current-user-query";
 import type { Listing } from "~/db/schema";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
-import { ListingCard, RestaurantCard, type RestaurantCardVM, listingToCardVM } from "./ListingCard";
+import { ListingCard, listingToCardVM, RestaurantCard, type RestaurantCardVM } from "./ListingCard";
 
 // The card now embeds the FavoriteButton island (F6, AUB-125), which imports the
 // `favorites.fn` server seam. That seam transitively pulls in the db-touching

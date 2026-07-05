@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Utensils } from "lucide-react";
 import { SAFETY_STATES, SAFETY_TOOLTIP, SafetySignal } from "~/components/SafetySignal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";

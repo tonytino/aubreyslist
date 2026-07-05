@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
 import type { ComponentProps } from "react";
-import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
+import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
 import { Badge } from "~/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";

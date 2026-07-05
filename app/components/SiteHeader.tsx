@@ -6,7 +6,6 @@ import { currentUserQuery } from "~/auth/current-user-query";
 import { previewLoginEnabledQuery } from "~/auth/preview-login-query";
 import { ThemeToggle } from "~/components/ThemeToggle";
 import { UserMenu } from "~/components/UserMenu";
-import { Wordmark } from "~/components/Wordmark";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -14,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { Wordmark } from "~/components/Wordmark";
 
 interface NavItem {
   to: string;

@@ -1,5 +1,5 @@
-import { Hono } from "hono";
 import type { Context } from "hono";
+import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import {
@@ -16,11 +16,11 @@ import {
   verifyPreviewSecret,
 } from "../auth/preview-login";
 import {
+  cookieSecure,
+  createSessionCookieValue,
   SESSION_COOKIE_NAME,
   SESSION_COOKIE_OPTIONS,
   SESSION_MAX_AGE_SECONDS,
-  cookieSecure,
-  createSessionCookieValue,
 } from "../auth/session";
 import { upsertUserFromGoogle } from "../auth/users";
 

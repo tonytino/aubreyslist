@@ -1,6 +1,6 @@
-import { type SQL, and, eq, gt, sql } from "drizzle-orm";
-import { attestations, claims, listings } from "~/db/schema";
+import { and, eq, gt, type SQL, sql } from "drizzle-orm";
 import type { ClaimAttribute } from "~/db/schema";
+import { attestations, claims, listings } from "~/db/schema";
 
 /**
  * Server-side GF taxonomy filtering for the browse list (issue #35, the killer

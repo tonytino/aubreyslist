@@ -63,7 +63,7 @@ unprefixed utility is the mobile base; `sm:`/`md:`/`lg:` add to it.
 
 Dark mode is **implemented and class-based** (ADR-011). It works through three pieces:
 
-1. **The variant** — `@variant dark (&:where(.dark, .dark *));` near the top of
+1. **The variant** — `@custom-variant dark (&:where(.dark, .dark *));` near the top of
    `app/styles/app.css` switches Tailwind v4 from the default
    `@media (prefers-color-scheme)` strategy to the `.dark` class strategy.
 2. **The token layer** — a `.dark { … }` block at the end of `app/styles/app.css`

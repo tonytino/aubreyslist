@@ -30,7 +30,7 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({ select: selectMock, insert: insertMock }),
 }));
 
-import { SETTING_KEYS, getDefault, getSetting, seedDefaults, setSetting } from "./index";
+import { getDefault, getSetting, SETTING_KEYS, seedDefaults, setSetting } from "./index";
 
 beforeEach(() => {
   selectRows = []; // default: no row -> getSetting returns the in-code default

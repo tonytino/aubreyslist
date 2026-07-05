@@ -1,5 +1,5 @@
-import { type SQL, and, eq, sql } from "drizzle-orm";
-import { type ClaimAttribute, attestations, claims, incidents, listings } from "~/db/schema";
+import { and, eq, type SQL, sql } from "drizzle-orm";
+import { attestations, type ClaimAttribute, claims, incidents, listings } from "~/db/schema";
 import { QUICK_FILTER_VALUES, type QuickFilterValue } from "~/listings/quick";
 import { buildLiveSuggestionHaving } from "~/server/listings/filter";
 import { RECENT_INCIDENT_WINDOW_DAYS, todayUtcMidnight } from "~/trust/incident-recency";

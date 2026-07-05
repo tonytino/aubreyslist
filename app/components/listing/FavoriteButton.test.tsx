@@ -17,6 +17,7 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 import { toast } from "sonner";
 
 import { currentUserQuery } from "~/auth/current-user-query";

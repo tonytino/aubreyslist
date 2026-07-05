@@ -1,9 +1,9 @@
 import {
-  RouterProvider,
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
+  RouterProvider,
 } from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";

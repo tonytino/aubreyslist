@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  RouterProvider,
   createMemoryHistory,
   createRootRoute,
   createRouter,
+  RouterProvider,
 } from "@tanstack/react-router";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -59,6 +59,7 @@ vi.mock("~/server/admin/set-role.fn", () => ({
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 import { toast } from "sonner";
 
 import { AdminPanel } from "./AdminPanel";

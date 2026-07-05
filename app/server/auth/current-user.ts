@@ -2,7 +2,7 @@ import { getCookie } from "@tanstack/react-start/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "~/db/client";
 import { type User, users } from "~/db/schema";
-import { SESSION_COOKIE_NAME, readSessionCookieValue } from "./session";
+import { readSessionCookieValue, SESSION_COOKIE_NAME } from "./session";
 
 /**
  * Server-only current-user accessor. Reads + verifies the sealed session cookie

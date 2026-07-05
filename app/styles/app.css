@@ -8,7 +8,7 @@
    <html> by the no-FOUC inline script in app/routes/__root.tsx before paint,
    so `dark:` utilities and the `.dark { … }` override block below both key off
    it. Must precede @theme. See docs/agents/styling.md → Dark Mode. */
-@variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 /*
  * Aubrey's List — brand identity + accessible design tokens (issue #12).
@@ -161,7 +161,7 @@
   /* spacing, and radius tokens above are untouched, and the safety-signal    */
   /* colour+icon+label contract is unaffected — these tokens only style the   */
   /* shadcn primitives. These are the LIGHT defaults; dark mode is implemented */
-  /* via @variant dark (top of file) + the `.dark { … }` override block below. */
+  /* via @custom-variant dark (top of file) + the `.dark { … }` override block below. */
   /* ----------------------------------------------------------------------- */
   --color-primary: var(--color-brand);
   --color-primary-foreground: var(--color-brand-foreground);

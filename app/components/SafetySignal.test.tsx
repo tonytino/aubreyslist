@@ -24,20 +24,19 @@ describe("SafetySignal", () => {
 
   const VARIANTS = ["solid", "soft"] as const;
 
-  it.each(SAFETY_STATES.flatMap((state) => VARIANTS.map((variant) => [state, variant] as const)))(
-    "pairs a colour + icon + label for the %s state (%s variant, never colour alone)",
-    (state, variant) => {
-      const { container } = render(<SafetySignal state={state} variant={variant} />);
-      // Icon present, decorative (aria-hidden) so meaning lives in the label...
-      const svg = container.querySelector("svg");
-      expect(svg).not.toBeNull();
-      expect(svg).toHaveAttribute("aria-hidden", "true");
-      // ...AND the text label present alongside it.
-      const root = container.firstChild as HTMLElement;
-      expect(within(root).getByText(EXPECTED_LABELS[state])).toBeInTheDocument();
-      expect(root).toHaveAttribute("data-safety-state", state);
-    }
-  );
+  it.each(
+    SAFETY_STATES.flatMap((state) => VARIANTS.map((variant) => [state, variant] as const))
+  )("pairs a colour + icon + label for the %s state (%s variant, never colour alone)", (state, variant) => {
+    const { container } = render(<SafetySignal state={state} variant={variant} />);
+    // Icon present, decorative (aria-hidden) so meaning lives in the label...
+    const svg = container.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg).toHaveAttribute("aria-hidden", "true");
+    // ...AND the text label present alongside it.
+    const root = container.firstChild as HTMLElement;
+    expect(within(root).getByText(EXPECTED_LABELS[state])).toBeInTheDocument();
+    expect(root).toHaveAttribute("data-safety-state", state);
+  });
 
   it("renders distinct labels for celiac-safe vs gluten-friendly", () => {
     expect(safetyLabel("celiac-safe")).not.toBe(safetyLabel("gluten-friendly"));

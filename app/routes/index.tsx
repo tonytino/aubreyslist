@@ -13,10 +13,10 @@ import { listingToCardVM } from "~/components/listing/ListingCard";
 import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 import {
   BROWSE_PAGE_SIZE,
-  type UserCoords,
   coordsFromSearch,
   parseAttrs,
   serializeAttrs,
+  type UserCoords,
 } from "~/listings/browse-params";
 import {
   BROWSE_SEARCH_DEFAULTS,
@@ -25,9 +25,9 @@ import {
 } from "~/listings/browse-search";
 import { UNION_STATION } from "~/listings/distance";
 import {
-  type QuickFilterValue,
   applyQuickToggle,
   parseQuick,
+  type QuickFilterValue,
   serializeQuick,
 } from "~/listings/quick";
 import { type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";

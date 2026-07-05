@@ -1,9 +1,9 @@
 import workerThreads from "node:worker_threads";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  RECENT_INCIDENT_WINDOW_DAYS,
   findRecentIncident,
   isRecentIncident,
+  RECENT_INCIDENT_WINDOW_DAYS,
   reportIncidentInputSchema,
   toCalendarDayString,
 } from "./incident-recency";
