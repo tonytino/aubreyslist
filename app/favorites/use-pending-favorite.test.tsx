@@ -88,6 +88,11 @@ beforeEach(() => {
 
 afterEach(() => {
   window.history.replaceState({}, "", "/");
+  // Vitest 4 returns the SAME spy when `vi.spyOn` targets an already-spied
+  // method, so the `replaceState` spy from one test would otherwise leak its
+  // call history (including beforeEach/setLocation navigations) into the next.
+  // Restore spies so each test's `vi.spyOn` starts fresh.
+  vi.restoreAllMocks();
 });
 
 describe("PendingFavoriteHandler", () => {
