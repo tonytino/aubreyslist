@@ -8,7 +8,6 @@ import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
-import { SafetyBadges } from "~/components/listing/SafetyBadges";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -278,10 +277,21 @@ function ListingDetail() {
           </div>
         </div>
 
-        {/* Solid bar below the media: the headline safety cue at hero scale +
-            the at-a-glance metadata strip mirrored from the browse card. */}
+        {/* Solid bar below the media: the ONE safety-badge row for this listing
+            (repo-owner feedback, nits-detail-badges-once — the headline state
+            used to render twice, once here and once in a standalone
+            `SafetyBadges` row below the hero) + the at-a-glance metadata strip
+            mirrored from the browse card. `SafetySummary`'s hero variant now
+            owns the whole row: the headline celiac-safe/gluten-friendly/stale
+            badge (or the honest "Not yet attested" empty state) plus the
+            recent-incident badge, scrolling horizontally on overflow rather
+            than wrapping. */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-card">
-          <SafetySummary state={safetyState} variant="hero" />
+          <SafetySummary
+            state={safetyState}
+            variant="hero"
+            hasRecentIncident={recentIncident !== null}
+          />
           {verifiedRelative || confirmations > 0 ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-muted-foreground">
               {verifiedRelative ? (
@@ -306,13 +316,6 @@ function ListingDetail() {
       {recentIncident ? (
         <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
       ) : null}
-
-      {/* Safety status badges (owner feedback): only the signals that actually
-          apply to THIS listing — the headline celiac-safe/gluten-friendly/stale
-          state (when attested) plus the incident badge (when recent), never the
-          full four-state set regardless of relevance. Renders nothing when
-          neither applies. */}
-      <SafetyBadges state={safetyState} hasRecentIncident={recentIncident !== null} />
 
       {/* Primary action: deep-link to Google Maps (ADR-009 — no embedded map).
           Both hrefs are guarded by `isHttpUrl` so only http(s) links ever reach
