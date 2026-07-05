@@ -14,7 +14,10 @@
     "noFallthroughCasesInSwitch": true,
 
     // Paths
-    "baseUrl": ".",
+    // `baseUrl` is deprecated as of TypeScript 6.0 (removed in 7.0 — see
+    // https://aka.ms/ts6). It was set to "." (the tsconfig.json directory),
+    // which is also the default base for "paths" when baseUrl is absent, so
+    // dropping it is a no-op for module resolution.
     "paths": {
       // More specific first: ~/db/* resolves to the repo-root db/ directory,
       // everything else under ~/ resolves to app/.
