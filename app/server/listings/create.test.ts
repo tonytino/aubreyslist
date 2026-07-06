@@ -21,6 +21,13 @@ import type { PlaceDetails, PlacesResult } from "~/server/places";
 const getSettingMock = vi.fn();
 vi.mock("~/server/settings", () => ({ getSetting: (key: string) => getSettingMock(key) }));
 
+// The links-insert degrade path reports through Sentry (like the favorites
+// read-degrade); mock it so the test can assert the report without a DSN.
+const captureExceptionMock = vi.fn();
+vi.mock("@sentry/tanstackstart-react", () => ({
+  captureException: (error: unknown) => captureExceptionMock(error),
+}));
+
 const runPlaceDetailsMock = vi.fn();
 vi.mock("~/server/places", async (importOriginal) => {
   const actual = await importOriginal<typeof import("~/server/places")>();
@@ -388,6 +395,48 @@ describe("runCreateListing — manual mode", () => {
 
     // Only the listing insert — no empty links batch.
     expect(insertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the created listing when the links insert fails (degrade + report)", async () => {
+    // The listing insert has already committed and the Neon HTTP driver has no
+    // interactive transaction to roll it back with — and failing the create
+    // would strand the user: their retry dedups to `created: false`, dropping
+    // the links silently anyway. So the create degrades to success-without-
+    // links (the detail page's edit dialog is the recovery path) and reports
+    // the failure to Sentry + the server log.
+    const created = listingRow({ id: "degrade-1", placeId: null });
+    returningResult = [created];
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const linksFailure = new Error("links write failed");
+    onConflictDoNothingMock
+      // First call: the LISTING insert (chains .returning()) — succeeds.
+      .mockImplementationOnce(() =>
+        Object.assign(Promise.resolve(undefined), { returning: returningMock })
+      )
+      // Second call: the LINKS batch (awaited directly) — fails.
+      .mockImplementationOnce(() =>
+        Object.assign(Promise.reject(linksFailure), { returning: returningMock })
+      );
+
+    const result = await runCreateListing(
+      {
+        mode: "manual",
+        name: "Corner Cafe",
+        address: "1 Main St, Denver",
+        lat: 39.74,
+        lng: -104.99,
+        links: [{ kind: "menu", url: "https://corner.example/menu" }],
+      },
+      "user-7"
+    );
+
+    // The create still succeeds with the real listing.
+    expect(result).toEqual({ listing: created, created: true });
+    // ...and the swallowed failure is REPORTED, never silent.
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    expect(captureExceptionMock).toHaveBeenCalledWith(linksFailure);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 
   it("does not use the Place-ID dedup lookup for a manual entry (placeId is null)", async () => {

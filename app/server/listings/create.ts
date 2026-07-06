@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/tanstackstart-react";
 import { createServerFn } from "@tanstack/react-start";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "~/db/client";
@@ -303,7 +304,21 @@ export async function runCreateListing(
   const resolved = await resolveListing(input);
   const result = await insertListing(resolved);
   if (result.created) {
-    await insertListingLinks(result.listing.id, input.links, createdBy);
+    // NON-FATAL: the listing insert has already committed, and the Neon HTTP
+    // driver offers no interactive transaction to roll it back with (and
+    // `db.batch` can't express this flow — the links depend on the dedup
+    // branch's outcome). Failing here would surface an error for a listing
+    // that EXISTS, and the user's retry would dedup to `created: false` and
+    // silently drop the links anyway. So degrade to success-without-links —
+    // the wiki-style edit dialog on the detail page is the recovery path —
+    // and report the error (Sentry + server logs) like the favorites
+    // read-degrade does.
+    try {
+      await insertListingLinks(result.listing.id, input.links, createdBy);
+    } catch (error) {
+      console.error("[listing-links] intake links insert failed; created listing kept", error);
+      Sentry.captureException(error);
+    }
   }
   return result;
 }
