@@ -37,11 +37,23 @@ or user reviews (§3.2.3(a)(iii)); no caching except as expressly permitted
 The express carve-outs: **place IDs may be cached indefinitely** (§A.3), and
 **lat/lng may be cached for up to 30 consecutive days** (§B.14.3).
 
+- **GMP ToS §3.2.3(d)(iii) directory/listings restriction:** GMP ToS
+  §3.2.3(d)(iii) prohibits using Maps Core Services "in a listings or
+  directory service or to create or augment an advertising product";
+  §3.2.3(d) allows products with "substantial, independent value and features
+  beyond the Google products". **Accepted-risk rationale (owner-accepted):**
+  aubreyslist's core content is its own community GF-safety evidence
+  (ADR-007) — the community's attestations, incidents, and trust signals are
+  the substantial, independent value; Google data is supplemental enrichment
+  on top of that, never the substance of a listing. This is precisely why
+  Google content must stay supplemental — never the substance of listings.
+
 There is also money: post-March-2025 GMP pricing replaced the flat $200 credit
 with **per-SKU monthly free caps** (Essentials 10k, Pro 5k, Enterprise 1k calls
-per month; Place photo media ~$7/1k after 1k free; Maps Embed API free and
-unlimited; Maps JavaScript API 10k free map loads). The free-tier-only cost
-posture (`docs/product/overview.md`) still applies.
+per month; Place photo media $7.00 per 1,000 media requests beyond the SKU's
+monthly free cap — exact tier per Google's current pricing table; Maps Embed
+API free and unlimited; Maps JavaScript API 10k free map loads). The
+free-tier-only cost posture (`docs/product/overview.md`) still applies.
 
 ## Decision
 
@@ -110,8 +122,9 @@ toggle so a quota/cost ceiling can never break the app.
 ### 4. Cost ceilings & graceful degradation
 
 Post-March-2025 GMP pricing: per-SKU monthly free caps (Essentials 10k / Pro
-5k / Enterprise 1k), photo media $7/1k after 1k free, Maps Embed API
-free/unlimited, Maps JS 10k free loads. Rules:
+5k / Enterprise 1k), photo media $7.00 per 1,000 media requests beyond the
+SKU's monthly free cap (exact tier per Google's current pricing table), Maps
+Embed API free/unlimited, Maps JS 10k free loads. Rules:
 
 - **Every Google-spending surface must have a graceful-degradation path**
   mirroring ADR-008's intake toggle — a cost ceiling never breaks the app:
