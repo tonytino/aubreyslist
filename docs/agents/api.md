@@ -101,12 +101,11 @@ The app mounts a `GET /api/health` liveness route
 (`app/server/routes/health.ts`). For the canonical route-group pattern, see
 **Adding a new Hono route group** below.
 
-> **Request validation:** `@hono/zod-validator` is not a dependency yet — the
-> example that demonstrated it was removed for a clean base. Add it
-> (`pnpm add @hono/zod-validator`) when you build the first endpoint that takes
-> a request body. It remains the standard validator for this layer: it is used
-> in the snippet below and required by the "Do Not" rules at the bottom of this
-> doc.
+> **Request validation:** `@hono/zod-validator` **is a dependency** (added with
+> the first validated endpoint — the `GET /api/places/photo` media proxy,
+> AUB-215, which validates its query params). It is the standard validator for
+> this layer: use it for request bodies AND typed query params, per the snippet
+> below and the "Do Not" rules at the bottom of this doc.
 
 ### Adding a new Hono route group
 

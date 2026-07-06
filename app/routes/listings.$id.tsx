@@ -6,6 +6,7 @@ import { z } from "zod";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
+import { HeroPhoto } from "~/components/listing/HeroPhoto";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
@@ -211,10 +212,13 @@ function ListingDetail() {
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-section bg-background px-4 py-6 text-foreground sm:px-6 sm:py-8">
       {/* ============================================================ HERO */}
       <header className="relative overflow-hidden rounded-card border border-border bg-surface shadow-sm">
-        {/* Brand-tinted gradient media band (real photo slot later). Decorative
-            pastel blobs layer over a brand gradient; a bottom scrim keeps the
-            overlaid white name/address AA-legible. All Tailwind utilities — no
-            inline styles. */}
+        {/* Media band: brand-tinted gradient with a render-time Google Place
+            photo layered on top when one resolves (AUB-215, ADR-013 — fetched
+            per view through the server-side proxy, never persisted). Decorative
+            pastel blobs layer over a brand gradient and stay the loading/
+            fallback/error state; a bottom scrim keeps the overlaid white
+            name/address AA-legible over either surface. All Tailwind utilities
+            — no inline styles. */}
         <div className="relative aspect-[16/9] bg-gradient-to-br from-brand to-brand-strong sm:aspect-[21/9]">
           <div
             aria-hidden="true"
@@ -228,12 +232,17 @@ function ListingDetail() {
             aria-hidden="true"
             className="absolute inset-0 bg-[radial-gradient(130%_120%_at_78%_96%,var(--color-accent-sky),transparent_55%)]"
           />
-          {/* Placeholder label for the eventual food photo. */}
+          {/* Placeholder label — visible only while no real photo covers it. */}
           <div aria-hidden="true" className="absolute inset-0 grid place-items-center">
             <span className="font-mono text-caption font-semibold uppercase tracking-[0.28em] text-white/80">
               Food photo
             </span>
           </div>
+          {/* Render-time place photo + its attribution line (client-side query,
+              never blocks render). Renders nothing — leaving the gradient band
+              untouched — while loading and on any failure. Sits between the
+              gradient layers and the scrim so overlaid text stays legible. */}
+          <HeroPhoto listingId={listing.id} />
           {/* Bottom scrim for text contrast. */}
           <div
             aria-hidden="true"

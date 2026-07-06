@@ -73,6 +73,17 @@ const positiveIntCodec: Codec<number> = {
 };
 
 /**
+ * Codec for boolean settings (e.g. a feature kill switch). Stored canonically as
+ * the TEXT `"true"` / `"false"`; anything else parses to `undefined` so the
+ * in-code default wins — a corrupt row can never wedge a switch into an
+ * unintended state.
+ */
+const boolCodec: Codec<boolean> = {
+  serialize: (value) => (value ? "true" : "false"),
+  parse: (raw) => (raw === "true" ? true : raw === "false" ? false : undefined),
+};
+
+/**
  * Codec factory for a string-union ("enum") setting. Serializes like a plain
  * string; parses back to the union type only when the stored value is a member,
  * else `undefined` (default wins).
@@ -126,6 +137,18 @@ export const SETTINGS = {
   staleness_months: define<number>({
     default: DEFAULT_STALENESS_MONTHS,
     codec: positiveIntCodec,
+  }),
+  /**
+   * Kill switch for render-time Google Place photos (AUB-215, ADR-013). Defaults
+   * to ENABLED when the row is absent — mirroring `intake_mode`'s
+   * default-on-unset behaviour — so photos work out of the box; an admin (or an
+   * operator via SQL) flips it to `false` if the Places photo spend needs to be
+   * cut off. Reads never persist Google content; this only gates the
+   * render-time fetch + media proxy.
+   */
+  place_photos_enabled: define<boolean>({
+    default: true,
+    codec: boolCodec,
   }),
 } as const;
 
