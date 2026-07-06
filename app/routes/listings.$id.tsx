@@ -3,6 +3,7 @@ import { createFileRoute, Link, notFound, stripSearchParams } from "@tanstack/re
 import { createServerFn } from "@tanstack/react-start";
 import { CircleCheck, MapPin, Menu, Users } from "lucide-react";
 import { z } from "zod";
+import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
@@ -25,7 +26,12 @@ import { fetchListing } from "~/server/listings/get-listing.fn";
 import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
 import { findRecentIncident } from "~/trust/incident-recency";
-import { deriveHeadlineSafetyState, formatRelativeTime } from "~/trust/summary";
+import {
+  deriveHeadlineSafetyState,
+  formatRelativeTime,
+  hasEvidence,
+  hasPositiveConsensus,
+} from "~/trust/summary";
 
 /**
  * Server-only loader for a listing's claims WITH their aggregates (confirm/
@@ -190,6 +196,22 @@ function ListingDetail() {
     : null;
   const confirmations = headlineClaim?.confirmCount ?? 0;
 
+  // The non-headline claim badges relevant to this listing (e.g. "Off-menu GF
+  // on request"): every attribute besides the headline that either has real
+  // positive community consensus, or — while there's no evidence yet — is a
+  // live curator-bot suggestion (ADR-007: a suggestion never coexists with
+  // real evidence for the same attribute, guarded here the same way
+  // `summarizeClaim` does). Rendered via the shared `ClaimBadge` so this row
+  // and the browse cards' suggested badges stay visually consistent.
+  const nonHeadlineClaimBadges = claims
+    .filter((claim) => claim.attribute !== "celiac_safe_vs_gluten_friendly")
+    .map((claim) => ({
+      attribute: claim.attribute,
+      confirmed: hasPositiveConsensus(claim),
+      suggested: claim.suggested && !hasEvidence(claim),
+    }))
+    .filter((claim) => claim.confirmed || claim.suggested);
+
   const claimsCount = claims.length;
   const incidentsCount = incidents.length;
 
@@ -309,6 +331,23 @@ function ListingDetail() {
             </div>
           ) : null}
         </div>
+
+        {/* Non-headline claim badges relevant to this listing (e.g. "Off-menu
+            GF on request", "Dedicated fryer"): a second row, so every
+            confirmed or bot-suggested attribute — not just the headline
+            celiac-safe/gluten-friendly state — is visible at a glance instead
+            of being buried in the Claims tab below. */}
+        {nonHeadlineClaimBadges.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border px-card pb-card pt-3">
+            {nonHeadlineClaimBadges.map((claim) => (
+              <ClaimBadge
+                key={claim.attribute}
+                attribute={claim.attribute}
+                suggested={claim.suggested}
+              />
+            ))}
+          </div>
+        ) : null}
       </header>
 
       {/* Recent harm is surfaced first and never buried by older confirmations
