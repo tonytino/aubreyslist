@@ -66,7 +66,11 @@ const LINK_KIND_ICONS: Record<LinkKind, LucideIcon> = {
  *
  * Legacy fallback: a listing created before typed links may carry only the
  * legacy `listings.menu_url`. When there is no `menu`-kind row, that legacy
- * URL renders as the menu link, so old rows keep their button.
+ * URL renders as the menu link, so old rows keep their button. Both `links`
+ * and `legacyMenuUrl` come from the ONE links query (`fetchListingLinks`), so
+ * invalidating it after an edit refreshes the fallback too — the server nulls
+ * the legacy column whenever a typed menu write supersedes it, and the
+ * refetch picks that up (a loader-sourced legacy value would go stale here).
  *
  * Security (#90, defence-in-depth): EVERY anchor href in this section — maps,
  * typed links, the legacy fallback — is `isHttpUrl`-guarded at the render
@@ -142,13 +146,21 @@ export function ListingLinks({
 /**
  * The signed-in edit affordance + dialog. Fields are pre-filled from the
  * current typed links; with no `menu`-kind row the legacy `menu_url` pre-fills
- * the menu field, so saving migrates it into a typed row organically.
+ * the menu field, so the dialog shows exactly what the page renders.
  *
- * Save semantics per kind, run through one mutation: a filled field that
- * differs from the stored URL upserts (`submitListingLink`), a cleared field
- * that had a typed row removes it (`deleteListingLink`), everything else is
- * left untouched. On success the links query is invalidated so the buttons
- * refresh (the same invalidate-on-success pattern as the incident mutations).
+ * Save semantics per kind, run through one mutation, diffed against the
+ * EFFECTIVE current value (the typed row, or the legacy menu fallback): a
+ * filled field that differs upserts (`submitListingLink`), a cleared field
+ * that HAD a value removes it (`deleteListingLink`) — including a legacy-only
+ * menu value, because the server's menu-kind remove also clears the legacy
+ * column (typed writes supersede it), so clearing a legacy-prefilled menu
+ * field is a real removal and never a silent no-op. An unchanged field issues
+ * no write.
+ *
+ * The links query is invalidated in `onSettled`, not only on success: the
+ * mutation runs up to five sequential server calls, so a mid-sequence failure
+ * has already committed earlier writes — the page must refetch what actually
+ * landed, error or not, rather than showing stale buttons under an error toast.
  */
 function EditListingLinks({
   listingId,
@@ -179,25 +191,45 @@ function EditListingLinks({
     setIsOpen(true);
   };
 
+  /**
+   * The kind's EFFECTIVE current URL: its typed row, or — for the menu kind
+   * with no typed row — the legacy `menu_url` fallback the page renders. The
+   * diff below runs against this, so the legacy value behaves like any other
+   * stored link: clearing it removes (Case B), rewriting it saves.
+   */
+  const effectiveUrl = (kind: LinkKind): string | undefined => {
+    const typed = linkByKind.get(kind)?.url;
+    if (typed !== undefined) {
+      return typed;
+    }
+    return kind === "menu" && isHttpUrl(legacyMenuUrl) ? legacyMenuUrl : undefined;
+  };
+
   const save = useMutation({
     mutationFn: async (values: LinkFieldValues) => {
       for (const kind of LINK_KINDS) {
         const url = values[kind].trim();
-        const existing = linkByKind.get(kind)?.url;
+        const existing = effectiveUrl(kind);
         if (url && url !== existing) {
           await submitListingLink({ data: { listingId, kind, url } });
-        } else if (!url && existing) {
+        } else if (!url && existing !== undefined) {
+          // Removes the typed row AND (for menu) clears the legacy column
+          // server-side — a legacy-only clear must not silently no-op.
           await deleteListingLink({ data: { listingId, kind } });
         }
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: listingLinksQueryKey(listingId) });
       setIsOpen(false);
       toast.success("Links saved");
     },
     onError: () => {
       toast.error("Could not save the links. Please try again.");
+    },
+    // Settled, not success: a mid-sequence failure has already committed the
+    // earlier writes, so the page must refetch what actually landed.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: listingLinksQueryKey(listingId) });
     },
   });
 

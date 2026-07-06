@@ -21,6 +21,7 @@ function makeFakeDb(legacyRows: LegacyRow[], conflictedListingIds: Set<string> =
   const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
   const conflictTargets: unknown[] = [];
   const selectWheres: unknown[] = [];
+  const updates: Array<{ table: unknown; set: Record<string, unknown> }> = [];
 
   const db = {
     select() {
@@ -56,6 +57,15 @@ function makeFakeDb(legacyRows: LegacyRow[], conflictedListingIds: Set<string> =
         },
       };
     },
+    // The post-migration legacy clear: update(listings).set({menuUrl: null}).where(...)
+    update(table: unknown) {
+      return {
+        set(values: Record<string, unknown>) {
+          updates.push({ table, set: values });
+          return { where: () => Promise.resolve(undefined) };
+        },
+      };
+    },
   };
 
   // The core only uses this narrow surface; cast through unknown (test-only).
@@ -64,6 +74,7 @@ function makeFakeDb(legacyRows: LegacyRow[], conflictedListingIds: Set<string> =
     inserts,
     conflictTargets,
     selectWheres,
+    updates,
   };
 }
 
@@ -83,8 +94,8 @@ describe("backfillListingLinks", () => {
     expect(selectWheres).toEqual([isNotNull(listings.menuUrl)]);
   });
 
-  it("inserts a menu-kind row with createdBy null from the row's own legacy URL", async () => {
-    const { db, inserts, conflictTargets } = makeFakeDb([legacy()]);
+  it("inserts a menu-kind row with createdBy null, then clears the migrated menu_url", async () => {
+    const { db, inserts, conflictTargets, updates } = makeFakeDb([legacy()]);
 
     const result: BackfillListingLinksResult = await backfillListingLinks({ db });
 
@@ -101,40 +112,52 @@ describe("backfillListingLinks", () => {
     expect(conflictTargets[0]).toEqual({
       target: [listingLinks.listingId, listingLinks.kind],
     });
+    // Typed writes supersede the legacy column: the migrated value is cleared
+    // so the detail page's fallback can never resurrect a later-removed link.
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.table).toBe(listings);
+    expect(updates[0]?.set).toEqual({ menuUrl: null });
   });
 
-  it("treats an existing menu-kind row as a conflict no-op (never overwrites)", async () => {
-    const { db, inserts } = makeFakeDb([legacy()], new Set(["listing-1"]));
+  it("clears the legacy column on a conflict no-op too, without overwriting the typed URL", async () => {
+    const { db, inserts, updates } = makeFakeDb([legacy()], new Set(["listing-1"]));
 
     const result = await backfillListingLinks({ db });
 
     expect(result).toEqual({ inserted: 0, alreadyLinked: 1, skippedNotHttp: 0 });
-    // The insert was attempted but conflicted — nothing was updated.
+    // The insert conflicted — the existing (possibly user-edited) typed URL
+    // was never touched — but the redundant legacy column is still cleared.
     expect(inserts).toHaveLength(1);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.set).toEqual({ menuUrl: null });
   });
 
-  it("skips (and reports) a legacy value that is not an http(s) URL (#90)", async () => {
+  it("skips a non-http(s) legacy value entirely — no insert, no clear (#90)", async () => {
     const logs: string[] = [];
-    const { db, inserts } = makeFakeDb([legacy({ menuUrl: "javascript:alert(1)" })]);
+    const { db, inserts, updates } = makeFakeDb([legacy({ menuUrl: "javascript:alert(1)" })]);
 
     const result = await backfillListingLinks({ db, log: (m) => logs.push(m) });
 
     expect(result).toEqual({ inserted: 0, alreadyLinked: 0, skippedNotHttp: 1 });
     expect(inserts).toHaveLength(0);
+    // A skipped row is left FULLY untouched — its legacy value stays for a
+    // human to look at, it just never renders (the sink guard suppresses it).
+    expect(updates).toHaveLength(0);
     expect(logs.join("\n")).toContain("not http(s)");
   });
 
   it("is a no-op when no listing carries a legacy menuUrl", async () => {
-    const { db, inserts } = makeFakeDb([]);
+    const { db, inserts, updates } = makeFakeDb([]);
 
     const result = await backfillListingLinks({ db });
 
     expect(result).toEqual({ inserted: 0, alreadyLinked: 0, skippedNotHttp: 0 });
     expect(inserts).toHaveLength(0);
+    expect(updates).toHaveLength(0);
   });
 
   it("processes every row independently (mixed batch)", async () => {
-    const { db } = makeFakeDb(
+    const { db, updates } = makeFakeDb(
       [
         legacy({ id: "l-1", name: "One", menuUrl: "https://one.example/menu" }),
         legacy({ id: "l-2", name: "Two", menuUrl: "ftp://two.example/menu" }),
@@ -147,5 +170,7 @@ describe("backfillListingLinks", () => {
     const result = await backfillListingLinks({ db });
 
     expect(result).toEqual({ inserted: 2, alreadyLinked: 1, skippedNotHttp: 1 });
+    // Cleared for the two inserts + the conflict; never for the ftp skip.
+    expect(updates).toHaveLength(3);
   });
 });

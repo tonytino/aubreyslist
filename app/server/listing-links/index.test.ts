@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * Tests for the typed listing-links DB layer (AUB-202) — the login-gated,
  * rate-limited, visibility-checked writes (upsert-by-kind save + idempotent
- * remove) and the public, parent-visibility-filtered read.
+ * remove), the legacy `menu_url` supersede rule (a `menu`-kind write also
+ * clears the legacy column), and the public, parent-visibility-gated read
+ * that returns the typed rows plus the legacy fallback.
  *
  * We model the exact drizzle chains the module uses so we can assert behaviour
  * without a live database, per `docs/agents/testing.md` (the incidents-module
@@ -16,19 +18,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // --- Mocks -----------------------------------------------------------------
 // DB chains modeled:
-//   read list:      getDb().select().from().innerJoin().where().orderBy() -> rows
-//   listing lookup: getDb().query.listings.findFirst({ where })           -> row | undefined
+//   listing lookup: getDb().query.listings.findFirst({ where, columns })     -> row | undefined
+//   read list:      getDb().select().from().where().orderBy()               -> rows
 //   save (upsert):  getDb().insert().values().onConflictDoUpdate().returning() -> [row]
-//   remove:         getDb().delete().where()                              -> resolves
+//   legacy clear:   getDb().update().set().where()                          -> resolves
+//   remove:         getDb().delete().where()                                -> resolves
 const h = vi.hoisted(() => {
   const state = {
     listRows: [] as Array<Record<string, unknown>>,
     listingVisible: true,
+    listingMenuUrl: null as string | null,
     lastInsertValues: undefined as unknown,
     lastConflictArgs: undefined as unknown,
     lastOrderByArgs: [] as unknown[],
     lastListWhere: undefined as unknown,
     lastDeleteWhere: undefined as unknown,
+    lastUpdateSet: undefined as unknown,
+    lastUpdateWhere: undefined as unknown,
     upsertedRows: [{ id: "link-1" }] as Array<Record<string, unknown>>,
     signedIn: true,
   };
@@ -41,14 +47,13 @@ const h = vi.hoisted(() => {
     state.lastListWhere = predicate;
     return { orderBy: orderByMock };
   });
-  // The list read INNER JOINs `listings` (parent-listing visibility gate).
-  const innerJoinMock = vi.fn(() => ({ where: selectWhereMock }));
-  const fromMock = vi.fn(() => ({ innerJoin: innerJoinMock }));
+  const fromMock = vi.fn(() => ({ where: selectWhereMock }));
   const selectMock = vi.fn(() => ({ from: fromMock }));
 
-  // The visible-listing existence check before every write.
-  const findFirstMock = vi.fn((_args?: { where?: unknown }) =>
-    Promise.resolve(state.listingVisible ? { id: "listing-1" } : undefined)
+  // The visible-listing gate before every write AND at the top of the read;
+  // its row carries the legacy `menuUrl` the read returns as the fallback.
+  const findFirstMock = vi.fn((_args?: { where?: unknown; columns?: unknown }) =>
+    Promise.resolve(state.listingVisible ? { menuUrl: state.listingMenuUrl } : undefined)
   );
 
   const returningMock = vi.fn(() => Promise.resolve(state.upsertedRows));
@@ -61,6 +66,17 @@ const h = vi.hoisted(() => {
     return { onConflictDoUpdate: onConflictDoUpdateMock };
   });
   const insertMock = vi.fn(() => ({ values: valuesMock }));
+
+  // update().set().where() — the legacy menu_url clear.
+  const updateWhereMock = vi.fn((predicate?: unknown) => {
+    state.lastUpdateWhere = predicate;
+    return Promise.resolve(undefined);
+  });
+  const updateSetMock = vi.fn((vals: unknown) => {
+    state.lastUpdateSet = vals;
+    return { where: updateWhereMock };
+  });
+  const updateMock = vi.fn(() => ({ set: updateSetMock }));
 
   const deleteWhereMock = vi.fn((predicate?: unknown) => {
     state.lastDeleteWhere = predicate;
@@ -81,11 +97,11 @@ const h = vi.hoisted(() => {
     state,
     selectMock,
     orderByMock,
-    innerJoinMock,
     findFirstMock,
     insertMock,
     valuesMock,
     onConflictDoUpdateMock,
+    updateMock,
     deleteMock,
     requireCurrentUserMock,
     enforceWriteLimitMock,
@@ -96,6 +112,7 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({
     select: h.selectMock,
     insert: h.insertMock,
+    update: h.updateMock,
     delete: h.deleteMock,
     query: { listings: { findFirst: h.findFirstMock } },
   }),
@@ -114,10 +131,10 @@ import { listListingLinks, removeListingLink, saveListingLink } from "./index";
 const {
   state,
   orderByMock,
-  innerJoinMock,
   findFirstMock,
   insertMock,
   onConflictDoUpdateMock,
+  updateMock,
   deleteMock,
   requireCurrentUserMock,
   enforceWriteLimitMock,
@@ -133,11 +150,14 @@ function renderWhere(predicate: unknown): { sql: string; params: unknown[] } {
 beforeEach(() => {
   state.listRows = [];
   state.listingVisible = true;
+  state.listingMenuUrl = null;
   state.lastInsertValues = undefined;
   state.lastConflictArgs = undefined;
   state.lastOrderByArgs = [];
   state.lastListWhere = undefined;
   state.lastDeleteWhere = undefined;
+  state.lastUpdateSet = undefined;
+  state.lastUpdateWhere = undefined;
   state.upsertedRows = [{ id: "link-1" }];
   state.signedIn = true;
 });
@@ -182,10 +202,31 @@ describe("saveListingLink — login-gated, rate-limited, visibility-checked upse
     await expect(saveListingLink(saveInput)).resolves.toEqual({ id: "link-9", kind: "menu" });
   });
 
+  it("clears the legacy menu_url on a menu-kind save (typed writes supersede it)", async () => {
+    await saveListingLink(saveInput);
+
+    // update listings set menu_url = null where id = ? and menu_url is not null
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(state.lastUpdateSet).toEqual({ menuUrl: null });
+    const { sql, params } = renderWhere(state.lastUpdateWhere);
+    expect(sql).toContain('"id"');
+    expect(sql).toContain("menu_url");
+    expect(sql).toContain("is not null");
+    expect(params).toContain("listing-1");
+  });
+
+  it("does NOT touch the legacy column on a non-menu save", async () => {
+    await saveListingLink({ ...saveInput, kind: "website", url: "https://example.com" });
+
+    expect(insertMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   it("requires a signed-in user (401 gate); no write happens", async () => {
     state.signedIn = false;
     await expect(saveListingLink(saveInput)).rejects.toThrow("Authentication required.");
     expect(insertMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it("rate-limits the authenticated user before writing (#18)", async () => {
@@ -209,6 +250,7 @@ describe("saveListingLink — login-gated, rate-limited, visibility-checked upse
 
     await expect(saveListingLink(saveInput)).rejects.toMatchObject({ status: 404 });
     expect(insertMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it("scopes the listing check to visible rows (no moderation-state oracle)", async () => {
@@ -224,8 +266,9 @@ describe("saveListingLink — login-gated, rate-limited, visibility-checked upse
 
   it("imposes NO ownership check — wiki-style, any signed-in user (AUB-202)", async () => {
     // The write path touches exactly: auth, rate limit, the visible-listing
-    // lookup, and the upsert. Nothing compares the current user to any stored
-    // creator — deliberately (product decision, do not add one).
+    // lookup, and the upsert (+ the menu-kind legacy clear). Nothing compares
+    // the current user to any stored creator — deliberately (product
+    // decision, do not add one).
     await saveListingLink(saveInput);
     expect(requireCurrentUserMock).toHaveBeenCalledTimes(1);
     const { sql } = renderWhere(findFirstMock.mock.calls[0]?.[0]?.where);
@@ -248,6 +291,26 @@ describe("removeListingLink — login-gated, rate-limited, visibility-checked de
     expect(params).toContain("menu");
   });
 
+  it("clears the legacy menu_url on a menu-kind remove (no fallback resurrection)", async () => {
+    // Without this, removing the menu link on a pre-AUB-202 row deletes the
+    // typed row but the render fallback resurrects the legacy URL — and a
+    // legacy-only row could never lose its menu link at all.
+    await removeListingLink(removeInput);
+
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(state.lastUpdateSet).toEqual({ menuUrl: null });
+    const { sql, params } = renderWhere(state.lastUpdateWhere);
+    expect(sql).toContain("menu_url");
+    expect(params).toContain("listing-1");
+  });
+
+  it("does NOT touch the legacy column on a non-menu remove", async () => {
+    await removeListingLink({ listingId: "listing-1", kind: "website" });
+
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   it("is a no-op success when the kind has no link (idempotent delete)", async () => {
     // The mocked delete matches zero rows either way; the call must resolve.
     await expect(removeListingLink(removeInput)).resolves.toBeUndefined();
@@ -257,6 +320,7 @@ describe("removeListingLink — login-gated, rate-limited, visibility-checked de
     state.signedIn = false;
     await expect(removeListingLink(removeInput)).rejects.toThrow("Authentication required.");
     expect(deleteMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it("does not delete when the rate limit is exceeded (429)", async () => {
@@ -272,17 +336,18 @@ describe("removeListingLink — login-gated, rate-limited, visibility-checked de
 
     await expect(removeListingLink(removeInput)).rejects.toMatchObject({ status: 404 });
     expect(deleteMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });
 
-describe("listListingLinks — public read in LINK_KINDS order", () => {
+describe("listListingLinks — public read in LINK_KINDS order (+ legacy fallback)", () => {
   it("orders by the kind enum column (declaration order = LINK_KINDS order) and stays anonymous", async () => {
     state.listRows = [
       { id: "a", kind: "menu" },
       { id: "b", kind: "website" },
     ];
 
-    const rows = await listListingLinks({ listingId: "listing-1" });
+    const result = await listListingLinks({ listingId: "listing-1" });
 
     // Reads must not require auth or the rate limiter.
     expect(requireCurrentUserMock).not.toHaveBeenCalled();
@@ -294,22 +359,36 @@ describe("listListingLinks — public read in LINK_KINDS order", () => {
     const orderSql = dialect.sqlToQuery(state.lastOrderByArgs[0] as SQL).sql.toLowerCase();
     expect(orderSql).toContain('"kind"');
     expect(orderSql).toContain("asc");
-    // Passes the DB ordering straight through.
-    expect(rows.map((r) => r.id)).toEqual(["a", "b"]);
-  });
-
-  it("requires the PARENT listing visible — a hidden/removed listing leaks no links (#41)", async () => {
-    // Links carry no moderation state of their own and `moderationStatus` has
-    // no parent→child propagation, so this addressable per-listing RPC INNER
-    // JOINs `listings` and requires the parent `visible`.
-    await listListingLinks({ listingId: "listing-1" });
-
-    expect(innerJoinMock).toHaveBeenCalledTimes(1);
+    // Passes the DB ordering straight through, scoped to the listing.
+    expect(result.links.map((r) => r.id)).toEqual(["a", "b"]);
     const { sql, params } = renderWhere(state.lastListWhere);
     expect(sql).toContain("listing_id");
-    expect(sql).toContain('"listings"."moderation_status"');
-    expect(sql).toContain(" and ");
     expect(params).toContain("listing-1");
+  });
+
+  it("returns the legacy menu_url alongside the typed rows (render fallback input)", async () => {
+    state.listingMenuUrl = "https://legacy.example/menu";
+
+    const result = await listListingLinks({ listingId: "listing-1" });
+
+    expect(result.legacyMenuUrl).toBe("https://legacy.example/menu");
+  });
+
+  it("gates on the VISIBLE parent listing — a hidden/removed listing leaks no links (#41)", async () => {
+    // Links carry no moderation state of their own and `moderationStatus` has
+    // no parent→child propagation, so this addressable per-listing RPC
+    // resolves the visible parent first and returns the empty result — never
+    // the typed rows NOR the legacy menu URL — when it is moderated away.
+    state.listingVisible = false;
+    state.listRows = [{ id: "x", kind: "menu" }];
+
+    const result = await listListingLinks({ listingId: "listing-1" });
+
+    expect(result).toEqual({ links: [], legacyMenuUrl: null });
+    // The links select never even runs for a non-visible parent.
+    expect(orderByMock).not.toHaveBeenCalled();
+    const { sql, params } = renderWhere(findFirstMock.mock.calls[0]?.[0]?.where);
+    expect(sql).toContain("moderation_status");
     expect(params).toContain("visible");
   });
 });

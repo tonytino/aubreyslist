@@ -62,6 +62,46 @@ test.describe("edit listing links (wiki-style, signed-in)", () => {
     await expect(page.getByLabel("Website", { exact: true })).toHaveValue(url);
   });
 
+  test("removing a legacy menu link sticks (no fallback resurrection)", async ({
+    context,
+    page,
+    baseURL,
+  }) => {
+    // A pre-AUB-202 row: menu link only in the legacy menu_url column. Clearing
+    // the pre-filled menu field must remove the button FOR GOOD — the server
+    // clears the legacy column too, so the render fallback cannot resurrect it
+    // after the refetch (adversarial-review finding 1).
+    const listing = await seeder.createListing(uniqueToken("LegacySpot"), {
+      menuUrl: "https://legacy.example/menu",
+    });
+    const user = await seeder.createUser(uniqueToken("legacy-editor"));
+    // biome-ignore lint/style/noNonNullAssertion: Playwright always provides baseURL from the config.
+    await seeder.signIn(context, user.id, baseURL!);
+
+    await page.goto(`/listings/${listing.id}`);
+    await waitForHydration(page);
+
+    // The legacy fallback renders the menu button, so the affordance reads Edit.
+    const linksSection = page.getByRole("region", { name: "Links" });
+    await expect(linksSection.getByRole("link", { name: "Menu", exact: true })).toBeVisible();
+    await linksSection.getByRole("button", { name: "Edit links" }).click();
+
+    // Pre-filled with the legacy value; clear it and save.
+    const menuField = page.getByLabel("Menu", { exact: true });
+    await expect(menuField).toHaveValue("https://legacy.example/menu");
+    await menuField.fill("");
+    await page.getByRole("button", { name: "Save links" }).click();
+
+    // The menu button is gone and STAYS gone across a full reload (the legacy
+    // column was cleared server-side, not just hidden client-side).
+    await expect(linksSection.getByRole("link", { name: "Menu", exact: true })).toHaveCount(0);
+    await page.reload();
+    await waitForHydration(page);
+    await expect(
+      page.getByRole("region", { name: "Links" }).getByRole("link", { name: "Menu", exact: true })
+    ).toHaveCount(0);
+  });
+
   test("anonymous viewers see links but no edit affordance", async ({ page }) => {
     const listing = await seeder.createListing(uniqueToken("AnonLinksSpot"), {
       menuUrl: "https://legacy.example/menu",

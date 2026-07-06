@@ -178,7 +178,7 @@ function ListingDetail() {
   const navigate = Route.useNavigate();
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
   const { data: claims } = useSuspenseQuery(claimsQueryOptions(listing.id));
-  const { data: links } = useSuspenseQuery(listingLinksQueryOptions(listing.id));
+  const { data: linksData } = useSuspenseQuery(listingLinksQueryOptions(listing.id));
   const now = new Date(nowMs);
   const isSignedIn = viewerId !== null;
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
@@ -337,12 +337,15 @@ function ListingDetail() {
           map) plus the listing's typed links in LINK_KINDS order, with the
           legacy menuUrl as the menu fallback and — for signed-in viewers — the
           wiki-style edit-links dialog. Every href is `isHttpUrl`-guarded at
-          the render sink inside the component (#90). */}
+          the render sink inside the component (#90). Both the typed links AND
+          the legacy fallback come from the invalidatable links QUERY (not the
+          loader's listing row), so an edit that clears the legacy column
+          refreshes the section without a full route reload. */}
       <ListingLinks
         listingId={listing.id}
         mapsUrl={listing.mapsUrl}
-        legacyMenuUrl={listing.menuUrl}
-        links={links}
+        legacyMenuUrl={linksData.legacyMenuUrl}
+        links={linksData.links}
         isSignedIn={isSignedIn}
       />
 

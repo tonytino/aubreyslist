@@ -13,7 +13,12 @@ import type { LinkKind } from "~/listings/links";
  *   - a non-http(s) URL is suppressed at the render sink (#90 defence-in-depth),
  *   - a legacy `menuUrl` renders as the menu link when no menu-kind row exists,
  *   - the edit affordance is signed-in only (writes are re-gated server-side),
- *   - the edit dialog pre-fills, saves changed kinds, and removes cleared ones.
+ *   - the edit dialog pre-fills, saves changed kinds, and removes cleared ones —
+ *     INCLUDING a cleared legacy-prefilled menu field, which must fire a real
+ *     `deleteListingLink` (the server also clears the legacy column) and never
+ *     silently no-op,
+ *   - the links query is invalidated even when the mutation fails mid-sequence
+ *     (earlier writes already committed — the page must refetch what landed).
  */
 
 const submitLinkMock = vi.fn((_args: unknown) => Promise.resolve({} as never));
@@ -31,6 +36,7 @@ function renderWithQuery(ui: ReactElement) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return { queryClient };
 }
 
 function link(kind: LinkKind, url: string): ListingLink {
@@ -135,7 +141,7 @@ describe("ListingLinks — rendering", () => {
 });
 
 describe("ListingLinks — edit dialog", () => {
-  it("pre-fills the fields from current links (legacy menuUrl included) and saves changes", async () => {
+  it("pre-fills the fields from current links (legacy menuUrl included) and saves only changes", async () => {
     renderWithQuery(
       <ListingLinks
         {...baseProps()}
@@ -159,18 +165,115 @@ describe("ListingLinks — edit dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save links" }));
 
     await waitFor(() => {
-      // Changed kinds are saved: the new reservations link AND the legacy menu
-      // value (no typed menu row existed, so saving migrates it organically).
-      expect(submitLinkMock).toHaveBeenCalledWith({
-        data: { listingId: "listing-1", kind: "menu", url: "https://legacy.example/menu" },
-      });
       expect(submitLinkMock).toHaveBeenCalledWith({
         data: { listingId: "listing-1", kind: "reservations", url: "https://book.example" },
       });
     });
-    // The unchanged website link is NOT rewritten, and nothing is removed.
-    expect(submitLinkMock).toHaveBeenCalledTimes(2);
+    // ONLY the changed kind is written: the untouched website row and the
+    // untouched legacy menu value (its EFFECTIVE current value equals the
+    // pre-fill) issue no writes, and nothing is removed.
+    expect(submitLinkMock).toHaveBeenCalledTimes(1);
     expect(deleteLinkMock).not.toHaveBeenCalled();
+  });
+
+  it("saves an EDITED legacy-prefilled menu value as a typed link", async () => {
+    renderWithQuery(
+      <ListingLinks {...baseProps()} isSignedIn legacyMenuUrl="https://legacy.example/menu" />
+    );
+
+    // The legacy fallback renders a menu button, so the affordance reads Edit.
+    fireEvent.click(screen.getByRole("button", { name: "Edit links" }));
+    fireEvent.change(await screen.findByLabelText("Menu", { exact: true }), {
+      target: { value: "https://fresh.example/menu" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save links" }));
+
+    await waitFor(() => {
+      // The save is a typed menu write; the server clears the legacy column.
+      expect(submitLinkMock).toHaveBeenCalledWith({
+        data: { listingId: "listing-1", kind: "menu", url: "https://fresh.example/menu" },
+      });
+    });
+    expect(deleteLinkMock).not.toHaveBeenCalled();
+  });
+
+  it("clearing a LEGACY-only menu field fires a real remove, never a silent no-op", async () => {
+    // Case B of the legacy interplay: no typed menu row, only the legacy
+    // column. Clearing the pre-filled field must issue deleteListingLink —
+    // whose server side also nulls listings.menu_url — so the button actually
+    // goes away after the refetch instead of a success toast over a no-op.
+    renderWithQuery(
+      <ListingLinks {...baseProps()} isSignedIn legacyMenuUrl="https://legacy.example/menu" />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit links" }));
+    fireEvent.change(await screen.findByLabelText("Menu", { exact: true }), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save links" }));
+
+    await waitFor(() => {
+      expect(deleteLinkMock).toHaveBeenCalledWith({
+        data: { listingId: "listing-1", kind: "menu" },
+      });
+    });
+    expect(submitLinkMock).not.toHaveBeenCalled();
+  });
+
+  it("clearing the menu field removes the typed row even when a legacy value also exists", async () => {
+    // Case A of the legacy interplay (post-backfill rows): typed menu row AND
+    // a lingering legacy column value. The remove fires for the menu kind; the
+    // server deletes the row AND clears the legacy column, and because the
+    // legacy fallback is served by the same invalidated links query, the
+    // refetch cannot resurrect the button.
+    renderWithQuery(
+      <ListingLinks
+        {...baseProps()}
+        isSignedIn
+        legacyMenuUrl="https://legacy.example/menu"
+        links={[link("menu", "https://typed.example/menu")]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit links" }));
+    fireEvent.change(await screen.findByLabelText("Menu", { exact: true }), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save links" }));
+
+    await waitFor(() => {
+      expect(deleteLinkMock).toHaveBeenCalledWith({
+        data: { listingId: "listing-1", kind: "menu" },
+      });
+    });
+    expect(submitLinkMock).not.toHaveBeenCalled();
+  });
+
+  it("invalidates the links query even when the mutation fails mid-sequence", async () => {
+    // Two changed kinds: the first save succeeds (committed server-side), the
+    // second fails. onSettled must still invalidate so the page refetches the
+    // partially-applied state instead of showing stale buttons.
+    submitLinkMock
+      .mockResolvedValueOnce({} as never)
+      .mockRejectedValueOnce(new Error("boom") as never);
+    const { queryClient } = renderWithQuery(<ListingLinks {...baseProps()} isSignedIn />);
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add links" }));
+    fireEvent.change(await screen.findByLabelText("Menu", { exact: true }), {
+      target: { value: "https://a.example/menu" },
+    });
+    fireEvent.change(screen.getByLabelText("Website", { exact: true }), {
+      target: { value: "https://a.example" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save links" }));
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["listing-links", "listing-1"],
+      });
+    });
+    expect(submitLinkMock).toHaveBeenCalledTimes(2);
   });
 
   it("removes a cleared kind via deleteListingLink", async () => {
