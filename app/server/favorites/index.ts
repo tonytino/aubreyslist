@@ -162,11 +162,12 @@ export async function getViewerFavoriteIds(): Promise<string[]> {
  *
  * The resulting listings run through the SHARED, distance-agnostic
  * {@link buildBrowseCards} so each card's trust glance is byte-identical to the
- * browse page (same celiac aggregate + recent-incident derivation). We then
- * attach the public save-count aggregate ({@link getFavoriteCounts}) for those
- * ids — batched alongside the glance (NO N+1) — so the save-count pill renders on
- * `/favorites` exactly as it does on browse. No distance is computed (favorites
- * have no distance origin), so `distanceLabel` stays absent.
+ * browse page (same celiac aggregate + recent-incident + suggested-attribute
+ * derivation). We then attach the public save-count aggregate
+ * ({@link getFavoriteCounts}) for those ids — batched alongside the glance (NO
+ * N+1) — so the save-count pill renders on `/favorites` exactly as it does on
+ * browse. No distance is computed (favorites have no distance origin), so
+ * `distanceLabel` stays absent.
  *
  * v1 loads the FULL favorite set unbounded — favorites lists are small.
  *

@@ -63,17 +63,13 @@ import { attestations, claims, listings } from "~/db/schema";
  *
  * A suggestion is provenance, not evidence (ADR-007): it never inflates the
  * confirm/dispute tallies. Including it in filter MATCHING is a discovery aid
- * ("show me candidates worth validating"). HONEST SCOPE OF THE CARD CUE: the
- * browse card's "Suggested by Aubrey's Bot" badge (AUB-193,
- * `deriveListingTrustGlance`) covers a live suggestion on ANY visible claim —
- * but only while the listing has NO real headline celiac evidence (once real
- * celiac votes exist, the headline SafetySignal occupies that slot). So a
- * suggestion-matched card shows the badge EXCEPT in one narrow case: a listing
- * with community celiac evidence that matches a NON-headline attribute filter
- * via that attribute's live suggestion — there the provenance is visible only
- * on the listing detail's claim rows, not the browse card (flagged as an owner
- * follow-up). Nothing overstates community confirmation either way (cards
- * never display per-attribute consensus).
+ * ("show me candidates worth validating"). HONEST SCOPE OF THE CARD CUE
+ * (owner nit 7): the browse card labels a live suggestion on ANY visible claim
+ * "Suggested by Aubrey's Bot" and badges each suggested attribute
+ * (`deriveListingTrustGlance`), regardless of whether real celiac evidence
+ * exists — so a suggestion-matched card ALWAYS shows where its labels came
+ * from. Nothing overstates community confirmation either way: the suggested
+ * badges are styled as bot provenance, never as per-attribute consensus.
  *
  * `confirmCount`/`disputeCount` are the caller's grouped conditional tallies, so
  * this fragment slots into the same `HAVING` as the consensus rule.

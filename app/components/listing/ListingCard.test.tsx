@@ -43,6 +43,7 @@ const baseVm: RestaurantCardVM = {
   address: "123 Main St, Denver, CO",
   safetyState: "celiac-safe",
   suggestedByBot: false,
+  suggestedAttributes: [],
   hasRecentIncident: false,
   accent: "lavender",
 };
@@ -146,18 +147,107 @@ describe("RestaurantCard", () => {
     expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
   });
 
-  it("shows the 'Suggested by Aubrey's Bot' chip in place of Not-yet-attested when bot-suggested (AUB-31)", async () => {
-    renderCard({ safetyState: null, suggestedByBot: true });
-    expect(await screen.findByText("Suggested by Aubrey's Bot")).toBeInTheDocument();
-    // The suggestion REPLACES the bare empty state — never a fabricated verdict.
+  it("labels a bot-suggested card 'Suggested by Aubrey's Bot' in the META ROW's freshness slot (owner nits 7+8)", async () => {
+    renderCard({
+      safetyState: null,
+      suggestedByBot: true,
+      suggestedAttributes: ["dedicated_fryer"],
+    });
+    const label = await screen.findByTestId("bot-provenance");
+    expect(label).toHaveTextContent("Suggested by Aubrey's Bot");
+    // The label lives in the meta row (the freshness slot), NOT the safety row —
+    // bot-suggested cards read uniformly with verified ones.
+    expect(screen.getByTestId("card-meta-row")).toContainElement(label);
+    // The suggestion replaces the bare empty state — never a fabricated verdict.
     expect(screen.queryByText("Not yet attested")).not.toBeInTheDocument();
     expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
   });
 
-  it("never shows the bot chip once a real verdict exists (suggestion is superseded)", async () => {
+  it("KEEPS the bot label when a real verdict exists (provenance, not gated on no-evidence — owner nit 7)", async () => {
+    // A listing with community celiac evidence can still carry live suggestions
+    // on other attributes; the provenance label stays visible alongside the
+    // real verdict (the verdict itself derives from evidence only).
+    renderCard({
+      safetyState: "celiac-safe",
+      suggestedByBot: true,
+      suggestedAttributes: ["dedicated_fryer"],
+    });
+    expect(await screen.findByText("Celiac-safe")).toBeInTheDocument();
+    expect(screen.getByTestId("bot-provenance")).toHaveTextContent("Suggested by Aubrey's Bot");
+  });
+
+  it("gives a REAL freshness cue the meta-row slot over the bot label (evidence over provenance)", async () => {
+    renderCard({
+      safetyState: "celiac-safe",
+      suggestedByBot: true,
+      suggestedAttributes: ["dedicated_fryer"],
+      freshness: { kind: "fresh", label: "Verified 4d ago" },
+    });
+    expect(await screen.findByText("Verified 4d ago")).toBeInTheDocument();
+    // The freshness cue wins the slot; the per-claim suggested badge still
+    // carries the provenance.
+    expect(screen.queryByTestId("bot-provenance")).not.toBeInTheDocument();
+    expect(screen.getByTestId("suggested-attribute")).toBeInTheDocument();
+  });
+
+  it("shows no bot label when nothing is suggested", async () => {
     renderCard({ safetyState: "celiac-safe", suggestedByBot: false });
     expect(await screen.findByText("Celiac-safe")).toBeInTheDocument();
     expect(screen.queryByText("Suggested by Aubrey's Bot")).not.toBeInTheDocument();
+  });
+
+  it("renders one bot-provenance badge per suggested attribute with a VISIBLE 'Suggested:' prefix (owner nit 7)", async () => {
+    renderCard({
+      safetyState: null,
+      suggestedByBot: true,
+      suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
+    });
+    const badges = await screen.findAllByTestId("suggested-attribute");
+    expect(badges).toHaveLength(2);
+    // Clearly a suggestion, never a community-confirmed verdict (ADR-007): the
+    // "Suggested:" prefix is VISIBLE text, so the distinction never rests on
+    // colour or a screen reader; no SafetySignal state marker either.
+    expect(badges[0]).toHaveTextContent("Suggested: Dedicated fryer");
+    expect(badges[1]).toHaveTextContent("Suggested: GF substitutes");
+    for (const badge of badges) {
+      expect(badge).not.toHaveAttribute("data-safety-state");
+    }
+  });
+
+  it("prefixes even the suggested CELIAC badge so it can never mirror the real verdict chip (ADR-007)", async () => {
+    // The celiac badge shares the verdict chip's icon shape (ShieldCheck) and
+    // attribute label — the visible "Suggested:" prefix is what keeps it
+    // readable as a suggestion at a glance, colour-blind and greyscale-safe.
+    renderCard({
+      safetyState: null,
+      suggestedByBot: true,
+      suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
+    });
+    const badge = await screen.findByTestId("suggested-attribute");
+    expect(badge).toHaveTextContent("Suggested: Celiac-safe");
+    // Never the bare verdict text: the label is always prefix-qualified.
+    expect(badge.textContent?.trim().startsWith("Suggested:")).toBe(true);
+    expect(badge).not.toHaveAttribute("data-safety-state");
+  });
+
+  it("keeps suggested-attribute badges structurally distinct from the SafetySignal verdict (ADR-007)", async () => {
+    renderCard({
+      safetyState: "celiac-safe",
+      suggestedByBot: true,
+      suggestedAttributes: ["dedicated_gf_menu"],
+    });
+    const badge = await screen.findByTestId("suggested-attribute");
+    const safety = document.querySelector('[data-safety-state="celiac-safe"]');
+    expect(safety).not.toBeNull();
+    // Neither element nests the other — a suggestion never dresses as evidence.
+    expect(badge).not.toContainElement(safety as HTMLElement);
+    expect(safety as HTMLElement).not.toContainElement(badge);
+  });
+
+  it("renders no suggested-attribute badges when nothing is suggested", async () => {
+    renderCard();
+    await screen.findByText("Celiac-safe");
+    expect(screen.queryByTestId("suggested-attribute")).not.toBeInTheDocument();
   });
 
   it("shows the recent-incident warning when a recent incident exists", async () => {
@@ -197,7 +287,6 @@ describe("RestaurantCard", () => {
     // Hidden at 0 (matches how googleRating hides when absent) — no fabricated
     // "0 saves" pill.
     expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
-    expect(screen.queryByText("saves")).not.toBeInTheDocument();
   });
 
   it("does not render a save-count pill when saveCount is absent (undefined)", async () => {
@@ -206,16 +295,20 @@ describe("RestaurantCard", () => {
     expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
   });
 
-  it("renders an ATTRIBUTED save-count pill only when saveCount > 0", async () => {
-    // The count is a PLAIN NUMBER on the client-safe VM — no server-only import
-    // reaches the card; it just renders the number it is handed.
+  it("renders a compact save-count pill — heart + count, NO visible 'saves' word (owner, PR #274)", async () => {
     renderCard({ saveCount: 12 });
     const pill = await screen.findByTestId("save-count");
-    // The count is shown AND explicitly attributed ("saves")...
+    // The count renders...
     expect(pill).toHaveTextContent("12");
-    expect(pill).toHaveTextContent("saves");
-    // ...and it is NOT presented as a safety verdict (ADR-007): no safety label,
-    // and it carries no SafetySignal state marker.
+    // ...but the owner dropped the visible "saves" word — the pill is heart
+    // glyph + number only...
+    expect(pill).not.toHaveTextContent("saves");
+    expect(screen.queryByText("saves")).not.toBeInTheDocument();
+    // ...with the meaning carried by an explicit accessible name instead
+    // (styling.md/ADR-007: never the tooltip or colour alone).
+    expect(pill).toHaveAccessibleName("12 saves");
+    // And it is NOT presented as a safety verdict (ADR-007): no safety label,
+    // no SafetySignal state marker.
     expect(pill).not.toHaveTextContent(/celiac|safe|gluten/i);
     expect(pill).not.toHaveAttribute("data-safety-state");
   });
@@ -228,7 +321,6 @@ describe("RestaurantCard", () => {
     // stays exclusively in SafetySignal.
     const safety = document.querySelector('[data-safety-state="celiac-safe"]');
     expect(safety).not.toBeNull();
-    // Neither element nests the other — they are structurally distinct.
     expect(pill).not.toContainElement(safety as HTMLElement);
     expect(safety as HTMLElement).not.toContainElement(pill);
     // Not siblings: the pill and the safety signal live in different containers.
@@ -277,6 +369,14 @@ describe("RestaurantCard", () => {
     expect(link).not.toContainElement(google);
   });
 
+  it("exposes the save-count ADR-007 tooltip on keyboard focus", async () => {
+    renderCard({ saveCount: 12 });
+    const pill = await screen.findByTestId("save-count");
+    fireEvent.focus(pill);
+    const tip = await screen.findByRole("tooltip");
+    expect(tip).toHaveTextContent("Community saves, not a safety score.");
+  });
+
   it("keeps the card ONE link with an accessible name after moving the body out", async () => {
     renderCard({ saveCount: 8, googleRating: { value: 4.8, count: 128 } });
     // Exactly one anchor, still pointing at the detail page. The <h3> is no longer
@@ -304,25 +404,6 @@ describe("RestaurantCard", () => {
     expect(tip).not.toHaveTextContent(/celiac-safe|gluten-friendly/i);
   });
 
-  it("exposes the save-count ADR-007 tooltip on keyboard focus", async () => {
-    renderCard({ saveCount: 12 });
-    const pill = await screen.findByTestId("save-count");
-    expect(pill).toHaveTextContent("saves");
-    fireEvent.focus(pill);
-    const tip = await screen.findByRole("tooltip");
-    expect(tip).toHaveTextContent("Community saves, not a safety score.");
-  });
-
-  it("renders BOTH the save-count and Google rating pills together in one cluster", async () => {
-    renderCard({ saveCount: 5, googleRating: { value: 4.8, count: 128 } });
-    const save = await screen.findByTestId("save-count");
-    const google = screen.getByTestId("google-rating");
-    expect(save).toHaveTextContent("5");
-    expect(google).toHaveTextContent("Google");
-    // Both attributed pills share the lifted-out cluster, apart from any safety signal.
-    expect(save.parentElement).toBe(google.parentElement);
-  });
-
   it("renders evidence counts when present", async () => {
     renderCard({ evidence: { confirmations: 128, contributors: 41 } });
     expect(await screen.findByText("128 confirmations · 41 neighbors")).toBeInTheDocument();
@@ -333,12 +414,13 @@ describe("RestaurantCard", () => {
     expect(await screen.findByText("Verified 3d ago")).toBeInTheDocument();
   });
 
-  it("reserves the meta-row space with an invisible placeholder when freshness AND evidence are absent (AUB-194)", async () => {
-    // A seeded/bot-suggested VM has no freshness cue and no evidence counts, but
-    // its card must keep the same body height as a fully-attested card — the
-    // meta row always renders, swapping in an invisible height-reserving line.
-    renderCard({ safetyState: null, suggestedByBot: true });
-    await screen.findByText("Suggested by Aubrey's Bot");
+  it("reserves the meta-row space with an invisible placeholder when freshness, evidence AND bot label are all absent (AUB-194)", async () => {
+    // A bare unattested VM has no freshness cue, no evidence counts, and no bot
+    // provenance, but its card must keep the same body height as a fully-
+    // attested card — the meta row always renders, swapping in an invisible
+    // height-reserving line.
+    renderCard({ safetyState: null, suggestedByBot: false });
+    await screen.findByText("Not yet attested");
 
     const metaRow = screen.getByTestId("card-meta-row");
     expect(metaRow).toBeInTheDocument();
@@ -351,6 +433,21 @@ describe("RestaurantCard", () => {
     // The reserved row keeps the same vertical rhythm as the real one (top
     // margin + padding), with a transparent border so no stray divider shows.
     expect(metaRow).toHaveClass("mt-3", "pt-3", "border-t", "border-transparent");
+  });
+
+  it("renders the REAL meta row (no placeholder, same rhythm) for a bot-suggested card (AUB-194)", async () => {
+    // A bot-suggested card fills the reserved slot with the provenance label —
+    // same row composition and vertical rhythm, so heights stay equalized.
+    renderCard({
+      safetyState: null,
+      suggestedByBot: true,
+      suggestedAttributes: ["gf_substitutes"],
+    });
+    await screen.findByTestId("bot-provenance");
+
+    const metaRow = screen.getByTestId("card-meta-row");
+    expect(metaRow).toHaveClass("mt-3", "pt-3", "border-t", "border-border");
+    expect(screen.queryByTestId("card-meta-placeholder")).not.toBeInTheDocument();
   });
 
   it("renders the REAL meta row (no placeholder) when freshness or evidence is present", async () => {
@@ -404,6 +501,7 @@ describe("ListingCard (mapping wrapper)", () => {
   const baseGlance: ListingTrustGlance = {
     safetyState: "celiac-safe",
     suggestedByBot: false,
+    suggestedAttributes: [],
     hasRecentIncident: false,
     evidence: null,
     freshness: null,
@@ -460,16 +558,23 @@ describe("ListingCard (mapping wrapper)", () => {
   });
 });
 
-describe("listingToCardVM (save-count threading)", () => {
+describe("listingToCardVM (bot-provenance threading)", () => {
   const glance: ListingTrustGlance = {
     safetyState: "celiac-safe",
     hasRecentIncident: false,
     evidence: null,
     freshness: null,
-    suggestedByBot: false,
+    suggestedByBot: true,
+    suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
   };
 
-  it("threads a provided save count onto the VM", () => {
+  it("threads the glance's suggested attributes + label flag onto the VM", () => {
+    const vm = listingToCardVM(baseListing, glance);
+    expect(vm.suggestedByBot).toBe(true);
+    expect(vm.suggestedAttributes).toEqual(["dedicated_fryer", "gf_substitutes"]);
+  });
+
+  it("threads a provided save count onto the VM (trailing param)", () => {
     const vm = listingToCardVM(baseListing, glance, undefined, 9);
     expect(vm.saveCount).toBe(9);
   });

@@ -18,6 +18,7 @@ describe("deriveListingTrustGlance", () => {
     expect(glance.hasRecentIncident).toBe(false);
     expect(glance.evidence).toBeNull();
     expect(glance.freshness).toBeNull();
+    expect(glance.suggestedAttributes).toEqual([]);
   });
 
   it("returns null safetyState AND null evidence when the celiac claim has no votes", () => {
@@ -39,13 +40,18 @@ describe("deriveListingTrustGlance", () => {
       null,
       NOW
     );
-    // Provenance only — no fabricated verdict, and it never sits beside evidence.
+    // Provenance only — no fabricated verdict.
     expect(glance.suggestedByBot).toBe(true);
+    // The celiac fallback flag folds into the attribute set, so the card can
+    // badge the suggested claim even without the batched per-attribute set.
+    expect(glance.suggestedAttributes).toEqual(["celiac_safe_vs_gluten_friendly"]);
     expect(glance.safetyState).toBeNull();
     expect(glance.evidence).toBeNull();
   });
 
-  it("does NOT flag suggestedByBot once the celiac claim has real evidence", () => {
+  it("drops the celiac claim's own suggestion once THAT claim has real evidence (vote clears it)", () => {
+    // Per-claim honesty: a vote clears `suggested_by` server-side, so a voted
+    // celiac claim's suggestion is no longer live and never badges the card.
     const glance = deriveListingTrustGlance(
       {
         confirmCount: 2,
@@ -58,6 +64,7 @@ describe("deriveListingTrustGlance", () => {
       NOW
     );
     expect(glance.suggestedByBot).toBe(false);
+    expect(glance.suggestedAttributes).toEqual([]);
     expect(glance.safetyState).toBe("celiac-safe");
   });
 
@@ -69,13 +76,15 @@ describe("deriveListingTrustGlance", () => {
       NOW
     );
     expect(glance.suggestedByBot).toBe(false);
+    expect(glance.suggestedAttributes).toEqual([]);
   });
 
   it("flags suggestedByBot from a NON-celiac bot suggestion with no celiac claim (AUB-193)", () => {
     // A seeded listing whose bot labels are all non-celiac attributes: there is
-    // no celiac aggregate at all, but the listing-level suggestion flag is set.
-    const glance = deriveListingTrustGlance(null, 0, null, NOW, undefined, true);
+    // no celiac aggregate at all, but the batched suggested-attribute set is live.
+    const glance = deriveListingTrustGlance(null, 0, null, NOW, undefined, ["dedicated_fryer"]);
     expect(glance.suggestedByBot).toBe(true);
+    expect(glance.suggestedAttributes).toEqual(["dedicated_fryer"]);
     // Still the honest empty state — provenance, never a verdict.
     expect(glance.safetyState).toBeNull();
     expect(glance.evidence).toBeNull();
@@ -88,32 +97,56 @@ describe("deriveListingTrustGlance", () => {
       null,
       NOW,
       undefined,
-      true
+      ["gf_substitutes"]
     );
     expect(glance.suggestedByBot).toBe(true);
+    expect(glance.suggestedAttributes).toEqual(["gf_substitutes"]);
     expect(glance.safetyState).toBeNull();
   });
 
-  it("does NOT flag suggestedByBot from a non-celiac suggestion once real celiac evidence exists", () => {
-    // A bot-suggested non-celiac claim can never decorate a card that shows a
-    // REAL verdict — the suggestion is provenance, not evidence (ADR-007).
+  it("KEEPS the bot label when live suggestions coexist with real celiac evidence (owner nit 7)", () => {
+    // The label is PROVENANCE, not gated on "no evidence" any more: a listing
+    // with community celiac evidence can still carry live suggestions on OTHER
+    // attributes, and where those labels came from stays true. The verdict and
+    // counts still derive from evidence only — never from the suggestion.
     const glance = deriveListingTrustGlance(
       { confirmCount: 3, disputeCount: 0, lastConfirmedAt: new Date("2026-06-25T00:00:00Z") },
       3,
       null,
       NOW,
       undefined,
-      true
+      ["dedicated_fryer"]
     );
-    expect(glance.suggestedByBot).toBe(false);
+    expect(glance.suggestedByBot).toBe(true);
+    expect(glance.suggestedAttributes).toEqual(["dedicated_fryer"]);
     expect(glance.safetyState).toBe("celiac-safe");
+    expect(glance.evidence).toEqual({ confirmations: 3, contributors: 3 });
   });
 
-  it("does NOT flag suggestedByBot when the listing-level suggestion flag is false and nothing is suggested", () => {
+  it("does NOT flag suggestedByBot when nothing is suggested (cleared by a real vote)", () => {
     // Models the "suggestion cleared by a real vote" case: `suggested_by` was
-    // nulled server-side, so the batched existence check comes back false.
-    const glance = deriveListingTrustGlance(null, 0, null, NOW, undefined, false);
+    // nulled server-side, so the batched per-attribute set comes back empty.
+    const glance = deriveListingTrustGlance(null, 0, null, NOW, undefined, []);
     expect(glance.suggestedByBot).toBe(false);
+    expect(glance.suggestedAttributes).toEqual([]);
+  });
+
+  it("dedupes and normalizes suggestedAttributes to taxonomy order", () => {
+    const glance = deriveListingTrustGlance(
+      { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null, suggested: true },
+      0,
+      null,
+      NOW,
+      undefined,
+      // Out of order + a duplicate + celiac already present (so the fallback
+      // fold-in must not double it).
+      ["gf_substitutes", "dedicated_fryer", "gf_substitutes", "celiac_safe_vs_gluten_friendly"]
+    );
+    expect(glance.suggestedAttributes).toEqual([
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_fryer",
+      "gf_substitutes",
+    ]);
   });
 
   it("derives celiac-safe + fresh cue + evidence counts when confirms lead and fresh", () => {

@@ -47,7 +47,7 @@ const h = vi.hoisted(() => {
     subqueryWhere: undefined as unknown,
     /** The WHERE predicate handed to the incidents query (#41 visibility). */
     incidentWhere: undefined as unknown,
-    /** Rows returned by the bot-suggestion existence query (AUB-193). */
+    /** Rows returned by the bot-suggested-attribute query (AUB-193). */
     suggestionRows: [] as Array<Record<string, unknown>>,
     /** The WHERE predicate handed to the bot-suggestion query (visibility). */
     suggestionWhere: undefined as unknown,
@@ -134,6 +134,8 @@ const h = vi.hoisted(() => {
     return Promise.resolve(state.suggestionRows);
   });
   const suggestionFromMock = vi.fn(() => ({ where: suggestionWhereMock }));
+  // (The suggestion chain, above, routes by the `suggestedListingId` projection
+  // key and now also carries a `suggestedAttribute` per row — AUB-193/owner nit 7.)
 
   // The count chain: select({ total }).from().where()  (awaited)
   const countWhereMock = vi.fn((predicate?: unknown) => {
@@ -319,19 +321,20 @@ describe("getBrowseListings", () => {
     expect(result.cards[0]?.glance.safetyState).toBeNull();
   });
 
-  it("flags suggestedByBot for a listing whose only bot suggestion is non-celiac (AUB-193)", async () => {
+  it("flags suggestedByBot (with its attribute set) for a listing whose only bot suggestion is non-celiac (AUB-193)", async () => {
     state.pageListings = [{ id: "l1", name: "Seeded Spot", address: "5 Main St" }];
     state.total = 1;
     state.celiacRows = []; // no celiac claim — the bot suggested only other attributes
-    state.suggestionRows = [{ suggestedListingId: "l1" }];
+    state.suggestionRows = [{ suggestedListingId: "l1", suggestedAttribute: "dedicated_fryer" }];
 
     const result = await getBrowseListings(baseInput, NOW);
 
     expect(result.cards[0]?.glance.safetyState).toBeNull();
     expect(result.cards[0]?.glance.suggestedByBot).toBe(true);
+    expect(result.cards[0]?.glance.suggestedAttributes).toEqual(["dedicated_fryer"]);
   });
 
-  it("keeps suggestedByBot false once real celiac evidence exists, despite a live suggestion", async () => {
+  it("keeps suggestedByBot true once real celiac evidence exists — provenance is not gated (owner nit 7)", async () => {
     state.pageListings = [{ id: "l1", name: "Voted Spot", address: "6 Main St" }];
     state.total = 1;
     state.celiacRows = [
@@ -344,12 +347,15 @@ describe("getBrowseListings", () => {
         contributors: "3",
       },
     ];
-    state.suggestionRows = [{ suggestedListingId: "l1" }];
+    state.suggestionRows = [{ suggestedListingId: "l1", suggestedAttribute: "gf_substitutes" }];
 
     const result = await getBrowseListings(baseInput, NOW);
 
+    // The verdict/evidence derive from evidence only; the live suggestion keeps
+    // the provenance label + badge data alongside them (never altering them).
     expect(result.cards[0]?.glance.safetyState).toBe("celiac-safe");
-    expect(result.cards[0]?.glance.suggestedByBot).toBe(false);
+    expect(result.cards[0]?.glance.suggestedByBot).toBe(true);
+    expect(result.cards[0]?.glance.suggestedAttributes).toEqual(["gf_substitutes"]);
   });
 
   it("flags a recent incident regardless of confirmations", async () => {
@@ -1116,13 +1122,19 @@ describe("browse visibility filtering (#41)", () => {
     expect(renderArg(state.incidentWhere)).toContain("moderation_status");
     expect(dialect.sqlToQuery(state.incidentWhere as SQL).params).toContain("visible");
 
-    // The bot-suggestion existence check (AUB-193) counts only VISIBLE claims
+    // The bot-suggested-attribute check (AUB-193) counts only VISIBLE claims
     // with a live `suggested_by`, so a hidden/removed suggested claim can never
-    // drive the "Suggested by Aubrey's Bot" chip.
+    // drive the "Suggested by Aubrey's Bot" cue.
     expect(renderArg(state.suggestionWhere)).toContain("moderation_status");
     expect(renderArg(state.suggestionWhere)).toContain("suggested_by");
     expect(renderArg(state.suggestionWhere)).toContain("is not null");
     expect(dialect.sqlToQuery(state.suggestionWhere as SQL).params).toContain("visible");
+    // ...AND only UNVOTED claims (the correlated NOT EXISTS attestations vote
+    // gate): castVote's clear of `suggested_by` is not atomic with the
+    // attestation upsert, so a transiently-stale suggestion on a voted claim
+    // must never badge the card as suggested (ADR-007, belt-and-braces).
+    expect(renderArg(state.suggestionWhere)).toContain("not exists");
+    expect(renderArg(state.suggestionWhere)).toContain("attestations");
   });
 
   it("recomputes the recent-incident flag from VISIBLE incidents only — none survive → no flag", async () => {

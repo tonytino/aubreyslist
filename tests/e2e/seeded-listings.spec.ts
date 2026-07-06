@@ -9,9 +9,12 @@ import { waitForBrowseSearchApplied, waitForHydration } from "./helpers";
  * curator bot suggests labels for (AUB-31). Two regressions shipped against
  * seeded data without any E2E catching them:
  *
- *  1. Directory cards for seeded listings WITHOUT a celiac suggestion lost the
- *     "Suggested by Aubrey's Bot" badge (AUB-193) — only celiac-suggested cards
- *     showed it.
+ *  1. Directory cards for seeded listings WITHOUT a celiac suggestion lost their
+ *     "Suggested by Aubrey's Bot" cue (AUB-193) — only celiac-suggested cards
+ *     showed it. (The cue has since moved into the card's meta row as the
+ *     `bot-provenance` label, joined by per-attribute "Suggested:" badges —
+ *     owner nits 7+8 — but the guarantee under test is unchanged: EVERY card
+ *     with live bot suggestions surfaces its provenance.)
  *  2. Seeded listings' detail pages 500'd on a preview DB that had silently
  *     skipped a migration (AUB-195).
  *
@@ -88,8 +91,10 @@ test.describe("seeded listings — badge + detail page (AUB-196)", () => {
     await expect(card).toBeVisible();
 
     // The exact case that shipped broken: no celiac suggestion → the card must
-    // STILL surface the bot provenance, never a bare "Not yet attested".
-    await expect(card.getByText("Suggested by Aubrey's Bot")).toBeVisible();
+    // STILL surface the bot provenance, never a bare "Not yet attested". Target
+    // the meta-row label by testid: the phrase alone need not be unique within
+    // a card, so a bare getByText could trip Playwright's strict mode.
+    await expect(card.getByTestId("bot-provenance")).toBeVisible();
     await expect(card.getByText("Not yet attested")).toHaveCount(0);
   });
 
@@ -136,6 +141,7 @@ test.describe("seeded listings — badge + detail page (AUB-196)", () => {
       .filter({ has: page.getByRole("heading", { level: 3, name: target.name, exact: true }) })
       .first();
     await expect(card).toBeVisible();
-    await expect(card.getByText("Suggested by Aubrey's Bot")).toBeVisible();
+    // Same strict-mode-safe targeting as the non-celiac case above.
+    await expect(card.getByTestId("bot-provenance")).toBeVisible();
   });
 });
