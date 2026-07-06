@@ -1,12 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "~/db/client";
-import { listings } from "~/db/schema";
+import { listingLinks, listings } from "~/db/schema";
 import {
   type CreateListingInput,
   type CreateListingResult,
   createListingInputSchema,
 } from "~/listings/create-input";
+import type { ListingLinkInput } from "~/listings/links";
 import { requireCurrentUser } from "~/server/auth/guards";
 import { DuplicateListingError, findDuplicateListing } from "~/server/listings/dedup";
 import { buildMapsUrl, runPlaceDetails } from "~/server/places";
@@ -29,8 +30,12 @@ export {
  * client submits a chosen Google Place ID and the canonical name/address/lat/lng
  * are resolved server-side from the Places provider (the client never gets to
  * hand-fabricate those); in `manual` mode the client submits the
- * name/address/lat/lng directly. Either way an optional menu-link URL rides
- * along.
+ * name/address/lat/lng directly. Either way an optional set of typed links
+ * (menu, gluten-free menu, website, reservations, online ordering — AUB-202)
+ * rides along and is inserted into `listing_links` after the listing insert.
+ * The legacy `listings.menu_url` column is NO LONGER written (it stays `null`
+ * on new rows and is kept only for legacy data; the detail page falls back to
+ * it when a listing has no `menu`-kind link).
  *
  * Why a server function (not a Hono route): per `docs/agents/api.md`, the
  * decision rule turns on "could anything outside this app's frontend ever need
@@ -68,8 +73,6 @@ interface ResolvedListing {
   lat: number;
   lng: number;
   mapsUrl: string;
-  /** Optional external menu link (no uploads in v1, ADR-008); `null` when blank. */
-  menuUrl: string | null;
 }
 
 /**
@@ -109,7 +112,6 @@ async function resolveListing(input: CreateListingInput): Promise<ResolvedListin
       mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
         `${input.name} ${input.address}`
       )}`,
-      menuUrl: input.menuUrl ?? null,
     };
   }
 
@@ -131,7 +133,6 @@ async function resolveListing(input: CreateListingInput): Promise<ResolvedListin
         details.data.placeId,
         `${details.data.name} ${details.data.formattedAddress}`.trim()
       ),
-    menuUrl: input.menuUrl ?? null,
   };
 }
 
@@ -176,6 +177,27 @@ async function assertNoManualDuplicate(resolved: ResolvedListing): Promise<void>
 }
 
 /**
+ * Insert the intake-provided typed links for a freshly-created listing
+ * (AUB-202). One batched insert into `listing_links`, with the creating user
+ * recorded as `createdBy` (provenance). `onConflictDoNothing` on the
+ * (listing, kind) unique target keeps a race with a concurrent post-creation
+ * edit from surfacing as a constraint error. No-op for an empty set.
+ */
+async function insertListingLinks(
+  listingId: string,
+  links: ListingLinkInput[] | undefined,
+  createdBy: string | null
+): Promise<void> {
+  if (!links || links.length === 0) {
+    return;
+  }
+  await getDb()
+    .insert(listingLinks)
+    .values(links.map((link) => ({ listingId, kind: link.kind, url: link.url, createdBy })))
+    .onConflictDoNothing({ target: [listingLinks.listingId, listingLinks.kind] });
+}
+
+/**
  * Insert the resolved listing, handling dedup for both intake modes (issue #25):
  *
  * - **Places** — first look up any existing row for the Place ID and return it
@@ -210,6 +232,8 @@ async function insertListing(resolved: ResolvedListing): Promise<CreateListingRe
 
   // `onConflictDoNothing` on the unique place_id index makes a concurrent
   // duplicate a no-op (empty `returning`) rather than a thrown constraint error.
+  // NOTE: `menuUrl` is deliberately absent — new rows keep it `null`; typed
+  // links go to `listing_links` instead (AUB-202).
   const inserted = await db
     .insert(listings)
     .values({
@@ -219,7 +243,6 @@ async function insertListing(resolved: ResolvedListing): Promise<CreateListingRe
       lat: resolved.lat,
       lng: resolved.lng,
       mapsUrl: resolved.mapsUrl,
-      menuUrl: resolved.menuUrl ?? null,
     } satisfies typeof listings.$inferInsert)
     .onConflictDoNothing({ target: listings.placeId })
     .returning();
@@ -260,15 +283,29 @@ async function insertListing(resolved: ResolvedListing): Promise<CreateListingRe
 /**
  * Core add-listing logic, factored out of the server-function transport so it is
  * directly unit-testable with a mocked DB / provider. Resolves the input for the
- * active intake mode, then inserts (deduping on Place ID).
+ * active intake mode, inserts (deduping on Place ID), then records any typed
+ * links on a NEWLY created listing (AUB-202).
+ *
+ * Links are written only when `created` is true: a places pick that deduped to
+ * an already-existing listing must not silently overwrite (or seed) that
+ * listing's links from an intake form — the detail page's edit-links flow is
+ * the deliberate surface for changing an existing listing's links.
  *
  * NOTE: the auth gate lives on the {@link createListing} server function, not
  * here — keeping this helper pure of session plumbing mirrors `places.ts`
- * (`runAutocomplete` / `runPlaceDetails`).
+ * (`runAutocomplete` / `runPlaceDetails`). `createdBy` is passed in by the
+ * gated wrappers for the same reason (link provenance, AUB-202).
  */
-export async function runCreateListing(input: CreateListingInput): Promise<CreateListingResult> {
+export async function runCreateListing(
+  input: CreateListingInput,
+  createdBy: string | null = null
+): Promise<CreateListingResult> {
   const resolved = await resolveListing(input);
-  return insertListing(resolved);
+  const result = await insertListing(resolved);
+  if (result.created) {
+    await insertListingLinks(result.listing.id, input.links, createdBy);
+  }
+  return result;
 }
 
 /**
@@ -286,5 +323,5 @@ export const createListing = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<CreateListingResult> => {
     const user = await requireCurrentUser();
     await enforceWriteLimit(user.id);
-    return runCreateListing(data);
+    return runCreateListing(data, user.id);
   });

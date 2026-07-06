@@ -30,10 +30,11 @@ vi.mock("~/server/places", async (importOriginal) => {
   };
 });
 
-// Model the DB shapes `insertListing` uses:
+// Model the DB shapes `insertListing` + `insertListingLinks` use:
 //   db.query.listings.findFirst({ where })  — places dedup lookup
 //   db.query.listings.findMany({ where })   — manual dedup candidate fetch (#25)
-//   db.insert(...).values(...).onConflictDoNothing(...).returning()  — the write
+//   db.insert(...).values(...).onConflictDoNothing(...).returning()  — the listing write
+//   db.insert(...).values([...]).onConflictDoNothing(...)            — the links write (AUB-202)
 let findFirstResult: Listing | undefined;
 let findManyResult: Listing[] = [];
 let returningResult: Listing[] = [];
@@ -67,11 +68,17 @@ function columnsReferenced(predicate: unknown): string[] {
   return found;
 }
 const returningMock = vi.fn(() => Promise.resolve(returningResult));
-const onConflictDoNothingMock = vi.fn((_args?: unknown) => ({ returning: returningMock }));
-const valuesMock = vi.fn((_values?: Record<string, unknown>) => ({
+// The links write awaits `.onConflictDoNothing(...)` directly (no returning),
+// while the listing write chains `.returning()` — so the conflict mock is a
+// real resolved promise that ALSO carries `returning` (mirrors drizzle's
+// awaitable query builder).
+const onConflictDoNothingMock = vi.fn((_args?: unknown) =>
+  Object.assign(Promise.resolve(undefined), { returning: returningMock })
+);
+const valuesMock = vi.fn((_values?: Record<string, unknown> | Array<Record<string, unknown>>) => ({
   onConflictDoNothing: onConflictDoNothingMock,
 }));
-const insertMock = vi.fn(() => ({ values: valuesMock }));
+const insertMock = vi.fn((_table?: unknown) => ({ values: valuesMock }));
 
 vi.mock("~/db/client", () => ({
   getDb: () => ({
@@ -172,6 +179,24 @@ describe("runCreateListing — places mode", () => {
 
     expect(result).toEqual({ listing: existing, created: false });
     // Dedup short-circuits before any insert.
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("does NOT write intake links onto an already-existing listing (created: false)", async () => {
+    // A places pick that dedups to an existing listing must not overwrite (or
+    // seed) that listing's links from an intake form — the detail page's
+    // edit-links flow is the deliberate surface for that (AUB-202).
+    findFirstResult = listingRow({ id: "existing-1" });
+
+    await runCreateListing(
+      {
+        mode: "places",
+        placeId: "place-123",
+        links: [{ kind: "menu", url: "https://example.com/menu" }],
+      },
+      "user-7"
+    );
+
     expect(insertMock).not.toHaveBeenCalled();
   });
 
@@ -292,18 +317,77 @@ describe("runCreateListing — manual mode", () => {
       address: "1 Main St, Denver",
       lat: 39.74,
       lng: -104.99,
-      menuUrl: "https://corner.example/menu",
     });
 
     expect(result).toEqual({ listing: created, created: true });
     // No Places call in manual mode.
     expect(runPlaceDetailsMock).not.toHaveBeenCalled();
     // Manual entries never carry a Place ID, so they never collide on the unique index.
-    const inserted = valuesMock.mock.calls[0]?.[0];
+    const inserted = valuesMock.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
     expect(inserted?.placeId).toBeNull();
     expect(inserted?.name).toBe("Corner Cafe");
-    expect(inserted?.menuUrl).toBe("https://corner.example/menu");
+    // The legacy menu_url column is NO LONGER written — typed links replace it
+    // (AUB-202); new rows keep it null via the column default.
+    expect(inserted).not.toHaveProperty("menuUrl");
     expect(String(inserted?.mapsUrl)).toContain("https://www.google.com/maps/search/");
+  });
+
+  it("inserts provided typed links into listing_links with the creator as provenance (AUB-202)", async () => {
+    const created = listingRow({ id: "listing-links-1", placeId: null });
+    returningResult = [created];
+
+    await runCreateListing(
+      {
+        mode: "manual",
+        name: "Corner Cafe",
+        address: "1 Main St, Denver",
+        lat: 39.74,
+        lng: -104.99,
+        links: [
+          { kind: "menu", url: "https://corner.example/menu" },
+          { kind: "website", url: "https://corner.example" },
+        ],
+      },
+      "user-7"
+    );
+
+    // Two inserts: the listing, then the links batch.
+    expect(insertMock).toHaveBeenCalledTimes(2);
+    const linkValues = valuesMock.mock.calls[1]?.[0];
+    expect(linkValues).toEqual([
+      {
+        listingId: "listing-links-1",
+        kind: "menu",
+        url: "https://corner.example/menu",
+        createdBy: "user-7",
+      },
+      {
+        listingId: "listing-links-1",
+        kind: "website",
+        url: "https://corner.example",
+        createdBy: "user-7",
+      },
+    ]);
+    // The links write is conflict-tolerant on the (listing, kind) unique target.
+    expect(onConflictDoNothingMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("writes no links row when the submission carries none", async () => {
+    returningResult = [listingRow({ placeId: null })];
+
+    await runCreateListing(
+      {
+        mode: "manual",
+        name: "Corner Cafe",
+        address: "1 Main St, Denver",
+        lat: 39.74,
+        lng: -104.99,
+      },
+      "user-7"
+    );
+
+    // Only the listing insert — no empty links batch.
+    expect(insertMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not use the Place-ID dedup lookup for a manual entry (placeId is null)", async () => {
@@ -431,53 +515,43 @@ describe("runCreateListing — manual mode", () => {
     expect(result).toEqual({ listing: created, created: true });
     expect(runPlaceDetailsMock).not.toHaveBeenCalled();
     expect(insertMock).toHaveBeenCalledTimes(1);
-    const inserted = valuesMock.mock.calls[0]?.[0];
+    const inserted = valuesMock.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
     expect(inserted?.placeId).toBeNull();
   });
 });
 
-// --- menuUrl scheme allowlist (#90) ----------------------------------------
+// --- typed-links scheme allowlist (#90, AUB-202) ----------------------------
 
-describe("createListingInputSchema — menuUrl scheme allowlist (#90)", () => {
+describe("createListingInputSchema — typed-links scheme allowlist (#90, AUB-202)", () => {
+  // The full valid/invalid matrix lives with the client-safe schema in
+  // `app/listings/create-input.test.ts` + `app/listings/links.test.ts`; this
+  // block just proves the RE-EXPORTED schema (this module's import surface)
+  // still enforces the allowlist.
   const base = { mode: "places" as const, placeId: "place-123" };
 
-  it("accepts an https menu URL", () => {
+  it("accepts typed https links", () => {
     const result = createListingInputSchema.safeParse({
       ...base,
-      menuUrl: "https://corner.example/menu",
+      links: [{ kind: "menu", url: "https://corner.example/menu" }],
     });
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.menuUrl).toBe("https://corner.example/menu");
+    if (result.success) expect(result.data.links?.[0]?.url).toBe("https://corner.example/menu");
   });
 
-  it("accepts an http menu URL", () => {
+  it("rejects a javascript: scheme link URL", () => {
     const result = createListingInputSchema.safeParse({
       ...base,
-      menuUrl: "http://corner.example",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects a javascript: scheme menu URL", () => {
-    const result = createListingInputSchema.safeParse({
-      ...base,
-      menuUrl: "javascript:alert(document.cookie)",
+      links: [{ kind: "menu", url: "javascript:alert(document.cookie)" }],
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejects a data: scheme menu URL", () => {
+  it("rejects a data: scheme link URL", () => {
     const result = createListingInputSchema.safeParse({
       ...base,
-      menuUrl: "data:text/html,<script>alert(1)</script>",
+      links: [{ kind: "menu", url: "data:text/html,<script>alert(1)</script>" }],
     });
     expect(result.success).toBe(false);
-  });
-
-  it("still allows an empty string (blank field normalises to undefined)", () => {
-    const result = createListingInputSchema.safeParse({ ...base, menuUrl: "" });
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.menuUrl).toBeUndefined();
   });
 });
 

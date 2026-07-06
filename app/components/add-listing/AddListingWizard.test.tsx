@@ -112,6 +112,53 @@ describe("AddListingWizard", () => {
     expect(screen.getByRole("link", { name: "View your listing" })).toBeInTheDocument();
   });
 
+  it("submits filled typed links and drops blank fields (AUB-202)", async () => {
+    createListingMock.mockResolvedValueOnce({
+      listing: { id: "l5" },
+      created: true,
+    } as never);
+    renderInApp(<AddListingWizard intakeMode="manual" />);
+
+    // Fill the manual finder, then — on the selected-place card — two of the
+    // five optional link fields. The other three stay blank.
+    fireEvent.change(await screen.findByLabelText("Restaurant name"), {
+      target: { value: "Two Hands" },
+    });
+    fireEvent.change(screen.getByLabelText("Address"), { target: { value: "123 Main St" } });
+    fireEvent.change(screen.getByLabelText("Latitude"), { target: { value: "39.7392" } });
+    fireEvent.change(screen.getByLabelText("Longitude"), { target: { value: "-104.9903" } });
+    fireEvent.click(screen.getByRole("button", { name: /Use this place/ }));
+
+    fireEvent.change(await screen.findByLabelText("Menu", { exact: true }), {
+      target: { value: "https://twohands.example/menu" },
+    });
+    fireEvent.change(screen.getByLabelText("Website", { exact: true }), {
+      target: { value: "https://twohands.example" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    for (let index = 0; index < 5; index += 1) {
+      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
+    }
+    fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
+    await screen.findByText("Listing added, thanks!");
+
+    // Only the two filled kinds are submitted — blanks are dropped, never sent.
+    expect(createListingMock).toHaveBeenCalledWith({
+      data: {
+        mode: "manual",
+        name: "Two Hands",
+        address: "123 Main St",
+        lat: 39.7392,
+        lng: -104.9903,
+        links: [
+          { kind: "menu", url: "https://twohands.example/menu" },
+          { kind: "website", url: "https://twohands.example" },
+        ],
+      },
+    });
+  });
+
   it("creates the listing and fires zero votes when every attribute is skipped", async () => {
     createListingMock.mockResolvedValueOnce({
       listing: { id: "l2" },
