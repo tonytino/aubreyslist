@@ -185,7 +185,7 @@ describe("runPlaceDetails", () => {
     expect(init.headers["X-Goog-FieldMask"]).toContain("photos");
   });
 
-  it("ignores upstream photos — nothing photo-shaped reaches the details result (ADR-013)", async () => {
+  it("ignores upstream photos — nothing photo-shaped reaches the details result (ADR-014)", async () => {
     vi.stubGlobal(
       "fetch",
       mockFetchOnce({

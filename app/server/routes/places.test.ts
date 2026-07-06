@@ -15,7 +15,14 @@ vi.mock("~/server/settings", () => ({
 }));
 
 import { PLACE_PHOTOS_CACHE_TTL_MS } from "~/server/places-photos";
-import { photoUriCache, placesRoutes } from "./places";
+import {
+  PHOTO_FAILURE_CACHE_TTL_MS,
+  PHOTO_WIDTH_LADDER,
+  photoFailureCache,
+  photoRateLimiter,
+  photoUriCache,
+  placesRoutes,
+} from "./places";
 
 /** Mount under the same prefix the real app uses (`app/server/index.ts`). */
 const app = new Hono().basePath("/api").route("/places", placesRoutes);
@@ -23,8 +30,8 @@ const app = new Hono().basePath("/api").route("/places", placesRoutes);
 const PHOTO_NAME = "places/ChIJ_place/photos/resource-1";
 const PHOTO_URI = "https://lh3.googleusercontent.com/place-photos/resolved";
 
-function photoRequest(query: string) {
-  return app.request(`/api/places/photo?${query}`);
+function photoRequest(query: string, headers: Record<string, string> = {}) {
+  return app.request(`/api/places/photo?${query}`, { headers });
 }
 
 function mockMediaFetch(body: unknown, ok = true, status = 200) {
@@ -38,6 +45,8 @@ function mockMediaFetch(body: unknown, ok = true, status = 200) {
 
 beforeEach(() => {
   photoUriCache.clear();
+  photoFailureCache.clear();
+  photoRateLimiter.clear();
   getEnvMock.mockReturnValue({ GOOGLE_PLACES_API_KEY: "test-key" });
   getSettingMock.mockResolvedValue(true);
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -70,18 +79,47 @@ describe("GET /api/places/photo", () => {
     expect(String(url)).not.toContain("test-key");
   });
 
-  it("defaults maxWidthPx to 960 and clamps it to the 64–1600 range", async () => {
+  it("defaults maxWidthPx to 960 and quantizes every request to the width ladder", async () => {
     const fetchSpy = mockMediaFetch({ photoUri: PHOTO_URI });
     vi.stubGlobal("fetch", fetchSpy);
 
+    // Default is a rung.
     await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}`);
     expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("maxWidthPx=960");
 
-    await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}&maxWidthPx=99999`);
-    expect(String(fetchSpy.mock.calls[1]?.[0])).toContain("maxWidthPx=1600");
+    // Snap UP to the nearest rung; above the top rung snaps down to it; a rung
+    // stays itself. The LADDER value reaches the upstream URL — never the raw ask.
+    const cases: Array<[requested: number, rung: number]> = [
+      [1, 320],
+      [64, 320],
+      [321, 640],
+      [700, 960],
+      [1280, 1280],
+      [1599, 1600],
+      [99999, 1600],
+    ];
+    for (const [requested, rung] of cases) {
+      fetchSpy.mockClear();
+      photoUriCache.clear();
+      await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}&maxWidthPx=${requested}`);
+      expect(String(fetchSpy.mock.calls[0]?.[0]), `requested=${requested}`).toContain(
+        `maxWidthPx=${rung}`
+      );
+    }
+  });
 
-    await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}&maxWidthPx=1`);
-    expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("maxWidthPx=64");
+  it("quantization collapses the per-token cache key space to the ladder", async () => {
+    // A harvested token can cost at most one upstream call per LADDER RUNG per
+    // TTL window — sweeping many distinct widths must NOT mint distinct billed
+    // calls (the quota-oracle attack from review finding 1a).
+    const fetchSpy = mockMediaFetch({ photoUri: PHOTO_URI });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    // Sample the whole 64–1600 range (kept under the per-IP budget).
+    for (let width = 64; width <= 1600; width += 100) {
+      await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}&maxWidthPx=${width}`);
+    }
+    expect(fetchSpy.mock.calls.length).toBeLessThanOrEqual(PHOTO_WIDTH_LADDER.length);
   });
 
   it("rejects a malformed photo name with 400 before any upstream call", async () => {
@@ -156,10 +194,12 @@ describe("GET /api/places/photo", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("boom")));
     expect((await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}`)).status).toBe(502);
 
+    photoFailureCache.clear();
     vi.stubGlobal("fetch", mockMediaFetch({ nope: true }));
     expect((await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}`)).status).toBe(502);
 
     // A non-https photoUri must never become a redirect target.
+    photoFailureCache.clear();
     vi.stubGlobal("fetch", mockMediaFetch({ photoUri: "http://evil.example/x" }));
     expect((await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}`)).status).toBe(502);
   });
@@ -178,7 +218,7 @@ describe("GET /api/places/photo", () => {
       expect(second.headers.get("location")).toBe(PHOTO_URI);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-      // A DIFFERENT width is a different cache entry.
+      // A DIFFERENT ladder width is a different cache entry.
       await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}&maxWidthPx=1280`);
       expect(fetchSpy).toHaveBeenCalledTimes(2);
 
@@ -188,15 +228,86 @@ describe("GET /api/places/photo", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(3);
     });
 
-    it("does not cache failures", async () => {
-      vi.stubGlobal("fetch", mockMediaFetch({}, false, 500));
-      await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}`);
+    it("negative-caches upstream failures briefly, then allows a retry", async () => {
+      vi.useFakeTimers();
+      const failSpy = mockMediaFetch({}, false, 500);
+      vi.stubGlobal("fetch", failSpy);
 
+      const query = `name=${encodeURIComponent(PHOTO_NAME)}`;
+      expect((await photoRequest(query)).status).toBe(502);
+      // Repeats inside the negative-cache window still 502 but cost NO new
+      // upstream call (review finding 1b — a bogus token can't drive one
+      // billed call per request).
+      expect((await photoRequest(query)).status).toBe(502);
+      expect((await photoRequest(query)).status).toBe(502);
+      expect(failSpy).toHaveBeenCalledTimes(1);
+
+      // The negative entry is per (name, width): a different rung retries.
+      await photoRequest(`${query}&maxWidthPx=320`);
+      expect(failSpy).toHaveBeenCalledTimes(2);
+
+      // After the (short) failure TTL, the original retries — and can recover.
+      vi.advanceTimersByTime(PHOTO_FAILURE_CACHE_TTL_MS + 1);
+      const okSpy = mockMediaFetch({ photoUri: PHOTO_URI });
+      vi.stubGlobal("fetch", okSpy);
+      const recovered = await photoRequest(query);
+      expect(recovered.status).toBe(302);
+      expect(okSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("a failure never poisons the positive cache", async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal("fetch", mockMediaFetch({}, false, 500));
+      const query = `name=${encodeURIComponent(PHOTO_NAME)}`;
+      await photoRequest(query);
+
+      // Once the negative window passes, a healthy upstream serves (and caches)
+      // the real URI — the earlier failure left nothing behind in photoUriCache.
+      vi.advanceTimersByTime(PHOTO_FAILURE_CACHE_TTL_MS + 1);
       const fetchSpy = mockMediaFetch({ photoUri: PHOTO_URI });
       vi.stubGlobal("fetch", fetchSpy);
-      const res = await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}`);
-      expect(res.status).toBe(302);
+      expect((await photoRequest(query)).status).toBe(302);
+      expect((await photoRequest(query)).status).toBe(302);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("per-IP rate limit", () => {
+    it("429s an IP that exceeds the budget, without touching upstream", async () => {
+      const fetchSpy = mockMediaFetch({ photoUri: PHOTO_URI });
+      vi.stubGlobal("fetch", fetchSpy);
+      const headers = { "x-forwarded-for": "203.0.113.7" };
+      const query = `name=${encodeURIComponent(PHOTO_NAME)}`;
+
+      // Exhaust the per-IP budget (all cache hits after the first — cheap).
+      let lastStatus = 0;
+      for (let i = 0; i < 60; i++) {
+        lastStatus = (await photoRequest(query, headers)).status;
+      }
+      expect(lastStatus).toBe(302);
+
+      const limited = await photoRequest(query, headers);
+      expect(limited.status).toBe(429);
+      expect(limited.headers.get("retry-after")).toBe("60");
+      expect(await limited.json()).toEqual({ error: "Too many photo requests" });
+      // Only the very first request reached upstream (the rest were cache hits,
+      // and the 429 short-circuits before any upstream work).
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("meters IPs independently (first XFF hop is the key)", async () => {
+      vi.stubGlobal("fetch", mockMediaFetch({ photoUri: PHOTO_URI }));
+      const query = `name=${encodeURIComponent(PHOTO_NAME)}`;
+
+      for (let i = 0; i < 61; i++) {
+        await photoRequest(query, { "x-forwarded-for": "203.0.113.7, 10.0.0.1" });
+      }
+      // The exhausted IP is limited…
+      expect(
+        (await photoRequest(query, { "x-forwarded-for": "203.0.113.7, 10.0.0.1" })).status
+      ).toBe(429);
+      // …while a different client IP still gets served.
+      expect((await photoRequest(query, { "x-forwarded-for": "198.51.100.9" })).status).toBe(302);
     });
   });
 });

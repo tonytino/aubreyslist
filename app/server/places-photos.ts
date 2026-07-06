@@ -5,9 +5,9 @@ import { getSetting } from "~/server/settings";
 
 /**
  * Render-time Google Place photos for the listing-detail hero (AUB-215,
- * ADR-013).
+ * ADR-014).
  *
- * COMPLIANCE POSTURE (ADR-013): Google content is NEVER persisted — no DB
+ * COMPLIANCE POSTURE (ADR-014): Google content is NEVER persisted — no DB
  * column, no blob store, no committed JSON. This module fetches photo metadata
  * at render time, holds it only in a short-TTL in-process cache, and hands the
  * client a transient `photoToken` (the Google photo resource `name`) that the
@@ -33,7 +33,7 @@ import { getSetting } from "~/server/settings";
 /**
  * TTL for the in-process caches (photo metadata per Place ID here; resolved
  * media `photoUri` per (name, width) in the `/api/places/photo` route). 12
- * hours is the risk posture ADR-013 lands on: long enough that a popular
+ * hours is the risk posture ADR-014 lands on: long enough that a popular
  * listing costs at most a couple of billed Place Details (photos-only) calls
  * per day per server instance, short enough that Google content is only ever
  * held transiently in memory — never persisted — and that a removed/updated
@@ -52,15 +52,28 @@ const DETAILS_URL_BASE = "https://places.googleapis.com/v1/places";
 // ---------------------------------------------------------------------------
 
 /**
- * Minimal in-process TTL cache. Values live in module memory only (ADR-013 —
+ * Default entry cap for the photo caches. Keys are attacker-influenceable
+ * (photo tokens / widths on the proxy, listing ids here), so an unbounded map
+ * would be a memory-growth vector; a bounded FIFO keeps the worst case at a
+ * few hundred KB while still covering every realistically-hot key.
+ */
+export const PLACE_PHOTOS_CACHE_MAX_ENTRIES = 1_000;
+
+/**
+ * Minimal in-process TTL cache. Values live in module memory only (ADR-014 —
  * transient by construction: a redeploy or instance recycle empties it) and
- * expire after `ttlMs`. Shared mechanism for both photo-metadata-per-place
- * (this module) and resolved-photoUri-per-(name,width) (`routes/places.ts`).
+ * expire after `ttlMs`. Bounded: at `maxEntries` the OLDEST-INSERTED entry is
+ * evicted (Map preserves insertion order — simple FIFO, no LRU bookkeeping
+ * needed for a cache this small). Shared mechanism for photo-metadata-per-place
+ * (this module) and resolved-photoUri / negative caches (`routes/places.ts`).
  */
 export class TtlCache<T> {
   private readonly entries = new Map<string, { value: T; expiresAt: number }>();
 
-  constructor(private readonly ttlMs: number) {}
+  constructor(
+    private readonly ttlMs: number,
+    private readonly maxEntries: number = PLACE_PHOTOS_CACHE_MAX_ENTRIES
+  ) {}
 
   get(key: string): T | undefined {
     const entry = this.entries.get(key);
@@ -73,6 +86,13 @@ export class TtlCache<T> {
   }
 
   set(key: string, value: T): void {
+    // Delete-then-set so an overwritten key moves to the back of the eviction
+    // order instead of aging out of turn.
+    this.entries.delete(key);
+    if (this.entries.size >= this.maxEntries) {
+      const oldest = this.entries.keys().next().value;
+      if (oldest !== undefined) this.entries.delete(oldest);
+    }
     this.entries.set(key, { value, expiresAt: Date.now() + this.ttlMs });
   }
 
@@ -106,7 +126,7 @@ export interface PlacePhotoAttribution {
  * Client-safe photo descriptor. `photoToken` is the Google photo resource
  * `name` (`places/PLACE_ID/photos/RESOURCE`) — a TRANSIENT handle the client
  * feeds back to the `/api/places/photo` proxy. It is never persisted
- * (ADR-013) and contains no key material.
+ * (ADR-014) and contains no key material.
  */
 export interface PlacePhoto {
   photoToken: string;

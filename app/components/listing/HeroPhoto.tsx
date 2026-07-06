@@ -16,7 +16,7 @@ import { fetchListingPhotos } from "~/server/places-photos.fn";
  * suspense): photos are decorative and must never block or break page render.
  * The photo itself loads through the `/api/places/photo` server-side media
  * proxy — nothing Google-sourced is persisted and no key ships to the client
- * (ADR-013).
+ * (ADR-014).
  *
  * Attribution: Google photos require author credit, so a real photo renders a
  * small "Photo: {author}" line over the scrim (linking to the author profile
@@ -26,7 +26,9 @@ import { fetchListingPhotos } from "~/server/places-photos.fn";
 /**
  * Width requested from the proxy for the hero band. The band renders edge to
  * edge in a `max-w-3xl` card (~768px CSS), so 1280px covers retina displays
- * without asking Google for the full-size original (proxy clamps to 1600 max).
+ * without asking Google for the full-size original. Deliberately a rung on the
+ * proxy's fixed width ladder (`PHOTO_WIDTH_LADDER` in
+ * `app/server/routes/places.ts`) — off-ladder asks get quantized server-side.
  */
 export const HERO_PHOTO_MAX_WIDTH_PX = 1280;
 
@@ -38,7 +40,12 @@ export function listingPhotosQueryKey(listingId: string) {
 export function HeroPhoto({ listingId }: { listingId: string }) {
   // Ephemeral render state, not data fetching: a broken image (e.g. the proxy
   // 503s after the kill switch flips mid-session) falls back to the gradient.
-  const [imageFailed, setImageFailed] = useState(false);
+  // The FAILED SRC is stored (not a boolean) so the suppression is scoped to
+  // the exact image that broke: when client-side navigation reuses this
+  // instance for another listing (or the photo list changes), the new src no
+  // longer matches and the photo renders again. The call site additionally
+  // keys the component by listing id (belt and braces).
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
   const { data: photos } = useQuery({
     queryKey: listingPhotosQueryKey(listingId),
@@ -51,7 +58,10 @@ export function HeroPhoto({ listingId }: { listingId: string }) {
 
   // Hero shows the FIRST photo only; errors surface as `data: undefined`.
   const photo = photos?.[0];
-  if (!photo || imageFailed) return null;
+  if (!photo) return null;
+
+  const src = placePhotoProxyUrl(photo.photoToken, HERO_PHOTO_MAX_WIDTH_PX);
+  if (failedSrc === src) return null;
 
   return (
     <>
@@ -60,10 +70,10 @@ export function HeroPhoto({ listingId }: { listingId: string }) {
           above the gradient/blob/placeholder layers (earlier siblings) and
           below the scrim + z-20/z-30 text/action layers. */}
       <img
-        src={placePhotoProxyUrl(photo.photoToken, HERO_PHOTO_MAX_WIDTH_PX)}
+        src={src}
         alt=""
         loading="lazy"
-        onError={() => setImageFailed(true)}
+        onError={() => setFailedSrc(src)}
         className="absolute inset-0 z-0 h-full w-full object-cover"
       />
       {photo.attributions.length > 0 ? (

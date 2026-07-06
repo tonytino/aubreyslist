@@ -29,7 +29,7 @@ app.route("/health", healthRoutes);
 // human-provisioned path /api/auth/callback/google.
 app.route("/auth", authRoutes);
 
-// Google Place photo media proxy (AUB-215, ADR-013) — resolves a transient
+// Google Place photo media proxy (AUB-215, ADR-014) — resolves a transient
 // photo token to Google's short-lived media URL server-side and 302s to it.
 app.route("/places", placesRoutes);
 

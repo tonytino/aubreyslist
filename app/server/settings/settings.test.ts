@@ -105,11 +105,19 @@ describe("typed read parsing", () => {
     selectRows = [{ value: "true" }];
     expect(await getSetting("place_photos_enabled")).toBe(true);
 
-    // Anything but the canonical "true"/"false" falls back to the default (on),
-    // so a corrupt row can never wedge the kill switch.
+    // Hand-run SQL is forgiven: parsing is case-insensitive and trimmed, so an
+    // operator's 'TRUE' / ' False ' lands on the intended side of the kill
+    // switch — 'FALSE' must never silently read as enabled (the spend-incurring
+    // direction).
     selectRows = [{ value: "TRUE" }];
     expect(await getSetting("place_photos_enabled")).toBe(true);
+    selectRows = [{ value: " False " }];
+    expect(await getSetting("place_photos_enabled")).toBe(false);
+
+    // Anything else falls back to the default (on) rather than guessing.
     selectRows = [{ value: "0" }];
+    expect(await getSetting("place_photos_enabled")).toBe(true);
+    selectRows = [{ value: "off" }];
     expect(await getSetting("place_photos_enabled")).toBe(true);
   });
 

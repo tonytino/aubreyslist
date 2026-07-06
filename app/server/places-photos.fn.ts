@@ -17,7 +17,7 @@ import { listingPhotosInputSchema, type PlacePhoto, runListingPhotos } from "./p
  * via the visibility-aware `getListing`, and the result is cached per Place ID
  * for {@link PLACE_PHOTOS_CACHE_TTL_MS} — so a burst of page views costs at
  * most one billed photos-only call per place per TTL window. Nothing
- * Google-sourced is persisted (ADR-013); the returned `photoToken`s are
+ * Google-sourced is persisted (ADR-014); the returned `photoToken`s are
  * transient handles for the `/api/places/photo` media proxy.
  *
  * Server-only at runtime; safe to import from client modules.

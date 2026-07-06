@@ -216,6 +216,33 @@ describe("TtlCache", () => {
     cache.clear();
     expect(cache.get("k")).toBeUndefined();
   });
+
+  it("caps entries, evicting the oldest-inserted first (keys are attacker-influenceable)", () => {
+    const cache = new TtlCache<number>(60_000, 3);
+    cache.set("a", 1);
+    cache.set("b", 2);
+    cache.set("c", 3);
+
+    // At the cap: a new key evicts the OLDEST ("a"), the rest survive.
+    cache.set("d", 4);
+    expect(cache.get("a")).toBeUndefined();
+    expect(cache.get("b")).toBe(2);
+    expect(cache.get("c")).toBe(3);
+    expect(cache.get("d")).toBe(4);
+
+    // Overwriting an existing key does NOT evict anyone — it just re-ages.
+    cache.set("b", 20);
+    expect(cache.get("b")).toBe(20);
+    expect(cache.get("c")).toBe(3);
+    expect(cache.get("d")).toBe(4);
+
+    // The re-aged "b" moved to the back of the eviction order: next eviction
+    // takes "c", the now-oldest insertion.
+    cache.set("e", 5);
+    expect(cache.get("c")).toBeUndefined();
+    expect(cache.get("b")).toBe(20);
+    expect(cache.get("e")).toBe(5);
+  });
 });
 
 // NOTE: the thin `fetchListingPhotos` wrapper in `places-photos.fn.ts` is not

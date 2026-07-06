@@ -213,7 +213,7 @@ function ListingDetail() {
       {/* ============================================================ HERO */}
       <header className="relative overflow-hidden rounded-card border border-border bg-surface shadow-sm">
         {/* Media band: brand-tinted gradient with a render-time Google Place
-            photo layered on top when one resolves (AUB-215, ADR-013 — fetched
+            photo layered on top when one resolves (AUB-215, ADR-014 — fetched
             per view through the server-side proxy, never persisted). Decorative
             pastel blobs layer over a brand gradient and stay the loading/
             fallback/error state; a bottom scrim keeps the overlaid white
@@ -241,8 +241,11 @@ function ListingDetail() {
           {/* Render-time place photo + its attribution line (client-side query,
               never blocks render). Renders nothing — leaving the gradient band
               untouched — while loading and on any failure. Sits between the
-              gradient layers and the scrim so overlaid text stays legible. */}
-          <HeroPhoto listingId={listing.id} />
+              gradient layers and the scrim so overlaid text stays legible.
+              Keyed by listing id so client-side navigation between listings
+              remounts it — a broken image on listing A must never suppress
+              listing B's photo. */}
+          <HeroPhoto key={listing.id} listingId={listing.id} />
           {/* Bottom scrim for text contrast. */}
           <div
             aria-hidden="true"

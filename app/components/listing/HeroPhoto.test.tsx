@@ -23,13 +23,20 @@ const PHOTO: PlacePhoto = {
   attributions: [{ displayName: "A Diner", uri: "https://maps.google.com/maps/contrib/123" }],
 };
 
-function renderHero() {
+function renderHero(listingId = "listing-1") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
-      <HeroPhoto listingId="listing-1" />
+      <HeroPhoto listingId={listingId} />
     </QueryClientProvider>
   );
+  const rerenderHero = (nextListingId: string) =>
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <HeroPhoto listingId={nextListingId} />
+      </QueryClientProvider>
+    );
+  return { ...view, rerenderHero };
 }
 
 /** The photo is decorative (alt=""), so it has no img role — query the node. */
@@ -134,5 +141,40 @@ describe("HeroPhoto", () => {
 
     await waitFor(() => expect(queryImg(container)).toBeNull());
     expect(screen.queryByText(/photo:/i)).not.toBeInTheDocument();
+  });
+
+  it("does not let a broken image on one listing suppress another listing's photo", async () => {
+    // Client-side navigation can reuse the same component instance with a new
+    // listingId (the route additionally remounts via key={listing.id}, but the
+    // component must be safe either way): an onError on listing A's image is
+    // scoped to that exact src and must not blank listing B's photo.
+    const PHOTO_B = { ...PHOTO, photoToken: "places/ChIJ_other/photos/resource-9" };
+    fetchListingPhotosMock.mockImplementation((args) => {
+      const { listingId } = (args as { data: { listingId: string } }).data;
+      return Promise.resolve(listingId === "listing-1" ? [PHOTO] : [PHOTO_B]);
+    });
+
+    const { container, rerenderHero } = renderHero("listing-1");
+    const img = await waitFor(() => {
+      const node = queryImg(container);
+      expect(node).not.toBeNull();
+      return node as HTMLImageElement;
+    });
+
+    fireEvent.error(img);
+    await waitFor(() => expect(queryImg(container)).toBeNull());
+
+    // Same instance, new listing → its (different) photo renders fine.
+    rerenderHero("listing-2");
+    const imgB = await waitFor(() => {
+      const node = queryImg(container);
+      expect(node).not.toBeNull();
+      return node as HTMLImageElement;
+    });
+    expect(imgB.getAttribute("src")).toContain(encodeURIComponent(PHOTO_B.photoToken));
+
+    // And navigating back to the broken listing stays suppressed (same src).
+    rerenderHero("listing-1");
+    await waitFor(() => expect(queryImg(container)).toBeNull());
   });
 });

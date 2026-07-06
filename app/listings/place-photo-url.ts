@@ -4,7 +4,7 @@
  * The listing-detail hero sets this as an `<img src>`; the browser GETs the
  * `/api/places/photo` Hono route (`app/server/routes/places.ts`), which
  * resolves the transient photo token to Google's short-lived media URL
- * server-side (key never leaves the server, ADR-013) and 302s to it. This is
+ * server-side (key never leaves the server, ADR-014) and 302s to it. This is
  * an image URL, not a data fetch — the frontend never `fetch`es it, so the
  * RPC-client rule for Hono routes doesn't apply.
  *

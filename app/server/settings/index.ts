@@ -73,14 +73,20 @@ const positiveIntCodec: Codec<number> = {
 };
 
 /**
- * Codec for boolean settings (e.g. a feature kill switch). Stored canonically as
- * the TEXT `"true"` / `"false"`; anything else parses to `undefined` so the
- * in-code default wins — a corrupt row can never wedge a switch into an
- * unintended state.
+ * Codec for boolean settings (e.g. a feature kill switch). Stored canonically
+ * as the TEXT `"true"` / `"false"`; parsing is deliberately forgiving —
+ * case-insensitive, whitespace-trimmed — so a hand-run SQL `'TRUE'` / `'False '`
+ * still reads as intended instead of silently falling back to the default
+ * (which for the photos kill switch is the spend-incurring direction). Anything
+ * else parses to `undefined` so the in-code default wins — a corrupt row can
+ * never wedge a switch into an unintended state.
  */
 const boolCodec: Codec<boolean> = {
   serialize: (value) => (value ? "true" : "false"),
-  parse: (raw) => (raw === "true" ? true : raw === "false" ? false : undefined),
+  parse: (raw) => {
+    const normalized = raw.trim().toLowerCase();
+    return normalized === "true" ? true : normalized === "false" ? false : undefined;
+  },
 };
 
 /**
@@ -139,7 +145,7 @@ export const SETTINGS = {
     codec: positiveIntCodec,
   }),
   /**
-   * Kill switch for render-time Google Place photos (AUB-215, ADR-013). Defaults
+   * Kill switch for render-time Google Place photos (AUB-215, ADR-014). Defaults
    * to ENABLED when the row is absent — mirroring `intake_mode`'s
    * default-on-unset behaviour — so photos work out of the box; an admin (or an
    * operator via SQL) flips it to `false` if the Places photo spend needs to be

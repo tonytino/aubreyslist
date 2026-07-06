@@ -66,7 +66,7 @@ const DETAILS_URL_BASE = "https://places.googleapis.com/v1/places";
 // not change the cost of this call. `photos` (AUB-215) is likewise in the Pro
 // SKU — each entry carries `name` (`places/PLACE_ID/photos/RESOURCE`),
 // `widthPx`/`heightPx`, and `authorAttributions[]`. NOTE: photos are Google
-// content and must NEVER be persisted (ADR-013) — `detailsResponseSchema`
+// content and must NEVER be persisted (ADR-014) — `detailsResponseSchema`
 // deliberately does not parse them, so nothing photo-shaped can reach the
 // `listings` insert. The render-time photo fetch lives in
 // `~/server/places-photos` (its own tight, `photos`-only call).
