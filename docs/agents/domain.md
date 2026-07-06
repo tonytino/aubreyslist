@@ -122,8 +122,12 @@ Rules every trust-related feature must honor:
 
 ## Discovery (v1)
 
-List-first (no embedded map — deep-link to Google Maps). Supports: **text
-search** (name/cuisine), **filters** by the taxonomy above (the killer
-feature — "celiac-safe + dedicated fryer"), **sort** by trust/recency or
-alphabetical, and **"near me"** distance sort using listing lat/lng +
-browser geolocation.
+List-first. Originally "no embedded map — deep-link to Google Maps"; that was
+**revised 2026-07-06 by owner direction** (Linear project "Google Maps
+enrichment") — embedded map surfaces and Google place photos are now in scope,
+governed by the GMP usage & content policy in **ADR-014** (storage limits,
+attribution, key split, cost/degradation rules). Deep-linking remains the
+fallback whenever the browser Maps key is absent. Supports: **text search**
+(name/cuisine), **filters** by the taxonomy above (the killer feature —
+"celiac-safe + dedicated fryer"), **sort** by trust/recency or alphabetical,
+and **"near me"** distance sort using listing lat/lng + browser geolocation.
