@@ -92,6 +92,14 @@ test.describe("edit listing links (wiki-style, signed-in)", () => {
     await menuField.fill("");
     await page.getByRole("button", { name: "Save links" }).click();
 
+    // Wait for the dialog to actually close — it closes only in the mutation's
+    // onSuccess, i.e. after the server deleted the typed row AND cleared the
+    // legacy menu_url column. While it is open, the modal marks the background
+    // aria-hidden, so the Links assertion below would pass vacuously and the
+    // reload would race the in-flight delete (the SSR snapshot then resurrects
+    // the legacy URL — the flake that shipped with this spec).
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
     // The menu button is gone and STAYS gone across a full reload (the legacy
     // column was cleared server-side, not just hidden client-side).
     await expect(linksSection.getByRole("link", { name: "Menu", exact: true })).toHaveCount(0);
