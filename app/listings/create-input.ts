@@ -1,9 +1,9 @@
 /**
- * Client-safe add-listing input contract (issues #26, #90, #141).
+ * Client-safe add-listing input contract (issues #26, #90, #141; AUB-202).
  *
  * CLIENT-SAFE: the Zod validator + inferred input type for the add-listing write,
- * plus the `CreateListingResult` shape. It imports only `z`, the pure
- * `isHttpUrl` scheme guard, and a TYPE-only `Listing` (erased at build) — NO
+ * plus the `CreateListingResult` shape. It imports only `z`, the client-safe
+ * typed-links schema, and a TYPE-only `Listing` (erased at build) — NO
  * `~/db` / drizzle / neon value import, mirroring `app/listings/taxonomy.ts`
  * (#126).
  *
@@ -16,7 +16,7 @@
 
 import { z } from "zod";
 import type { Listing } from "~/db/schema";
-import { isHttpUrl } from "~/server/listings/url";
+import { listingLinksInputSchema } from "~/listings/links";
 
 /** Result of an add-listing write: the listing plus whether it was newly created. */
 export interface CreateListingResult {
@@ -32,30 +32,21 @@ export interface CreateListingResult {
  *   resolved server-side, so the client cannot spoof name/address/coords.
  * - `manual`: the client sends the canonical fields directly.
  *
- * `menuUrl` is optional in both modes; an empty string is normalised to
- * `undefined` so a blank field stores `null` rather than `""`.
- *
- * The scheme is restricted to http(s) ({@link isHttpUrl}): `z.string().url()`
- * alone accepts `javascript:`/`data:` URLs, which — rendered into the detail
- * page's anchor `href` — is a stored-XSS / untrusted-navigation vector (#90).
+ * `links` (AUB-202) is the optional set of typed links (one per kind at most),
+ * replacing the legacy single `menuUrl`. Blank fields are dropped client-side
+ * before submit, so every entry that arrives here carries a validated
+ * http(s)-only URL ({@link listingLinksInputSchema}, #90: `z.string().url()`
+ * alone accepts `javascript:`/`data:` URLs — a stored-XSS vector at the detail
+ * page's anchor `href` sink). New writes go to `listing_links`; the legacy
+ * `listings.menu_url` column is no longer written.
  */
-const optionalMenuUrl = z
-  .union([
-    z
-      .string()
-      .url("Enter a valid URL (including https://).")
-      .max(2048)
-      .refine(isHttpUrl, "Menu URL must start with http:// or https://."),
-    z.literal(""),
-  ])
-  .optional()
-  .transform((value) => (value ? value : undefined));
+const optionalLinks = listingLinksInputSchema.optional();
 
 export const createListingInputSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("places"),
     placeId: z.string().min(1, "placeId is required"),
-    menuUrl: optionalMenuUrl,
+    links: optionalLinks,
   }),
   z.object({
     mode: z.literal("manual"),
@@ -63,7 +54,7 @@ export const createListingInputSchema = z.discriminatedUnion("mode", [
     address: z.string().trim().min(1, "Address is required").max(512),
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
-    menuUrl: optionalMenuUrl,
+    links: optionalLinks,
   }),
 ]);
 export type CreateListingInput = z.infer<typeof createListingInputSchema>;

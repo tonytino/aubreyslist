@@ -37,7 +37,7 @@ export interface SeededListing {
   lng: number;
   /** The GF-attribute labels the curator bot suggests (≥1). */
   suggestedAttributes: ClaimAttribute[];
-  /** Optional official menu / GF-info page persisted to `listings.menuUrl`. */
+  /** Optional official menu / GF-info page, seeded as a `menu`-kind `listing_links` row (AUB-220). */
   menuUrl?: string | null;
   /** Captured Google star rating at refresh time (informational). */
   googleRating?: number | null;

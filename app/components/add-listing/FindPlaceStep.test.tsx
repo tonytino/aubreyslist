@@ -20,6 +20,7 @@ vi.mock("~/server/places.fn", () => ({
 }));
 
 import { FindPlaceStep } from "./FindPlaceStep";
+import { emptyLinkFieldValues } from "./ListingLinksFields";
 
 function renderWithQuery(ui: ReactElement) {
   const queryClient = new QueryClient({
@@ -32,8 +33,8 @@ function baseProps() {
   return {
     intakeMode: "places" as const,
     place: null,
-    menuUrl: "",
-    onMenuUrlChange: vi.fn(),
+    links: emptyLinkFieldValues(),
+    onLinkChange: vi.fn(),
     onSelect: vi.fn(),
     onClear: vi.fn(),
     onContinue: vi.fn(),
@@ -109,5 +110,22 @@ describe("FindPlaceStep", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Change" }));
     expect(props.onClear).toHaveBeenCalledTimes(1);
+  });
+
+  it("collects typed links on the selected-place card via onLinkChange (AUB-202)", () => {
+    const place: WizardPlace = { mode: "places", placeId: "p1", description: "Two Hands, Denver" };
+    const props = { ...baseProps(), place };
+    renderWithQuery(<FindPlaceStep {...props} />);
+
+    // One field per link kind, all optional; edits flow up per kind.
+    fireEvent.change(screen.getByLabelText("Menu", { exact: true }), {
+      target: { value: "https://twohands.example/menu" },
+    });
+    expect(props.onLinkChange).toHaveBeenCalledWith("menu", "https://twohands.example/menu");
+
+    fireEvent.change(screen.getByLabelText("Website", { exact: true }), {
+      target: { value: "https://twohands.example" },
+    });
+    expect(props.onLinkChange).toHaveBeenCalledWith("website", "https://twohands.example");
   });
 });

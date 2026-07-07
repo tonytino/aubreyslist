@@ -4,10 +4,11 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import type { LinkKind } from "~/listings/links";
 import { autocompletePlaces } from "~/server/places.fn";
 import type { IntakeMode } from "~/server/settings";
 import type { WizardPlace } from "./AddListingWizard";
-import { MenuUrlField } from "./MenuUrlField";
+import { type LinkFieldValues, ListingLinksFields } from "./ListingLinksFields";
 
 /**
  * Step 0 — find the place. Reuses the Places autocomplete search + manual-entry
@@ -23,16 +24,16 @@ import { MenuUrlField } from "./MenuUrlField";
 export function FindPlaceStep({
   intakeMode,
   place,
-  menuUrl,
-  onMenuUrlChange,
+  links,
+  onLinkChange,
   onSelect,
   onClear,
   onContinue,
 }: {
   intakeMode: IntakeMode;
   place: WizardPlace | null;
-  menuUrl: string;
-  onMenuUrlChange: (value: string) => void;
+  links: LinkFieldValues;
+  onLinkChange: (kind: LinkKind, value: string) => void;
   onSelect: (place: WizardPlace) => void;
   onClear: () => void;
   onContinue: () => void;
@@ -40,13 +41,13 @@ export function FindPlaceStep({
   const placesEnabled = intakeMode === "places";
 
   // Once a place is collected, show the confirmation card (name/address, the
-  // dedup line, the optional menu link) with a Change affordance + Continue.
+  // dedup line, the optional typed links) with a Change affordance + Continue.
   if (place !== null) {
     return (
       <SelectedPlaceCard
         place={place}
-        menuUrl={menuUrl}
-        onMenuUrlChange={onMenuUrlChange}
+        links={links}
+        onLinkChange={onLinkChange}
         onClear={onClear}
         onContinue={onContinue}
       />
@@ -269,17 +270,17 @@ function ManualFinder({ onSelect }: { onSelect: (place: WizardPlace) => void }) 
   );
 }
 
-/** The "Selected place" confirmation card: dedup line, menu link, Change, Continue. */
+/** The "Selected place" confirmation card: dedup line, typed links, Change, Continue. */
 function SelectedPlaceCard({
   place,
-  menuUrl,
-  onMenuUrlChange,
+  links,
+  onLinkChange,
   onClear,
   onContinue,
 }: {
   place: WizardPlace;
-  menuUrl: string;
-  onMenuUrlChange: (value: string) => void;
+  links: LinkFieldValues;
+  onLinkChange: (kind: LinkKind, value: string) => void;
   onClear: () => void;
   onContinue: () => void;
 }) {
@@ -307,7 +308,7 @@ function SelectedPlaceCard({
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <MenuUrlField value={menuUrl} onChange={onMenuUrlChange} />
+          <ListingLinksFields values={links} onChange={onLinkChange} />
         </CardContent>
       </Card>
 

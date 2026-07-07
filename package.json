@@ -36,6 +36,7 @@
     "db:seed": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/seed.ts",
     "db:seed:refresh": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/refresh-seed-data.ts",
     "db:backfill:maps-urls": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/backfill-maps-urls.ts",
+    "db:backfill:listing-links": "node --experimental-strip-types --import ./scripts/register-aliases.mjs ./scripts/backfill-listing-links.ts",
     "postinstall": "tsr generate",
     "prepare": "lefthook install"
   },

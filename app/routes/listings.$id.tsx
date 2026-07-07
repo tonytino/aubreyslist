@@ -1,16 +1,17 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, stripSearchParams } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { CircleCheck, MapPin, Menu, Users } from "lucide-react";
+import { CircleCheck, MapPin, Users } from "lucide-react";
 import { z } from "zod";
+import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { HeroPhoto } from "~/components/listing/HeroPhoto";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
+import { ListingLinks, listingLinksQueryKey } from "~/components/listing/ListingLinks";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
-import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { absoluteUrl, canonicalLink, jsonLdScript, pageSeoMeta } from "~/lib/seo";
@@ -22,11 +23,17 @@ import {
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
+import { fetchListingLinks } from "~/server/listing-links/links.fn";
 import { fetchListing } from "~/server/listings/get-listing.fn";
 import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
 import { findRecentIncident } from "~/trust/incident-recency";
-import { deriveHeadlineSafetyState, formatRelativeTime } from "~/trust/summary";
+import {
+  deriveHeadlineSafetyState,
+  formatRelativeTime,
+  hasEvidence,
+  hasPositiveConsensus,
+} from "~/trust/summary";
 
 /**
  * Server-only loader for a listing's claims WITH their aggregates (confirm/
@@ -67,6 +74,17 @@ function incidentsQueryOptions(listingId: string) {
 }
 
 /**
+ * Cached typed links for a listing (AUB-202) — invalidated after a signed-in
+ * viewer saves or removes a link via the edit-links dialog.
+ */
+function listingLinksQueryOptions(listingId: string) {
+  return queryOptions({
+    queryKey: listingLinksQueryKey(listingId),
+    queryFn: () => fetchListingLinks({ data: { listingId } }),
+  });
+}
+
+/**
  * Cached claim roll-up for a listing — invalidated after the viewer changes or
  * retracts their own attestation (#32), so the per-claim counts, recency, the
  * viewer's own vote, and the headline cue all recompute from fresh evidence.
@@ -91,6 +109,9 @@ export const Route = createFileRoute("/listings/$id")({
       // Prefetch incidents so the list + banner render on first paint, then are
       // refetchable client-side via TanStack Query after a new report.
       context.queryClient.ensureQueryData(incidentsQueryOptions(id)),
+      // Prefetch the typed links so the Links section renders on first paint
+      // and is refetchable client-side after an edit-links save (AUB-202).
+      context.queryClient.ensureQueryData(listingLinksQueryOptions(id)),
     ]);
     // A missing listing is a 404, not an error — surface the route's
     // notFoundComponent instead of the error boundary.
@@ -164,6 +185,7 @@ function ListingDetail() {
   const navigate = Route.useNavigate();
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
   const { data: claims } = useSuspenseQuery(claimsQueryOptions(listing.id));
+  const { data: linksData } = useSuspenseQuery(listingLinksQueryOptions(listing.id));
   const now = new Date(nowMs);
   const isSignedIn = viewerId !== null;
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
@@ -190,6 +212,22 @@ function ListingDetail() {
     ? formatRelativeTime(headlineClaim.lastConfirmedAt, now)
     : null;
   const confirmations = headlineClaim?.confirmCount ?? 0;
+
+  // The non-headline claim badges relevant to this listing (e.g. "Off-menu GF
+  // on request"): every attribute besides the headline that either has real
+  // positive community consensus, or — while there's no evidence yet — is a
+  // live curator-bot suggestion (ADR-007: a suggestion never coexists with
+  // real evidence for the same attribute, guarded here the same way
+  // `summarizeClaim` does). Rendered via the shared `ClaimBadge` so this row
+  // and the browse cards' suggested badges stay visually consistent.
+  const nonHeadlineClaimBadges = claims
+    .filter((claim) => claim.attribute !== "celiac_safe_vs_gluten_friendly")
+    .map((claim) => ({
+      attribute: claim.attribute,
+      confirmed: hasPositiveConsensus(claim),
+      suggested: claim.suggested && !hasEvidence(claim),
+    }))
+    .filter((claim) => claim.confirmed || claim.suggested);
 
   const claimsCount = claims.length;
   const incidentsCount = incidents.length;
@@ -321,6 +359,23 @@ function ListingDetail() {
             </div>
           ) : null}
         </div>
+
+        {/* Non-headline claim badges relevant to this listing (e.g. "Off-menu
+            GF on request", "Dedicated fryer"): a second row, so every
+            confirmed or bot-suggested attribute — not just the headline
+            celiac-safe/gluten-friendly state — is visible at a glance instead
+            of being buried in the Claims tab below. */}
+        {nonHeadlineClaimBadges.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border px-card pb-card pt-3">
+            {nonHeadlineClaimBadges.map((claim) => (
+              <ClaimBadge
+                key={claim.attribute}
+                attribute={claim.attribute}
+                suggested={claim.suggested}
+              />
+            ))}
+          </div>
+        ) : null}
       </header>
 
       {/* Recent harm is surfaced first and never buried by older confirmations
@@ -329,32 +384,21 @@ function ListingDetail() {
         <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
       ) : null}
 
-      {/* Primary action: deep-link to Google Maps (ADR-009 — no embedded map).
-          Both hrefs are guarded by `isHttpUrl` so only http(s) links ever reach
-          an anchor — defence-in-depth against a dangerous-scheme URL (#90). Full-
-          width on mobile, side-by-side from 480px. */}
-      <section
-        aria-label="Links"
-        className="flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-center"
-      >
-        {isHttpUrl(listing.mapsUrl) ? (
-          <Button asChild size="lg" className="w-full min-[480px]:w-auto">
-            <a href={listing.mapsUrl} target="_blank" rel="noreferrer noopener">
-              <MapPin aria-hidden className="h-4 w-4" />
-              Open in Google Maps
-            </a>
-          </Button>
-        ) : null}
-
-        {isHttpUrl(listing.menuUrl) ? (
-          <Button asChild size="lg" variant="outline" className="w-full min-[480px]:w-auto">
-            <a href={listing.menuUrl} target="_blank" rel="noreferrer noopener">
-              <Menu aria-hidden className="h-4 w-4" />
-              View menu
-            </a>
-          </Button>
-        ) : null}
-      </section>
+      {/* Links (AUB-202): the Google Maps deep-link (ADR-009 — no embedded
+          map) plus the listing's typed links in LINK_KINDS order, with the
+          legacy menuUrl as the menu fallback and — for signed-in viewers — the
+          wiki-style edit-links dialog. Every href is `isHttpUrl`-guarded at
+          the render sink inside the component (#90). Both the typed links AND
+          the legacy fallback come from the invalidatable links QUERY (not the
+          loader's listing row), so an edit that clears the legacy column
+          refreshes the section without a full route reload. */}
+      <ListingLinks
+        listingId={listing.id}
+        mapsUrl={listing.mapsUrl}
+        legacyMenuUrl={linksData.legacyMenuUrl}
+        links={linksData.links}
+        isSignedIn={isSignedIn}
+      />
 
       {/* Tabbed evidence panel (AUB-131): Community claims + Incident reports in
           one card, with short "Claims" / "Reports" trigger labels (the count
