@@ -23,16 +23,123 @@ interface UserMenuProps {
   previewLoginEnabled?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Shared account rows
+//
+// These render helpers are the SINGLE SOURCE OF TRUTH for the signed-in and
+// signed-out account rows, reused by BOTH the desktop avatar dropdown (below)
+// and the mobile combined `SiteMenu`, so the two surfaces can never drift. Each
+// renders `DropdownMenuItem`s and expects to sit inside a `DropdownMenuContent`.
+// Touch sizing (>= 44px rows on coarse pointers) is inherited from the
+// `DropdownMenuItem` primitive — don't re-add it per row.
+// ---------------------------------------------------------------------------
+
+/** Identity block (name + email) for the signed-in account menu. */
+export function AccountIdentityLabel({ user }: { user: SessionUser }) {
+  return (
+    <DropdownMenuLabel className="flex flex-col gap-0.5">
+      <span className="font-medium text-foreground">{user.name}</span>
+      <span className="truncate text-caption font-normal text-muted-foreground">{user.email}</span>
+    </DropdownMenuLabel>
+  );
+}
+
 /**
- * Presentational auth control for the header. Takes `user` as a prop (never
- * runs the query itself) so it stays unit-testable in isolation — `SiteHeader`
- * reads the prefetched `currentUserQuery` and passes the result down.
+ * Signed-in account actions: Favorites (viewer-scoped) and, for moderator+ only,
+ * a role-appropriate Admin/Moderation link. Navigation only — the routes
+ * re-guard server-side. Sign out is intentionally NOT here so callers can place
+ * their own separator before it.
+ */
+export function AccountActionItems({ user }: { user: SessionUser }) {
+  return (
+    <>
+      {/* The viewer's saved spots (AUB-127 / F9) — signed-in only, since
+          favorites are viewer-scoped. Navigation only; the page re-derives the
+          viewer from the session server-side. */}
+      <DropdownMenuItem asChild>
+        <Link to="/favorites">
+          <Heart aria-hidden className="h-4 w-4" />
+          Favorites
+        </Link>
+      </DropdownMenuItem>
+
+      {/* Link to /admin for moderator+ — the route is RBAC-gated and shows
+          role-appropriate sections (admins: roles + settings + queue;
+          moderators: only the moderation queue), so the label reflects what the
+          viewer will actually see. Server fns re-guard regardless; this is
+          navigation only. */}
+      {user.role === "admin" || user.role === "moderator" ? (
+        <DropdownMenuItem asChild>
+          <Link to="/admin">
+            <ShieldCheck aria-hidden className="h-4 w-4" />
+            {user.role === "admin" ? "Admin" : "Moderation"}
+          </Link>
+        </DropdownMenuItem>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Sign-out row. A form POST is the right mechanism for a state-changing,
+ * full-page action (clears the session server-side then redirects home) — not
+ * an RPC. The submit BUTTON itself is the menu item (the form wraps it), so the
+ * item's entire padded hit area submits — no dead padding.
+ */
+export function SignOutItem() {
+  return (
+    <form method="post" action="/api/auth/sign-out">
+      <DropdownMenuItem asChild>
+        <button type="submit" className="w-full">
+          <LogOut aria-hidden className="h-4 w-4" />
+          Sign out
+        </button>
+      </DropdownMenuItem>
+    </form>
+  );
+}
+
+/**
+ * Signed-out auth rows as MENU ITEMS (for the mobile combined menu): the
+ * preview-only Dev sign-in (rendered only when `previewLoginEnabled`) plus the
+ * always-present Google "Log in". Both are plain anchors — full-page OAuth /
+ * dev-login server routes, not RPC data fetches. The desktop `UserMenu` renders
+ * these same destinations as buttons in its right cluster instead (see below).
+ */
+export function SignedOutMenuItems({ previewLoginEnabled }: { previewLoginEnabled: boolean }) {
+  return (
+    <>
+      {previewLoginEnabled ? (
+        <DropdownMenuItem asChild>
+          <a href="/api/auth/dev-login">
+            <FlaskConical aria-hidden className="h-4 w-4" />
+            Dev sign-in
+          </a>
+        </DropdownMenuItem>
+      ) : null}
+      <DropdownMenuItem asChild>
+        <a href="/api/auth/google">
+          <LogIn aria-hidden className="h-4 w-4" />
+          Log in
+        </a>
+      </DropdownMenuItem>
+    </>
+  );
+}
+
+/**
+ * Presentational auth control for the header's `sm:`+ right cluster. Takes
+ * `user` as a prop (never runs the query itself) so it stays unit-testable in
+ * isolation — `SiteHeader` reads the prefetched `currentUserQuery` and passes
+ * the result down. Below `sm` the header renders the combined `SiteMenu`
+ * instead of this component; it shares the account rows above so content stays
+ * in lockstep.
  *
- * - Logged out: a compact "Log in" anchor (full-page OAuth redirect; Google is
- *   the sole provider per ADR-006, but the header CTA stays generic).
+ * - Logged out: compact "Log in" (full-page OAuth redirect; Google is the sole
+ *   provider per ADR-006) plus, on previews, a "Dev sign-in" button.
  * - Logged in: an avatar button opening a portal dropdown with the user's
- *   identity, a moderation/admin link for moderator+ roles, and a POST sign-out
- *   form.
+ *   identity, Favorites, a moderator+ Admin/Moderation link, and a POST
+ *   sign-out form.
  */
 export function UserMenu({ user, previewLoginEnabled = false }: UserMenuProps) {
   if (user === null) {
@@ -48,7 +155,7 @@ export function UserMenu({ user, previewLoginEnabled = false }: UserMenuProps) {
           <Button asChild variant="ghost" size="sm">
             <a href="/api/auth/dev-login">
               <FlaskConical aria-hidden className="h-4 w-4" />
-              <span className="hidden sm:inline">Dev sign-in</span>
+              Dev sign-in
             </a>
           </Button>
         ) : null}
@@ -68,7 +175,7 @@ export function UserMenu({ user, previewLoginEnabled = false }: UserMenuProps) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {/* Touch ergonomics: >= 44px hit area on coarse pointers (matches the
-            hamburger trigger in SiteHeader; the 32px avatar stays centred). */}
+            combined-menu trigger in SiteMenu; the 32px avatar stays centred). */}
         <Button
           type="button"
           variant="ghost"
@@ -90,57 +197,16 @@ export function UserMenu({ user, previewLoginEnabled = false }: UserMenuProps) {
         </Button>
       </DropdownMenuTrigger>
 
-      {/* Wider panel on touch so icons + labels breathe at 375px (mirrors the
-          SiteHeader nav menu; item touch sizing lives in ui/dropdown-menu). */}
+      {/* Wider panel on touch so icons + labels breathe at 375px (item touch
+          sizing lives in ui/dropdown-menu). */}
       <DropdownMenuContent align="end" className="w-56 pointer-coarse:w-64">
-        <DropdownMenuLabel className="flex flex-col gap-0.5">
-          <span className="font-medium text-foreground">{user.name}</span>
-          <span className="truncate text-caption font-normal text-muted-foreground">
-            {user.email}
-          </span>
-        </DropdownMenuLabel>
+        <AccountIdentityLabel user={user} />
         <DropdownMenuSeparator />
-
-        {/* The viewer's saved spots (AUB-127 / F9) — signed-in only, since
-            favorites are viewer-scoped. Navigation only; the page re-derives the
-            viewer from the session server-side. */}
-        <DropdownMenuItem asChild>
-          <Link to="/favorites">
-            <Heart aria-hidden className="h-4 w-4" />
-            Favorites
-          </Link>
-        </DropdownMenuItem>
-
-        {/* Link to /admin for moderator+ — the route is RBAC-gated and shows
-            role-appropriate sections (admins: roles + settings + queue;
-            moderators: only the moderation queue), so the label reflects what
-            the viewer will actually see. Server fns re-guard regardless; this is
-            navigation only. */}
-        {user.role === "admin" || user.role === "moderator" ? (
-          <DropdownMenuItem asChild>
-            <Link to="/admin">
-              <ShieldCheck aria-hidden className="h-4 w-4" />
-              {user.role === "admin" ? "Admin" : "Moderation"}
-            </Link>
-          </DropdownMenuItem>
-        ) : null}
-
-        {/* Sign-out clears the session server-side then redirects home; a form
-            POST is the right mechanism for a state-changing, full-page action
-            (not an RPC). The submit BUTTON is the menu item (the form wraps it),
-            so the item's entire padded hit area submits — previously the form
-            was the item and taps on its padding did nothing. The separator adds
-            breathing room so a thumb aiming at the row above can't mis-tap
-            sign-out. */}
+        <AccountActionItems user={user} />
+        {/* The separator adds breathing room so a thumb aiming at the row above
+            can't mis-tap sign-out. */}
         <DropdownMenuSeparator />
-        <form method="post" action="/api/auth/sign-out">
-          <DropdownMenuItem asChild>
-            <button type="submit" className="w-full">
-              <LogOut aria-hidden className="h-4 w-4" />
-              Sign out
-            </button>
-          </DropdownMenuItem>
-        </form>
+        <SignOutItem />
       </DropdownMenuContent>
     </DropdownMenu>
   );
