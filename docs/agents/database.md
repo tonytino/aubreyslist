@@ -325,6 +325,24 @@ New listings don't need it: the Places provider now stores Google's own share
 link (`googleMapsUri` from Place Details) and only falls back to the built
 Maps URLs API link when that field is absent.
 
+## Backfilling listing links (`pnpm db:backfill:listing-links`)
+
+Migrates any listing still carrying its menu link only in the legacy
+`listings.menu_url` column into a typed `menu`-kind `listing_links` row
+(AUB-202), then clears the migrated column. API-free (needs only
+`DATABASE_URL`) and idempotent: the insert is `onConflictDoNothing` on the
+`(listing, kind)` unique constraint, so a user-edited link is never
+overwritten. Non-http(s) legacy values are reported and left untouched.
+
+- **Local / dev:** `pnpm db:backfill:listing-links` against your `.env`
+  `DATABASE_URL` — still useful for a dev database with pre-AUB-202 rows.
+- **Production:** already done — the one-time "Backfill production listing
+  links" GitHub Action ran successfully and has been **retired** (AUB-221;
+  the workflow file is deleted). Nothing re-mints legacy rows: intake and the
+  seed pipeline both write typed rows only (AUB-220), so no prod re-run should
+  ever be needed. If one ever is, run the script manually:
+  `DATABASE_URL='<prod-connection-string>' pnpm db:backfill:listing-links`.
+
 ## Production Incidents
 
 When a migration breaks production or data is at risk, see the **[Migration
