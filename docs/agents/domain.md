@@ -11,7 +11,7 @@
 
 | Entity | What it is |
 | --- | --- |
-| **Listing** | A restaurant. Canonical identity is its **Google Place ID** (dedup key). Carries name, address, lat/lng, Maps deep-link, optional menu-link URL. |
+| **Listing** | A restaurant. Canonical identity is its **Google Place ID** (dedup key). Carries name, address, lat/lng, Maps deep-link, and **typed links** (AUB-202): at most one per kind (menu, gluten-free menu, website, reservations, online ordering) in the `listing_links` table. The kind taxonomy is `LINK_KINDS` in `app/listings/links.ts`. The legacy `menu_url` column remains for pre-AUB-202 rows only (rendered as the menu link when no `menu`-kind row exists); intake never writes it, and typed `menu`-kind saves/removes (plus the backfill) CLEAR it — typed writes supersede the legacy column. |
 | **Claim** | A community-attested statement about a listing, one per attribute in the fixed taxonomy below. Carries an aggregate of confirmations/disputes and a "last confirmed" timestamp. |
 | **Attestation** | A single user's **confirm** or **dispute** on a claim. **One per user per claim** (changeable/retractable, not stackable). |
 | **Incident** | A "got glutened here" report on a listing: required **date**, optional **severity**, optional **note**, attributed to a user. |
@@ -101,6 +101,11 @@ Rules every trust-related feature must honor:
 
 - **Read is open / write is gated** — anonymous users browse; any write requires
   Google login.
+- **Listing links are wiki-editable** (AUB-202): the "own contributions" rule
+  above does NOT apply to a listing's typed links — ANY signed-in user may add,
+  edit, or remove any listing's links (a deliberate product decision, enforced
+  without ownership checks server-side). Abuse is handled like other content:
+  rate limits plus moderation, with `created_by` kept as provenance.
 - **Admins grant the moderator role** to any Google account at any time (starts
   with the owner + trusted people).
 - **Light rate limiting** applies to writes as an anti-abuse guardrail; there is
