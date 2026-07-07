@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  BookOpenText,
   CalendarCheck,
   Globe,
   type LucideIcon,
   MapPin,
-  Menu,
   Pencil,
   ShoppingBag,
   WheatOff,
@@ -45,12 +45,15 @@ export function listingLinksQueryKey(listingId: string) {
 
 /**
  * One distinct glyph per link kind, next to the visible text label (never
- * colour/icon alone). `WheatOff` marks the gluten-free MENU link — a document
- * pointer, not the gluten-friendly SAFETY state, so the `WheatStrike` safety
- * glyph contract (styling.md) does not apply here.
+ * colour/icon alone). `BookOpenText` marks the MENU link — an open printed
+ * document, i.e. a restaurant menu, NOT lucide's `Menu` hamburger, which reads
+ * as app navigation (owner mobile feedback, AUB-221). `WheatOff` marks the
+ * gluten-free MENU link — a document pointer, not the gluten-friendly SAFETY
+ * state, so the `WheatStrike` safety glyph contract (styling.md) does not
+ * apply here.
  */
 const LINK_KIND_ICONS: Record<LinkKind, LucideIcon> = {
-  menu: Menu,
+  menu: BookOpenText,
   gluten_free_menu: WheatOff,
   website: Globe,
   reservations: CalendarCheck,
@@ -265,9 +268,18 @@ function EditListingLinks({
         {hasAnyLink ? "Edit links" : "Add links"}
       </Button>
 
+      {/*
+        Mobile (below sm): a FULL-SCREEN takeover — the base classes override
+        the primitive's centred positioning/size via `cn`'s tailwind-merge, so
+        the dialog fills the whole viewport (dvh, not vh, so mobile browser
+        chrome never hides the footer) with square corners. The header and the
+        action buttons stay pinned; ONLY the fields area scrolls internally.
+        At sm+ the overrides restore the primitive's centred dialog, height
+        capped at 85dvh with the same internal-scroll split.
+      */}
       <Dialog open={isOpen} onOpenChange={(open) => (open ? setIsOpen(true) : setIsOpen(false))}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="top-0 left-0 flex h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[85dvh] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:border">
+          <DialogHeader className="border-b border-border px-6 pt-6 pb-4">
             <DialogTitle>{hasAnyLink ? "Edit links" : "Add links"}</DialogTitle>
             <DialogDescription>
               Add or fix this restaurant's links. Anyone signed in can edit them.
@@ -280,20 +292,25 @@ function EditListingLinks({
                 handleSubmit();
               }
             }}
-            className="flex flex-col gap-4"
+            className="flex min-h-0 flex-1 flex-col"
           >
-            <ListingLinksFields
-              values={drafts}
-              onChange={(kind, value) => setDrafts((prev) => ({ ...prev, [kind]: value }))}
-            />
+            {/* The ONLY scrolling region — header/footer stay visible. */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <div className="flex flex-col gap-4">
+                <ListingLinksFields
+                  values={drafts}
+                  onChange={(kind, value) => setDrafts((prev) => ({ ...prev, [kind]: value }))}
+                />
 
-            {validationError ? (
-              <p role="alert" className="text-body-sm text-incident">
-                {validationError}
-              </p>
-            ) : null}
+                {validationError ? (
+                  <p role="alert" className="text-body-sm text-incident">
+                    {validationError}
+                  </p>
+                ) : null}
+              </div>
+            </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 border-t border-border px-6 py-4">
               <Button
                 type="button"
                 variant="outline"
