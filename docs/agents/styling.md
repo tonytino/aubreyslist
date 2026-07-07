@@ -52,9 +52,14 @@ unprefixed utility is the mobile base; `sm:`/`md:`/`lg:` add to it.
   mobile/desktop designs, unless there's a clear reason to differ. Fewer
   viewport-conditional branches means fewer places to regress.
 - **The site header is the canonical example** (`app/components/SiteHeader.tsx`):
-  a hamburger menu (left) + centred wordmark + right-aligned controls, identical
-  at every size. When a control can't fit at 375px, shrink it (smaller wordmark,
-  compact button) rather than introducing a separate desktop layout.
+  it is built mobile-first with a single, deliberate breakpoint switch at `sm`
+  (640px). Below `sm`: a left-aligned wordmark and one thumb-reachable,
+  right-anchored combined menu (`app/components/SiteMenu.tsx`) whose panel groups
+  a **Navigate** section and an **Account** section (the theme toggle folds in as
+  a row). At `sm:`+: the layout splits into the wordmark + an inline primary
+  `<nav>` + a standalone theme toggle + a separate account menu
+  (`app/components/UserMenu.tsx`). The `<nav aria-label="Primary">` landmark and
+  the account rows are shared across both layouts, so they can't drift.
 - When you change a header/nav element's role, label, or visibility, re-check the
   e2e selectors in `tests/e2e/` (and component tests) that target it — a
   mobile-first restructure commonly moves an inline element into a menu.

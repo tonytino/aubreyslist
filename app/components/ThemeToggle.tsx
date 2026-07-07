@@ -31,6 +31,15 @@ function readAppliedTheme(): Theme {
  * Exposed as a hook so BOTH the standalone header button (`ThemeToggle`, shown
  * on `sm:`+) and the in-menu theme row (`SiteMenu`, mobile) drive the same
  * behaviour and copy from one place — no drift between the two surfaces.
+ *
+ * KNOWN COSMETIC LIMITATION (intentionally not fixed): each call site owns its
+ * OWN `useState`, so toggling in one instance does not update the other's
+ * icon/label. This only surfaces if you resize ACROSS the 640px breakpoint AFTER
+ * toggling in the now-hidden instance (a devtools-only edge case) — the actual
+ * page theme is always correct (it lives on the `<html>` class, not this state),
+ * and the stale control reconciles to the applied theme on its next mount. Only
+ * one of the two instances is ever visible at a time, so a shared store /
+ * cross-instance listener would add live-state machinery for no user-facing win.
  */
 export function useThemeToggle() {
   const [theme, setTheme] = useState<Theme>("light");
