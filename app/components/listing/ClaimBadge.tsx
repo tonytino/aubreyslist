@@ -16,10 +16,23 @@ export interface ClaimBadgeProps {
    *
    * The suggested variant swaps the attribute's own glyph for the `Sparkles`
    * "AI-suggested" icon, wraps the chip in a vibrant purple gradient ring, and
-   * moves the "suggested, not yet confirmed" gloss into a tooltip rather than a
-   * visible text prefix — a deliberately subtler treatment than a screaming
-   * label, on the owner's call that the icon + gradient + tooltip together are
-   * enough to keep it from reading as a confirmed claim.
+   * shows a compact always-visible "AI" tag next to the icon — a terser stand-in
+   * for the old "Suggested: " text prefix (owner's call: less shouty than
+   * restating the full label), but still a real, always-painted text label
+   * alongside the icon, never resting on colour/shape alone or on a
+   * hover/focus-only tooltip. That matters because Radix's Tooltip primitive
+   * never opens on touch (verified: `onPointerMove`/`onFocus`/`onClick` all
+   * ignore or actively close a touch-originated interaction), so a
+   * tooltip-only cue would be silently unreachable for touch users — exactly
+   * the "suggestion misread as a confirmed verdict" harm ADR-007 exists to
+   * prevent. The "AI" tag is itself the (only) tooltip trigger, carrying the
+   * fuller "not yet confirmed by the community" gloss for anyone who does
+   * hover/focus it — but its accessible name is just "AI", never the
+   * attribute's own label, so it can never share an accessible name+role with
+   * a same-label real control elsewhere on the page (e.g. the browse filter's
+   * "Dedicated fryer" toggle — Playwright's `getByRole` name matching is
+   * substring-based, so keeping the trigger's name label-free is what actually
+   * prevents the collision, not a text prefix/suffix).
    */
   suggested?: boolean;
   className?: string;
@@ -37,7 +50,7 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
   const label = CLAIM_ATTRIBUTE_LABELS[attribute];
   const Icon = suggested ? Sparkles : CLAIM_ATTRIBUTE_ICONS[attribute];
 
-  const chip = (
+  const badge = (
     <Badge
       variant="outline"
       data-testid={suggested ? "suggested-attribute" : "claim-badge"}
@@ -48,36 +61,37 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
       )}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-      {/* Screen-reader-only "Suggested: " prefix: the visible chip carries the
-          distinction via the Sparkles icon + gradient ring alone (no visible
-          text prefix, per the owner's subtler-styling call), but the
-          accessible name must still differ from a same-label real control
-          elsewhere on the page (e.g. the browse filter's "Dedicated fryer"
-          chip) — without this, both resolve to the identical accessible name
-          and role, an ambiguity for assistive tech as real as the visual one
-          the icon/gradient already solve for sighted users. */}
-      {suggested ? <span className="sr-only">Suggested: </span> : null}
+      {suggested ? (
+        // The "AI" tag is REAL, always-painted text (never hover/focus-gated —
+        // the touch-accessible path) AND the tooltip's only trigger. Its
+        // accessible name is deliberately just "AI", not the attribute label,
+        // so it never collides with a same-label real control elsewhere (see
+        // the `suggested` prop doc above).
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="rounded-sm text-[10px] font-bold uppercase tracking-wide text-brand underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+            >
+              AI
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Suggested by Aubrey's Bot — not yet confirmed by the community.
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <span>{label}</span>
     </Badge>
   );
 
   if (!suggested) {
-    return chip;
+    return badge;
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex shrink-0 cursor-help rounded-md bg-gradient-to-r from-brand via-accent-lavender to-accent-peach p-[1.5px] outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
-        >
-          {chip}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>
-        Suggested by Aubrey's Bot — not yet confirmed by the community.
-      </TooltipContent>
-    </Tooltip>
+    <span className="inline-flex shrink-0 rounded-md bg-gradient-to-r from-brand via-accent-lavender to-accent-peach p-[1.5px]">
+      {badge}
+    </span>
   );
 }

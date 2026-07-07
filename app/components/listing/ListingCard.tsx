@@ -52,10 +52,12 @@ export interface RestaurantCardVM {
   suggestedByBot: boolean;
   /**
    * The claim attributes the bot suggested that are still live (deduped, in
-   * taxonomy order). Each renders as a bot-provenance badge in the badge row
-   * with a VISIBLE "Suggested:" prefix plus the lavender + Sparkles treatment —
-   * clearly distinct from real evidence signals without relying on colour
-   * (ADR-007: a suggestion must never read as a community-confirmed verdict).
+   * taxonomy order). Each renders as a shared {@link ClaimBadge} (`suggested`
+   * variant) in the badge row: Sparkles icon, gradient ring, and an always-
+   * visible "AI" tag — clearly distinct from real evidence signals without
+   * relying on colour alone or on a hover/focus-only tooltip (ADR-007: a
+   * suggestion must never read as a community-confirmed verdict, and that
+   * distinction must reach touch-only users too).
    */
   suggestedAttributes: ClaimAttribute[];
   /** A recent "got glutened" report flags the card regardless of confirmations. */
@@ -312,9 +314,10 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           {/* Curator-bot suggested claims (AUB-31, owner nit 7): one shared
               {@link ClaimBadge} per live-suggested attribute — PROVENANCE, never
               evidence (ADR-007). The suggested variant swaps in the Sparkles
-              "AI-suggested" icon and a gradient ring, with the "not yet
-              confirmed" gloss in its tooltip rather than a visible text prefix
-              (owner call: distinct icon + colour treatment is enough here). */}
+              icon, a gradient ring, and an always-visible "AI" tag (terser than
+              the old "Suggested: " prefix, but still a real painted text label
+              alongside the icon — never colour/shape alone, and never gated on
+              a hover/focus-only tooltip that touch users could never reach). */}
           {vm.suggestedAttributes.map((attribute) => (
             <ClaimBadge key={attribute} attribute={attribute} suggested />
           ))}

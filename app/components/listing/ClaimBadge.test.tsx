@@ -14,28 +14,34 @@ describe("ClaimBadge", () => {
     expect(screen.getByText("Dedicated fryer")).toBeInTheDocument();
   });
 
-  it("swaps in the suggested variant: Sparkles icon, gradient ring, and a tooltip instead of visible prefix text", async () => {
+  it("swaps in the suggested variant: Sparkles icon, gradient ring, an always-visible AI tag, and a supplementary tooltip", async () => {
     render(<ClaimBadge attribute="off_menu_gf_on_request" suggested />);
     const badge = screen.getByTestId("suggested-attribute");
     expect(badge).toHaveTextContent("Off-menu GF on request");
-    // The tooltip is keyboard-reachable (a real <button> trigger) and carries
-    // the "not yet confirmed" gloss that the visible chip no longer states.
-    const trigger = badge.closest("[data-slot='tooltip-trigger']") as HTMLElement;
-    fireEvent.focus(trigger);
+    // The "AI" tag is REAL, always-painted text — not hover/focus-gated — so
+    // it renders even without any interaction (the touch-accessible path).
+    const aiTrigger = screen.getByRole("button", { name: "AI" });
+    expect(aiTrigger).toBeInTheDocument();
+    // The tooltip is a SUPPLEMENTARY channel on top of that, reachable via the
+    // "AI" button's own focus, carrying the fuller "not yet confirmed" gloss.
+    fireEvent.focus(aiTrigger);
     const tip = await screen.findByRole("tooltip");
     expect(tip).toHaveTextContent(/not yet confirmed by the community/i);
   });
 
-  it("carries a sr-only 'Suggested: ' prefix in its accessible name (not visible text) so it never shares an accessible name with a same-label real control (e.g. a browse filter chip)", () => {
+  it("shows the AI tag on render alone, with no interaction — the touch-accessible path, since Radix's tooltip never opens on touch", () => {
     render(<ClaimBadge attribute="dedicated_fryer" suggested />);
-    // The accessible name (what a screen reader announces, and what Playwright's
-    // getByRole name-matching uses) is prefix-qualified...
-    expect(
-      screen.getByRole("button", { name: /suggested:\s*dedicated fryer/i })
-    ).toBeInTheDocument();
-    // ...but the prefix itself is visually hidden (sr-only), never painted.
-    const srPrefix = screen.getByText("Suggested:", { exact: false });
-    expect(srPrefix).toHaveClass("sr-only");
+    // No focus/hover/click fired at all: a touch tap that never opens the
+    // tooltip still leaves this visible on the page.
+    expect(screen.getByRole("button", { name: "AI" })).toBeVisible();
+  });
+
+  it("keeps the 'AI' trigger's accessible name label-free, so it can never share an accessible name+role with a same-label real control elsewhere on the page (e.g. a browse filter chip) — Playwright's getByRole name matching is substring-based, so a text prefix/suffix on the attribute label could never disambiguate; only a label-free trigger name actually prevents the collision", () => {
+    render(<ClaimBadge attribute="dedicated_fryer" suggested />);
+    // No button on this badge is named after the attribute label at all.
+    expect(screen.queryByRole("button", { name: /dedicated fryer/i })).not.toBeInTheDocument();
+    // The only button is the "AI" trigger, a real natively-focusable element.
+    expect(screen.getByRole("button", { name: "AI" })).toBeInTheDocument();
   });
 
   it("keeps the confirmed and suggested variants structurally distinct via data-testid", () => {
