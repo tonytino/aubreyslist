@@ -12,8 +12,15 @@ import { describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
 import type { Listing } from "~/db/schema";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
+import type { PlacePhoto } from "~/server/places-photos";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
-import { ListingCard, listingToCardVM, RestaurantCard, type RestaurantCardVM } from "./ListingCard";
+import {
+  CARD_PHOTO_MAX_WIDTH_PX,
+  ListingCard,
+  listingToCardVM,
+  RestaurantCard,
+  type RestaurantCardVM,
+} from "./ListingCard";
 
 // The card now embeds the FavoriteButton island (F6, AUB-125), which imports the
 // `favorites.fn` server seam. That seam transitively pulls in the db-touching
@@ -494,6 +501,42 @@ describe("RestaurantCard", () => {
     expect(img).toHaveAttribute("src", "https://cdn.example.com/root-and-rye.jpg");
     expect(screen.queryByText("Food photo")).not.toBeInTheDocument();
   });
+
+  it("the <img> is decorative and lazy (AUB-219)", async () => {
+    renderCard({ photoUrl: "https://cdn.example.com/root-and-rye.jpg" });
+    const img = await screen.findByTestId("food-photo");
+    expect(img).toHaveAttribute("alt", "");
+    expect(img).toHaveAttribute("loading", "lazy");
+  });
+
+  it("falls back to the gradient placeholder when the photo fails to load (AUB-219)", async () => {
+    renderCard({ photoUrl: "https://cdn.example.com/root-and-rye.jpg" });
+    const img = await screen.findByTestId("food-photo");
+
+    fireEvent.error(img);
+
+    expect(await screen.findByText("Food photo")).toBeInTheDocument();
+    expect(screen.queryByTestId("food-photo")).not.toBeInTheDocument();
+  });
+
+  it("renders the compact author-attribution overlay as plain text (no nested link) when present (AUB-219)", async () => {
+    renderCard({
+      photoUrl: "https://cdn.example.com/root-and-rye.jpg",
+      photoAttributions: [{ displayName: "A Diner" }, { displayName: "B Baker" }],
+    });
+
+    const credit = await screen.findByTestId("food-photo-attribution");
+    expect(credit).toHaveTextContent("Photo: A Diner, B Baker");
+    // Attribution sits INSIDE the stretched-link media tile — an <a> there would
+    // nest inside the card's own <a>, so it must render as plain text, not a link.
+    expect(screen.queryByRole("link", { name: "A Diner" })).not.toBeInTheDocument();
+  });
+
+  it("omits the attribution overlay when the photo carries no attributions", async () => {
+    renderCard({ photoUrl: "https://cdn.example.com/root-and-rye.jpg", photoAttributions: [] });
+    await screen.findByTestId("food-photo");
+    expect(screen.queryByTestId("food-photo-attribution")).not.toBeInTheDocument();
+  });
 });
 
 describe("ListingCard (mapping wrapper)", () => {
@@ -584,5 +627,46 @@ describe("listingToCardVM (bot-provenance threading)", () => {
     // render no pill — the prop stays truly absent, not `undefined`.
     const vm = listingToCardVM(baseListing, glance);
     expect("saveCount" in vm).toBe(false);
+  });
+});
+
+describe("listingToCardVM (photo threading, AUB-219)", () => {
+  const glance: ListingTrustGlance = {
+    safetyState: "celiac-safe",
+    hasRecentIncident: false,
+    evidence: null,
+    freshness: null,
+    suggestedByBot: false,
+    suggestedAttributes: [],
+  };
+
+  const photo: PlacePhoto = {
+    photoToken: "places/ChIJ_place/photos/resource-1",
+    widthPx: 4032,
+    heightPx: 3024,
+    attributions: [{ displayName: "A Diner", uri: "https://maps.google.com/maps/contrib/123" }],
+  };
+
+  it("builds photoUrl through the SAME media-proxy helper the hero uses, at the card's width, and threads attributions", () => {
+    const vm = listingToCardVM(baseListing, glance, undefined, undefined, photo);
+    expect(vm.photoUrl).toBe(
+      `/api/places/photo?name=${encodeURIComponent(photo.photoToken)}&maxWidthPx=${CARD_PHOTO_MAX_WIDTH_PX}`
+    );
+    expect(vm.photoAttributions).toEqual(photo.attributions);
+  });
+
+  it("leaves photoUrl/photoAttributions absent when no photo is supplied (optional trailing param)", () => {
+    // Callers that haven't fetched photos (favorites, a caller mid-loading)
+    // simply omit the arg — the props stay truly absent, not `undefined`, so
+    // the card falls back to its existing gradient placeholder unchanged.
+    const vm = listingToCardVM(baseListing, glance);
+    expect("photoUrl" in vm).toBe(false);
+    expect("photoAttributions" in vm).toBe(false);
+  });
+
+  it("omits photo fields when explicitly passed undefined (a batch miss for this listing)", () => {
+    const vm = listingToCardVM(baseListing, glance, undefined, undefined, undefined);
+    expect("photoUrl" in vm).toBe(false);
+    expect("photoAttributions" in vm).toBe(false);
   });
 });

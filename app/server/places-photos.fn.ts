@@ -1,5 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
-import { listingPhotosInputSchema, type PlacePhoto, runListingPhotos } from "./places-photos";
+import {
+  getPhotosForListings,
+  type ListingPhotoMap,
+  listingIdsInputSchema,
+  listingPhotosInputSchema,
+  type PlacePhoto,
+  runListingPhotos,
+} from "./places-photos";
 
 /**
  * Client-callable listing-photos server function (AUB-215).
@@ -25,3 +32,24 @@ import { listingPhotosInputSchema, type PlacePhoto, runListingPhotos } from "./p
 export const fetchListingPhotos = createServerFn({ method: "GET" })
   .validator(listingPhotosInputSchema)
   .handler(async ({ data }): Promise<PlacePhoto[]> => runListingPhotos(data));
+
+/**
+ * Client-callable BATCH listing-photos server function (AUB-219).
+ *
+ * The browse route's List/Map surfaces import this — never `./places-photos`
+ * directly — so their client bundle stays free of `getDb`/`GOOGLE_PLACES_API_KEY`
+ * handling, exactly like {@link fetchListingPhotos} above.
+ *
+ * Open/anonymous READ, like the browse page itself: it takes the CURRENT
+ * page's listing ids (never a raw Place ID from the client), batches the
+ * Place ID lookup and the upstream photo fetch server-side, and answers a
+ * listing-id -> photo map through the same per-Place-ID cache
+ * {@link fetchListingPhotos} warms — so a place's photo is fetched at most once
+ * per {@link PLACE_PHOTOS_CACHE_TTL_MS} window no matter which surface (hero,
+ * list card, map carousel) asks for it first.
+ *
+ * Server-only at runtime; safe to import from client modules.
+ */
+export const fetchBrowsePhotos = createServerFn({ method: "GET" })
+  .validator(listingIdsInputSchema)
+  .handler(async ({ data }): Promise<ListingPhotoMap> => getPhotosForListings(data));
