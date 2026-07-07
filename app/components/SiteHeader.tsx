@@ -1,46 +1,34 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Info, Menu, Plus, Search } from "lucide-react";
-import type { ComponentType } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { previewLoginEnabledQuery } from "~/auth/preview-login-query";
+import { CTA_NAV_TO, NAV_ITEMS } from "~/components/nav-items";
+import { SiteMenu } from "~/components/SiteMenu";
 import { ThemeToggle } from "~/components/ThemeToggle";
 import { UserMenu } from "~/components/UserMenu";
 import { Button } from "~/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
 import { Wordmark } from "~/components/Wordmark";
-
-interface NavItem {
-  to: string;
-  label: string;
-  Icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }> | null;
-}
-
-// Primary navigation. Each item targets its real, existing route so the active
-// state is accurate.
-const NAV_ITEMS: readonly NavItem[] = [
-  { to: "/", label: "Browse", Icon: Search },
-  { to: "/listings/new", label: "Add a listing", Icon: Plus },
-  { to: "/about", label: "About", Icon: Info },
-];
 
 /**
  * App header. Reads the prefetched current-user query (hydrated from the root
- * loader) and passes the result into the presentational `UserMenu`, so the auth
+ * loader) and passes the result into the presentational menus, so the auth
  * state renders correctly on first paint with no useEffect/useState fetch.
  *
- * Layout is MOBILE-FIRST and identical at every breakpoint (see
- * docs/agents/styling.md → Mobile-first): a hamburger menu on the left holds the
- * primary nav, the brand wordmark is centred, and the theme toggle + account
- * menu sit on the right. The three-column grid (`1fr auto 1fr`) keeps the
- * wordmark optically centred regardless of the side content. The
- * `<nav aria-label="Primary">` wraps the hamburger trigger so the navigation
- * landmark persists even though the items live in a portaled menu.
+ * Layout is MOBILE-FIRST (see docs/agents/styling.md → Mobile-first) with ONE
+ * breakpoint switch at `sm` (640px), an owner-approved consolidation:
+ *
+ *  - Below `sm`: a flex row of left-aligned wordmark + a single right-anchored
+ *    combined menu (`SiteMenu`) that holds the primary nav AND the account
+ *    controls (theme toggle folded in as a row). No left hamburger. The
+ *    `<nav aria-label="Primary">` landmark wraps the menu trigger so the
+ *    navigation landmark persists even though the items live in a portaled menu.
+ *  - `sm:`+ : the layout splits back apart — inline primary nav links
+ *    (directly reachable, "Add a listing" as the brand-purple CTA), a
+ *    standalone `ThemeToggle`, and the avatar `UserMenu` in the right cluster.
+ *
+ * Exactly one `Primary` nav landmark and one theme control are display-visible
+ * at any width (the other variant is CSS-hidden), so the a11y tree never
+ * doubles up.
  *
  * ALWAYS-VISIBLE (user feedback #2): the header is `sticky top-0` with an opaque
  * `bg-background` so the primary nav stays reachable at any scroll position. Its
@@ -57,51 +45,40 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background">
-      <div className="mx-auto grid h-16 w-full max-w-[96rem] grid-cols-[1fr_auto_1fr] items-center gap-x-2 px-4 sm:px-6">
-        {/* Left: primary nav as a hamburger menu — the same experience at every
-            size. The nav items live in a portaled dropdown; the landmark wraps
-            the trigger so it persists. */}
-        <nav aria-label="Primary" className="justify-self-start">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              {/* Touch ergonomics: >= 44px hit area on coarse pointers (the
-                  icon-size Button is 36px, fine for a mouse but tight for a
-                  thumb). Item/panel touch sizing lives in ui/dropdown-menu. */}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="pointer-coarse:size-11"
-                aria-label="Open menu"
-              >
-                <Menu aria-hidden className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            {/* Wider panel on touch so icons + labels breathe at 375px. */}
-            <DropdownMenuContent align="start" className="w-48 pointer-coarse:w-60">
-              {NAV_ITEMS.map((item) => (
-                <DropdownMenuItem key={item.label} asChild>
-                  <Link to={item.to}>
-                    {item.Icon ? <item.Icon aria-hidden className="h-4 w-4" /> : null}
-                    {item.label}
-                  </Link>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </nav>
-
-        {/* Centre: brand wordmark, links home. */}
-        <Link
-          to="/"
-          aria-label="Aubrey's List home"
-          className="justify-self-center whitespace-nowrap"
-        >
+      <div className="mx-auto flex h-16 w-full max-w-[96rem] items-center gap-2 px-4 sm:px-6">
+        {/* Left: brand wordmark, links home. Left-aligned (owner decision 2) —
+            it takes the space the removed left hamburger vacated. */}
+        <Link to="/" aria-label="Aubrey's List home" className="whitespace-nowrap">
           <Wordmark size="sm" />
         </Link>
 
-        {/* Right: theme toggle + account menu / sign-in. */}
-        <div className="flex items-center justify-self-end gap-1 sm:gap-2">
+        {/* Desktop (`sm:`+) inline primary nav — directly reachable links, no
+            dropdown. "Add a listing" reads as the brand-purple primary CTA. */}
+        <nav aria-label="Primary" className="ml-2 hidden items-center gap-1 sm:flex md:ml-4">
+          {NAV_ITEMS.map((item) => {
+            const isCta = item.to === CTA_NAV_TO;
+            return (
+              <Button key={item.label} asChild size="sm" variant={isCta ? "default" : "ghost"}>
+                <Link to={item.to}>
+                  {item.Icon ? <item.Icon aria-hidden className="h-4 w-4" /> : null}
+                  {item.label}
+                </Link>
+              </Button>
+            );
+          })}
+        </nav>
+
+        {/* Spacer pushes the right cluster to the edge in both layouts. */}
+        <div className="flex-1" />
+
+        {/* Mobile (below `sm`): the combined menu, wrapped so the Primary nav
+            landmark persists (the menu's items are portaled out of the nav). */}
+        <nav aria-label="Primary" className="sm:hidden">
+          <SiteMenu user={user} previewLoginEnabled={previewLoginEnabled} />
+        </nav>
+
+        {/* Desktop (`sm:`+) right cluster: standalone theme toggle + account. */}
+        <div className="hidden items-center gap-1 sm:flex sm:gap-2">
           <ThemeToggle />
           <UserMenu user={user} previewLoginEnabled={previewLoginEnabled} />
         </div>

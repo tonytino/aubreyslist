@@ -1,6 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 
+import { waitForHydration } from "./helpers";
+
 /**
  * Accessibility gate (issue #192, part of #178).
  *
@@ -81,3 +83,58 @@ for (const path of PUBLIC_DB_FREE_PAGES) {
     ).toEqual([]);
   });
 }
+
+/**
+ * Mobile header coverage. The loop above runs at the ~1280px default width, where
+ * the responsive header shows its `sm:`+ split layout and the combined `SiteMenu`
+ * is `sm:hidden` — so its portaled dropdown gets ZERO axe coverage there. Below
+ * `sm` (375px, the minimum supported width) the header collapses into that single
+ * combined menu, so we scan it both CLOSED (mobile header chrome) and OPEN (the
+ * portaled Navigate + Account panel is in the DOM). `/about` is the DB-free page
+ * that renders the real header signed-out, so it works in this always-on lane.
+ */
+test.describe("mobile header (375px)", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test("a11y: mobile header + open combined menu have no WCAG 2 A/AA violations", async ({
+    page,
+  }) => {
+    await page.goto("/about");
+    await page.waitForLoadState("networkidle");
+
+    // (a) Closed mobile header chrome.
+    {
+      const { violations, summary } = await analyze(page);
+      if (violations.length > 0) {
+        console.error(
+          `axe violations on /about (375px, menu closed):\n${JSON.stringify(summary, null, 2)}`
+        );
+      }
+      expect(
+        violations,
+        `axe found ${violations.length} WCAG 2 A/AA violation(s) on the closed mobile header — see console output above`
+      ).toEqual([]);
+    }
+
+    // (b) Open the combined menu (portals its Navigate + Account content into the
+    // DOM) and re-scan. The trigger only opens after hydration.
+    await waitForHydration(page);
+    const nav = page.getByRole("navigation", { name: "Primary" });
+    await nav.getByRole("button", { name: "Open menu" }).click();
+    // Wait for the portaled panel to be present before scanning.
+    await expect(page.getByRole("menuitem", { name: "Browse" })).toBeVisible();
+
+    {
+      const { violations, summary } = await analyze(page);
+      if (violations.length > 0) {
+        console.error(
+          `axe violations on /about (375px, menu open):\n${JSON.stringify(summary, null, 2)}`
+        );
+      }
+      expect(
+        violations,
+        `axe found ${violations.length} WCAG 2 A/AA violation(s) on the open combined menu — see console output above`
+      ).toEqual([]);
+    }
+  });
+});
