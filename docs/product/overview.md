@@ -64,8 +64,12 @@ well-attested Denver listings are worth more than 50 scattered nationwide.
 ### Explicitly deferred (tracked in the post-launch backlog)
 
 Photo / menu **image uploads** (no blob storage in v1 — an optional menu-link
-**URL** field is the v1 substitute) · embedded **map view** (we deep-link to
-Google Maps instead) · **reputation scoring / badges** · **notifications** ·
+**URL** field is the v1 substitute; *user uploads stay deferred even after the
+2026-07-06 revision below*) · embedded **map view** (~~we deep-link to Google
+Maps instead~~ — **revised 2026-07-06** by owner direction: embedded map and
+render-time Google place *photos* are now in scope under the GMP usage policy
+in **ADR-014**; deep-link remains the no-key fallback) · **reputation scoring /
+badges** · **notifications** ·
 **restaurant-owner claims/responses** · **multi-city** expansion · **Cloudflare**
 deployment (post-launch learning exercise — see ADR-009) · **ads** (revenue,
 which gates any paid-tier spend).

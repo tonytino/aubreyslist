@@ -3,9 +3,9 @@ import { createListingInputSchema } from "./create-input";
 
 /**
  * Unit tests for the CLIENT-SAFE add-listing input schema (issue #141; the
- * menuUrl scheme allowlist is #90). These prove the validator the `submitCreateListing`
- * server fn binds works from the db-free module, including the http(s)-only
- * guard that blocks the stored-XSS vector.
+ * typed-links scheme allowlist is #90 / AUB-202). These prove the validator the
+ * `submitCreateListing` server fn binds works from the db-free module,
+ * including the http(s)-only guard that blocks the stored-XSS vector.
  */
 
 const placesBase = { mode: "places" as const, placeId: "place-123" };
@@ -58,32 +58,58 @@ describe("createListingInputSchema — discriminated union", () => {
   });
 });
 
-describe("createListingInputSchema — menuUrl scheme allowlist (#90)", () => {
-  it("accepts an https menu URL", () => {
-    expect(
-      createListingInputSchema.safeParse({ ...manualBase, menuUrl: "https://example.com/menu" })
-        .success
-    ).toBe(true);
+describe("createListingInputSchema — typed links (#90, AUB-202)", () => {
+  it("accepts an omitted links array (all fields left blank)", () => {
+    const result = createListingInputSchema.safeParse(manualBase);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.links).toBeUndefined();
+    }
+  });
+
+  it("accepts a set of typed https links in both modes", () => {
+    const links = [
+      { kind: "menu", url: "https://example.com/menu" },
+      { kind: "website", url: "https://example.com" },
+    ];
+    expect(createListingInputSchema.safeParse({ ...manualBase, links }).success).toBe(true);
+    expect(createListingInputSchema.safeParse({ ...placesBase, links }).success).toBe(true);
   });
 
   it("rejects a javascript: scheme URL", () => {
     expect(
-      createListingInputSchema.safeParse({ ...manualBase, menuUrl: "javascript:alert(1)" }).success
+      createListingInputSchema.safeParse({
+        ...manualBase,
+        links: [{ kind: "menu", url: "javascript:alert(1)" }],
+      }).success
     ).toBe(false);
   });
 
   it("rejects a data: scheme URL", () => {
     expect(
-      createListingInputSchema.safeParse({ ...manualBase, menuUrl: "data:text/html,<script>" })
-        .success
+      createListingInputSchema.safeParse({
+        ...manualBase,
+        links: [{ kind: "menu", url: "data:text/html,<script>" }],
+      }).success
     ).toBe(false);
   });
 
-  it("normalises a blank menuUrl to undefined", () => {
-    const result = createListingInputSchema.safeParse({ ...manualBase, menuUrl: "" });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.menuUrl).toBeUndefined();
-    }
+  it("rejects a duplicate kind (one link per kind)", () => {
+    expect(
+      createListingInputSchema.safeParse({
+        ...manualBase,
+        links: [
+          { kind: "menu", url: "https://example.com/a" },
+          { kind: "menu", url: "https://example.com/b" },
+        ],
+      }).success
+    ).toBe(false);
+  });
+
+  it("rejects a blank URL entry (blanks are dropped client-side, never submitted)", () => {
+    expect(
+      createListingInputSchema.safeParse({ ...manualBase, links: [{ kind: "menu", url: "" }] })
+        .success
+    ).toBe(false);
   });
 });

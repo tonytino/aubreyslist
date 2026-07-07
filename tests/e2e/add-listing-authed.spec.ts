@@ -10,9 +10,10 @@ import { waitForHydration } from "./helpers";
  * This spec covers the authenticated happy path end-to-end through the 7-step
  * claim wizard: with intake forced to `manual` (the deterministic, Places-key-
  * free mode — default is `places`, ADR-008) and a sealed session cookie, find
- * the place manually, skip every claim (skip writes nothing; the create still
- * succeeds), submit, then follow the success screen's "View your listing" and
- * assert it lands on the new listing's detail page showing the entered name.
+ * the place manually, add typed links (menu + website, AUB-202), skip every
+ * claim (skip writes nothing; the create still succeeds), submit, then follow
+ * the success screen's "View your listing" and assert it lands on the new
+ * listing's detail page showing the entered name and the typed link buttons.
  *
  * Manual intake is the simplest deterministic mode — `places` would require the
  * Google Places provider. Self-skips without the CI E2E DB / session secret.
@@ -66,7 +67,12 @@ test.describe("add a listing (authenticated, manual intake)", () => {
     await expect(useThisPlace).toBeEnabled();
     await useThisPlace.click();
 
-    // Selected-place confirmation card → Continue into the claim steps.
+    // Selected-place confirmation card: add two typed links (AUB-202) — the
+    // other three kinds stay blank and must not be submitted — then Continue
+    // into the claim steps. Labels are exact: "Menu" must not match
+    // "Gluten-free menu".
+    await page.getByLabel("Menu", { exact: true }).fill("https://new-spot.example/menu");
+    await page.getByLabel("Website", { exact: true }).fill("https://new-spot.example");
     await page.getByRole("button", { name: "Continue" }).click();
 
     // Steps 1–5 — skip every attribute. Skip writes nothing (first-class), and
@@ -88,5 +94,18 @@ test.describe("add a listing (authenticated, manual intake)", () => {
     await expect(page).toHaveURL(/\/listings\/[^/]+$/);
     await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
     await expect(page.getByText("42 Gluten-Free Ave, Denver, CO")).toBeVisible();
+
+    // The typed links captured at intake render as buttons in the Links
+    // section, in LINK_KINDS order (AUB-202); the blank kinds render nothing.
+    const linksSection = page.getByRole("region", { name: "Links" });
+    const menuLink = linksSection.getByRole("link", { name: "Menu", exact: true });
+    await expect(menuLink).toBeVisible();
+    await expect(menuLink).toHaveAttribute("href", "https://new-spot.example/menu");
+    const websiteLink = linksSection.getByRole("link", { name: "Website", exact: true });
+    await expect(websiteLink).toBeVisible();
+    await expect(websiteLink).toHaveAttribute("href", "https://new-spot.example");
+    await expect(linksSection.getByRole("link", { name: "Reservations", exact: true })).toHaveCount(
+      0
+    );
   });
 });

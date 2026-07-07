@@ -37,5 +37,7 @@ export const submitCreateListing = createServerFn({ method: "POST" })
     );
     const user = await requireCurrentUser();
     await enforceWriteLimit(user.id);
-    return runCreateListing(data);
+    // The user id rides along as the `createdBy` provenance for any typed
+    // links the intake collected (AUB-202).
+    return runCreateListing(data, user.id);
   });
