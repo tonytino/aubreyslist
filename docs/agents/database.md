@@ -277,6 +277,13 @@ away from the seed so `pnpm db:seed` is **API-free**:
   query keeps resolving to the same Google Place ID. If Google ever returns a
   different Place ID for the same spot, it would seed as a separate listing — rare,
   and a real user can flag/merge it.)
+- **Typed menu links (AUB-220):** an entry's `menuUrl` (the source field name is
+  unchanged) is seeded as a `menu`-kind `listing_links` row (`created_by` null),
+  never the legacy `listings.menu_url` column — and **only for listings the run
+  itself inserted**. An existing listing is never touched: `onConflictDoNothing`
+  would protect a user-edited link, but a user who *removed* their menu link
+  leaves no row to conflict with, so seeding into existing listings would
+  resurrect deleted links on every re-run.
 
 ### Per-environment
 
