@@ -19,8 +19,12 @@ describe("ClaimBadge", () => {
     const badge = screen.getByTestId("suggested-attribute");
     expect(badge).toHaveTextContent("Off-menu GF on request");
     // The suggested variant keeps the attribute's OWN glyph (AUB-225) — it is no
-    // longer swapped for a generic Sparkles icon.
-    expect(badge.querySelector("svg")).not.toBeNull();
+    // longer swapped for a generic Sparkles icon. lucide stamps the glyph name
+    // onto the svg's class (`lucide-concierge-bell` for off_menu_gf_on_request's
+    // ConciergeBell), so assert THAT specific icon and, explicitly, NOT Sparkles.
+    const iconClass = badge.querySelector("svg")?.getAttribute("class") ?? "";
+    expect(iconClass).toContain("lucide-concierge-bell");
+    expect(iconClass).not.toContain("lucide-sparkles");
     // The "AI" tag is REAL, always-painted text — not hover/focus-gated — so
     // it renders even without any interaction (the touch-accessible path).
     const aiTrigger = screen.getByRole("button", { name: "AI" });
