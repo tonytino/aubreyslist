@@ -291,7 +291,14 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
         </p>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        {/* `relative z-10` (matching AttributedPill/FavoriteButton above): the
+            suggested-attribute ClaimBadge's "AI" tooltip trigger is a real
+            interactive <button>, so this row must be raised above the card's
+            stretched-link overlay (`after:absolute after:inset-0` on the media
+            Link) or that overlay intercepts every pointer event over it —
+            hover/click would silently never reach the button, even though
+            keyboard Tab-focus still works (hit-testing doesn't gate focus). */}
+        <div className="relative z-10 mt-2 flex flex-wrap items-center gap-2">
           {vm.safetyState ? (
             <SafetySignal state={vm.safetyState} />
           ) : vm.suggestedByBot ? null : (
