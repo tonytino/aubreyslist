@@ -48,6 +48,15 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
       )}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {/* Screen-reader-only "Suggested: " prefix: the visible chip carries the
+          distinction via the Sparkles icon + gradient ring alone (no visible
+          text prefix, per the owner's subtler-styling call), but the
+          accessible name must still differ from a same-label real control
+          elsewhere on the page (e.g. the browse filter's "Dedicated fryer"
+          chip) — without this, both resolve to the identical accessible name
+          and role, an ambiguity for assistive tech as real as the visual one
+          the icon/gradient already solve for sighted users. */}
+      {suggested ? <span className="sr-only">Suggested: </span> : null}
       <span>{label}</span>
     </Badge>
   );
