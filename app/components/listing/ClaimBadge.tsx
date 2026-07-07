@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { BADGE_FAMILY_SIZE } from "~/components/badge-size";
 import { Badge } from "~/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
@@ -14,25 +14,26 @@ export interface ClaimBadgeProps {
    * should only pass `true` while there is no real evidence yet, matching
    * {@link import("~/trust/summary").summarizeClaim}'s `suggested` guard).
    *
-   * The suggested variant swaps the attribute's own glyph for the `Sparkles`
-   * "AI-suggested" icon, wraps the chip in a vibrant purple gradient ring, and
-   * shows a compact always-visible "AI" tag next to the icon — a terser stand-in
-   * for the old "Suggested: " text prefix (owner's call: less shouty than
-   * restating the full label), but still a real, always-painted text label
-   * alongside the icon, never resting on colour/shape alone or on a
-   * hover/focus-only tooltip. That matters because Radix's Tooltip primitive
-   * never opens on touch (verified: `onPointerMove`/`onFocus`/`onClick` all
-   * ignore or actively close a touch-originated interaction), so a
-   * tooltip-only cue would be silently unreachable for touch users — exactly
-   * the "suggestion misread as a confirmed verdict" harm ADR-007 exists to
-   * prevent. The "AI" tag is itself the (only) tooltip trigger, carrying the
-   * fuller "not yet confirmed by the community" gloss for anyone who does
-   * hover/focus it — but its accessible name is just "AI", never the
-   * attribute's own label, so it can never share an accessible name+role with
-   * a same-label real control elsewhere on the page (e.g. the browse filter's
-   * "Dedicated fryer" toggle — Playwright's `getByRole` name matching is
-   * substring-based, so keeping the trigger's name label-free is what actually
-   * prevents the collision, not a text prefix/suffix).
+   * The suggested variant KEEPS the attribute's OWN glyph
+   * (`CLAIM_ATTRIBUTE_ICONS[attribute]`, e.g. Flame / BookOpen / ConciergeBell /
+   * Replace) — it is no longer swapped for a generic `Sparkles` icon (AUB-225).
+   * The vibrant purple gradient ring plus the compact always-visible "AI" marker,
+   * now rendered AFTER the label (`[attribute icon] [label] [AI marker]`), are
+   * enough to signal "AI-suggested" without hiding which attribute it is. The
+   * "AI" marker is a real, always-painted text label alongside the icon, never
+   * resting on colour/shape alone or on a hover/focus-only tooltip. That matters
+   * because Radix's Tooltip primitive never opens on touch (verified:
+   * `onPointerMove`/`onFocus`/`onClick` all ignore or actively close a
+   * touch-originated interaction), so a tooltip-only cue would be silently
+   * unreachable for touch users — exactly the "suggestion misread as a confirmed
+   * verdict" harm ADR-007 exists to prevent. The "AI" marker is itself the (only)
+   * tooltip trigger, carrying the fuller "not yet confirmed by the community"
+   * gloss for anyone who does hover/focus it — but its accessible name is just
+   * "AI", never the attribute's own label, so it can never share an accessible
+   * name+role with a same-label real control elsewhere on the page (e.g. the
+   * browse filter's "Dedicated fryer" toggle — Playwright's `getByRole` name
+   * matching is substring-based, so keeping the trigger's name label-free is what
+   * actually prevents the collision, not a text prefix/suffix).
    */
   suggested?: boolean;
   className?: string;
@@ -45,28 +46,37 @@ export interface ClaimBadgeProps {
  * instead of hand-assembling its own icon+label(+tooltip) chip, which is how
  * attributes like `off_menu_gf_on_request` ended up missing from some surfaces
  * while present on others.
+ *
+ * Sizing/shape comes from the shared {@link BADGE_FAMILY_SIZE} (AUB-224), so this
+ * chip is the EXACT same size as the headline `SafetySignal` — the ONLY thing
+ * that sets the headline apart is its solid colour fill; the claim badges keep
+ * their soft/outline treatment at the identical size.
  */
 export function ClaimBadge({ attribute, suggested = false, className }: ClaimBadgeProps) {
   const label = CLAIM_ATTRIBUTE_LABELS[attribute];
-  const Icon = suggested ? Sparkles : CLAIM_ATTRIBUTE_ICONS[attribute];
+  // The suggested variant keeps the attribute's OWN icon (AUB-225) — the gradient
+  // ring + "AI" marker carry the provenance, so the glyph stays informative.
+  const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
 
   const badge = (
     <Badge
       variant="outline"
       data-testid={suggested ? "suggested-attribute" : "claim-badge"}
       className={cn(
-        "gap-1 px-2.5 py-1 text-caption font-medium text-foreground",
+        BADGE_FAMILY_SIZE,
+        "text-foreground",
         suggested ? "border-transparent bg-background" : "border-brand/25 bg-brand-soft",
         className
       )}
     >
-      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      <Icon aria-hidden="true" />
+      <span>{label}</span>
       {suggested ? (
-        // The "AI" tag is REAL, always-painted text (never hover/focus-gated —
-        // the touch-accessible path) AND the tooltip's only trigger. Its
-        // accessible name is deliberately just "AI", not the attribute label,
-        // so it never collides with a same-label real control elsewhere (see
-        // the `suggested` prop doc above).
+        // The "AI" marker is REAL, always-painted text (never hover/focus-gated —
+        // the touch-accessible path) AND the tooltip's only trigger, rendered
+        // AFTER the label (AUB-225). Its accessible name is deliberately just
+        // "AI", not the attribute label, so it never collides with a same-label
+        // real control elsewhere (see the `suggested` prop doc above).
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -81,7 +91,6 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
           </TooltipContent>
         </Tooltip>
       ) : null}
-      <span>{label}</span>
     </Badge>
   );
 
@@ -90,7 +99,7 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
   }
 
   return (
-    <span className="inline-flex shrink-0 rounded-md bg-gradient-to-r from-brand via-accent-lavender to-accent-peach p-[1.5px]">
+    <span className="inline-flex shrink-0 rounded-chip bg-gradient-to-r from-brand via-accent-lavender to-accent-peach p-[1.5px]">
       {badge}
     </span>
   );

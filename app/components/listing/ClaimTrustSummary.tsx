@@ -74,9 +74,12 @@ export function ClaimTrustSummaryRow({
         </p>
       ) : summary.suggested ? (
         // Curator-bot suggestion (AUB-31): a starter label seeded by "Aubrey's
-        // Bot" from public info, NOT community evidence. Same gradient-ring +
-        // Sparkles treatment as the shared `ClaimBadge` suggested variant, so
-        // every "suggested" surface in the app reads consistently. It clears the
+        // Bot" from public info, NOT community evidence. Shares the gradient-ring
+        // provenance treatment with the shared `ClaimBadge` suggested variant, so
+        // every "suggested" surface reads consistently. Here the Sparkles glyph
+        // pairs with a full "Suggested by Aubrey's Bot" text label (this is the
+        // provenance chip, not a per-attribute badge), whereas `ClaimBadge` keeps
+        // the attribute's own icon + an "AI" marker (AUB-225). It clears the
         // instant a real user confirms or disputes below.
         <Tooltip>
           <TooltipTrigger asChild>

@@ -14,14 +14,21 @@ describe("ClaimBadge", () => {
     expect(screen.getByText("Dedicated fryer")).toBeInTheDocument();
   });
 
-  it("swaps in the suggested variant: Sparkles icon, gradient ring, an always-visible AI tag, and a supplementary tooltip", async () => {
+  it("renders the suggested variant with the attribute's OWN icon, gradient ring, an always-visible AI marker AFTER the label, and a supplementary tooltip", async () => {
     render(<ClaimBadge attribute="off_menu_gf_on_request" suggested />);
     const badge = screen.getByTestId("suggested-attribute");
     expect(badge).toHaveTextContent("Off-menu GF on request");
+    // The suggested variant keeps the attribute's OWN glyph (AUB-225) — it is no
+    // longer swapped for a generic Sparkles icon.
+    expect(badge.querySelector("svg")).not.toBeNull();
     // The "AI" tag is REAL, always-painted text — not hover/focus-gated — so
     // it renders even without any interaction (the touch-accessible path).
     const aiTrigger = screen.getByRole("button", { name: "AI" });
     expect(aiTrigger).toBeInTheDocument();
+    // Render order is `[attribute icon] [label] [AI marker]` (AUB-225): the "AI"
+    // marker now comes AFTER the label, not before it.
+    expect(badge.textContent).toMatch(/Off-menu GF on request.*AI/s);
+    expect(badge.textContent?.trimStart().startsWith("AI")).toBe(false);
     // The tooltip is a SUPPLEMENTARY channel on top of that, reachable via the
     // "AI" button's own focus, carrying the fuller "not yet confirmed" gloss.
     fireEvent.focus(aiTrigger);
