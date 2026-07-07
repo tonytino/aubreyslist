@@ -25,6 +25,17 @@
  * exist — so a claim a real user has already engaged with is never re-suggested.
  * Re-run freely.
  *
+ * TYPED LINKS (AUB-220): an entry's `menuUrl` is inserted as a `menu`-kind
+ * `listing_links` row (`createdBy` null — no user performed the write), NEVER
+ * as the legacy `listings.menu_url` column, which nothing writes post-AUB-202.
+ * The link is seeded ONLY for listings this run itself inserted: on a Place-ID
+ * dedup hit the whole entry is standing data users may have edited, and a
+ * user-removed menu link leaves NO row behind, so `onConflictDoNothing` alone
+ * could not stop a re-run from resurrecting it (it only guards against an
+ * EXISTING row). Skipping existing listings entirely mirrors the retired
+ * backfill's semantics: typed rows are authoritative, seed re-runs never
+ * converge user-touched listings.
+ *
  * Runs via `node --experimental-strip-types` + the dependency-free alias loader
  * (`scripts/register-aliases.mjs`) — no `tsx`/`ts-node` dependency, same as
  * `db:seed-admin`.
@@ -32,7 +43,8 @@
 
 import { eq } from "drizzle-orm";
 import { getDb } from "~/db/client";
-import { claims, listings, users } from "~/db/schema";
+import { claims, listingLinks, listings, users } from "~/db/schema";
+import { isHttpUrl } from "~/server/listings/url";
 import { CURATOR_BOT, SEED_LISTINGS, type SeededListing } from "./seed-data";
 
 /** The real Drizzle client type, injected so tests can pass a structural mock. */
@@ -54,6 +66,8 @@ export interface SeedListingsResult {
   listingsExisting: number;
   /** Curator-bot label suggestions newly created this run. */
   claimsSuggested: number;
+  /** `menu`-kind `listing_links` rows seeded this run (newly inserted listings only). */
+  menuLinksSeeded: number;
   /** Entries skipped, with why (listing upsert failure). */
   skipped: Array<{ query: string; reason: string }>;
 }
@@ -95,11 +109,16 @@ export async function seedListings(
     listingsInserted: 0,
     listingsExisting: 0,
     claimsSuggested: 0,
+    menuLinksSeeded: 0,
     skipped: [],
   };
 
-  // 2. Per baked entry: upsert listing (Place-ID dedup) → suggest each label.
+  // 2. Per baked entry: upsert listing (Place-ID dedup) → seed its menu link
+  //    (newly inserted listings only) → suggest each label.
   for (const entry of data) {
+    // NOTE: the legacy `listings.menu_url` column is deliberately NOT written —
+    // nothing writes it post-AUB-202. The entry's `menuUrl` becomes a typed
+    // `menu`-kind `listing_links` row below instead (AUB-220).
     const inserted = await db
       .insert(listings)
       .values({
@@ -109,7 +128,6 @@ export async function seedListings(
         lat: entry.lat,
         lng: entry.lng,
         mapsUrl: resolveMapsUrl(entry),
-        menuUrl: entry.menuUrl ?? null,
       })
       .onConflictDoNothing({ target: listings.placeId })
       .returning({ id: listings.id });
@@ -134,6 +152,30 @@ export async function seedListings(
     }
     if (inserted[0]?.id === undefined) {
       result.listingsExisting += 1;
+    }
+
+    // Seed the typed menu link — ONLY for a listing this run itself inserted
+    // (AUB-220). An EXISTING listing is never touched: `onConflictDoNothing`
+    // would protect a user-edited menu row, but a user who REMOVED their menu
+    // link leaves no row for it to conflict with, so inserting into existing
+    // listings would resurrect deleted links on every re-seed. New listings
+    // have no user history, so the insert cannot conflict in practice — the
+    // guard is kept anyway (concurrent-run safety, and a user's edit between
+    // our insert and this write must win). Non-http(s) values are never copied
+    // into the typed table (#90), matching the retired backfill.
+    if (inserted[0]?.id !== undefined && entry.menuUrl != null) {
+      if (isHttpUrl(entry.menuUrl)) {
+        const linkInserted = await db
+          .insert(listingLinks)
+          .values({ listingId, kind: "menu", url: entry.menuUrl, createdBy: null })
+          .onConflictDoNothing({ target: [listingLinks.listingId, listingLinks.kind] })
+          .returning({ id: listingLinks.id });
+        if (linkInserted[0]?.id !== undefined) {
+          result.menuLinksSeeded += 1;
+        }
+      } else {
+        log(`SKIP  ${entry.name} — baked menuUrl is not http(s), link not seeded`);
+      }
     }
 
     // Suggest each label. `onConflictDoNothing` on the (listing, attribute) unique
@@ -207,7 +249,7 @@ export async function runCli(
     });
 
     log.log(
-      `Seed complete — bot=${result.botUserId} listings: +${result.listingsInserted} new, ${result.listingsExisting} existing · ${result.claimsSuggested} label(s) suggested · ${result.skipped.length} skipped.`
+      `Seed complete — bot=${result.botUserId} listings: +${result.listingsInserted} new, ${result.listingsExisting} existing · ${result.claimsSuggested} label(s) suggested · ${result.menuLinksSeeded} menu link(s) seeded · ${result.skipped.length} skipped.`
     );
     if (result.skipped.length > 0) {
       log.log(`Skipped: ${result.skipped.map((s) => s.query).join("; ")}`);

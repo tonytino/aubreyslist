@@ -18,7 +18,11 @@ import type { LinkKind } from "~/listings/links";
  *     `deleteListingLink` (the server also clears the legacy column) and never
  *     silently no-op,
  *   - the links query is invalidated even when the mutation fails mid-sequence
- *     (earlier writes already committed — the page must refetch what landed).
+ *     (earlier writes already committed — the page must refetch what landed),
+ *   - the dialog's mobile full-screen layout (AUB-221): full-viewport base
+ *     classes with sm: overrides restoring the centred dialog, and the
+ *     header/actions pinned OUTSIDE the one internal scroll region (structure
+ *     only — pixels are not assertable in jsdom).
  */
 
 const submitLinkMock = vi.fn((_args: unknown) => Promise.resolve({} as never));
@@ -293,6 +297,52 @@ describe("ListingLinks — edit dialog", () => {
       });
     });
     expect(submitLinkMock).not.toHaveBeenCalled();
+  });
+
+  it("is a full-screen takeover on mobile, restored to a capped centred dialog at sm+", async () => {
+    renderWithQuery(<ListingLinks {...baseProps()} isSignedIn />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add links" }));
+    const dialog = await screen.findByRole("dialog");
+
+    // Mobile base = full viewport (dvh for browser chrome) and square corners;
+    // sm: overrides restore the centred, height-capped dialog. Class-level
+    // assertions only — jsdom cannot measure the result.
+    for (const cls of ["h-dvh", "max-w-none", "rounded-none", "top-0", "left-0"]) {
+      expect(dialog).toHaveClass(cls);
+    }
+    for (const cls of ["sm:h-auto", "sm:max-h-[85dvh]", "sm:max-w-lg", "sm:rounded-lg"]) {
+      expect(dialog).toHaveClass(cls);
+    }
+    // The primitive's centred positioning must actually be overridden (the
+    // tailwind-merge conflict resolution is load-bearing here).
+    expect(dialog.className).not.toMatch(/(?:^|\s)top-\[50%\]/);
+    expect(dialog).toHaveClass("translate-x-0");
+  });
+
+  it("keeps the title and actions outside the ONE internal scroll region", async () => {
+    renderWithQuery(<ListingLinks {...baseProps()} isSignedIn />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add links" }));
+    const dialog = await screen.findByRole("dialog");
+
+    const scrollRegions = dialog.querySelectorAll(".overflow-y-auto");
+    expect(scrollRegions).toHaveLength(1);
+    const scrollRegion = scrollRegions[0] as HTMLElement;
+
+    // The fields scroll; the header and the save/cancel actions never do.
+    expect(scrollRegion).toContainElement(screen.getByLabelText("Menu", { exact: true }));
+    expect(scrollRegion).not.toContainElement(
+      screen.getByText("Add or fix this restaurant's links. Anyone signed in can edit them.")
+    );
+    expect(scrollRegion).not.toContainElement(screen.getByRole("button", { name: "Save links" }));
+    expect(scrollRegion).not.toContainElement(screen.getByRole("button", { name: "Cancel" }));
+    // a11y wiring survives the restructure: the dialog is labelled by the
+    // title and described by the description.
+    expect(dialog).toHaveAccessibleName("Add links");
+    expect(dialog).toHaveAccessibleDescription(
+      "Add or fix this restaurant's links. Anyone signed in can edit them."
+    );
   });
 
   it("blocks a bad-scheme URL client-side with an inline error (no server call)", async () => {
