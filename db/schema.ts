@@ -10,6 +10,7 @@ import {
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
+import { LINK_KINDS } from "~/listings/links";
 import { CLAIM_ATTRIBUTES } from "~/listings/taxonomy";
 
 // Single source of truth for the Aubrey's List domain schema.
@@ -45,6 +46,15 @@ export const userRole = pgEnum("user_role", ["admin", "moderator", "user"]);
  * taxonomy list, the filter UI, and any seed data when it changes.
  */
 export const claimAttribute = pgEnum("claim_attribute", CLAIM_ATTRIBUTES);
+
+/**
+ * The fixed typed-link taxonomy for a listing (AUB-202): menu, gluten-free
+ * menu, website, reservations, online ordering. Derives from the client-safe
+ * `LINK_KINDS` tuple (`app/listings/links.ts`) exactly like `claim_attribute`
+ * derives from `CLAIM_ATTRIBUTES`, so the DB and the client share ONE ordered
+ * list. Declaration order is render order (an enum column sorts by it).
+ */
+export const listingLinkKind = pgEnum("listing_link_kind", LINK_KINDS);
 
 /** A single user's vote on a claim — confirm or dispute. */
 export const attestationValue = pgEnum("attestation_value", ["confirm", "dispute"]);
@@ -125,6 +135,38 @@ export const listings = pgTable("listings", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/**
+ * Typed links on a listing, one row per (listing, kind) — enforced by the
+ * unique constraint (AUB-202). Replaces the single legacy `listings.menu_url`
+ * for NEW writes; that column stays for legacy rows (dropping it is deferred)
+ * and the detail page falls back to it when no `menu`-kind row exists.
+ *
+ * Wiki-style: ANY signed-in user may save/remove a listing's links (a
+ * deliberate product decision — no ownership check), moderated like other
+ * content. Rows are mutable (the URL can be edited), hence `updatedAt`.
+ *
+ * `createdBy` is provenance for moderation/abuse investigation only — never an
+ * authorization key. `set null` on the user's deletion keeps the link.
+ */
+export const listingLinks = pgTable(
+  "listing_links",
+  {
+    id: id(),
+    listingId: text("listing_id")
+      .notNull()
+      .references(() => listings.id, { onDelete: "cascade" }),
+    kind: listingLinkKind("kind").notNull(),
+    url: text("url").notNull(),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    unique("listing_links_listing_kind_unique").on(table.listingId, table.kind),
+    index("listing_links_listing_idx").on(table.listingId),
+  ]
+);
 
 /**
  * Community-attested statements about a listing, one row per (listing,
@@ -348,6 +390,9 @@ export type NewUser = typeof users.$inferInsert;
 export type Listing = typeof listings.$inferSelect;
 export type NewListing = typeof listings.$inferInsert;
 
+export type ListingLink = typeof listingLinks.$inferSelect;
+export type NewListingLink = typeof listingLinks.$inferInsert;
+
 export type Claim = typeof claims.$inferSelect;
 export type NewClaim = typeof claims.$inferInsert;
 
@@ -376,6 +421,7 @@ export type NewModerationActionRow = typeof moderationActions.$inferInsert;
 
 export const userRoles = userRole.enumValues;
 export const claimAttributes = claimAttribute.enumValues;
+export const listingLinkKinds = listingLinkKind.enumValues;
 export const attestationValues = attestationValue.enumValues;
 export const incidentSeverities = incidentSeverity.enumValues;
 export const flagStatuses = flagStatus.enumValues;
@@ -388,6 +434,9 @@ export const moderationActionTypes = moderationAction.enumValues;
 // ---------------------------------------------------------------------------
 
 export type UserRole = (typeof userRoles)[number];
+// Re-exported from the client-safe links module (single source of truth,
+// AUB-202) so `~/db/schema` type consumers keep one import surface.
+export type { LinkKind } from "~/listings/links";
 // Re-exported from the client-safe taxonomy module (single source of truth,
 // issue #126) so existing `~/db/schema` type consumers keep working unchanged.
 export type { ClaimAttribute } from "~/listings/taxonomy";

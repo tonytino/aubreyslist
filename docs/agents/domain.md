@@ -11,7 +11,7 @@
 
 | Entity | What it is |
 | --- | --- |
-| **Listing** | A restaurant. Canonical identity is its **Google Place ID** (dedup key). Carries name, address, lat/lng, Maps deep-link, optional menu-link URL. |
+| **Listing** | A restaurant. Canonical identity is its **Google Place ID** (dedup key). Carries name, address, lat/lng, Maps deep-link, and **typed links** (AUB-202): at most one per kind (menu, gluten-free menu, website, reservations, online ordering) in the `listing_links` table. The kind taxonomy is `LINK_KINDS` in `app/listings/links.ts`. The legacy `menu_url` column remains only as a render fallback for any stray pre-AUB-202 row (shown as the menu link when no `menu`-kind row exists); no product code writes it anymore (E2E fixtures still create legacy rows deliberately, to test this fallback) — intake and the seed pipeline both write typed `menu`-kind rows (AUB-220), and typed `menu`-kind saves/removes (plus the `db:backfill:listing-links` script, whose one-time prod run has completed) CLEAR it — typed writes supersede the legacy column. |
 | **Claim** | A community-attested statement about a listing, one per attribute in the fixed taxonomy below. Carries an aggregate of confirmations/disputes and a "last confirmed" timestamp. |
 | **Attestation** | A single user's **confirm** or **dispute** on a claim. **One per user per claim** (changeable/retractable, not stackable). |
 | **Incident** | A "got glutened here" report on a listing: required **date**, optional **severity**, optional **note**, attributed to a user. |
@@ -101,6 +101,11 @@ Rules every trust-related feature must honor:
 
 - **Read is open / write is gated** — anonymous users browse; any write requires
   Google login.
+- **Listing links are wiki-editable** (AUB-202): the "own contributions" rule
+  above does NOT apply to a listing's typed links — ANY signed-in user may add,
+  edit, or remove any listing's links (a deliberate product decision, enforced
+  without ownership checks server-side). Abuse is handled like other content:
+  rate limits plus moderation, with `created_by` kept as provenance.
 - **Admins grant the moderator role** to any Google account at any time (starts
   with the owner + trusted people).
 - **Light rate limiting** applies to writes as an anti-abuse guardrail; there is
@@ -122,8 +127,12 @@ Rules every trust-related feature must honor:
 
 ## Discovery (v1)
 
-List-first (no embedded map — deep-link to Google Maps). Supports: **text
-search** (name/cuisine), **filters** by the taxonomy above (the killer
-feature — "celiac-safe + dedicated fryer"), **sort** by trust/recency or
-alphabetical, and **"near me"** distance sort using listing lat/lng +
-browser geolocation.
+List-first. Originally "no embedded map — deep-link to Google Maps"; that was
+**revised 2026-07-06 by owner direction** (Linear project "Google Maps
+enrichment") — embedded map surfaces and Google place photos are now in scope,
+governed by the GMP usage & content policy in **ADR-014** (storage limits,
+attribution, key split, cost/degradation rules). Deep-linking remains the
+fallback whenever the browser Maps key is absent. Supports: **text search**
+(name/cuisine), **filters** by the taxonomy above (the killer feature —
+"celiac-safe + dedicated fryer"), **sort** by trust/recency or alphabetical,
+and **"near me"** distance sort using listing lat/lng + browser geolocation.

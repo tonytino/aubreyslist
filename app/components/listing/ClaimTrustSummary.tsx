@@ -74,14 +74,17 @@ export function ClaimTrustSummaryRow({
         </p>
       ) : summary.suggested ? (
         // Curator-bot suggestion (AUB-31): a starter label seeded by "Aubrey's
-        // Bot" from public info, NOT community evidence. The meaning is carried in
-        // text (never icon/colour alone — styling.md), and the tooltip names the
-        // source. It clears the instant a real user confirms or disputes below.
+        // Bot" from public info, NOT community evidence. Same gradient-ring +
+        // Sparkles treatment as the shared `ClaimBadge` suggested variant, so
+        // every "suggested" surface in the app reads consistently. It clears the
+        // instant a real user confirms or disputes below.
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-chip bg-accent-lavender/40 px-2 py-1 text-caption font-semibold text-foreground">
-              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Suggested by Aubrey's Bot</span>
+            <span className="inline-flex w-fit cursor-help items-center gap-1.5 rounded-chip bg-gradient-to-r from-brand via-accent-lavender to-accent-peach p-[1.5px]">
+              <span className="inline-flex items-center gap-1.5 rounded-chip bg-background px-2 py-1 text-caption font-semibold text-foreground">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Suggested by Aubrey's Bot</span>
+              </span>
             </span>
           </TooltipTrigger>
           <TooltipContent>Suggested by Aubrey's Bot</TooltipContent>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { claims, listings, users } from "~/db/schema";
+import { claims, listingLinks, listings, users } from "~/db/schema";
 import { type SeedListingsResult, seedListings } from "./seed";
 import { CURATOR_BOT, type SeededListing } from "./seed-data";
 
@@ -22,6 +22,8 @@ interface FakeState {
   listingSelect: Rows[];
   /** `.returning()` result for every `insert(claims)`. */
   claimReturning: Rows;
+  /** `.returning()` result for every `insert(listingLinks)` (AUB-220). */
+  linkReturning: Rows;
 }
 
 function makeFakeDb(overrides: Partial<FakeState> = {}) {
@@ -30,6 +32,7 @@ function makeFakeDb(overrides: Partial<FakeState> = {}) {
     listingReturning: [],
     listingSelect: [],
     claimReturning: [{ id: "claim-1" }],
+    linkReturning: [{ id: "link-1" }],
     ...overrides,
   };
   const inserts: Array<{ table: unknown; values: unknown }> = [];
@@ -54,6 +57,9 @@ function makeFakeDb(overrides: Partial<FakeState> = {}) {
               }
               if (table === claims) {
                 return thenableWithReturning(() => state.claimReturning);
+              }
+              if (table === listingLinks) {
+                return thenableWithReturning(() => state.linkReturning);
               }
               // users: awaited WITHOUT `.returning()` — a plain resolved thenable.
               return thenableWithReturning(() => []);
@@ -134,6 +140,9 @@ describe("seedListings", () => {
       mapsUrl:
         "https://www.google.com/maps/search/?api=1&query=Moore%20Cafe%20and%20Bakery%20123%20Main%20St%2C%20Denver%2C%20CO&query_place_id=place-1",
     });
+    // The legacy menu_url column is NEVER written post-AUB-202 (AUB-220): the
+    // key must be absent from the insert values entirely, not just null.
+    expect(Object.keys(listingInsert?.values as object)).not.toContain("menuUrl");
   });
 
   it("prefers a baked googleMapsUri (Google's share link) as the persisted mapsUrl", async () => {
@@ -196,5 +205,66 @@ describe("seedListings", () => {
     const { db } = makeFakeDb({ botRows: [] });
 
     await expect(seedListings([listing()], { db })).rejects.toThrow(/curator bot/i);
+  });
+});
+
+describe("seedListings — typed menu links (AUB-220)", () => {
+  it("seeds an entry's menuUrl as a menu-kind listing_links row (createdBy null) on insert", async () => {
+    const { db, inserts } = makeFakeDb({ listingReturning: [[{ id: "listing-1" }]] });
+
+    const result = await seedListings([listing({ menuUrl: "https://spot.example/menu" })], { db });
+
+    expect(result.menuLinksSeeded).toBe(1);
+    const linkInsert = inserts.find((i) => i.table === listingLinks);
+    expect(linkInsert?.values).toEqual({
+      listingId: "listing-1",
+      kind: "menu",
+      url: "https://spot.example/menu",
+      createdBy: null,
+    });
+  });
+
+  it("does NOT seed a menu link onto an existing (dedup-hit) listing — a user-removed link must never resurrect", async () => {
+    // The (listing, kind) slot may be EMPTY because a user deleted their menu
+    // link; onConflictDoNothing cannot guard an absent row, so the seed skips
+    // existing listings entirely (mirrors the retired backfill's semantics).
+    const { db, inserts } = makeFakeDb({
+      listingReturning: [[]],
+      listingSelect: [[{ id: "existing-1" }]],
+    });
+
+    const result = await seedListings([listing({ menuUrl: "https://spot.example/menu" })], { db });
+
+    expect(result.menuLinksSeeded).toBe(0);
+    expect(inserts.find((i) => i.table === listingLinks)).toBeUndefined();
+  });
+
+  it("never copies a non-http(s) baked menuUrl into the typed table (#90)", async () => {
+    const { db, inserts } = makeFakeDb({ listingReturning: [[{ id: "listing-1" }]] });
+
+    const result = await seedListings([listing({ menuUrl: "javascript:alert(1)" })], { db });
+
+    expect(result.menuLinksSeeded).toBe(0);
+    expect(inserts.find((i) => i.table === listingLinks)).toBeUndefined();
+  });
+
+  it("seeds no link when the entry has no menuUrl", async () => {
+    const { db, inserts } = makeFakeDb({ listingReturning: [[{ id: "listing-1" }]] });
+
+    const result = await seedListings([listing({ menuUrl: null })], { db });
+
+    expect(result.menuLinksSeeded).toBe(0);
+    expect(inserts.find((i) => i.table === listingLinks)).toBeUndefined();
+  });
+
+  it("counts a conflicting link insert as not seeded (defensive onConflictDoNothing)", async () => {
+    const { db } = makeFakeDb({
+      listingReturning: [[{ id: "listing-1" }]],
+      linkReturning: [],
+    });
+
+    const result = await seedListings([listing({ menuUrl: "https://spot.example/menu" })], { db });
+
+    expect(result.menuLinksSeeded).toBe(0);
   });
 });
