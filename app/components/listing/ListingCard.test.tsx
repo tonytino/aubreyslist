@@ -196,7 +196,7 @@ describe("RestaurantCard", () => {
     expect(screen.queryByText("Suggested by Aubrey's Bot")).not.toBeInTheDocument();
   });
 
-  it("renders one bot-provenance badge per suggested attribute with a VISIBLE 'Suggested:' prefix (owner nit 7)", async () => {
+  it("renders one shared ClaimBadge per suggested attribute (owner nit 7)", async () => {
     renderCard({
       safetyState: null,
       suggestedByBot: true,
@@ -205,28 +205,26 @@ describe("RestaurantCard", () => {
     const badges = await screen.findAllByTestId("suggested-attribute");
     expect(badges).toHaveLength(2);
     // Clearly a suggestion, never a community-confirmed verdict (ADR-007): the
-    // "Suggested:" prefix is VISIBLE text, so the distinction never rests on
-    // colour or a screen reader; no SafetySignal state marker either.
-    expect(badges[0]).toHaveTextContent("Suggested: Dedicated fryer");
-    expect(badges[1]).toHaveTextContent("Suggested: GF substitutes");
+    // distinction rests on the icon + gradient ring + tooltip, never colour
+    // alone; no SafetySignal state marker either.
+    expect(badges[0]).toHaveTextContent("Dedicated fryer");
+    expect(badges[1]).toHaveTextContent("GF substitutes");
     for (const badge of badges) {
       expect(badge).not.toHaveAttribute("data-safety-state");
     }
   });
 
-  it("prefixes even the suggested CELIAC badge so it can never mirror the real verdict chip (ADR-007)", async () => {
-    // The celiac badge shares the verdict chip's icon shape (ShieldCheck) and
-    // attribute label — the visible "Suggested:" prefix is what keeps it
-    // readable as a suggestion at a glance, colour-blind and greyscale-safe.
+  it("keeps even the suggested CELIAC badge structurally distinct from the real verdict chip (ADR-007)", async () => {
+    // The celiac badge shares the verdict chip's attribute label — the Sparkles
+    // icon + gradient ring + tooltip are what keep it readable as a suggestion,
+    // never resting on colour alone.
     renderCard({
       safetyState: null,
       suggestedByBot: true,
       suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
     });
     const badge = await screen.findByTestId("suggested-attribute");
-    expect(badge).toHaveTextContent("Suggested: Celiac-safe");
-    // Never the bare verdict text: the label is always prefix-qualified.
-    expect(badge.textContent?.trim().startsWith("Suggested:")).toBe(true);
+    expect(badge).toHaveTextContent("Celiac-safe");
     expect(badge).not.toHaveAttribute("data-safety-state");
   });
 
