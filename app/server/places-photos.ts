@@ -303,9 +303,20 @@ export const MAX_BATCH_LISTING_IDS = 60;
  */
 export const BATCH_PHOTO_CONCURRENCY = 5;
 
+/**
+ * Per-id length cap for the batch input. Listing ids are `crypto.randomUUID()`
+ * (36 chars, `db/schema.ts`); 64 leaves headroom while stopping an anonymous
+ * GET caller from stuffing megabyte-scale strings into the array (they'd only
+ * ever miss the DB lookup, but the request shouldn't get to carry them at all).
+ */
+export const MAX_LISTING_ID_LENGTH = 64;
+
 /** Validated input for {@link getPhotosForListings}. */
 export const listingIdsInputSchema = z.object({
-  listingIds: z.array(z.string().min(1)).min(1).max(MAX_BATCH_LISTING_IDS),
+  listingIds: z
+    .array(z.string().min(1).max(MAX_LISTING_ID_LENGTH))
+    .min(1)
+    .max(MAX_BATCH_LISTING_IDS),
 });
 
 /** Validated shape accepted by {@link getPhotosForListings}. */

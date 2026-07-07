@@ -519,7 +519,7 @@ describe("RestaurantCard", () => {
     expect(screen.queryByTestId("food-photo")).not.toBeInTheDocument();
   });
 
-  it("renders the compact author-attribution overlay as plain text (no nested link) when present (AUB-219)", async () => {
+  it("renders the compact author-attribution overlay as plain text (no nested link) with its contrast scrim when present (AUB-219)", async () => {
     renderCard({
       photoUrl: "https://cdn.example.com/root-and-rye.jpg",
       photoAttributions: [{ displayName: "A Diner" }, { displayName: "B Baker" }],
@@ -530,12 +530,18 @@ describe("RestaurantCard", () => {
     // Attribution sits INSIDE the stretched-link media tile — an <a> there would
     // nest inside the card's own <a>, so it must render as plain text, not a link.
     expect(screen.queryByRole("link", { name: "A Diner" })).not.toBeInTheDocument();
+    // AA contrast on light photos: a decorative bottom gradient scrim backs the
+    // white credit text (matching the hero's scrim-assisted posture).
+    const scrim = screen.getByTestId("food-photo-attribution-scrim");
+    expect(scrim).toHaveAttribute("aria-hidden", "true");
+    expect(scrim.className).toContain("bg-gradient-to-t");
   });
 
-  it("omits the attribution overlay when the photo carries no attributions", async () => {
+  it("omits the attribution overlay AND its scrim when the photo carries no attributions", async () => {
     renderCard({ photoUrl: "https://cdn.example.com/root-and-rye.jpg", photoAttributions: [] });
     await screen.findByTestId("food-photo");
     expect(screen.queryByTestId("food-photo-attribution")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("food-photo-attribution-scrim")).not.toBeInTheDocument();
   });
 });
 

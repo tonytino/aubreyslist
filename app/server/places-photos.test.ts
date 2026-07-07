@@ -44,6 +44,7 @@ import {
   listingIdsInputSchema,
   listingPhotosCache,
   MAX_BATCH_LISTING_IDS,
+  MAX_LISTING_ID_LENGTH,
   MAX_LISTING_PHOTOS,
   PLACE_PHOTOS_CACHE_TTL_MS,
   runListingPhotos,
@@ -281,6 +282,18 @@ describe("listingIdsInputSchema", () => {
 
   it("rejects an empty batch", () => {
     expect(listingIdsInputSchema.safeParse({ listingIds: [] }).success).toBe(false);
+  });
+
+  it(`rejects an id longer than ${MAX_LISTING_ID_LENGTH} chars (unauthenticated GET input bound)`, () => {
+    // Real ids are 36-char UUIDs; the cap leaves headroom but stops oversized
+    // payload strings at the validator, before any DB/upstream work.
+    expect(
+      listingIdsInputSchema.safeParse({ listingIds: ["a".repeat(MAX_LISTING_ID_LENGTH)] }).success
+    ).toBe(true);
+    expect(
+      listingIdsInputSchema.safeParse({ listingIds: ["a".repeat(MAX_LISTING_ID_LENGTH + 1)] })
+        .success
+    ).toBe(false);
   });
 });
 

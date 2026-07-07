@@ -351,7 +351,12 @@ function BrowseListings() {
   // the listing-detail hero is (`~/server/places-photos`), so this costs at
   // most one photos-only call per NEW place per 12h window, however many
   // visitors browse it.
-  const listingIds = useMemo(() => data.cards.map((card) => card.listing.id), [data.cards]);
+  // SORTED for the query key: the photo SET only depends on which ids are on
+  // the page, not their order, so re-sorting the directory (which permutes the
+  // same page of ids) must hit the same cache entry instead of refiring the
+  // batch. Sorting the payload too keeps key and request trivially in sync
+  // (the server dedupes; order is irrelevant to it).
+  const listingIds = useMemo(() => data.cards.map((card) => card.listing.id).sort(), [data.cards]);
   const { data: photosById } = useQuery({
     queryKey: ["browse-photos", listingIds],
     queryFn: () => fetchBrowsePhotos({ data: { listingIds } }),

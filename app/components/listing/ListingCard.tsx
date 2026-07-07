@@ -250,16 +250,26 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
                   (the whole media tile is one tap target), and an `<a>` nested in
                   an `<a>` is invalid HTML (the same reason the hero's linked
                   credit lives OUTSIDE its non-link hero band). Small, AA-contrast
-                  overlay text — same treatment as `HeroPhoto.tsx`'s credit line,
-                  scaled down for the card's shorter media band. */}
+                  overlay text — same posture as `HeroPhoto.tsx`'s scrim-assisted
+                  credit line, scaled down for the card's shorter media band: a
+                  subtle bottom gradient scrim guarantees the white caption stays
+                  legible on a light photo (text-shadow alone can't). Both layers
+                  are decorative (`aria-hidden` scrim; the credit reads normally). */}
               {vm.photoAttributions && vm.photoAttributions.length > 0 ? (
-                <p
-                  data-testid="food-photo-attribution"
-                  className="absolute bottom-1 right-2 max-w-[80%] truncate text-caption text-white/90 [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]"
-                >
-                  Photo:{" "}
-                  {vm.photoAttributions.map((attribution) => attribution.displayName).join(", ")}
-                </p>
+                <>
+                  <div
+                    aria-hidden="true"
+                    data-testid="food-photo-attribution-scrim"
+                    className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/60 to-transparent"
+                  />
+                  <p
+                    data-testid="food-photo-attribution"
+                    className="absolute bottom-1 right-2 max-w-[80%] truncate text-caption text-white/90 [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]"
+                  >
+                    Photo:{" "}
+                    {vm.photoAttributions.map((attribution) => attribution.displayName).join(", ")}
+                  </p>
+                </>
               ) : null}
             </>
           ) : (
