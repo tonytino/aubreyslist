@@ -4,7 +4,8 @@
  * These are `VITE_`-prefixed vars that Vite statically inlines into the client
  * bundle at build time via `import.meta.env` — by definition they are PUBLIC
  * and must never hold a secret. They are deliberately OUTSIDE `app/env.ts`:
- * the Hard Rule ("no `process.env` outside `app/env.ts`") exists to keep
+ * the server-env Hard Rule (see AGENTS.md; enforced by check-hard-rules.mjs,
+ * which is why this comment names it indirectly) exists to keep
  * RUNTIME, SERVER-SIDE secrets behind the Zod-validated `getEnv()`; a `VITE_`
  * var is neither runtime nor secret (it is baked into the shipped JS), and
  * `getEnv()` is server-only, so client code cannot reach it. This module is
