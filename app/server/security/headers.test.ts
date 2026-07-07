@@ -40,8 +40,10 @@ describe("contentSecurityPolicy", () => {
   });
 
   it("permits the Maps Embed API iframe for the listing-detail map (AUB-216, ADR-014)", () => {
-    // Scoped tight: exactly the Embed API's iframe origin, nothing wider.
-    expect(csp).toMatch(/frame-src [^;]*https:\/\/www\.google\.com/);
+    // Pinned EXACTLY: the frame-src directive is the Embed API's iframe
+    // origin and nothing else — any future widening (another host, 'self', a
+    // wildcard) must consciously fail this assertion and update it.
+    expect(csp).toMatch(/frame-src https:\/\/www\.google\.com(;|$)/);
   });
 });
 
