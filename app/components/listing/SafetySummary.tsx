@@ -137,10 +137,14 @@ export function SafetySummary({
     // off-screen). In the hero's overflow row the box is `shrink-0`, so it
     // needs a width cap — without one a flex item's base size is its
     // max-content width (the whole guidance sentence unwrapped) and the row
-    // would scroll for no reason at the 375px minimum width.
+    // would scroll for no reason at the 375px minimum width. `w-full` BEFORE
+    // the max-w cap resolves the box to the row's content width first (so at
+    // 375px it fits the ~301px row instead of forcing ~19px of needless
+    // horizontal scroll that clipped the dashed edge), while `max-w-xs`/`sm:`
+    // still cap it on wider rows — behaviour at >=394px is unchanged.
     <div
       className={`flex shrink-0 flex-col gap-1 rounded-card border border-dashed border-border bg-muted p-gutter${
-        isHero ? " max-w-xs sm:max-w-sm" : ""
+        isHero ? " w-full max-w-xs sm:max-w-sm" : ""
       }`}
     >
       <p className="text-body font-semibold text-foreground">Not yet attested</p>

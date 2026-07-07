@@ -55,6 +55,10 @@ export function ThemeToggle() {
       type="button"
       variant="ghost"
       size="icon"
+      // Touch ergonomics: >= 44px hit area on coarse pointers (the icon-size
+      // Button is 36px, fine for a mouse but tight for a thumb), matching the
+      // adjacent hamburger + avatar triggers (#269). Desktop stays compact.
+      className="pointer-coarse:size-11"
       aria-label={label}
       title={label}
       onClick={toggle}

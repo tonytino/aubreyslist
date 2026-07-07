@@ -272,6 +272,47 @@ describe("ClaimVoteControls", () => {
     expect(screen.queryByText("You disputed this.")).not.toBeInTheDocument();
   });
 
+  it("keeps the plain confirm/dispute caption wording for a NON-headline attribute", () => {
+    // A plain attribute like "Dedicated fryer" reads fine as confirmed/disputed.
+    renderWithQuery(
+      <ClaimVoteControls
+        listingId="listing-1"
+        attribute="dedicated_fryer"
+        viewerVote="dispute"
+        isSignedIn={true}
+      />
+    );
+    expect(screen.getByText("You disputed this.")).toBeInTheDocument();
+    expect(screen.queryByText("You marked this gluten-friendly.")).not.toBeInTheDocument();
+  });
+
+  it("names the safety STATE in the caption for the HEADLINE claim (not confirm/dispute)", () => {
+    // "You confirmed this." reads awkwardly next to the Celiac-safe / Gluten-
+    // friendly badges, so the headline caption names the state the vote records.
+    renderWithQuery(
+      <ClaimVoteControls
+        listingId="listing-1"
+        attribute="celiac_safe_vs_gluten_friendly"
+        viewerVote="confirm"
+        isSignedIn={true}
+      />
+    );
+    expect(screen.getByText("You marked this celiac-safe.")).toBeInTheDocument();
+    expect(screen.queryByText("You confirmed this.")).not.toBeInTheDocument();
+    cleanup();
+
+    renderWithQuery(
+      <ClaimVoteControls
+        listingId="listing-1"
+        attribute="celiac_safe_vs_gluten_friendly"
+        viewerVote="dispute"
+        isSignedIn={true}
+      />
+    );
+    expect(screen.getByText("You marked this gluten-friendly.")).toBeInTheDocument();
+    expect(screen.queryByText("You disputed this.")).not.toBeInTheDocument();
+  });
+
   it("keeps both buttons disabled until the roll-up invalidation settles", async () => {
     // The toggle branches on `viewerVote`, which the roll-up query provides —
     // so `busy` must hold through the refetch, not just the write. Simulate a

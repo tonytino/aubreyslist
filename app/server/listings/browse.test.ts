@@ -765,6 +765,11 @@ describe("getBrowseListings", () => {
     expect(sql).toContain("suggested_by");
     expect(sql).toContain("and not exists");
     expect(sql).toContain('inner join "attestations"');
+    // Pin the FULL correlated equality, not just the joined table name — an edit
+    // that aliased the outer `claims` table (breaking the correlation) would
+    // still render `inner join "attestations"` and pass the looser check, but
+    // must not silently change WHICH rows the evidence subquery joins.
+    expect(sql).toContain('"attestations"."claim_id" = "claims"."id"');
   });
 
   it("default (includeSuggested=true) folds NO exclusion into the WHERE — behavior unchanged", async () => {

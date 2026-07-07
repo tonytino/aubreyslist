@@ -120,6 +120,22 @@ export function ClaimVoteControls({
   // confirms as its own badge and disputes via a consistent X + "Dispute".
   const isHeadline = attribute === "celiac_safe_vs_gluten_friendly";
 
+  // Ownership caption for a pressed vote, attribute-aware. The HEADLINE claim's
+  // two sides ARE the two safety states, so "You confirmed/disputed this." reads
+  // awkwardly beside its Celiac-safe / Gluten-friendly badges (a pressed
+  // "Gluten-friendly" badge with "You disputed this." next to it) — name the
+  // state the vote records instead. Every OTHER attribute keeps the plain
+  // confirm/dispute wording, which reads fine for a plain fact like "Dedicated
+  // fryer". Only rendered when the viewer has voted; meaning is also carried by
+  // each toggle's `aria-pressed`.
+  const ownershipCaption = isHeadline
+    ? viewerVote === "confirm"
+      ? "You marked this celiac-safe."
+      : "You marked this gluten-friendly."
+    : viewerVote === "confirm"
+      ? "You confirmed this."
+      : "You disputed this.";
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -148,9 +164,7 @@ export function ClaimVoteControls({
             "your vote" from reading as the community verdict (ADR-007). Screen
             readers already get the ownership from the toggle's `aria-pressed`. */}
         {viewerVote !== null ? (
-          <span className="text-caption text-muted-foreground">
-            {viewerVote === "confirm" ? "You confirmed this." : "You disputed this."}
-          </span>
+          <span className="text-caption text-muted-foreground">{ownershipCaption}</span>
         ) : null}
       </div>
 
