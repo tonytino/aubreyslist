@@ -1,16 +1,16 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, stripSearchParams } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { CircleCheck, MapPin, Menu, Users } from "lucide-react";
+import { CircleCheck, MapPin, Users } from "lucide-react";
 import { z } from "zod";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
+import { ListingLinks, listingLinksQueryKey } from "~/components/listing/ListingLinks";
 import { ListingMap } from "~/components/listing/ListingMap";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
-import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { absoluteUrl, canonicalLink, jsonLdScript, pageSeoMeta } from "~/lib/seo";
@@ -22,6 +22,7 @@ import {
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
+import { fetchListingLinks } from "~/server/listing-links/links.fn";
 import { fetchListing } from "~/server/listings/get-listing.fn";
 import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
@@ -67,6 +68,17 @@ function incidentsQueryOptions(listingId: string) {
 }
 
 /**
+ * Cached typed links for a listing (AUB-202) — invalidated after a signed-in
+ * viewer saves or removes a link via the edit-links dialog.
+ */
+function listingLinksQueryOptions(listingId: string) {
+  return queryOptions({
+    queryKey: listingLinksQueryKey(listingId),
+    queryFn: () => fetchListingLinks({ data: { listingId } }),
+  });
+}
+
+/**
  * Cached claim roll-up for a listing — invalidated after the viewer changes or
  * retracts their own attestation (#32), so the per-claim counts, recency, the
  * viewer's own vote, and the headline cue all recompute from fresh evidence.
@@ -91,6 +103,9 @@ export const Route = createFileRoute("/listings/$id")({
       // Prefetch incidents so the list + banner render on first paint, then are
       // refetchable client-side via TanStack Query after a new report.
       context.queryClient.ensureQueryData(incidentsQueryOptions(id)),
+      // Prefetch the typed links so the Links section renders on first paint
+      // and is refetchable client-side after an edit-links save (AUB-202).
+      context.queryClient.ensureQueryData(listingLinksQueryOptions(id)),
     ]);
     // A missing listing is a 404, not an error — surface the route's
     // notFoundComponent instead of the error boundary.
@@ -164,6 +179,7 @@ function ListingDetail() {
   const navigate = Route.useNavigate();
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
   const { data: claims } = useSuspenseQuery(claimsQueryOptions(listing.id));
+  const { data: linksData } = useSuspenseQuery(listingLinksQueryOptions(listing.id));
   const now = new Date(nowMs);
   const isSignedIn = viewerId !== null;
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
@@ -318,37 +334,34 @@ function ListingDetail() {
         <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
       ) : null}
 
-      {/* Embedded map (AUB-216, ADR-014 — revises ADR-009's original "no
-          embedded map" call now that the Maps Embed API's free,
-          unrestricted-quota tier removes the cost/quota risk that motivated
-          it) + the primary action: deep-link to Google Maps. The embed is a
-          lightweight preview; the button below is KEPT as the mobile
-          hand-off for turn-by-turn directions in the native Maps app. Both
-          hrefs are guarded by `isHttpUrl` so only http(s) links ever reach an
-          anchor — defence-in-depth against a dangerous-scheme URL (#90).
-          Full-width on mobile, side-by-side from 480px. */}
-      <section aria-label="Links" className="flex flex-col gap-4">
-        <ListingMap name={listing.name} address={listing.address} placeId={listing.placeId} />
-        <div className="flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-center">
-          {isHttpUrl(listing.mapsUrl) ? (
-            <Button asChild size="lg" className="w-full min-[480px]:w-auto">
-              <a href={listing.mapsUrl} target="_blank" rel="noreferrer noopener">
-                <MapPin aria-hidden className="h-4 w-4" />
-                Open in Google Maps
-              </a>
-            </Button>
-          ) : null}
+      {/* Embedded map preview (AUB-216; ADR-014 — revises v1's "no embedded
+          map — deep-link only" decision, previously mislabeled here as
+          ADR-009, which is Vercel hosting — now that the Maps Embed API is
+          free and unrestricted-quota). Renders nothing when the public
+          browser key is unset (no empty block, no layout shift).
+          Deliberately a SIBLING of the "Links" region below, never inside
+          it: the edit-listing-links E2E spec asserts link/button roles
+          within that region, and the map must not perturb them. The "Open in
+          Google Maps" deep-link inside ListingLinks is KEPT — it is the
+          mobile hand-off to turn-by-turn in the native Maps app; the embed
+          is only a preview. */}
+      <ListingMap name={listing.name} address={listing.address} placeId={listing.placeId} />
 
-          {isHttpUrl(listing.menuUrl) ? (
-            <Button asChild size="lg" variant="outline" className="w-full min-[480px]:w-auto">
-              <a href={listing.menuUrl} target="_blank" rel="noreferrer noopener">
-                <Menu aria-hidden className="h-4 w-4" />
-                View menu
-              </a>
-            </Button>
-          ) : null}
-        </div>
-      </section>
+      {/* Links (AUB-202): the Google Maps deep-link plus the listing's typed
+          links in LINK_KINDS order, with the legacy menuUrl as the menu
+          fallback and — for signed-in viewers — the wiki-style edit-links
+          dialog. Every href is `isHttpUrl`-guarded at the render sink inside
+          the component (#90). Both the typed links AND the legacy fallback
+          come from the invalidatable links QUERY (not the loader's listing
+          row), so an edit that clears the legacy column refreshes the
+          section without a full route reload. */}
+      <ListingLinks
+        listingId={listing.id}
+        mapsUrl={listing.mapsUrl}
+        legacyMenuUrl={linksData.legacyMenuUrl}
+        links={linksData.links}
+        isSignedIn={isSignedIn}
+      />
 
       {/* Tabbed evidence panel (AUB-131): Community claims + Incident reports in
           one card, with short "Claims" / "Reports" trigger labels (the count

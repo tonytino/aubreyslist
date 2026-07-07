@@ -19,11 +19,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * guards' window logic in `auth/guards.test.ts` + `rate-limit/index.test.ts`.
  */
 
-const runCreateListingMock = vi.fn((_input: unknown) =>
+const runCreateListingMock = vi.fn((_input: unknown, _createdBy?: string | null) =>
   Promise.resolve({ listing: { id: "listing-1" }, created: true })
 );
 vi.mock("./create", () => ({
-  runCreateListing: (input: unknown) => runCreateListingMock(input),
+  runCreateListing: (input: unknown, createdBy?: string | null) =>
+    runCreateListingMock(input, createdBy),
 }));
 
 const requireCurrentUserMock = vi.fn(() => Promise.resolve({ id: "user-1" }));
@@ -54,7 +55,8 @@ describe("submitCreateListing — auth + rate limit seam (#141)", () => {
     expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
     expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
     expect(runCreateListingMock).toHaveBeenCalledTimes(1);
-    expect(runCreateListingMock).toHaveBeenCalledWith(placesInput.data);
+    // The authed user rides along as the links `createdBy` provenance (AUB-202).
+    expect(runCreateListingMock).toHaveBeenCalledWith(placesInput.data, "user-1");
 
     // Auth BEFORE limit BEFORE the write — the security ordering (#18).
     const authOrder = requireCurrentUserMock.mock.invocationCallOrder[0];
