@@ -277,6 +277,16 @@ away from the seed so `pnpm db:seed` is **API-free**:
   query keeps resolving to the same Google Place ID. If Google ever returns a
   different Place ID for the same spot, it would seed as a separate listing — rare,
   and a real user can flag/merge it.)
+- **Typed menu links (AUB-220):** an entry's `menuUrl` (the source field name is
+  unchanged) is seeded as a `menu`-kind `listing_links` row (`created_by` null),
+  never the legacy `listings.menu_url` column — and **only for listings the run
+  itself inserted**. An existing listing is never touched: `onConflictDoNothing`
+  would protect a user-edited link, but a user who *removed* their menu link
+  leaves no row to conflict with, so seeding into existing listings would
+  resurrect deleted links on every re-run. (Known tradeoff: the listing and
+  link inserts are not transactional, so a run that dies between them leaves a
+  listing whose menu link no re-run will seed — recover by adding the link via
+  the detail-page edit dialog or a manual insert.)
 
 ### Per-environment
 
@@ -317,6 +327,24 @@ legacy format with no Place ID are reported and left untouched, never guessed.
 New listings don't need it: the Places provider now stores Google's own share
 link (`googleMapsUri` from Place Details) and only falls back to the built
 Maps URLs API link when that field is absent.
+
+## Backfilling listing links (`pnpm db:backfill:listing-links`)
+
+Migrates any listing still carrying its menu link only in the legacy
+`listings.menu_url` column into a typed `menu`-kind `listing_links` row
+(AUB-202), then clears the migrated column. API-free (needs only
+`DATABASE_URL`) and idempotent: the insert is `onConflictDoNothing` on the
+`(listing, kind)` unique constraint, so a user-edited link is never
+overwritten. Non-http(s) legacy values are reported and left untouched.
+
+- **Local / dev:** `pnpm db:backfill:listing-links` against your `.env`
+  `DATABASE_URL` — still useful for a dev database with pre-AUB-202 rows.
+- **Production:** already done — the one-time "Backfill production listing
+  links" GitHub Action ran successfully and has been **retired** (AUB-221;
+  the workflow file is deleted). Nothing re-mints legacy rows: intake and the
+  seed pipeline both write typed rows only (AUB-220), so no prod re-run should
+  ever be needed. If one ever is, run the script manually:
+  `DATABASE_URL='<prod-connection-string>' pnpm db:backfill:listing-links`.
 
 ## Production Incidents
 
