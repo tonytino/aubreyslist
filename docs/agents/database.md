@@ -283,7 +283,10 @@ away from the seed so `pnpm db:seed` is **API-free**:
   itself inserted**. An existing listing is never touched: `onConflictDoNothing`
   would protect a user-edited link, but a user who *removed* their menu link
   leaves no row to conflict with, so seeding into existing listings would
-  resurrect deleted links on every re-run.
+  resurrect deleted links on every re-run. (Known tradeoff: the listing and
+  link inserts are not transactional, so a run that dies between them leaves a
+  listing whose menu link no re-run will seed — recover by adding the link via
+  the detail-page edit dialog or a manual insert.)
 
 ### Per-environment
 
