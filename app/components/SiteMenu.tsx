@@ -81,7 +81,14 @@ export function SiteMenu({ user, previewLoginEnabled }: SiteMenuProps) {
   const triggerLabel = signedIn ? `Open menu, signed in as ${user.name}` : "Open menu";
 
   return (
-    <DropdownMenu>
+    // Non-modal (a11y): a modal Radix dropdown sets aria-hidden="true" on all
+    // background content when open, which puts the SiteFooter's visible,
+    // focusable nav links inside an aria-hidden subtree — a serious WCAG 4.1.2
+    // (aria-hidden-focus) violation. Non-modal skips the background aria-hiding
+    // while Radix still moves focus into the menu and closes it on Escape /
+    // outside interaction, so the combined menu stays keyboard-correct without
+    // burying the footer from assistive tech.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
