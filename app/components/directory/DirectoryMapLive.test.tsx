@@ -24,16 +24,18 @@ vi.mock("@vis.gl/react-google-maps", () => ({
   APIProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Map: ({
     children,
+    className,
     onDragstart,
     onZoomChanged,
     onIdle,
   }: {
     children?: ReactNode;
+    className?: string;
     onDragstart?: (event: unknown) => void;
     onZoomChanged?: (event: unknown) => void;
     onIdle?: (event: unknown) => void;
   }) => (
-    <div data-testid="google-map">
+    <div data-testid="google-map" className={className}>
       {/* Hooks for tests to simulate camera gestures the mock map would fire. */}
       <button type="button" data-testid="simulate-dragstart" onClick={() => onDragstart?.({})} />
       <button
@@ -118,6 +120,13 @@ describe("DirectoryMapLive — markers", () => {
     );
     const markers = screen.getAllByTestId("advanced-marker");
     expect(markers.map((m) => m.getAttribute("data-zindex"))).toEqual(["1", "2"]);
+  });
+
+  it("clamps the map container at z-0 so the map subtree can never stack above the z-10 carousel", () => {
+    renderLive();
+    // The explicit clamp for the carousel-above-pins safety invariant — we do
+    // not rely on Google's internal `z-index: 0` on `.gm-style`.
+    expect(screen.getByTestId("google-map").className).toContain("z-0");
   });
 
   it("selects a restaurant when its pin is clicked (existing selectedId flow)", () => {

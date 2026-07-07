@@ -35,9 +35,12 @@ import { type DirectoryMapEntry, MapPinButton, RecenterFab } from "~/components/
  *   never-animated `map.moveCamera` (camera computed by the pure
  *   `cameraForBounds`) instead of `fitBounds`, which may animate.
  * - **Z-ORDER SAFETY INVARIANT** (see `map-ui.tsx`): everything here renders
- *   BELOW the opaque `z-10` carousel band that `DirectoryMap` stacks after it —
- *   the map canvas creates its own stacking context at the base level, so no
- *   marker (whatever its internal zIndex) can bleed over a mini-card.
+ *   BELOW the opaque `z-10` carousel band that `DirectoryMap` stacks after it.
+ *   We do NOT rely on Google's internal `z-index: 0` on `.gm-style`: the map
+ *   container carries an explicit `z-0` clamp, which pins the positioned
+ *   container at z-index 0 and gives it its OWN stacking context — so no
+ *   marker or Google-internal element (whatever z-index Google's DOM assigns
+ *   inside) can ever stack above the carousel, regardless of Maps internals.
  *
  * `mapId` is Google's documented `DEMO_MAP_ID` sentinel: Advanced Markers
  * REQUIRE a map ID, and the demo ID enables them (vector map, default styling)
@@ -132,7 +135,12 @@ export function DirectoryMapLive({
     <APIProvider apiKey={apiKey}>
       <GoogleMap
         mapId={DIRECTORY_MAP_ID}
-        className="absolute inset-0"
+        // `z-0` is the explicit stacking clamp for the safety invariant (see
+        // the module comment): the positioned container gets z-index 0 AND its
+        // own stacking context, so NOTHING inside the Google map subtree —
+        // whatever internal z-index Google's DOM uses — can ever stack above
+        // the sibling z-10 carousel band. Do not remove it.
+        className="absolute inset-0 z-0"
         // Initial camera: fit the current result pins (bounds computed from
         // real lat/lng), padded clear of the carousel band. Null bounds (no
         // usable coordinates) can't happen when the map view renders — the
