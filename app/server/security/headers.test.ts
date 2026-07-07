@@ -38,6 +38,11 @@ describe("contentSecurityPolicy", () => {
   it("never grants unsafe-eval", () => {
     expect(csp).not.toContain("unsafe-eval");
   });
+
+  it("permits the Maps Embed API iframe for the listing-detail map (AUB-216, ADR-014)", () => {
+    // Scoped tight: exactly the Embed API's iframe origin, nothing wider.
+    expect(csp).toMatch(/frame-src [^;]*https:\/\/www\.google\.com/);
+  });
 });
 
 describe("buildSecurityHeaders", () => {

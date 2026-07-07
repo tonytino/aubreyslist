@@ -7,6 +7,7 @@ import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityC
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
+import { ListingMap } from "~/components/listing/ListingMap";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { Button } from "~/components/ui/button";
@@ -317,31 +318,36 @@ function ListingDetail() {
         <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
       ) : null}
 
-      {/* Primary action: deep-link to Google Maps (ADR-009 — no embedded map).
-          Both hrefs are guarded by `isHttpUrl` so only http(s) links ever reach
-          an anchor — defence-in-depth against a dangerous-scheme URL (#90). Full-
-          width on mobile, side-by-side from 480px. */}
-      <section
-        aria-label="Links"
-        className="flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-center"
-      >
-        {isHttpUrl(listing.mapsUrl) ? (
-          <Button asChild size="lg" className="w-full min-[480px]:w-auto">
-            <a href={listing.mapsUrl} target="_blank" rel="noreferrer noopener">
-              <MapPin aria-hidden className="h-4 w-4" />
-              Open in Google Maps
-            </a>
-          </Button>
-        ) : null}
+      {/* Embedded map (AUB-216, ADR-014 — revises ADR-009's original "no
+          embedded map" call now that the Maps Embed API's free,
+          unrestricted-quota tier removes the cost/quota risk that motivated
+          it) + the primary action: deep-link to Google Maps. The embed is a
+          lightweight preview; the button below is KEPT as the mobile
+          hand-off for turn-by-turn directions in the native Maps app. Both
+          hrefs are guarded by `isHttpUrl` so only http(s) links ever reach an
+          anchor — defence-in-depth against a dangerous-scheme URL (#90).
+          Full-width on mobile, side-by-side from 480px. */}
+      <section aria-label="Links" className="flex flex-col gap-4">
+        <ListingMap name={listing.name} address={listing.address} placeId={listing.placeId} />
+        <div className="flex flex-col gap-3 min-[480px]:flex-row min-[480px]:items-center">
+          {isHttpUrl(listing.mapsUrl) ? (
+            <Button asChild size="lg" className="w-full min-[480px]:w-auto">
+              <a href={listing.mapsUrl} target="_blank" rel="noreferrer noopener">
+                <MapPin aria-hidden className="h-4 w-4" />
+                Open in Google Maps
+              </a>
+            </Button>
+          ) : null}
 
-        {isHttpUrl(listing.menuUrl) ? (
-          <Button asChild size="lg" variant="outline" className="w-full min-[480px]:w-auto">
-            <a href={listing.menuUrl} target="_blank" rel="noreferrer noopener">
-              <Menu aria-hidden className="h-4 w-4" />
-              View menu
-            </a>
-          </Button>
-        ) : null}
+          {isHttpUrl(listing.menuUrl) ? (
+            <Button asChild size="lg" variant="outline" className="w-full min-[480px]:w-auto">
+              <a href={listing.menuUrl} target="_blank" rel="noreferrer noopener">
+                <Menu aria-hidden className="h-4 w-4" />
+                View menu
+              </a>
+            </Button>
+          ) : null}
+        </div>
       </section>
 
       {/* Tabbed evidence panel (AUB-131): Community claims + Incident reports in

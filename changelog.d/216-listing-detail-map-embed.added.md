@@ -1,0 +1,1 @@
+- `[manual]` Added an embedded Google map (Maps Embed API, free tier) to each listing's detail page, alongside the existing "Open in Google Maps" deep-link button (AUB-216, ADR-014).
