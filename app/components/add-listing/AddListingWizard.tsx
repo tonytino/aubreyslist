@@ -6,12 +6,14 @@ import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import type { CreateListingInput } from "~/listings/create-input";
 import { parseDuplicateListingError } from "~/listings/dedup-error";
+import { LINK_KINDS, type LinkKind } from "~/listings/links";
 import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
 import { submitVote } from "~/server/attestations/attestations.fn";
 import { submitCreateListing } from "~/server/listings/create.fn";
 import type { IntakeMode } from "~/server/settings";
 import { ClaimAttestStep } from "./ClaimAttestStep";
 import { FindPlaceStep } from "./FindPlaceStep";
+import { emptyLinkFieldValues, type LinkFieldValues } from "./ListingLinksFields";
 import { ProgressStepper } from "./ProgressStepper";
 import { ReviewStep } from "./ReviewStep";
 
@@ -73,11 +75,19 @@ function placeName(place: WizardPlace): string {
   return place.mode === "places" ? place.description : place.name;
 }
 
-/** Build the create-write input from the collected place + optional menu link. */
-function toCreateInput(place: WizardPlace, menuUrl: string): CreateListingInput {
-  const menu = menuUrl.trim() ? menuUrl.trim() : undefined;
+/**
+ * Build the create-write input from the collected place + typed links
+ * (AUB-202). Blank link fields are dropped here — only kinds the user actually
+ * filled reach the schema, which requires each URL to be valid http(s).
+ */
+function toCreateInput(place: WizardPlace, links: LinkFieldValues): CreateListingInput {
+  const filled = LINK_KINDS.flatMap((kind: LinkKind) => {
+    const url = links[kind].trim();
+    return url ? [{ kind, url }] : [];
+  });
+  const linksInput = filled.length > 0 ? filled : undefined;
   if (place.mode === "places") {
-    return { mode: "places", placeId: place.placeId, menuUrl: menu };
+    return { mode: "places", placeId: place.placeId, links: linksInput };
   }
   return {
     mode: "manual",
@@ -85,14 +95,14 @@ function toCreateInput(place: WizardPlace, menuUrl: string): CreateListingInput 
     address: place.address,
     lat: place.lat,
     lng: place.lng,
-    menuUrl: menu,
+    links: linksInput,
   };
 }
 
 export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
   const [step, setStep] = useState(0);
   const [place, setPlace] = useState<WizardPlace | null>(null);
-  const [menuUrl, setMenuUrl] = useState("");
+  const [links, setLinks] = useState<LinkFieldValues>(emptyLinkFieldValues());
   const [answers, setAnswers] = useState<AnswerMap>(EMPTY_ANSWERS);
   const [submitted, setSubmitted] = useState<{ listingId: string; created: boolean } | null>(null);
 
@@ -101,7 +111,7 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
       if (place === null) {
         throw new Error("Choose a place before submitting.");
       }
-      const result = await submitCreateListing({ data: toCreateInput(place, menuUrl) });
+      const result = await submitCreateListing({ data: toCreateInput(place, links) });
       const listingId = result.listing.id;
       // Record ONLY the answers the user actually made. Skip / untouched writes
       // nothing — the listing keeps an honest "Not yet attested" gap.
@@ -139,7 +149,7 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
         onReset={() => {
           setStep(0);
           setPlace(null);
-          setMenuUrl("");
+          setLinks(emptyLinkFieldValues());
           setAnswers(EMPTY_ANSWERS);
           setSubmitted(null);
           submit.reset();
@@ -164,8 +174,8 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
       <FindPlaceStep
         intakeMode={intakeMode}
         place={place}
-        menuUrl={menuUrl}
-        onMenuUrlChange={setMenuUrl}
+        links={links}
+        onLinkChange={(kind, value) => setLinks((prev) => ({ ...prev, [kind]: value }))}
         onSelect={setPlace}
         onClear={() => setPlace(null)}
         onContinue={() => setStep(1)}

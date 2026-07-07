@@ -166,6 +166,61 @@ describe.skipIf(!hasDb)("schema constraints (real Postgres)", () => {
     await expect(makeListing(null)).resolves.toEqual(expect.any(String));
   });
 
+  it("rejects a second link for the same (listing, kind) — UNIQUE(listing_id, kind) (AUB-202)", async () => {
+    const listingId = await makeListing();
+
+    await db.insert(schema.listingLinks).values({
+      listingId,
+      kind: "menu",
+      url: "https://example.test/menu",
+      createdBy: userId,
+    });
+
+    // Same kind again on the same listing → unique violation (one link per kind).
+    await expect(
+      db.insert(schema.listingLinks).values({
+        listingId,
+        kind: "menu",
+        url: "https://example.test/other-menu",
+      })
+    ).rejects.toThrow();
+
+    // A different kind on the same listing coexists fine.
+    await expect(
+      db.insert(schema.listingLinks).values({
+        listingId,
+        kind: "website",
+        url: "https://example.test",
+      })
+    ).resolves.toBeDefined();
+  });
+
+  it("cascades a listing delete to its links — onDelete: cascade (AUB-202)", async () => {
+    const listingId = await makeListing();
+    await db.insert(schema.listingLinks).values({
+      listingId,
+      kind: "reservations",
+      url: "https://example.test/book",
+      createdBy: userId,
+    });
+
+    // Sanity: the link exists before the delete.
+    const before = await db
+      .select({ id: schema.listingLinks.id })
+      .from(schema.listingLinks)
+      .where(sql`${schema.listingLinks.listingId} = ${listingId}`);
+    expect(before.length).toBe(1);
+
+    await db.delete(schema.listings).where(sql`${schema.listings.id} = ${listingId}`);
+    listingIds.delete(listingId);
+
+    const after = await db
+      .select({ id: schema.listingLinks.id })
+      .from(schema.listingLinks)
+      .where(sql`${schema.listingLinks.listingId} = ${listingId}`);
+    expect(after.length).toBe(0);
+  });
+
   it("cascades a listing delete to its claims, incidents, and flags — onDelete: cascade", async () => {
     const listingId = await makeListing();
     const claimId = await makeClaim(listingId);

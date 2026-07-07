@@ -36,6 +36,13 @@
       "when": 1783057253835,
       "tag": "0004_classy_runaways",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783369618941,
+      "tag": "0005_rare_havok",
+      "breakpoints": true
     }
   ]
 }
