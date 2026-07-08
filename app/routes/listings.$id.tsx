@@ -13,7 +13,7 @@ import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner"
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { Card, CardContent } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { absoluteUrl, canonicalLink, jsonLdScript, pageSeoMeta } from "~/lib/seo";
+import { absoluteUrl, breadcrumbJsonLd, canonicalLink, jsonLdScript, pageSeoMeta } from "~/lib/seo";
 import {
   LISTING_DETAIL_SEARCH_DEFAULTS,
   type ListingDetailTab,
@@ -162,6 +162,14 @@ export const Route = createFileRoute("/listings/$id")({
           url: absoluteUrl(path),
           ...(isHttpUrl(listing.mapsUrl) ? { hasMap: listing.mapsUrl } : {}),
         }),
+        // Breadcrumb trail (Home → this restaurant) so Search can render the
+        // page's place in the site instead of the raw URL path.
+        jsonLdScript(
+          breadcrumbJsonLd([
+            { name: "Aubrey's List", path: "/" },
+            { name: listing.name, path },
+          ])
+        ),
       ],
     };
   },

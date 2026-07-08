@@ -16,22 +16,22 @@ name: Post-deploy smoke test
 # narrowly "did THIS deploy come up ok", not "is prod up right now".
 #
 # --- Production URL source (read this before touching PRODUCTION_URL) ---
-# Per ADR-009 (docs/decisions/009-vercel-hosting-v1.md), v1 ships on a free
-# `*.vercel.app` subdomain; a custom domain is attached later. Meanwhile
-# `app/lib/seo.ts` hardcodes `SITE_URL = "https://aubreyslist.com"` for
-# canonical/OG URLs — that is the ASPIRATIONAL public domain for SEO markup,
-# NOT necessarily where the app is actually reachable today. Defaulting this
-# workflow to SITE_URL would silently curl a domain that may not resolve to
-# the live deployment yet (or, worse, may resolve to something else once it's
-# parked/attached), and the job would look green for the wrong reason (or fail
-# for an unrelated DNS reason).
+# Per ADR-009 (docs/decisions/009-vercel-hosting-v1.md), v1 shipped on a free
+# `*.vercel.app` subdomain; the custom domain `www.aubreys-list.com` has since
+# been attached (it's the host Google indexes). `app/lib/seo.ts` hardcodes
+# `SITE_URL = "https://www.aubreys-list.com"` for canonical/OG URLs, but this
+# workflow still does NOT default to SITE_URL: keeping the smoke-check target
+# decoupled from the SEO constant means a future domain change can't silently
+# point the check at a host that isn't serving the live deployment yet, where
+# the job would look green for the wrong reason (or fail for an unrelated DNS
+# reason).
 #
 # So the URL this workflow checks comes from, in order:
 #   1. The `PRODUCTION_URL` repository VARIABLE (Settings > Secrets and
 #      variables > Actions > Variables) — the explicit, human-set source of
-#      truth. Set this once the real Vercel production URL is known and
-#      update it if the custom domain in ADR-009 is ever attached. Not a
-#      secret: it's a public URL, hence a Variable, not a Secret.
+#      truth. With the custom domain now live this should be
+#      `https://www.aubreys-list.com`; update it if the domain ever changes.
+#      Not a secret: it's a public URL, hence a Variable, not a Secret.
 #   2. If unset, and this run was triggered by a successful production
 #      `deployment_status` event, fall back to that event's own
 #      `target_url` — Vercel's GitHub integration supplies the exact URL it
@@ -88,7 +88,7 @@ jobs:
             URL="$DEPLOYMENT_TARGET_URL"
             echo "::warning::'PRODUCTION_URL' repo variable is not set; falling back to this deployment_status event's target_url ($URL) for this run only. Set the 'PRODUCTION_URL' repo variable so schedule/workflow_dispatch runs (which have no deployment event to fall back on) also work — see this workflow's header comment."
           else
-            echo "::error::No production URL available. Set the 'PRODUCTION_URL' repository variable (Settings > Secrets and variables > Actions > Variables) to the live Vercel production URL. Per ADR-009 (docs/decisions/009-vercel-hosting-v1.md) that is currently a '*.vercel.app' domain, NOT the aspirational 'aubreyslist.com' hardcoded in app/lib/seo.ts's SITE_URL — refusing to guess and silently check the wrong environment."
+            echo "::error::No production URL available. Set the 'PRODUCTION_URL' repository variable (Settings > Secrets and variables > Actions > Variables) to the live production URL (the custom domain 'https://www.aubreys-list.com', per this workflow's header comment) — refusing to guess and silently check the wrong environment."
             exit 1
           fi
           # Strip a trailing slash so path concatenation below never double-slashes.

@@ -1,0 +1,1 @@
+- `[manual]` Improved how the site appears in Google results: `alternateName` on the `WebSite` JSON-LD (so Search shows "Aubrey's List" instead of the bare hostname), a 192px PNG favicon fallback (Google's favicon crawler is unreliable with SVG-only, leaving a generic globe), and `BreadcrumbList` JSON-LD on listing detail pages.
