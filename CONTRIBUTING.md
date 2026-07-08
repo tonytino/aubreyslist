@@ -21,9 +21,9 @@ Just state your goal. Using another harness? Point your agent at `AGENTS.md` →
   review your own agents' work — that's the design, not a loophole. Your
   agents drive CI green, then stop and wait for you.
 - **Exception: owner-gated surfaces** — changes touching an owner-gated
-  surface; the categories and exact files are defined in
-  `docs/agents/governance.md` (mirrored in
-  `.github/scripts/owner-review-paths.mjs` and `.github/CODEOWNERS`). Only
+  surface; the categories are defined in `docs/agents/governance.md`, and the
+  exact files live in `.github/scripts/owner-review-paths.mjs` (the single
+  source of truth), mirrored in `.github/CODEOWNERS`. Only
   **@tonytino** can approve and merge those — owned paths are hard-blocked by
   CODEOWNERS + branch protection, while the content-only categories rely on
   the best-effort `owner-review` CI tripwire (see governance.md's "Known
