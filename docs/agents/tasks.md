@@ -145,6 +145,9 @@ Stop and leave a comment on the issue if:
 - You discover the actual scope is `size:l` — don't expand silently
 - Something unexpected is broken that blocks progress
 
+In Claude Code sessions, prefer the AskUserQuestion tool for questions that
+need the human — see `docs/agents/orchestration.md` → "Talking to the human".
+
 ```bash
 gh issue comment <NUMBER> --body "Blocked: <what you found and why you stopped>"
 gh issue edit <NUMBER> --remove-label "status:in-progress" --add-label "status:blocked"
@@ -164,7 +167,7 @@ gh issue edit <NUMBER> --remove-label "status:in-progress" --add-label "status:b
 | `size:s` | < 2 hrs, isolated change |
 | `size:m` | 2–4 hrs, multi-file |
 | `size:l` | Needs planning session first |
-| `safe:agent` | Agent may merge the PR once CI passes |
+| `safe:agent` | Agent may merge the PR once CI passes — self-merge runbook in `docs/agents/orchestration.md` |
 | `safe:human` | Agent implements it, but a **human** reviews and merges — never auto-merged. **Required** for any change touching an owner-gated surface (cost / legal / security / trust & safety / destructive data / privacy / safety-disclaimer): the `owner-review` CI job fails a gated PR labeled `safe:agent`, and `.github/CODEOWNERS` auto-requests the owner's review. Agents never click merge on these. See `docs/agents/governance.md`. |
 | `type:bug` | Something broken |
 | `type:feature` | New functionality |

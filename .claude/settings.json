@@ -9,5 +9,17 @@
       "mcp__Linear__delete_attachment",
       "mcp__Linear__delete_status_update"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'ORCHESTRATOR DIRECTIVE (repo standing policy): this session operates as an orchestrator by default. Read CLAUDE.md, then invoke the /orchestrate skill before multi-step work. safe:agent PRs self-merge once CI is green; safe:human PRs stop at green for human review. Tiny tasks (questions, typo/doc fixes) may be done directly but still ship per PR conventions.'"
+          }
+        ]
+      }
+    ]
   }
 }

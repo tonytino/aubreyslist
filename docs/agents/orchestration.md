@@ -7,6 +7,9 @@
 > `.claude/workflows/adversarial-review.mjs` workflow; the `review-loop` skill is
 > the one-line entry point.
 
+Every session is an orchestrator by default — `CLAUDE.md` and the `/orchestrate`
+skill route here; this doc is the playbook.
+
 ---
 
 ## Roles
@@ -19,6 +22,16 @@
 
 The Reviewer must be a **new subagent each round** — never the worker reviewing
 itself, never a reused context. Adversarial independence is the point.
+
+---
+
+## Tiny-task exception
+
+Orchestration is the default for **all real work**. Direct handling — no
+workers, no review loop — is allowed only for: answering questions that change
+no files, and typo-class / one-line doc fixes. Committed changes still ship as
+a conventional PR with the full label set and `## TL;DR`; `skip-review` (and
+`skip-changelog` where genuinely trivial) are the sanctioned bypass labels.
 
 ---
 
@@ -154,6 +167,68 @@ owner-gated surface (cost / legal / security / trust & safety / destructive data
 privacy / safety-disclaimer), the **Trust-model invariants** and **Security**
 dimensions above must be probed *and* the PR is `safe:human` — merged by the owner
 via CODEOWNERS + branch protection, which no review record or label can bypass.
+
+---
+
+## Shipping the PR: the `safe:agent` self-merge runbook
+
+This runbook applies **only** to PRs labeled `safe:agent` ("Agent may merge the
+PR once CI passes"). For `safe:human` PRs, see the next section.
+
+1. **Babysit CI.** After opening the PR, subscribe to PR activity
+   (`subscribe_pr_activity` via the GitHub MCP, or your harness's equivalent).
+   Diagnose red checks from the job logs, push fixes, and re-drive. Escalate to
+   the human instead of looping forever on a failure that is out of the PR's
+   scope.
+2. **Merge conflicts are your job.** Rebase onto `main` (or merge `main` in),
+   resolve, and re-drive CI — don't hand conflicts to the human.
+3. **Preconditions before merging** — verify all of:
+   - All required checks are green.
+   - `review:adversarial-passed` plus a well-formed review block (or
+     `skip-review`) satisfy the adversarial-review gate.
+   - No `CONFIRMED` blocker or major finding stands.
+   - The `owner-review` job passed with the PR labeled `safe:agent`. If it
+     flags the diff as owner-gated, relabel `safe:human` and switch to the
+     handoff path (`docs/agents/governance.md`).
+4. **Merge: squash.** Repo policy — the PR title becomes the squash commit,
+   which is why the `pr-title` job runs commitlint against it. Use the GitHub
+   MCP `merge_pull_request` with `merge_method: "squash"`, or
+   `gh pr merge --squash --delete-branch` locally. Never rewrite the title at
+   merge time.
+5. **Cleanup.** Delete the branch and unsubscribe from PR activity.
+6. **Linear closeout.** `Fixes AUB-<n>` auto-transitions the issue to Done on
+   merge; **archive it** to stay under the 250-issue budget
+   (`docs/agents/linear.md`).
+
+---
+
+## Who reviews a `safe:human` PR
+
+**Default: the session owner.** The human driving the orchestrating session
+reviews and merges their own agents' `safe:human` PRs — that covers design PRs,
+judgment-call changes, and governance/process docs.
+
+**Exception: owner-gated surfaces.** Those always require **@tonytino** per
+`docs/agents/governance.md` — CODEOWNERS + branch protection make that
+unbypassable, regardless of who else approves.
+
+As an agent: request the right reviewer and say so in the PR's "Notes for
+reviewer" section; the PR stays open until that human merges it. **Never merge
+— or enable auto-merge on — any `safe:human` PR** (Hard Rule in `AGENTS.md`).
+
+---
+
+## Talking to the human
+
+Prefer **AskUserQuestion** for any decision that needs human input. Structured
+prompts surface across the owner's many parallel sessions; questions embedded
+mid-response get missed. One question-set with concrete options beats a
+paragraph ending in "thoughts?".
+
+An **unresponsive human is busy, not broken**: keep the session alive, re-ask
+periodically, park non-blocking work and continue what you can — and never
+fabricate an answer to a blocking question. In a harness without the tool, put
+the question in the FIRST line of the reply, prefixed `QUESTION FOR HUMAN:`.
 
 ---
 

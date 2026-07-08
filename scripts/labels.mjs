@@ -80,12 +80,12 @@ export const LABELS = [
   {
     name: "safe:agent",
     color: "bfd4f2",
-    description: "Agent can execute without human pre-approval",
+    description: "Agent may merge the PR once CI passes",
   },
   {
     name: "safe:human",
     color: "e4b429",
-    description: "Human must approve before the agent begins work",
+    description: "Agent implements; a human reviews and merges — never auto-merged",
   },
 
   // ── Meta ──────────────────────────────────────────────────────────────────
