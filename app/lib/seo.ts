@@ -13,8 +13,13 @@
  * Canonical production origin — used to build ABSOLUTE URLs for `og:image` and
  * `og:url`, which social scrapers (notably Apple/iMessage) require; relative
  * paths are unreliable. Update this single constant if the domain changes.
+ *
+ * The live custom domain is the HYPHENATED `www.aubreys-list.com` — that is
+ * the host Google indexes (per Search results) and the one attached to the
+ * Vercel project. The unhyphenated `aubreyslist.com` (the repo's name) is NOT
+ * our domain; do not "fix" the spelling back.
  */
-export const SITE_URL = "https://aubreyslist.com";
+export const SITE_URL = "https://www.aubreys-list.com";
 
 export const SITE_NAME = "Aubrey's List";
 
