@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 import { cn } from "~/lib/utils";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
+import { SuggestedRing } from "./SuggestedRing";
 
 export interface ClaimBadgeProps {
   /** Which taxonomy attribute this badge represents (drives its icon + label). */
@@ -99,9 +100,7 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
     return badge;
   }
 
-  return (
-    <span className="inline-flex shrink-0 rounded-chip bg-gradient-to-r from-brand via-accent-lavender to-accent-peach p-[1.5px]">
-      {badge}
-    </span>
-  );
+  // The gradient provenance ring is the ONE shared `SuggestedRing` primitive,
+  // identical to the one behind the `ClaimTrustSummaryRow` provenance chip.
+  return <SuggestedRing>{badge}</SuggestedRing>;
 }

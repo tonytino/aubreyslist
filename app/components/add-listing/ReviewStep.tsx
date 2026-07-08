@@ -1,8 +1,11 @@
 import { ArrowLeft, HelpCircle, Pencil } from "lucide-react";
 import type { ReactNode } from "react";
+import { BADGE_FAMILY_SIZE } from "~/components/badge-size";
 import { SafetySignal } from "~/components/SafetySignal";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { cn } from "~/lib/utils";
 import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
 import { CLAIM_ATTRIBUTE_ICONS, claimAttributeLabel } from "~/trust/summary";
 import type { Answer, AnswerMap, WizardPlace } from "./AddListingWizard";
@@ -150,13 +153,22 @@ function ReviewOutcome({
 }
 
 /**
- * A non-headline fact outcome: a per-attribute icon chip that DELIBERATELY avoids
- * the celiac-safe green / gluten-friendly amber safety tokens (honesty — a plain
- * fact must never read as a safety verdict). Confirmed uses a neutral-positive
- * brand tint, Disputed a muted/neutral one. Colour + icon + visible outcome word,
- * with the icon `aria-hidden` so the meaning lives in the text.
+ * A non-headline fact outcome chip. It composes the SAME badge family as the
+ * detail-page per-claim {@link import("~/components/listing/ClaimBadge").ClaimBadge}
+ * — the shared `Badge` shell at {@link BADGE_FAMILY_SIZE} and the attribute's own
+ * `CLAIM_ATTRIBUTE_ICONS` glyph from `~/trust/summary` — so the add-listing review
+ * and the listing detail read in one visual language (AUB-227). Its CONTENT stays
+ * distinct on purpose: it carries the confirm/dispute OUTCOME word, not the plain
+ * attribute label.
+ *
+ * It DELIBERATELY avoids the celiac-safe green / gluten-friendly amber safety
+ * tokens (honesty — a plain fact must never read as a safety verdict). Confirmed
+ * uses a neutral-positive brand tint, Disputed a muted/neutral one. Colour + icon
+ * + the visible "Confirmed"/"Disputed" word keep the two states distinguishable
+ * without resting on colour alone; the icon is `aria-hidden` so meaning lives in
+ * the text.
  */
-function FactOutcomeChip({
+export function FactOutcomeChip({
   attribute,
   confirmed,
 }: {
@@ -167,14 +179,18 @@ function FactOutcomeChip({
   // `text-brand-strong` (not `text-brand`) so the chip clears WCAG AA on the
   // light `brand-soft` fill in BOTH themes (dark `text-brand` on `brand-soft`
   // is only 3.78:1); matches how brand-soft is paired elsewhere in the app.
-  const tint = confirmed ? "bg-brand-soft text-brand-strong" : "bg-muted text-muted-foreground";
+  const tint = confirmed
+    ? "border-transparent bg-brand-soft text-brand-strong"
+    : "border-transparent bg-muted text-muted-foreground";
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-chip px-2.5 py-1 text-body-sm font-medium ${tint}`}
+    <Badge
+      variant="outline"
+      data-testid={confirmed ? "fact-confirmed" : "fact-disputed"}
+      className={cn(BADGE_FAMILY_SIZE, tint)}
     >
-      <Icon aria-hidden="true" className="size-4 shrink-0" />
+      <Icon aria-hidden="true" />
       {confirmed ? "Confirmed" : "Disputed"}
-    </span>
+    </Badge>
   );
 }
 

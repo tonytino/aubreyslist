@@ -2,8 +2,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
+import { BADGE_FAMILY_SIZE } from "~/components/badge-size";
 import { WheatStrike } from "~/components/icons/WheatStrike";
 import type { AttestationValue, ClaimAttribute } from "~/db/schema";
+import { cn } from "~/lib/utils";
 import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
 import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
 import { claimsQueryKey } from "./CommunityClaims";
@@ -189,12 +191,17 @@ interface VoteBadgeButtonProps {
 }
 
 /**
- * A badge-shaped toggle button sharing `SafetySignal`'s chip shape language
- * (rounded chip, `size-4` glyph, `text-body-sm` label) so a pressed vote reads
- * identically to the same state everywhere else. Unpressed it is a neutral
- * outline badge; pressed it fills with the caller's safety colour. Icon + text
- * label are always present and `aria-pressed` announces the state, so the
- * meaning never rests on colour alone.
+ * A badge-shaped toggle button. It stays its OWN interactive `<button>` (Variant
+ * 1 deliberately does NOT fold it into the shared display-chip component — that's
+ * Variant 2), but it now draws its size + shape from the ONE shared
+ * {@link BADGE_FAMILY_SIZE} the static badge family uses (rounded chip, `size-4`
+ * glyph via `[&>svg]:size-4`, `text-body-sm` label), so a pressed vote is
+ * pixel-matched to the `SafetySignal` / `ClaimBadge` chips it mirrors (AUB-227).
+ * Unpressed it is a neutral outline badge; pressed it fills with the caller's
+ * safety colour. Icon + text label are always present and `aria-pressed`
+ * announces the state, so the meaning never rests on colour alone. Behaviour is
+ * unchanged — only the hand-tuned size literals were replaced by the shared
+ * constant.
  */
 function VoteBadgeButton({
   icon: Icon,
@@ -210,11 +217,13 @@ function VoteBadgeButton({
       aria-pressed={pressed}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-chip border px-2.5 py-1 text-body-sm font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 ${
+      className={cn(
+        "inline-flex items-center border outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+        BADGE_FAMILY_SIZE,
         pressed ? pressedClassName : "border-border bg-background text-foreground hover:bg-muted"
-      }`}
+      )}
     >
-      <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={2.25} />
+      <Icon aria-hidden="true" className="shrink-0" strokeWidth={2.25} />
       <span>{label}</span>
     </button>
   );

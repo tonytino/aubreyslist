@@ -161,6 +161,30 @@ bordered soft/outline badges to the pixel.
 
 The header wordmark is `app/components/Wordmark.tsx` (`<Wordmark size="lg" />`).
 
+### One shared chip source per concept (AUB-227)
+
+The badge FAMILY is one visual language; each distinct chip concept has ONE
+implementation, so add-listing and listing-detail can't drift:
+
+- **Per-claim badge** — `ClaimBadge` (`app/components/listing/ClaimBadge.tsx`) is
+  the canonical icon+label claim chip. The add-listing review outcome chip
+  (`FactOutcomeChip`, exported from `app/components/add-listing/ReviewStep.tsx`)
+  composes the SAME `Badge` shell + `BADGE_FAMILY_SIZE`; it keeps distinct content
+  (attribute icon + a "Confirmed"/"Disputed" outcome word in a neutral, non-safety
+  tint) but matches the family's size/shape.
+- **Bot "suggested" treatment** — the purple gradient provenance ring is the ONE
+  `SuggestedRing` primitive (`app/components/listing/SuggestedRing.tsx`), shared by
+  the `ClaimBadge` `suggested` variant AND the `ClaimTrustSummaryRow` provenance
+  chip. Don't hand-roll the `bg-gradient-to-r from-brand via-accent-lavender …`
+  ring again — wrap `SuggestedRing`.
+- **Vote toggle** — `ClaimVoteControls`' `VoteBadgeButton` stays its own
+  interactive `<button>` but draws its size/shape from `BADGE_FAMILY_SIZE` too, so
+  a pressed vote is pixel-matched to the static chips.
+- **Parity guard** — `app/components/listing/claim-chip-parity.test.tsx` fails if
+  the review chip and the detail `ClaimBadge` diverge on the taxonomy icon/label
+  (both sourced from `~/trust/summary`) or on the shared family-size class. Run it
+  as the tripwire whenever you touch either chip.
+
 ## Component primitives (shadcn/ui — ADR-011)
 
 Reusable primitives live in `app/components/ui/` (shadcn New-York style,
