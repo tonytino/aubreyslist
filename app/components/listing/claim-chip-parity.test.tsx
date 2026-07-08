@@ -1,26 +1,52 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type { ReactElement } from "react";
+import { describe, expect, it, vi } from "vitest";
 import { FactOutcomeChip } from "~/components/add-listing/ReviewStep";
 import { BADGE_FAMILY_SIZE } from "~/components/badge-size";
 import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
 import { CLAIM_ATTRIBUTE_ICONS, claimAttributeLabel } from "~/trust/summary";
 import { ClaimBadge } from "./ClaimBadge";
+import { ClaimVoteControls } from "./ClaimVoteControls";
+
+// The vote toggle imports the attestation server fns; stub them so this pure
+// render-parity test never touches the network. Behaviour (clicks, toasts,
+// aria-pressed) is covered in ClaimVoteControls.test.tsx — here we only assert
+// WHAT the confirm chip renders, to prove it shares the family primitive.
+vi.mock("~/server/attestations/attestations.fn", () => ({
+  submitVote: vi.fn(() => Promise.resolve()),
+  removeVote: vi.fn(() => Promise.resolve()),
+}));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 /**
  * PARITY GUARD (AUB-227) — the "means to maintain consistency" the issue asks for.
  *
- * The "confirmed/attested" concept is rendered by more than one chip: the
- * add-listing review `FactOutcomeChip` and the listing-detail `ClaimBadge`. Both
- * are supposed to draw their per-attribute ICON + attribute LABEL from the SINGLE
- * source in `~/trust/summary` and share the ONE badge family size
- * (`BADGE_FAMILY_SIZE`). This test FAILS if either surface drifts — e.g. someone
- * hard-codes a different glyph in the review step, or hand-tunes a chip's size —
- * so the two can't silently diverge again.
+ * The per-claim chip is rendered by more than one surface: the add-listing review
+ * `FactOutcomeChip`, the listing-detail `ClaimBadge`, AND — since V2 deep-unified
+ * them onto the shared `ClaimChip` primitive — the interactive vote toggle's
+ * confirm button. All draw their per-attribute ICON + attribute LABEL from the
+ * SINGLE source in `~/trust/summary` and share the ONE badge family size
+ * (`BADGE_FAMILY_SIZE`). This test FAILS if any surface drifts — e.g. someone
+ * hard-codes a different glyph in the review step, hand-tunes a chip's size, or
+ * re-hand-rolls the vote toggle off the shared primitive — so they can't silently
+ * diverge again.
  *
  * It is intentionally NOT vacuous: it extracts the ACTUAL lucide glyph token that
  * each surface renders and the ACTUAL family-size tokens each applies, then
  * asserts they match the shared source. Swap one out and the assertion breaks.
  */
+
+/** Wrap a vote-toggle render in a QueryClient — its mutations need the provider. */
+function renderVoteControls(attribute: ClaimAttribute): ReactElement {
+  return (
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <ClaimVoteControls listingId="listing-1" attribute={attribute} viewerVote={null} isSignedIn />
+    </QueryClientProvider>
+  );
+}
 
 /** The four non-headline "fact" attributes (the headline uses a SafetySignal). */
 const FACT_ATTRIBUTES = CLAIM_ATTRIBUTES.filter(
@@ -128,5 +154,35 @@ describe("claim-chip parity (add-listing review ⇄ listing detail)", () => {
     // fact must never read as a safety verdict.
     expect(confirmedChip?.getAttribute("class")).not.toContain("celiac-safe");
     expect(disputedChip?.getAttribute("class")).not.toContain("gluten-friendly");
+  });
+
+  // V2 deep-unify: the interactive vote toggle now renders THROUGH the same
+  // `ClaimChip` primitive as the static chips. These assertions FAIL if the vote
+  // toggle is ever re-hand-rolled off the shared chip — the confirm affordance
+  // must keep the family icon + size, proving the unify is real, not cosmetic.
+  it.each(
+    FACT_ATTRIBUTES
+  )("renders the vote toggle's confirm chip on the SAME shared primitive (icon + family size) for '%s'", (attribute) => {
+    const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
+    const canonicalToken = lucideToken(
+      render(<Icon aria-hidden="true" />).container.querySelector("svg")
+    );
+
+    // The confirm affordance IS the attribute's own badge (its role name is the
+    // attribute label), and it renders as a real native <button>.
+    const label = claimAttributeLabel(attribute);
+    const { getByRole } = render(renderVoteControls(attribute));
+    const confirm = getByRole("button", { name: label });
+
+    // Same taxonomy glyph as the static detail badge…
+    expect(lucideToken(confirm.querySelector("svg"))).toBe(canonicalToken);
+    // …and the same shared family-size tokens (merged onto the button via Slot).
+    const confirmClass = confirm.getAttribute("class") ?? "";
+    for (const token of FAMILY_TOKENS) {
+      expect(confirmClass).toContain(token);
+    }
+    // Icon + visible text label are both present — meaning never rests on colour.
+    expect(confirm.querySelector("svg")).not.toBeNull();
+    expect(confirm).toHaveTextContent(label);
   });
 });

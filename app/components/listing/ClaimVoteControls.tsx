@@ -2,12 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { BADGE_FAMILY_SIZE } from "~/components/badge-size";
 import { WheatStrike } from "~/components/icons/WheatStrike";
 import type { AttestationValue, ClaimAttribute } from "~/db/schema";
 import { cn } from "~/lib/utils";
 import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
 import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
+import { ClaimChip } from "./ClaimChip";
 import { claimsQueryKey } from "./CommunityClaims";
 
 interface ClaimVoteControlsProps {
@@ -191,17 +191,21 @@ interface VoteBadgeButtonProps {
 }
 
 /**
- * A badge-shaped toggle button. It stays its OWN interactive `<button>` (Variant
- * 1 deliberately does NOT fold it into the shared display-chip component — that's
- * Variant 2), but it now draws its size + shape from the ONE shared
- * {@link BADGE_FAMILY_SIZE} the static badge family uses (rounded chip, `size-4`
- * glyph via `[&>svg]:size-4`, `text-body-sm` label), so a pressed vote is
- * pixel-matched to the `SafetySignal` / `ClaimBadge` chips it mirrors (AUB-227).
- * Unpressed it is a neutral outline badge; pressed it fills with the caller's
- * safety colour. Icon + text label are always present and `aria-pressed`
- * announces the state, so the meaning never rests on colour alone. Behaviour is
- * unchanged — only the hand-tuned size literals were replaced by the shared
- * constant.
+ * A badge-shaped toggle button. Variant 2 (AUB-227) DEEP-unifies it onto the
+ * shared {@link ClaimChip} primitive: the toggle now renders THROUGH that same
+ * chip the static `ClaimBadge` / `FactOutcomeChip` use — so the confirm/dispute
+ * toggle and the display badges are LITERALLY the same component, not two
+ * implementations kept in visual sync. `ClaimChip` supplies the icon + label +
+ * family size/shape (`[&>svg]:size-4`, `text-body-sm`, rounded chip); via
+ * `asChild` (Radix `Slot`) it renders onto the real native `<button>` below,
+ * which adds ONLY its interactive concerns — `aria-pressed`, `disabled`,
+ * `onClick`, the pressed safety-colour fill, and the focus-visible ring.
+ *
+ * Behaviour and a11y are unchanged from V1: icon + visible text label are always
+ * present and `aria-pressed` announces the toggle, so meaning never rests on
+ * colour alone; unpressed it is a neutral outline badge, pressed it fills with the
+ * caller's safety colour. The `<button>` stays a first-class element, so its
+ * keyboard/focus/disabled semantics are native, not simulated.
  */
 function VoteBadgeButton({
   icon: Icon,
@@ -212,19 +216,17 @@ function VoteBadgeButton({
   onClick,
 }: VoteBadgeButtonProps) {
   return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center border outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
-        BADGE_FAMILY_SIZE,
-        pressed ? pressedClassName : "border-border bg-background text-foreground hover:bg-muted"
-      )}
-    >
-      <Icon aria-hidden="true" className="shrink-0" strokeWidth={2.25} />
-      <span>{label}</span>
-    </button>
+    <ClaimChip asChild icon={Icon} iconProps={{ strokeWidth: 2.25 }} label={label}>
+      <button
+        type="button"
+        aria-pressed={pressed}
+        disabled={disabled}
+        onClick={onClick}
+        className={cn(
+          "transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+          pressed ? pressedClassName : "border-border bg-background text-foreground hover:bg-muted"
+        )}
+      />
+    </ClaimChip>
   );
 }

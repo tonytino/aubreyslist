@@ -1,11 +1,9 @@
 import { ArrowLeft, HelpCircle, Pencil } from "lucide-react";
 import type { ReactNode } from "react";
-import { BADGE_FAMILY_SIZE } from "~/components/badge-size";
+import { ClaimChip } from "~/components/listing/ClaimChip";
 import { SafetySignal } from "~/components/SafetySignal";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { cn } from "~/lib/utils";
 import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
 import { CLAIM_ATTRIBUTE_ICONS, claimAttributeLabel } from "~/trust/summary";
 import type { Answer, AnswerMap, WizardPlace } from "./AddListingWizard";
@@ -153,13 +151,14 @@ function ReviewOutcome({
 }
 
 /**
- * A non-headline fact outcome chip. It composes the SAME badge family as the
- * detail-page per-claim {@link import("~/components/listing/ClaimBadge").ClaimBadge}
- * — the shared `Badge` shell at {@link BADGE_FAMILY_SIZE} and the attribute's own
- * `CLAIM_ATTRIBUTE_ICONS` glyph from `~/trust/summary` — so the add-listing review
- * and the listing detail read in one visual language (AUB-227). Its CONTENT stays
- * distinct on purpose: it carries the confirm/dispute OUTCOME word, not the plain
- * attribute label.
+ * A non-headline fact outcome chip. It composes the SAME {@link ClaimChip}
+ * primitive as the detail-page per-claim
+ * {@link import("~/components/listing/ClaimBadge").ClaimBadge} and the interactive
+ * vote toggle — one shared chip (attribute glyph + label at {@link
+ * import("~/components/badge-size").BADGE_FAMILY_SIZE}), so the add-listing review and the listing detail read in
+ * one visual language and cannot drift (AUB-227). Its CONTENT stays distinct on
+ * purpose: it carries the confirm/dispute OUTCOME word, not the plain attribute
+ * label.
  *
  * It DELIBERATELY avoids the celiac-safe green / gluten-friendly amber safety
  * tokens (honesty — a plain fact must never read as a safety verdict). Confirmed
@@ -183,14 +182,12 @@ export function FactOutcomeChip({
     ? "border-transparent bg-brand-soft text-brand-strong"
     : "border-transparent bg-muted text-muted-foreground";
   return (
-    <Badge
-      variant="outline"
+    <ClaimChip
+      icon={Icon}
+      label={confirmed ? "Confirmed" : "Disputed"}
       data-testid={confirmed ? "fact-confirmed" : "fact-disputed"}
-      className={cn(BADGE_FAMILY_SIZE, tint)}
-    >
-      <Icon aria-hidden="true" />
-      {confirmed ? "Confirmed" : "Disputed"}
-    </Badge>
+      className={tint}
+    />
   );
 }
 
