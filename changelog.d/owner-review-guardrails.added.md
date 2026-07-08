@@ -1,0 +1,1 @@
+- `[manual]` Added an owner-review guardrail: a `CODEOWNERS` file plus an `owner-review` CI gate that route cost, legal, security, trust-&-safety, destructive-data, privacy, and safety-disclaimer changes to the owner for explicit sign-off, while everything else still ships agent-driven on green CI (ADR-015, `docs/agents/governance.md`).

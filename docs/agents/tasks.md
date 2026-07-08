@@ -165,7 +165,7 @@ gh issue edit <NUMBER> --remove-label "status:in-progress" --add-label "status:b
 | `size:m` | 2–4 hrs, multi-file |
 | `size:l` | Needs planning session first |
 | `safe:agent` | Agent may merge the PR once CI passes |
-| `safe:human` | Agent implements it, but a human reviews and merges — never auto-merged |
+| `safe:human` | Agent implements it, but a **human** reviews and merges — never auto-merged. **Required** for any change touching an owner-gated surface (cost / legal / security / trust & safety / destructive data / privacy / safety-disclaimer): the `owner-review` CI job fails a gated PR labeled `safe:agent`, and `.github/CODEOWNERS` auto-requests the owner's review. Agents never click merge on these. See `docs/agents/governance.md`. |
 | `type:bug` | Something broken |
 | `type:feature` | New functionality |
 | `type:chore` | Maintenance / tooling |
