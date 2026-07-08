@@ -53,7 +53,9 @@ paths can't see — destructive SQL in a migration, the safety disclaimer wherev
 it lives, telemetry/PII posture. If a gated surface is touched but the PR isn't
 labeled `safe:human`, **CI fails** with a "relabel `safe:human`" message. This
 stops an agent self-labeling a gated change `safe:agent` (auto-mergeable) and
-gives fast feedback. Layer 1 backstops every miss, so this stays simple.
+gives fast feedback. Layer 1 backstops every miss in the **path** categories, so
+those checks can stay simple; the **content** checks guard unowned files and are
+best-effort — see "Known limitations" below.
 
 **There is no bypass label.** Unlike the adversarial-review gate (`skip-review`),
 the owner-review gate cannot be waved off by a label — a label is appliable by any

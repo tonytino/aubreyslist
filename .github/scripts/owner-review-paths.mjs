@@ -176,8 +176,8 @@ export const CONTENT_CHECKS = [
       /senddefaultpii\s*:\s*true/i,
       /\b(traces|profiles)samplerate\s*:/i,
       /\breplays(session|onerror)samplerate\s*:/i,
-      /\bsetuser\s*\(/i, // Sentry.setUser({ email, id, … })
-      /\.identify\s*\(/i, // posthog/segment/amplitude identify()
+      /\.setuser\s*\(/i, // Sentry.setUser({ email, id }) — member call, NOT the bare React useState setter
+      /\b(posthog|segment|analytics|amplitude|mixpanel|rudderanalytics)\s*\.\s*identify\s*\(/i,
       /\bgtag\s*\(/i, // Google Analytics
       /from\s+["'](@sentry\/|posthog|mixpanel|@amplitude|@segment|@vercel\/analytics)/i,
     ],
