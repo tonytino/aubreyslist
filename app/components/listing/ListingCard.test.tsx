@@ -205,8 +205,8 @@ describe("RestaurantCard", () => {
     const badges = await screen.findAllByTestId("suggested-attribute");
     expect(badges).toHaveLength(2);
     // Clearly a suggestion, never a community-confirmed verdict (ADR-007): the
-    // distinction rests on the icon + gradient ring + tooltip, never colour
-    // alone; no SafetySignal state marker either.
+    // distinction rests on the attribute icon + gradient ring + "AI" marker +
+    // tooltip, never colour alone; no SafetySignal state marker either.
     expect(badges[0]).toHaveTextContent("Dedicated fryer");
     expect(badges[1]).toHaveTextContent("GF substitutes");
     for (const badge of badges) {
@@ -215,9 +215,9 @@ describe("RestaurantCard", () => {
   });
 
   it("keeps even the suggested CELIAC badge structurally distinct from the real verdict chip (ADR-007)", async () => {
-    // The celiac badge shares the verdict chip's attribute label — the Sparkles
-    // icon + gradient ring + tooltip are what keep it readable as a suggestion,
-    // never resting on colour alone.
+    // The celiac badge shares the verdict chip's attribute label — the attribute
+    // icon + gradient ring + "AI" marker + tooltip are what keep it readable as a
+    // suggestion, never resting on colour alone.
     renderCard({
       safetyState: null,
       suggestedByBot: true,

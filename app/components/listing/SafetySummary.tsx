@@ -11,9 +11,12 @@ interface SafetySummaryProps {
   state?: SafetyState | null;
   /**
    * Visual emphasis. `"default"` is the standalone section; `"hero"` (AUB-131)
-   * scales the cue up to sit in the listing hero's solid bar below the media,
-   * where it reads as the page's headline verdict. Both variants keep the
-   * accessible region + heading and the honest empty state — only sizing and the
+   * places the cue in the listing hero's solid bar below the media, where it
+   * reads as the page's headline verdict. The headline is NO LONGER up-scaled
+   * (AUB-224): it renders at the shared badge-family size, identical to the
+   * per-claim badges, and stays the primary verdict by its solid colour fill +
+   * hero position rather than by size. Both variants keep the accessible region
+   * + heading and the honest empty state — only the fill/position and the
    * heading's visibility differ.
    */
   variant?: "default" | "hero";
@@ -65,9 +68,9 @@ const NOT_YET_ATTESTED_GUIDANCE =
  * consensus could put a celiac at real risk. The `state` prop is the single seam
  * EPIC 4 wires up; everything else here already handles the populated render.
  *
- * The `"hero"` variant (AUB-131) renders the SAME headline cue at hero scale
- * inside the listing hero's solid bar, plus the incident badge when
- * `hasRecentIncident` is true. Both badges (or the badge + the honest empty
+ * The `"hero"` variant (AUB-131) renders the SAME headline cue inside the
+ * listing hero's solid bar — at the shared badge-family size, not up-scaled
+ * (AUB-224) — plus the incident badge when `hasRecentIncident` is true. Both badges (or the badge + the honest empty
  * state) sit in ONE row that scrolls horizontally on overflow instead of
  * wrapping — `overflow-x-auto` with a hidden scrollbar and `shrink-0` chips
  * (the same pattern as the directory's `FilterChips` row) — so the row never
@@ -105,13 +108,18 @@ export function SafetySummary({
       <Tooltip>
         <TooltipTrigger asChild>
           <button type="button" className={tooltipButtonClassName}>
-            <SafetySignal state={state} variant="solid" className="text-lead gap-2 px-4 py-2" />
+            {/* No size override (AUB-224): the headline renders at the shared
+                badge-family size, identical to the per-claim badges. It stays
+                the primary verdict by its SOLID colour fill + hero position,
+                never by being bigger. */}
+            <SafetySignal state={state} variant="solid" />
           </button>
         </TooltipTrigger>
         <TooltipContent>{SAFETY_TOOLTIP[state]}</TooltipContent>
       </Tooltip>
     ) : (
-      <SafetySignal state={state} variant="solid" className="text-body self-start px-3 py-1.5" />
+      // Same shared size as everywhere else; `self-start` is alignment, not size.
+      <SafetySignal state={state} variant="solid" className="self-start" />
     )
   ) : isHero && hasRecentIncident ? (
     // Compact empty state, ONLY when it must share the never-wrapping hero row

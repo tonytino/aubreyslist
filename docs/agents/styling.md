@@ -144,6 +144,21 @@ so the signal survives greyscale.
 `SAFETY_STATES` and `safetyLabel()` are exported for legends, filters, and the
 `/style-guide` route, which showcases the palette, type scale, and every signal.
 
+### One shared badge size (AUB-224)
+
+The whole badge family — the headline `SafetySignal` chip AND the per-claim
+`ClaimBadge` (`app/components/listing/ClaimBadge.tsx`) — must render at the EXACT
+same size and shape everywhere, including the listing-detail hero. There is ONE
+size source: `BADGE_FAMILY_SIZE` in `app/components/badge-size.ts` (padding,
+radius, text size, gap, and icon size via `[&>svg]:size-4`). Both components
+compose that constant; never hand-tune `px`/`py`/`text`/`rounded`/icon-size on an
+individual badge, and do not up-scale the headline in the hero (the old
+`text-lead px-4 py-2` override is gone). The headline stays the primary verdict
+by its SOLID colour fill + hero position, not by size; the other claim badges
+keep their soft/outline fill at the identical size. `SafetySignal`'s `solid`
+variants carry a `border border-transparent` so their box metrics match the
+bordered soft/outline badges to the pixel.
+
 The header wordmark is `app/components/Wordmark.tsx` (`<Wordmark size="lg" />`).
 
 ## Component primitives (shadcn/ui — ADR-011)
