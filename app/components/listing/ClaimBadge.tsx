@@ -17,8 +17,9 @@ export interface ClaimBadgeProps {
    * The suggested variant KEEPS the attribute's OWN glyph
    * (`CLAIM_ATTRIBUTE_ICONS[attribute]`, e.g. Flame / BookOpen / ConciergeBell /
    * Replace) — it is no longer swapped for a generic `Sparkles` icon (AUB-225).
-   * The vibrant purple gradient ring plus the compact always-visible "AI" marker,
-   * now rendered AFTER the label (`[attribute icon] [label] [AI marker]`), are
+   * The vibrant purple gradient ring plus the always-visible "AI" marker (set in
+   * the badge's own text size, AUB-225 owner nit), now rendered AFTER the label
+   * (`[attribute icon] [label] [AI marker]`), are
    * enough to signal "AI-suggested" without hiding which attribute it is. The
    * "AI" marker is a real, always-painted text label alongside the icon, never
    * resting on colour/shape alone or on a hover/focus-only tooltip. That matters
@@ -81,7 +82,7 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="rounded-sm text-[10px] font-bold uppercase tracking-wide text-brand underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+              className="rounded-sm text-body-sm font-bold uppercase tracking-wide text-brand underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
             >
               AI
             </button>
