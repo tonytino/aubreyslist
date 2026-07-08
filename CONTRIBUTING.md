@@ -20,10 +20,14 @@ Just state your goal. Using another harness? Point your agent at `AGENTS.md` →
 - **`safe:human` PRs are reviewed and merged by YOU, the session owner.** You
   review your own agents' work — that's the design, not a loophole. Your
   agents drive CI green, then stop and wait for you.
-- **Exception: owner-gated surfaces** — cost, legal, security, trust & safety
-  model, destructive data, privacy posture, and safety-disclaimer copy (see
-  `docs/agents/governance.md`). Only **@tonytino** can approve and merge
-  those; CODEOWNERS + branch protection make it unbypassable.
+- **Exception: owner-gated surfaces** — changes touching an owner-gated
+  surface; the categories and exact files are defined in
+  `docs/agents/governance.md` (mirrored in
+  `.github/scripts/owner-review-paths.mjs` and `.github/CODEOWNERS`). Only
+  **@tonytino** can approve and merge those — owned paths are hard-blocked by
+  CODEOWNERS + branch protection, while the content-only categories rely on
+  the best-effort `owner-review` CI tripwire (see governance.md's "Known
+  limitations").
 
 ## Expect questions
 

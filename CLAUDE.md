@@ -22,6 +22,13 @@ source of truth for this repo — read it before changing anything.
 - Track work in Linear team `AUB` — search existing projects and issues before
   creating anything (`docs/agents/linear.md`).
 
+## Non-negotiables (full list + enforcement in AGENTS.md → Hard Rules)
+
+- pnpm only — never npm or yarn.
+- Run `pnpm preflight` before declaring work complete.
+- Never merge (or enable auto-merge on) a `safe:human` PR.
+- Owner-gated surfaces are always `safe:human` (`docs/agents/governance.md`).
+
 ## Tiny-task exception
 
 Answering questions and typo-class / one-line doc fixes may be handled

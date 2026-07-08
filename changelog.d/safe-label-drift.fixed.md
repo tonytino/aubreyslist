@@ -1,0 +1,1 @@
+- `[manual]` Fixed `safe:human` drift in the agent-task and bug-report issue templates and `scripts/labels.mjs` — the label gates the merge, not the work.

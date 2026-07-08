@@ -205,12 +205,16 @@ PR once CI passes"). For `safe:human` PRs, see the next section.
 ## Who reviews a `safe:human` PR
 
 **Default: the session owner.** The human driving the orchestrating session
-reviews and merges their own agents' `safe:human` PRs — that covers design PRs,
-judgment-call changes, and governance/process docs.
+reviews and merges their own agents' `safe:human` PRs — design PRs and other
+judgment-call changes in non-owner-gated paths.
 
 **Exception: owner-gated surfaces.** Those always require **@tonytino** per
-`docs/agents/governance.md` — CODEOWNERS + branch protection make that
-unbypassable, regardless of who else approves.
+`docs/agents/governance.md`. Caution: the process/config surfaces are
+themselves owner-gated paths — `AGENTS.md`, `/.github/`, `docs/decisions/`,
+`scripts/labels.mjs`, `package.json`, and the root configs. Owned **paths**
+are hard-blocked by CODEOWNERS + branch protection regardless of who else
+approves; the **content** categories rely on the best-effort `owner-review`
+CI tripwire (see governance.md's "Known limitations").
 
 As an agent: request the right reviewer and say so in the PR's "Notes for
 reviewer" section; the PR stays open until that human merges it. **Never merge
