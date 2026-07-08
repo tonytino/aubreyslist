@@ -60,6 +60,30 @@ the owner-review gate cannot be waved off by a label — a label is appliable by
 write collaborator or bot, which would defeat the point. The only way past a gated
 change is @tonytino's own review + merge.
 
+### Known limitations (honest)
+
+The backstop is **asymmetric**, and it matters:
+
+- **Path categories are hard-backstopped.** For anything living in an owned path
+  (auth, places, schema, migrations, env, the config surface, …), Layer 1 blocks
+  the merge regardless of label — even if the Layer-2 detector had a bug.
+- **Content categories are best-effort.** The disclaimer, telemetry, and
+  destructive-SQL checks exist to catch gated changes that land in **unowned**
+  files (a disclaimer reworded into a new component; a brand-new analytics init).
+  Those have **no Layer-1 backstop by construction** — so a content-category
+  change that evades the regex heuristics can still merge as `safe:agent`. The
+  patterns are kept deliberately broad, but they are heuristics, not a proof.
+  Destructive SQL run from **non-migration** app code (a raw `sql`…`` outside
+  `db/migrations/`) is likewise not caught by the migration check.
+- **Mitigation:** when you add a new outbound tracker, a new user-facing safety
+  claim, or raw destructive SQL, classify honestly as `safe:human` even if CI is
+  green — the gate is a floor, not a ceiling. Reviewers: treat the **Trust-model
+  invariants**, **Security**, and data-collection dimensions of the
+  adversarial-review loop as the human backstop for these content categories.
+- **Credentials, not code, are the ultimate boundary.** No GitHub setting can tell
+  the owner apart from an agent holding the owner's approve-capable token — see the
+  merge norm below.
+
 ---
 
 ## The merge norm (hard rule)

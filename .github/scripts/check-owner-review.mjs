@@ -74,21 +74,34 @@ export function parseUnifiedDiff(diffText) {
   if (typeof diffText !== "string" || diffText === "") return out;
   let aPath = null;
   let file = null;
+  // Track hunk state so a CONTENT line that happens to start with `+++ ` / `--- `
+  // (e.g. `+++ heading` inside an edited markdown/SQL body) is NOT misparsed as a
+  // file header (review finding #5). `--- `/`+++ ` are headers only BEFORE the
+  // first `@@` of a file; once inside a hunk, `+`/`-` lines are content until the
+  // next `diff --git`.
+  let inHunk = false;
   for (const line of diffText.split(/\r?\n/)) {
-    if (line.startsWith("--- ")) {
+    if (line.startsWith("diff --git")) {
+      file = null;
+      aPath = null;
+      inHunk = false;
+      continue;
+    }
+    if (!inHunk && line.startsWith("--- ")) {
       const p = line.slice(4).trim();
       aPath = p === "/dev/null" ? null : p.replace(/^a\//, "");
       continue;
     }
-    if (line.startsWith("+++ ")) {
+    if (!inHunk && line.startsWith("+++ ")) {
       const p = line.slice(4).trim();
       file = p === "/dev/null" ? aPath : p.replace(/^b\//, "");
       continue;
     }
-    if (line.startsWith("diff --git") || line.startsWith("@@") || line.startsWith("index ")) {
+    if (line.startsWith("@@")) {
+      inHunk = true;
       continue;
     }
-    if (!file) continue;
+    if (!inHunk || !file) continue;
     if (line.startsWith("+")) out.push({ file, side: "add", text: line.slice(1) });
     else if (line.startsWith("-")) out.push({ file, side: "del", text: line.slice(1) });
   }
@@ -169,13 +182,20 @@ function collectDiff() {
   } catch {
     base = baseRef;
   }
+  // `-c core.quotepath=false` so non-ASCII filenames come back verbatim (not
+  // C-quoted like "app/caf\303\251.ts"), which would otherwise defeat the path
+  // and header matching (review finding #4). Diffing from the merge-base is
+  // three-dot-equivalent scoping (only this branch's own changes).
   const changedFiles = splitList(
-    execFileSync("git", ["diff", "--name-only", `${base}`, "HEAD"], { encoding: "utf8" })
+    execFileSync("git", ["-c", "core.quotepath=false", "diff", "--name-only", `${base}`, "HEAD"], {
+      encoding: "utf8",
+    })
   );
-  const diffText = execFileSync("git", ["diff", "--unified=0", `${base}`, "HEAD"], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  const diffText = execFileSync(
+    "git",
+    ["-c", "core.quotepath=false", "diff", "--unified=0", `${base}`, "HEAD"],
+    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }
+  );
   return { changedFiles, diffText };
 }
 

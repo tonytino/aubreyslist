@@ -12,11 +12,20 @@
 //     owned-path PR unmergeable until the owner approves. Nothing here can be
 //     bypassed by a collaborator, bot, or agent.
 //   Layer 2 (the tripwire): the CI detector re-derives the same surface from this
-//     module PLUS a few content signals paths can't see (destructive SQL, the
-//     safety disclaimer, telemetry posture) and FAILS the PR unless it is labeled
+//     module PLUS content signals paths can't see (destructive SQL, the safety
+//     disclaimer, telemetry posture) and FAILS the PR unless it is labeled
 //     `safe:human`. This stops an agent self-labeling a gated change `safe:agent`
-//     (auto-mergeable). Layer 1 backstops every miss, so this stays deliberately
-//     simple — false negatives here still cannot merge without the owner.
+//     (auto-mergeable).
+//
+// IMPORTANT — the backstop is asymmetric. Layer 1 (CODEOWNERS) backstops every
+// miss in the PATH categories: a path-owned file cannot merge without the owner
+// regardless of label, so the path checks can be simple. The CONTENT_CHECKS are
+// different — they exist to catch gated changes that land in UNOWNED files (a
+// disclaimer moved to a new component, a new telemetry init), which by
+// definition have NO Layer-1 backstop. They are therefore best-effort
+// heuristics: a content-category change in an unowned file that evades these
+// patterns can still merge as `safe:agent`. Keep the patterns broad and treat
+// this as a known residual limitation (documented in docs/agents/governance.md).
 //
 // The seven owner-gated categories (ADR-015): cost, legal, security, trust &
 // safety model, destructive/irreversible data changes, data-collection/privacy
@@ -65,9 +74,10 @@ export const OWNED_PATHS = [
   "/.env.example",
   "/.gitignore",
 
-  // ── Data / PII schema + migrations (real user + health-incident data) ──
+  // ── Data / PII schema + migrations + DB connection (real user + health data) ──
   "/db/schema.ts",
   "/db/migrations/",
+  "/db/client.ts",
   "/drizzle.config.ts",
 
   // ── Supply chain / legal ──
@@ -113,12 +123,23 @@ export const CONTENT_CHECKS = [
     kind: "destructive-migration",
     side: "add",
     fileScope: /(^|\/)db\/migrations\//,
-    // Drizzle emits these for data-loss operations. `SET DATA TYPE` / `ALTER
-    // COLUMN ... TYPE` narrows a column (can truncate/round existing values).
+    // Data-loss / integrity-loss operations. `SET DATA TYPE` / `ALTER COLUMN
+    // ... TYPE` narrows a column (can truncate/round existing values); dropping a
+    // constraint/NOT NULL/DEFAULT loses an invariant; RENAME + DELETE FROM are
+    // destructive too. NOTE: any migration edit is ALREADY path-gated
+    // (/db/migrations/ is an OWNED_PATH), so this list only sharpens the error
+    // message — it does not need to be exhaustive to keep data-loss migrations
+    // from shipping `safe:agent`. Destructive SQL executed from NON-migration app
+    // code (e.g. a raw `sql`TRUNCATE …`` in an unowned server module) is out of
+    // scope here (see the residual-limitations note in docs/agents/governance.md).
     patterns: [
       /\bdrop\s+table\b/i,
       /\bdrop\s+column\b/i,
+      /\bdrop\s+constraint\b/i,
+      /\bdrop\s+(not\s+null|default)\b/i,
       /\btruncate\b/i,
+      /\bdelete\s+from\b/i,
+      /\brename\s+(column|table|to)\b/i,
       /\bset\s+data\s+type\b/i,
       /\balter\s+column\b[^\n;]*\btype\b/i,
     ],
@@ -129,25 +150,39 @@ export const CONTENT_CHECKS = [
     kind: "safety-disclaimer",
     side: "both",
     // The "not medical advice" framing is a legal + safety statement. Any line
-    // touching the phrase is gated so wording changes get the owner's sign-off.
-    patterns: [/medical\s+advice/i],
+    // touching this framing (in ANY file — the disclaimer may move) is gated so
+    // wording changes get the owner's sign-off. Broadened past the exact phrase so
+    // a reworded variant in a new component still trips (review finding #1/#2).
+    patterns: [
+      /medical\s+(advice|guidance|opinion)/i,
+      /health\s+advice/i,
+      /(not|isn'?t)\s+a\s+substitute\s+for/i,
+      /professional\s+(medical|health)/i,
+      /consult\s+(a|your)\s+(doctor|physician|healthcare)/i,
+    ],
     message:
       "This change touches the medical-advice / safety-disclaimer copy. Changing the legal/safety framing requires the owner's explicit review (safe:human) — see docs/agents/governance.md.",
   },
   {
     kind: "telemetry-privacy",
     side: "add",
-    // Data-collection posture: capturing PII in error/telemetry payloads or
-    // changing sampling volume (also a cost lever). Most telemetry lives in the
-    // already-owned instrument.server.mjs; this catches a new init elsewhere.
+    // Data-collection posture: capturing PII in error/telemetry payloads, changing
+    // sampling volume (also a cost lever), or wiring a NEW tracker. Most telemetry
+    // lives in the already-owned instrument.server.mjs; these catch a new init /
+    // identify / tracker import elsewhere (review finding #2). Heuristic and
+    // deliberately broad — it only forces `safe:human`, and a false positive is
+    // cheaper than a silent new tracker capturing PII in an unowned file.
     patterns: [
       /senddefaultpii\s*:\s*true/i,
-      /\btracessamplerate\s*:/i,
-      /\bprofilessamplerate\s*:/i,
+      /\b(traces|profiles)samplerate\s*:/i,
       /\breplays(session|onerror)samplerate\s*:/i,
+      /\bsetuser\s*\(/i, // Sentry.setUser({ email, id, … })
+      /\.identify\s*\(/i, // posthog/segment/amplitude identify()
+      /\bgtag\s*\(/i, // Google Analytics
+      /from\s+["'](@sentry\/|posthog|mixpanel|@amplitude|@segment|@vercel\/analytics)/i,
     ],
     message:
-      "This change alters data-collection / telemetry posture (PII capture or sampling volume). It requires the owner's explicit review (safe:human) — see docs/agents/governance.md.",
+      "This change alters data-collection / telemetry posture (PII capture, sampling volume, or a new tracker). It requires the owner's explicit review (safe:human) — see docs/agents/governance.md.",
   },
 ];
 

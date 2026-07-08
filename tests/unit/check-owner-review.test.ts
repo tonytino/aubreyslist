@@ -8,7 +8,7 @@ import * as policy from "../../.github/scripts/owner-review-paths.mjs";
 
 const { matchCodeowners, isOwnedPath, parseUnifiedDiff, contentReasons, classifyOwnerReview } =
   detector;
-const { OWNED_PATHS } = policy as { OWNED_PATHS: string[] };
+const { OWNED_PATHS, OWNER_HANDLE } = policy as { OWNED_PATHS: string[]; OWNER_HANDLE: string };
 
 describe("matchCodeowners — CODEOWNERS glob semantics", () => {
   it("matches a directory prefix (trailing slash)", () => {
@@ -93,6 +93,28 @@ describe("parseUnifiedDiff", () => {
       text: "was here",
     });
   });
+
+  it("does not misparse an added line whose content starts with `+++ ` as a header (finding #5)", () => {
+    const diff = [
+      "diff --git a/db/migrations/0007_x.sql b/db/migrations/0007_x.sql",
+      "--- a/db/migrations/0007_x.sql",
+      "+++ b/db/migrations/0007_x.sql",
+      "@@ -0,0 +1,2 @@",
+      "+++ a comment line that looks like a header",
+      '+DROP TABLE "incidents";',
+    ].join("\n");
+    const entries = parseUnifiedDiff(diff);
+    // The DROP TABLE line must still be attributed to the migration file, not lost
+    // to a bogus file reset.
+    expect(entries).toContainEqual({
+      file: "db/migrations/0007_x.sql",
+      side: "add",
+      text: 'DROP TABLE "incidents";',
+    });
+    expect(contentReasons(entries).map((r: { kind: string }) => r.kind)).toContain(
+      "destructive-migration"
+    );
+  });
 });
 
 describe("content checks — gated changes paths can't see", () => {
@@ -136,6 +158,45 @@ describe("content checks — gated changes paths can't see", () => {
     ].join("\n");
     const kinds = contentReasons(parseUnifiedDiff(diff)).map((r: { kind: string }) => r.kind);
     expect(kinds).toContain("telemetry-privacy");
+  });
+
+  it("flags a reworded disclaimer in a new unowned file (finding #1 — no path backstop)", () => {
+    const diff = [
+      "--- /dev/null",
+      "+++ b/app/components/LegalLine.tsx",
+      "@@ +1 @@",
+      "+  return <p>Not a substitute for professional medical guidance.</p>;",
+    ].join("\n");
+    const kinds = contentReasons(parseUnifiedDiff(diff)).map((r: { kind: string }) => r.kind);
+    expect(kinds).toContain("safety-disclaimer");
+  });
+
+  it("flags a new third-party tracker identify() call (finding #2)", () => {
+    const diff = [
+      "--- a/app/components/Analytics.tsx",
+      "+++ b/app/components/Analytics.tsx",
+      "@@ +1 @@",
+      "+  posthog.identify(user.id, { email: user.email });",
+    ].join("\n");
+    const kinds = contentReasons(parseUnifiedDiff(diff)).map((r: { kind: string }) => r.kind);
+    expect(kinds).toContain("telemetry-privacy");
+  });
+
+  it("flags additional destructive SQL ops (DROP CONSTRAINT, DELETE FROM, RENAME)", () => {
+    for (const sql of [
+      'ALTER TABLE "users" DROP CONSTRAINT "users_email_unique";',
+      'DELETE FROM "incidents";',
+      'ALTER TABLE "listings" RENAME COLUMN "addr" TO "address";',
+    ]) {
+      const diff = [
+        "--- a/db/migrations/0008_x.sql",
+        "+++ b/db/migrations/0008_x.sql",
+        "@@ +1 @@",
+        `+${sql}`,
+      ].join("\n");
+      const kinds = contentReasons(parseUnifiedDiff(diff)).map((r: { kind: string }) => r.kind);
+      expect(kinds, sql).toContain("destructive-migration");
+    }
   });
 });
 
@@ -202,5 +263,20 @@ describe("drift guard — CODEOWNERS and the policy module never diverge", () =>
     // ...and every policy path is actually gated in CODEOWNERS.
     for (const token of policySet) expect(codeownersSet.has(token)).toBe(true);
     expect(codeownersSet.size).toBe(policySet.size);
+  });
+
+  it("assigns every CODEOWNERS rule solely to the owner (no other/empty owner)", () => {
+    // Review finding #3: set-equality on paths alone would let a rule reassign a
+    // gated path to a bot — or drop the owner entirely (which REMOVES ownership) —
+    // while staying green. Assert every rule's owner column is exactly the owner.
+    const codeownersPath = join(process.cwd(), ".github/CODEOWNERS");
+    const rules = readFileSync(codeownersPath, "utf8")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l !== "" && !l.startsWith("#"));
+    for (const rule of rules) {
+      const owners = rule.split(/\s+/).slice(1);
+      expect(owners).toEqual([OWNER_HANDLE]);
+    }
   });
 });

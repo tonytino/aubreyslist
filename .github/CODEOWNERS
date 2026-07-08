@@ -45,9 +45,10 @@
 /.env.example                    @tonytino
 /.gitignore                      @tonytino
 
-# ── Data / PII schema + migrations ────────────────────────────────────────────
+# ── Data / PII schema + migrations + DB connection ────────────────────────────
 /db/schema.ts                    @tonytino
 /db/migrations/                  @tonytino
+/db/client.ts                    @tonytino
 /drizzle.config.ts               @tonytino
 
 # ── Supply chain / legal ──────────────────────────────────────────────────────
