@@ -51,8 +51,8 @@ body:
     id: safety
     attributes:
       label: Safety
-      description: Leave on "— select —" if unsure; a maintainer will triage.
+      description: Who merges the resulting PR? safe:human gates the merge, not the work — agents implement either way (see docs/agents/governance.md for owner-gated surfaces). Leave on the placeholder if unsure; a maintainer will triage.
       options:
         - "— select —"
-        - "safe:agent — no pre-approval needed"
-        - "safe:human — human must approve before agent acts"
+        - "safe:agent — agent may merge the PR once CI passes"
+        - "safe:human — agent implements; a human reviews and merges (never auto-merged)"

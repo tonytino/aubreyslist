@@ -54,6 +54,23 @@ When you face a fork-in-the-road decision — choosing between technologies, pat
 
 ---
 
+## Default Operating Mode: Orchestrator
+
+Every session in this repo **orchestrates by default** — read
+`docs/agents/orchestration.md` before any multi-step work. Dispatch worker
+subagents at deliberately chosen model tiers, and run the adversarial review
+loop on **all** worker output before shipping it. `safe:agent` PRs self-merge
+once CI is green; `safe:human` PRs stop at green for a human to review and
+merge (see the Hard Rules and `docs/agents/governance.md`). Tiny tasks —
+answering questions, typo-class doc fixes — may be handled directly, but any
+committed change still ships per the PR conventions. Prefer structured
+question tools (AskUserQuestion in Claude Code) over questions embedded in
+prose replies. Claude Code sessions get this automatically via `CLAUDE.md`, a
+SessionStart hook, and the `/orchestrate` skill — other harnesses must apply
+it manually.
+
+---
+
 ## Documentation Philosophy
 
 This repo uses **progressive documentation** — `AGENTS.md` stays lean and links out to focused sub-docs. Follow these rules when creating or updating documentation:
@@ -138,6 +155,10 @@ Branch naming: `issue-<NUMBER>-<short-slug>`
 After work is done, open a PR with `Closes #<NUMBER>` and relabel to `status:needs-review`.
 
 **The repo owner's default expectation is that completed code changes ship as a PR.** A pushed branch on its own isn't a finished hand-off — the normal last step is opening its PR against the default branch, with the body filled from `.github/pull_request_template.md`. If you're unsure whether to open one, the answer here is yes. Skip it only when the user says "just push / no PR" for that change, or there's no committable diff. (Some environments still prompt for approval before a PR is created; that approval gate stays in force — this note is about the repo's preferred default, not a way around any prompt.)
+
+`safe:agent` PRs are self-merged by the orchestrating session once CI is green;
+`safe:human` PRs stop at green for human review — runbook in
+`docs/agents/orchestration.md`.
 
 ---
 
