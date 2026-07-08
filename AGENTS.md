@@ -24,6 +24,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Cutting the v1 release (readiness checklist)   | `docs/product/v1-readiness.md` |
 | Domain: listings, GF taxonomy, trust, roles   | `docs/agents/domain.md`       |
 | Finding and claiming work                     | `docs/agents/tasks.md`        |
+| What needs the owner's sign-off (cost/legal/security/safety) | `docs/agents/governance.md` |
 | Planning, epics, tracked work (Linear)        | `docs/agents/linear.md`       |
 | Epics via GitHub issues (legacy/in-flight)    | `docs/agents/issues.md`       |
 | Acting on Vercel preview comments (visual feedback) | `docs/agents/preview-feedback.md` |
@@ -99,6 +100,14 @@ These apply everywhere, always, with no exceptions.
 - **No manual edits to `app/routeTree.gen.ts` or `db/migrations/`.** Both are auto-generated.
 - **No new dependencies** without checking if the existing stack already covers the need.
 - **No skipping tests** for code you add.
+- **Owner-gated changes are `safe:human`, never `safe:agent`.** Any change
+  touching a cost, legal, security, trust-&-safety-model, destructive-data,
+  privacy, or safety-disclaimer surface requires the owner's explicit review. The
+  exact surfaces and mechanism are in `docs/agents/governance.md`; the
+  `owner-review` CI job enforces it and there is **no bypass label**.
+- **Agents never merge (or enable auto-merge on) a `safe:human` PR** — a human
+  always clicks merge for those. More broadly, never take an action-as-a-human the
+  human would disapprove of.
 - **pnpm only.** Never use npm or yarn.
 - **Run `pnpm preflight` before declaring work complete.** This single command runs lint, typecheck, and tests. See `docs/agents/tooling.md` for when to use `check` vs `preflight` vs the pre-commit hook.
 

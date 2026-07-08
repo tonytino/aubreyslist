@@ -150,3 +150,40 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: node .github/scripts/check-review-block.mjs
+
+  owner-review:
+    name: Owner-review gate
+    # Layer 2 of the owner-review guardrail (ADR-015, docs/agents/governance.md).
+    # FAILS the PR when it touches an owner-gated surface (cost / legal / security
+    # / trust & safety / data-loss migration / privacy / safety-disclaimer copy)
+    # but is NOT labeled `safe:human` — i.e. an agent tried to self-classify it
+    # `safe:agent` (auto-mergeable). Re-evaluates on `labeled`/`unlabeled` (the
+    # triggers above), so relabeling `safe:human` re-runs it.
+    #
+    # This is a forcing function; the ENFORCEMENT is Layer 1 (.github/CODEOWNERS
+    # + branch protection), which makes an owned-path PR unmergeable until the
+    # owner approves. There is deliberately NO bypass label (unlike skip-review):
+    # the only way past a gated change is the owner's own review + merge.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      # fetch-depth: 0 so the merge-base against the PR base resolves (the gate
+      # diffs base…HEAD to find this PR's changed files + added lines).
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      # Zero-dep ESM script; node is already on ubuntu-latest, so (like pr-tldr /
+      # adversarial-review) we only need a checkout — no pnpm/setup-node/install.
+      # Labels are passed via env (newline-joined), NOT inline ${{ }}, so a
+      # hostile label can't inject into the shell. BASE_SHA drives the merge-base
+      # diff, mirroring the diff-coverage job.
+      - name: Enforce owner review on gated surfaces
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Comma-joined (label names never contain commas); the script splits on
+          # commas/newlines. Passed via env, never inline, to avoid injection.
+          OWNER_REVIEW_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: node .github/scripts/check-owner-review.mjs

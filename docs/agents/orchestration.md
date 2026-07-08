@@ -147,6 +147,14 @@ Likewise `skip-review` is a **human judgement call**: CI cannot enforce *who*
 applied it or that the change truly warranted skipping. Treat both as social
 contracts the gate makes visible, not guarantees.
 
+**Relationship to the owner-review gate.** The adversarial-review loop is a
+self/peer check that any reviewer can clear. It does **not** replace the
+owner-review guardrail (`docs/agents/governance.md`): when a change touches an
+owner-gated surface (cost / legal / security / trust & safety / destructive data /
+privacy / safety-disclaimer), the **Trust-model invariants** and **Security**
+dimensions above must be probed *and* the PR is `safe:human` — merged by the owner
+via CODEOWNERS + branch protection, which no review record or label can bypass.
+
 ---
 
 ## How to Invoke
