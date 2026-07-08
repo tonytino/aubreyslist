@@ -15,10 +15,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * mocking `~/db/client` the SAME way `browse.test.ts` does — a `getDb()` whose
  * `select()` chains resolve to fixture rows — so we assert the assembled cards
  * without a live database (docs/agents/testing.md). `buildBrowseCards` issues
- * exactly three batched queries (celiac aggregate + incidents + the AUB-193
- * bot-suggested-attribute set); the mock routes each by its `select()`
- * projection and returns the fixtures verbatim, so the IN(...) filter is
- * irrelevant to what a row maps to (the row's own `listingId` keys it).
+ * exactly four batched queries (celiac aggregate + incidents + the AUB-193
+ * bot-suggested-attribute set + the AUB-226 confirmed non-headline attribute
+ * set); the mock routes each by its `select()` projection and returns the
+ * fixtures verbatim, so the IN(...) filter is irrelevant to what a row maps to
+ * (the row's own `listingId` keys it).
  *
  * The helper is DISTANCE-AGNOSTIC (the "0.4 mi" label lives in
  * `getBrowseListings`), so no distance is asserted here — that path stays pinned
@@ -30,6 +31,7 @@ const h = vi.hoisted(() => {
     celiacRows: [] as Array<Record<string, unknown>>,
     incidentRows: [] as Array<Record<string, unknown>>,
     suggestionRows: [] as Array<Record<string, unknown>>,
+    confirmedRows: [] as Array<Record<string, unknown>>,
   };
 
   // The celiac-aggregate chain: select(proj).from().leftJoin().where().groupBy()
@@ -46,23 +48,39 @@ const h = vi.hoisted(() => {
   const suggestionWhereMock = vi.fn(() => Promise.resolve(state.suggestionRows));
   const suggestionFromMock = vi.fn(() => ({ where: suggestionWhereMock }));
 
+  // The confirmed-attribute consensus chain (AUB-226):
+  //   select(proj).from().leftJoin().where().groupBy().having()
+  // The `.where()` and `.having()` SQL args are captured (the mocks record their
+  // calls) so a test can render them with PgDialect and assert the real SQL rule
+  // (headline excluded; strict confirms > disputes) — the mock returns rows
+  // verbatim, so the SQL itself is where those guarantees live.
+  const confirmedHavingMock = vi.fn((_having?: unknown) => Promise.resolve(state.confirmedRows));
+  const confirmedGroupByMock = vi.fn(() => ({ having: confirmedHavingMock }));
+  const confirmedWhereMock = vi.fn((_predicate?: unknown) => ({ groupBy: confirmedGroupByMock }));
+  const confirmedLeftJoinMock = vi.fn(() => ({ where: confirmedWhereMock }));
+  const confirmedFromMock = vi.fn(() => ({ leftJoin: confirmedLeftJoinMock }));
+
   // Route each query to the right chain by its select() projection:
   //  - has `occurredOn`           → incidents
   //  - has `suggestedListingId`   → bot-suggestion existence (AUB-193)
+  //  - has `confirmedListingId`   → confirmed-attribute consensus (AUB-226)
   //  - otherwise (claim cols)     → celiac aggregate
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
     if (projection && "occurredOn" in projection) return { from: incidentFromMock };
     if (projection && "suggestedListingId" in projection) return { from: suggestionFromMock };
+    if (projection && "confirmedListingId" in projection) return { from: confirmedFromMock };
     return { from: aggFromMock };
   });
 
-  return { state, selectMock };
+  return { state, selectMock, confirmedWhereMock, confirmedHavingMock };
 });
 
 vi.mock("~/db/client", () => ({
   getDb: () => ({ select: h.selectMock }),
 }));
 
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import type { Listing } from "~/db/schema";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
 import { buildBrowseCards } from "./browse";
@@ -95,6 +113,7 @@ beforeEach(() => {
   state.celiacRows = [];
   state.incidentRows = [];
   state.suggestionRows = [];
+  state.confirmedRows = [];
 });
 
 afterEach(() => {
@@ -193,6 +212,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         freshness: { kind: "fresh", label: "Verified 27d ago" },
         suggestedByBot: false,
         suggestedAttributes: [],
+        confirmedAttributes: [],
       },
       // stale: confirm-majority aged past the window → "stale" + "Updated".
       {
@@ -202,6 +222,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         freshness: { kind: "stale", label: "Updated 6mo ago" },
         suggestedByBot: false,
         suggestedAttributes: [],
+        confirmedAttributes: [],
       },
       // contested: disputes lead → gluten-friendly; the fresh confirm still
       // reads as a "Verified" freshness cue (an independent display signal).
@@ -212,6 +233,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         freshness: { kind: "fresh", label: "Verified 8d ago" },
         suggestedByBot: false,
         suggestedAttributes: [],
+        confirmedAttributes: [],
       },
       // recent-incident: fresh confirm-majority (celiac-safe) BUT a recent report
       // flags the card and the incident cue wins the freshness slot.
@@ -222,6 +244,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         freshness: { kind: "incident", label: "Reported 10d ago" },
         suggestedByBot: false,
         suggestedAttributes: [],
+        confirmedAttributes: [],
       },
       // unattested: no celiac claim → honest empty state, no evidence, no cue.
       {
@@ -231,6 +254,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         freshness: null,
         suggestedByBot: false,
         suggestedAttributes: [],
+        confirmedAttributes: [],
       },
     ];
 
@@ -262,6 +286,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
       freshness: null,
       suggestedByBot: false,
       suggestedAttributes: [],
+      confirmedAttributes: [],
     });
   });
 
@@ -286,6 +311,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
       freshness: null,
       suggestedByBot: true,
       suggestedAttributes: ["dedicated_fryer"],
+      confirmedAttributes: [],
     });
   });
 
@@ -369,5 +395,90 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
     // A 3-month (90d) window → the SAME confirm is now STALE.
     const narrow = await buildBrowseCards([listing], NOW, 3);
     expect(narrow[0]?.glance.safetyState).toBe("stale");
+  });
+});
+
+describe("buildBrowseCards — CONFIRMED non-headline claim badges (AUB-226)", () => {
+  it("surfaces a CONFIRMED non-headline attribute on the glance (detail-page parity)", async () => {
+    // The regression this fixes: a confirmed non-headline claim (e.g. "Off-menu
+    // GF on request") showed on the detail page but never on the browse card.
+    const listing = mkListing({ id: "l-confirmed", name: "Confirmed Claims" });
+    state.celiacRows = [];
+    state.confirmedRows = [
+      { confirmedListingId: "l-confirmed", confirmedAttribute: "off_menu_gf_on_request" },
+    ];
+
+    const cards = await buildBrowseCards([listing], NOW, 6);
+
+    expect(cards[0]?.glance.confirmedAttributes).toEqual(["off_menu_gf_on_request"]);
+    // Confirmed is EVIDENCE, not a bot suggestion — the provenance flag stays off.
+    expect(cards[0]?.glance.suggestedByBot).toBe(false);
+    expect(cards[0]?.glance.suggestedAttributes).toEqual([]);
+  });
+
+  it("normalizes multiple confirmed attributes to taxonomy order (deduped)", async () => {
+    const listing = mkListing({ id: "l-multi", name: "Multi Confirmed" });
+    state.confirmedRows = [
+      { confirmedListingId: "l-multi", confirmedAttribute: "gf_substitutes" },
+      { confirmedListingId: "l-multi", confirmedAttribute: "dedicated_fryer" },
+      { confirmedListingId: "l-multi", confirmedAttribute: "gf_substitutes" },
+    ];
+
+    const cards = await buildBrowseCards([listing], NOW, 6);
+
+    expect(cards[0]?.glance.confirmedAttributes).toEqual(["dedicated_fryer", "gf_substitutes"]);
+  });
+
+  it("dedupes a confirmed attribute AGAINST the suggested set (never both at once)", async () => {
+    // Confirmed evidence and a live suggestion are mutually exclusive by
+    // construction; the glance drops any confirmed attribute also on the
+    // suggested path so the card never double-badges one attribute.
+    const listing = mkListing({ id: "l-overlap", name: "Overlap" });
+    state.suggestionRows = [
+      { suggestedListingId: "l-overlap", suggestedAttribute: "dedicated_fryer" },
+    ];
+    state.confirmedRows = [
+      { confirmedListingId: "l-overlap", confirmedAttribute: "dedicated_fryer" },
+      { confirmedListingId: "l-overlap", confirmedAttribute: "gf_substitutes" },
+    ];
+
+    const cards = await buildBrowseCards([listing], NOW, 6);
+
+    // dedicated_fryer stays on the suggested (provenance) path only.
+    expect(cards[0]?.glance.suggestedAttributes).toEqual(["dedicated_fryer"]);
+    expect(cards[0]?.glance.confirmedAttributes).toEqual(["gf_substitutes"]);
+  });
+
+  it("excludes the headline claim and requires STRICT confirms>disputes in the query SQL", async () => {
+    // The mock returns rows verbatim, so the "headline excluded" and "a tie/
+    // dispute-majority does NOT surface" guarantees live in the SQL itself.
+    // Render the captured WHERE + HAVING and assert the rule directly.
+    const listing = mkListing({ id: "l-sql", name: "SQL Shape" });
+
+    await buildBrowseCards([listing], NOW, 6);
+
+    const dialect = new PgDialect();
+    const whereSql = dialect
+      .sqlToQuery(h.confirmedWhereMock.mock.calls[0]?.[0] as SQL)
+      .sql.toLowerCase();
+    const havingSql = dialect
+      .sqlToQuery(h.confirmedHavingMock.mock.calls[0]?.[0] as SQL)
+      .sql.toLowerCase();
+
+    // Headline excluded: the WHERE filters the celiac attribute OUT (`<>`).
+    expect(whereSql).toContain("<>");
+    expect(whereSql).toContain("celiac_safe_vs_gluten_friendly");
+    // Visibility (#41): only `visible` claims count toward consensus.
+    expect(whereSql).toContain("moderation_status");
+    // STRICT positive consensus: confirms `>` disputes, never `>=` — a tie or
+    // dispute-majority (contested) must NOT surface as a confirmed badge.
+    expect(havingSql).toContain("'confirm'");
+    expect(havingSql).toContain("'dispute'");
+    expect(havingSql).toContain(" > ");
+    expect(havingSql).not.toContain(">=");
+    // Confirms on the LEFT of `>`, disputes on the RIGHT (not the inverse).
+    const gtIndex = havingSql.indexOf(" > ");
+    expect(havingSql.indexOf("'confirm'")).toBeLessThan(gtIndex);
+    expect(havingSql.lastIndexOf("'dispute'")).toBeGreaterThan(gtIndex);
   });
 });

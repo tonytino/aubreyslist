@@ -31,6 +31,7 @@ function vm(overrides: Partial<RestaurantCardVM>): RestaurantCardVM {
     safetyState: null,
     suggestedByBot: false,
     suggestedAttributes: [],
+    confirmedAttributes: [],
     hasRecentIncident: false,
     accent: "lavender",
     ...overrides,

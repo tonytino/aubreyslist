@@ -60,6 +60,16 @@ export interface RestaurantCardVM {
    * distinction must reach touch-only users too).
    */
   suggestedAttributes: ClaimAttribute[];
+  /**
+   * The NON-headline claim attributes with CONFIRMED positive community
+   * consensus (AUB-226), deduped and in taxonomy order. Each renders as a shared
+   * {@link ClaimBadge} in its NON-suggested (affirmed) variant in the badge row,
+   * BEFORE the suggested ones (evidence before provenance). This gives the browse
+   * card the same confirmed claim badges the listing-detail page shows (e.g.
+   * "Off-menu GF on request"). The headline celiac attribute is excluded — it is
+   * the {@link safetyState} verdict, rendered via {@link SafetySignal}, not a badge.
+   */
+  confirmedAttributes: ClaimAttribute[];
   /** A recent "got glutened" report flags the card regardless of confirmations. */
   hasRecentIncident: boolean;
   /** Freshness/recency cue, e.g. `{ kind: "fresh", label: "Verified 3d ago" }`. */
@@ -318,6 +328,16 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           {/* Recent harm flags the card regardless of older confirmations. */}
           {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
 
+          {/* CONFIRMED non-headline claims (AUB-226): one shared {@link ClaimBadge}
+              in its NON-suggested (affirmed) variant per attribute with positive
+              community consensus — real EVIDENCE, so it reads as confirmed, never
+              the suggested/provenance variant. Rendered BEFORE the suggested badges
+              (evidence before provenance) and in taxonomy order, so the browse card
+              shows the SAME confirmed claim badges as the listing-detail page. */}
+          {vm.confirmedAttributes.map((attribute) => (
+            <ClaimBadge key={attribute} attribute={attribute} />
+          ))}
+
           {/* Curator-bot suggested claims (AUB-31, owner nit 7): one shared
               {@link ClaimBadge} per live-suggested attribute — PROVENANCE, never
               evidence (ADR-007). The suggested variant swaps in the Sparkles
@@ -479,6 +499,7 @@ export function listingToCardVM(
     safetyState: glance.safetyState,
     suggestedByBot: glance.suggestedByBot,
     suggestedAttributes: glance.suggestedAttributes,
+    confirmedAttributes: glance.confirmedAttributes,
     hasRecentIncident: glance.hasRecentIncident,
     accent: accentForId(listing.id),
     // Already-derived on the server (batched query set); mapped straight through.
