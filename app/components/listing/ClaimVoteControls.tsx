@@ -4,8 +4,10 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { WheatStrike } from "~/components/icons/WheatStrike";
 import type { AttestationValue, ClaimAttribute } from "~/db/schema";
+import { cn } from "~/lib/utils";
 import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
 import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
+import { ClaimChip } from "./ClaimChip";
 import { claimsQueryKey } from "./CommunityClaims";
 
 interface ClaimVoteControlsProps {
@@ -189,12 +191,21 @@ interface VoteBadgeButtonProps {
 }
 
 /**
- * A badge-shaped toggle button sharing `SafetySignal`'s chip shape language
- * (rounded chip, `size-4` glyph, `text-body-sm` label) so a pressed vote reads
- * identically to the same state everywhere else. Unpressed it is a neutral
- * outline badge; pressed it fills with the caller's safety colour. Icon + text
- * label are always present and `aria-pressed` announces the state, so the
- * meaning never rests on colour alone.
+ * A badge-shaped toggle button. Variant 2 (AUB-227) DEEP-unifies it onto the
+ * shared {@link ClaimChip} primitive: the toggle now renders THROUGH that same
+ * chip the static `ClaimBadge` / `FactOutcomeChip` use — so the confirm/dispute
+ * toggle and the display badges are LITERALLY the same component, not two
+ * implementations kept in visual sync. `ClaimChip` supplies the icon + label +
+ * family size/shape (`[&>svg]:size-4`, `text-body-sm`, rounded chip); via
+ * `asChild` (Radix `Slot`) it renders onto the real native `<button>` below,
+ * which adds ONLY its interactive concerns — `aria-pressed`, `disabled`,
+ * `onClick`, the pressed safety-colour fill, and the focus-visible ring.
+ *
+ * Behaviour and a11y are unchanged from V1: icon + visible text label are always
+ * present and `aria-pressed` announces the toggle, so meaning never rests on
+ * colour alone; unpressed it is a neutral outline badge, pressed it fills with the
+ * caller's safety colour. The `<button>` stays a first-class element, so its
+ * keyboard/focus/disabled semantics are native, not simulated.
  */
 function VoteBadgeButton({
   icon: Icon,
@@ -205,17 +216,17 @@ function VoteBadgeButton({
   onClick,
 }: VoteBadgeButtonProps) {
   return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-chip border px-2.5 py-1 text-body-sm font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 ${
-        pressed ? pressedClassName : "border-border bg-background text-foreground hover:bg-muted"
-      }`}
-    >
-      <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={2.25} />
-      <span>{label}</span>
-    </button>
+    <ClaimChip asChild icon={Icon} iconProps={{ strokeWidth: 2.25 }} label={label}>
+      <button
+        type="button"
+        aria-pressed={pressed}
+        disabled={disabled}
+        onClick={onClick}
+        className={cn(
+          "transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+          pressed ? pressedClassName : "border-border bg-background text-foreground hover:bg-muted"
+        )}
+      />
+    </ClaimChip>
   );
 }

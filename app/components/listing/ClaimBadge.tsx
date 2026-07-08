@@ -1,9 +1,9 @@
-import { BADGE_FAMILY_SIZE } from "~/components/badge-size";
-import { Badge } from "~/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
+import { ClaimChip } from "./ClaimChip";
+import { SuggestedRing } from "./SuggestedRing";
 
 export interface ClaimBadgeProps {
   /** Which taxonomy attribute this badge represents (drives its icon + label). */
@@ -48,10 +48,11 @@ export interface ClaimBadgeProps {
  * attributes like `off_menu_gf_on_request` ended up missing from some surfaces
  * while present on others.
  *
- * Sizing/shape comes from the shared {@link BADGE_FAMILY_SIZE} (AUB-224), so this
- * chip is the EXACT same size as the headline `SafetySignal` — the ONLY thing
- * that sets the headline apart is its solid colour fill; the claim badges keep
- * their soft/outline treatment at the identical size.
+ * Sizing/shape comes from the shared {@link ClaimChip} primitive (AUB-224/227),
+ * so this chip is the EXACT same component — and thus the exact same size — as the
+ * add-listing `FactOutcomeChip` and the interactive vote toggle; the ONLY thing
+ * that sets the headline `SafetySignal` apart is its solid colour fill. The claim
+ * badges keep their soft/outline treatment at the identical size.
  */
 export function ClaimBadge({ attribute, suggested = false, className }: ClaimBadgeProps) {
   const label = CLAIM_ATTRIBUTE_LABELS[attribute];
@@ -60,48 +61,45 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
   const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
 
   const badge = (
-    <Badge
-      variant="outline"
+    <ClaimChip
+      icon={Icon}
+      label={label}
       data-testid={suggested ? "suggested-attribute" : "claim-badge"}
       className={cn(
-        BADGE_FAMILY_SIZE,
         "text-foreground",
         suggested ? "border-transparent bg-background" : "border-brand/25 bg-brand-soft",
         className
       )}
-    >
-      <Icon aria-hidden="true" />
-      <span>{label}</span>
-      {suggested ? (
-        // The "AI" marker is REAL, always-painted text (never hover/focus-gated —
-        // the touch-accessible path) AND the tooltip's only trigger, rendered
-        // AFTER the label (AUB-225). Its accessible name is deliberately just
-        // "AI", not the attribute label, so it never collides with a same-label
-        // real control elsewhere (see the `suggested` prop doc above).
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className="rounded-sm text-body-sm font-bold uppercase tracking-wide text-brand underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
-            >
-              AI
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            Suggested by Aubrey's Bot — not yet confirmed by the community.
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
-    </Badge>
+      trailing={
+        suggested ? (
+          // The "AI" marker is REAL, always-painted text (never hover/focus-gated —
+          // the touch-accessible path) AND the tooltip's only trigger, rendered
+          // AFTER the label (AUB-225). Its accessible name is deliberately just
+          // "AI", not the attribute label, so it never collides with a same-label
+          // real control elsewhere (see the `suggested` prop doc above).
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="rounded-sm text-body-sm font-bold uppercase tracking-wide text-brand underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+              >
+                AI
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Suggested by Aubrey's Bot — not yet confirmed by the community.
+            </TooltipContent>
+          </Tooltip>
+        ) : null
+      }
+    />
   );
 
   if (!suggested) {
     return badge;
   }
 
-  return (
-    <span className="inline-flex shrink-0 rounded-chip bg-gradient-to-r from-brand via-accent-lavender to-accent-peach p-[1.5px]">
-      {badge}
-    </span>
-  );
+  // The gradient provenance ring is the ONE shared `SuggestedRing` primitive,
+  // identical to the one behind the `ClaimTrustSummaryRow` provenance chip.
+  return <SuggestedRing>{badge}</SuggestedRing>;
 }

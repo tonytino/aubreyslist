@@ -161,6 +161,44 @@ bordered soft/outline badges to the pixel.
 
 The header wordmark is `app/components/Wordmark.tsx` (`<Wordmark size="lg" />`).
 
+### One shared chip source per concept (AUB-227)
+
+The badge FAMILY is one visual language; each distinct chip concept has ONE
+implementation, so add-listing and listing-detail can't drift. Every per-claim
+chip — static AND interactive — composes ONE primitive:
+
+- **The shared chip primitive** — `ClaimChip`
+  (`app/components/listing/ClaimChip.tsx`) is the single source for the per-claim
+  chip: a leading `aria-hidden` glyph + a visible text label at
+  `BADGE_FAMILY_SIZE`. It is `asChild`-capable (Radix `Slot` + `Slottable`), so an
+  interactive caller can render it THROUGH a real element (a `<button>`) that adds
+  only its own concerns. `ClaimChip` owns just the shared visual (box, family
+  size/shape, glyph, label span); fills/tints and interactive props stay with the
+  caller, so nothing conflicts under `cn()` or `Slot`'s className merge.
+- **Per-claim badge** — `ClaimBadge` (`app/components/listing/ClaimBadge.tsx`) is
+  the canonical static claim chip; it composes `ClaimChip` (default `<span>`). The
+  add-listing review outcome chip (`FactOutcomeChip`, exported from
+  `app/components/add-listing/ReviewStep.tsx`) composes the SAME `ClaimChip`; it
+  keeps distinct content (attribute icon + a "Confirmed"/"Disputed" outcome word in
+  a neutral, non-safety tint) but IS the same component.
+- **Bot "suggested" treatment** — the purple gradient provenance ring is the ONE
+  `SuggestedRing` primitive (`app/components/listing/SuggestedRing.tsx`), shared by
+  the `ClaimBadge` `suggested` variant AND the `ClaimTrustSummaryRow` provenance
+  chip. Don't hand-roll the `bg-gradient-to-r from-brand via-accent-lavender …`
+  ring again — wrap `SuggestedRing`.
+- **Vote toggle** — `ClaimVoteControls`' `VoteBadgeButton` renders THROUGH the
+  shared `ClaimChip` (`<ClaimChip asChild …><button …/></ClaimChip>`): the confirm/
+  dispute toggle IS the shared badge, not a look-alike. The `<button>` supplies
+  ONLY its interactive concerns — `aria-pressed`, `disabled`, `onClick`, the
+  pressed safety-colour fill, the focus-visible ring — while the chip supplies the
+  icon + label + family size/shape. Meaning still never rests on colour alone
+  (icon + visible label + `aria-pressed`), and the button stays a first-class
+  native element (native keyboard/focus/disabled semantics).
+- **Parity guard** — `app/components/listing/claim-chip-parity.test.tsx` fails if
+  the review chip, the detail `ClaimBadge`, OR the vote toggle's confirm chip
+  diverge on the taxonomy icon/label (all sourced from `~/trust/summary`) or on the
+  shared family-size class. Run it as the tripwire whenever you touch any of them.
+
 ## Component primitives (shadcn/ui — ADR-011)
 
 Reusable primitives live in `app/components/ui/` (shadcn New-York style,
