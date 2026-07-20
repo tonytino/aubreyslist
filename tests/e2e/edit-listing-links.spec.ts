@@ -52,7 +52,18 @@ test.describe("edit listing links (wiki-style, signed-in)", () => {
     await page.getByLabel("Website", { exact: true }).fill(url);
     await page.getByRole("button", { name: "Save links" }).click();
 
-    // The dialog closes and the new typed link renders as a button.
+    // Barriers before asserting the UI (see the legacy-removal test for the
+    // full rationale): the dialog closes only in the mutation's onSuccess, and
+    // the DB poll confirms the write landed — the save's client-side refresh
+    // can otherwise be lost to a mid-save document reload (AUB-223). NOTE:
+    // deliberately no `page.reload()` here — issuing our own navigation can
+    // collide with that in-flight framework reload and destabilise the
+    // interactions below; the presence assertions retry until whichever refresh
+    // wins renders the committed row.
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect.poll(() => seeder.getListingLinkUrl(listing.id, "website")).toBe(url);
+
+    // The new typed link renders as a button.
     const websiteLink = linksSection.getByRole("link", { name: "Website", exact: true });
     await expect(websiteLink).toBeVisible();
     await expect(websiteLink).toHaveAttribute("href", url);
@@ -92,17 +103,32 @@ test.describe("edit listing links (wiki-style, signed-in)", () => {
     await menuField.fill("");
     await page.getByRole("button", { name: "Save links" }).click();
 
-    // Wait for the dialog to actually close — it closes only in the mutation's
-    // onSuccess, i.e. after the server deleted the typed row AND cleared the
-    // legacy menu_url column. While it is open, the modal marks the background
-    // aria-hidden, so the Links assertion below would pass vacuously and the
-    // reload would race the in-flight delete (the SSR snapshot then resurrects
-    // the legacy URL — the flake that shipped with this spec).
+    // Two barriers, reconciling #293 and AUB-222 — both are needed:
+    //
+    // 1. Dialog-close (from #293): the dialog closes only in the mutation's
+    //    onSuccess, i.e. after the server deleted the typed row AND cleared the
+    //    legacy menu_url column. While it is open the modal marks the
+    //    background aria-hidden, so the Links assertion below would pass
+    //    vacuously. This gates on client-observable success.
+    //
+    // 2. DB-side barrier (AUB-222): a framework-initiated mid-save document
+    //    reload (AUB-223) can both discard the client-side refetch AND
+    //    server-render the page from a read that raced the still-committing
+    //    mutation — so even after the dialog closes, the following `page.reload`
+    //    can SSR a stale row and resurrect the legacy Menu link (red at CI's
+    //    Neon latency). Poll the column this spec guards — the write contract —
+    //    until it is actually null before reloading, closing the race window.
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect.poll(() => seeder.getListingMenuUrl(listing.id)).toBeNull();
 
-    // The menu button is gone and STAYS gone across a full reload (the legacy
-    // column was cleared server-side, not just hidden client-side).
+    // With the write confirmed landed, the pre-reload UI must already reflect
+    // the removal (the dialog-close refetch has run) — a non-vacuous DOM check
+    // that no longer races the mutation now that the barriers are in front.
     await expect(linksSection.getByRole("link", { name: "Menu", exact: true })).toHaveCount(0);
+
+    // And it STAYS gone across a full reload — the legacy column was cleared
+    // server-side, not just hidden client-side, so the render fallback cannot
+    // resurrect it even from a fresh SSR.
     await page.reload();
     await waitForHydration(page);
     await expect(

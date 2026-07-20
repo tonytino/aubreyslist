@@ -59,6 +59,7 @@ function makeCard(id: string, name: string): BrowseListingCard {
     hasRecentIncident: false,
     suggestedByBot: false,
     suggestedAttributes: [],
+    confirmedAttributes: [],
     evidence: null,
     freshness: null,
   };

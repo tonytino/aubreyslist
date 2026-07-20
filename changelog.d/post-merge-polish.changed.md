@@ -1,0 +1,4 @@
+- `[manual]` Fixed the listing hero's "Not yet attested" empty-state box forcing horizontal scroll at the 375px minimum width by capping it to the row's content width first (`w-full` before the `max-w` cap).
+- `[manual]` Made the vote ownership caption attribute-aware: the headline claim now reads "You marked this celiac-safe." / "You marked this gluten-friendly." beside its badges, while other attributes keep "You confirmed this." / "You disputed this."
+- `[manual]` Gave the header theme toggle a >= 44px touch target on coarse pointers, matching the hamburger and account-menu triggers.
+- `[manual]` Tightened the "Hide bot suggestions" SQL pin to assert the full `"attestations"."claim_id" = "claims"."id"` correlation, and added a sign-out end-to-end test for the account menu's POST path.

@@ -19,6 +19,11 @@ import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
 test.describe("mocked Google sign-in", () => {
   let seeder: Seeder;
 
+  // Assert the authenticated header at the mobile width, where the account
+  // controls fold into the combined menu (its trigger carries the signed-in
+  // name); 375px is the minimum supported width.
+  test.use({ viewport: { width: 375, height: 812 } });
+
   test.beforeEach(async () => {
     test.skip(!E2E_DB_READY, "needs CI E2E DATABASE_URL + SESSION_SECRET");
     seeder = new Seeder();
@@ -35,18 +40,18 @@ test.describe("mocked Google sign-in", () => {
     // biome-ignore lint/style/noNonNullAssertion: Playwright always provides baseURL from the config.
     await seeder.signIn(context, user.id, baseURL!);
 
-    // The header now shows the authenticated state as the avatar account menu,
-    // whose accessible name carries the visitor's name — and NOT the anonymous
-    // "Log in" entry. The menu's contents (name, moderation/admin link, sign out)
-    // are covered by UserMenu's unit tests; this e2e only needs to confirm the
-    // sealed cookie produces the authenticated header for THIS user. We assert it
-    // from the server-rendered trigger, so it doesn't depend on hydration timing
-    // (opening the portal'd menu would).
+    // The header now shows the authenticated state via the combined-menu
+    // trigger, whose accessible name carries the visitor's name — and NOT the
+    // anonymous "Log in" entry. The menu's contents (name, moderation/admin
+    // link, sign out) are covered by SiteMenu/UserMenu unit tests; this e2e only
+    // needs to confirm the sealed cookie produces the authenticated header for
+    // THIS user. We assert it from the server-rendered trigger, so it doesn't
+    // depend on hydration timing (opening the portal'd menu would).
     await page.goto("/");
     const header = page.getByRole("banner");
     await expect(header.getByRole("link", { name: "Log in" })).toHaveCount(0);
     await expect(
-      header.getByRole("button", { name: `Account menu for ${user.name}` })
+      header.getByRole("button", { name: `Open menu, signed in as ${user.name}` })
     ).toBeVisible();
 
     // A gated surface now renders its authenticated intake wizard, not the

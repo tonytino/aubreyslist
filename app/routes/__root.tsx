@@ -49,6 +49,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      // Raster fallback at a multiple of 48px: Google Search's favicon crawler
+      // wants a >=48x48 icon and is less reliable with SVG-only — without this
+      // it shows the generic globe next to results.
+      { rel: "icon", type: "image/png", sizes: "192x192", href: "/icon-192.png" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/site.webmanifest" },
     ],

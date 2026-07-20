@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   absoluteUrl,
+  breadcrumbJsonLd,
   canonicalLink,
   defaultSeoMeta,
   jsonLdScript,
   LOGO_PATH,
   OG_IMAGE_PATH,
   pageSeoMeta,
+  SITE_ALTERNATE_NAMES,
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_URL,
@@ -115,6 +117,26 @@ describe("serializeJsonLd", () => {
   });
 });
 
+describe("breadcrumbJsonLd", () => {
+  it("emits an ordered BreadcrumbList with absolute item URLs", () => {
+    const data = breadcrumbJsonLd([
+      { name: "Aubrey's List", path: "/" },
+      { name: "Example Spot", path: "/listings/abc123" },
+    ]);
+    expect(data["@context"]).toBe("https://schema.org");
+    expect(data["@type"]).toBe("BreadcrumbList");
+    expect(data.itemListElement).toEqual([
+      { "@type": "ListItem", position: 1, name: "Aubrey's List", item: `${SITE_URL}/` },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Example Spot",
+        item: `${SITE_URL}/listings/abc123`,
+      },
+    ]);
+  });
+});
+
 describe("jsonLdScript", () => {
   it("wraps serialized JSON-LD as an application/ld+json script descriptor", () => {
     const script = jsonLdScript({ "@type": "Thing" });
@@ -134,6 +156,7 @@ describe("siteJsonLd", () => {
   it("includes a WebSite with a ?q= SearchAction target", () => {
     const website = graph.find((n) => n["@type"] === "WebSite");
     expect(website?.name).toBe(SITE_NAME);
+    expect(website?.alternateName).toEqual(SITE_ALTERNATE_NAMES);
     expect(website?.url).toBe(SITE_URL);
     const action = website?.potentialAction as Record<string, unknown>;
     expect(action["@type"]).toBe("SearchAction");

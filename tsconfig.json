@@ -28,7 +28,10 @@
     // TS 6.0 no longer picks up @types/node's globals (process, Buffer) via
     // automatic @types inclusion under moduleResolution "Bundler" — list it
     // explicitly. Safe: react/react-dom types arrive via imports, not globals.
-    "types": ["node"],
+    // "google.maps" supplies the ambient `google.maps.*` namespace that
+    // @vis.gl/react-google-maps' typings (and the directory map, AUB-111)
+    // reference — it too must be listed since automatic inclusion is off.
+    "types": ["node", "google.maps"],
     "skipLibCheck": true
   },
   "include": ["app", "tests", "db", "scripts"]

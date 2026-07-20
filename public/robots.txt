@@ -16,4 +16,4 @@ Disallow: /favorites
 Disallow: /api/
 
 # Sitemap location
-Sitemap: https://aubreyslist.com/sitemap.xml
+Sitemap: https://www.aubreys-list.com/sitemap.xml

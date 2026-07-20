@@ -55,16 +55,36 @@ const CSP_DIRECTIVES: Readonly<Record<string, readonly string[]>> = {
   // (app/routes/__root.tsx). None can carry a nonce in this framework version,
   // so inline scripts must be allowed; `'unsafe-eval'` is still withheld.
   // `va.vercel-scripts.com` serves the Vercel Analytics client on preview/dev.
-  "script-src": ["'self'", "'unsafe-inline'", "https://va.vercel-scripts.com"],
+  // `maps.googleapis.com` serves the Maps JavaScript API (the directory map's
+  // loader + its on-demand libraries, AUB-111).
+  "script-src": [
+    "'self'",
+    "'unsafe-inline'",
+    "https://va.vercel-scripts.com",
+    "https://maps.googleapis.com",
+  ],
   // Sentry error ingestion + Vercel Analytics beacon. Google OAuth is a
   // top-level server-side 302 redirect (not a fetch/XHR/iframe), so it is NOT
   // subject to connect-src and needs no entry here.
+  // The Maps JS API (AUB-111) fetches vector tiles/attribution from
+  // `maps.googleapis.com`, static assets from `maps.gstatic.com`, and map-label
+  // webfonts from `fonts.gstatic.com` via fetch/XHR — the tightest host set for
+  // a working map (img-src's broad `https:` already covers its raster imagery).
   "connect-src": [
     "'self'",
     "https://*.ingest.us.sentry.io",
     "https://*.sentry.io",
     "https://va.vercel-scripts.com",
+    "https://maps.googleapis.com",
+    "https://maps.gstatic.com",
+    "https://fonts.gstatic.com",
   ],
+  // The Maps JS API's vector renderer spawns Web Workers from blob: URLs
+  // (AUB-111). Without an explicit worker-src, workers fall back to script-src,
+  // which must NOT be widened to blob: (that would loosen script execution
+  // globally) — so scope blob: to workers only, the narrowest grant that lets
+  // the map render.
+  "worker-src": ["'self'", "blob:"],
 };
 
 /** Serialize {@link CSP_DIRECTIVES} into a Content-Security-Policy header value. */

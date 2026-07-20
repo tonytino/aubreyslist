@@ -35,6 +35,10 @@ import { DEFAULT_STALENESS_MONTHS, deriveHeadlineSafetyState } from "~/trust/sum
  *   curator-bot suggestion (AUB-31/AUB-193, owner nit 7). PROVENANCE, never
  *   evidence (ADR-007): it labels where a card's suggested labels came from and
  *   never influences the safety verdict or the evidence counts.
+ * - **Confirmed claim badges** — the NON-headline attributes with positive
+ *   community consensus (AUB-226), so the card shows the SAME confirmed claim
+ *   badges the listing-detail page does. Real EVIDENCE, deduped against the
+ *   suggested set so an attribute is never both confirmed and suggested.
  *
  * This is a roll-up of visible evidence, never a secret score — the same reading
  * any user gets from the listing-detail page.
@@ -85,10 +89,24 @@ export interface ListingTrustGlance {
    * community-confirmed verdict (ADR-007). Empty when nothing is suggested.
    */
   suggestedAttributes: ClaimAttribute[];
+  /**
+   * The NON-headline claim attributes with CONFIRMED positive community
+   * consensus (AUB-226), deduped and in taxonomy order. Each renders as a
+   * NON-suggested {@link import("~/components/listing/ClaimBadge").ClaimBadge} on
+   * the card — real community evidence, so it reads as affirmed (never the
+   * suggested/provenance variant). This is the browse-card parity for the
+   * listing-detail page's `confirmed` badges (`hasPositiveConsensus`): without it
+   * a confirmed non-headline claim (e.g. "Off-menu GF on request") showed on the
+   * detail page but never on the card. The headline `celiac_safe_vs_gluten_friendly`
+   * attribute is excluded (it is the {@link safetyState} verdict, not a badge).
+   * Deduped AGAINST {@link suggestedAttributes} so an attribute is never both
+   * confirmed and suggested at once. Empty when nothing is confirmed.
+   */
+  confirmedAttributes: ClaimAttribute[];
 }
 
 /** Dedupe + order attributes by the canonical taxonomy order (stable render order). */
-function normalizeSuggestedAttributes(attributes: readonly ClaimAttribute[]): ClaimAttribute[] {
+function normalizeAttributes(attributes: readonly ClaimAttribute[]): ClaimAttribute[] {
   return CLAIM_ATTRIBUTES.filter((attribute) => attributes.includes(attribute));
 }
 
@@ -116,6 +134,14 @@ function normalizeSuggestedAttributes(attributes: readonly ClaimAttribute[]): Cl
  * a suggestion is provenance, never evidence, so it can never fabricate or
  * alter the safety verdict — but it IS surfaced even when real evidence exists
  * on other claims, because provenance stays true regardless of evidence.
+ *
+ * `confirmedAttributes` (AUB-226) is the set of NON-headline attributes with
+ * CONFIRMED positive community consensus, batched server-side the SAME way
+ * (`buildBrowseCards`) and threaded in as plain data so this module stays pure
+ * and db-free. It is deduped AGAINST the suggested set (an attribute is never
+ * both confirmed and suggested — they are mutually exclusive by construction:
+ * consensus needs ≥ 1 confirm, a live suggestion needs zero votes) so the card
+ * never double-renders one attribute as both evidence and provenance.
  */
 export function deriveListingTrustGlance(
   celiacAggregate:
@@ -127,7 +153,8 @@ export function deriveListingTrustGlance(
   recentIncidentAt: Date | null,
   now: Date = new Date(),
   stalenessMonths: number = DEFAULT_STALENESS_MONTHS,
-  suggestedAttributes: readonly ClaimAttribute[] = []
+  suggestedAttributes: readonly ClaimAttribute[] = [],
+  confirmedAttributes: readonly ClaimAttribute[] = []
 ): ListingTrustGlance {
   const lastConfirmedAt = celiacAggregate?.lastConfirmedAt ?? null;
   const hasEvidence =
@@ -140,10 +167,19 @@ export function deriveListingTrustGlance(
   // on THAT claim" (a vote clears the suggestion server-side, so a voted celiac
   // claim's suggestion is no longer live) — NOT a gate on the label itself.
   const celiacSuggested = (celiacAggregate?.suggested ?? false) && !hasEvidence;
-  const suggested = normalizeSuggestedAttributes(
+  const suggested = normalizeAttributes(
     celiacSuggested
       ? [...suggestedAttributes, "celiac_safe_vs_gluten_friendly"]
       : suggestedAttributes
+  );
+
+  // Confirmed non-headline attributes (AUB-226), taxonomy-ordered and deduped
+  // AGAINST the suggested set so an attribute never renders as BOTH evidence and
+  // provenance. They are mutually exclusive by construction (consensus needs a
+  // confirm; a live suggestion needs zero votes), but the filter is belt-and-
+  // braces so a transient overlap can never double-badge the card.
+  const confirmed = normalizeAttributes(confirmedAttributes).filter(
+    (attribute) => !suggested.includes(attribute)
   );
 
   return {
@@ -163,5 +199,8 @@ export function deriveListingTrustGlance(
     // feeds `safetyState`/`evidence`, so it can never overstate safety.
     suggestedByBot: suggested.length > 0,
     suggestedAttributes: suggested,
+    // CONFIRMED non-headline claim badges (AUB-226) — real community evidence,
+    // rendered as the affirmed (non-suggested) ClaimBadge. Detail-page parity.
+    confirmedAttributes: confirmed,
   };
 }

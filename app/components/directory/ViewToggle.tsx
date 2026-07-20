@@ -12,16 +12,16 @@ export type { DirectoryView };
  * a segment swaps the content view instantly (no shimmer).
  *
  * AUB-164 / OWNER OVERRIDE: the Map segment is gated behind `mapEnabled`
- * (defaults to `false` — fail-closed) because the map view is a CSS placeholder
- * with no real map provider wired up (see `DirectoryMap.tsx`); a real provider is
- * still deferred to AUB-111. The repo owner has since explicitly asked for the
- * Map segment to come back on the public directory ahead of AUB-111 — the
- * placeholder is accepted for now — so the directory route
+ * (defaults to `false` — fail-closed). It was originally hidden while the map
+ * view was a bare CSS placeholder; the repo owner then explicitly asked for the
+ * Map segment to come back on the public directory, so the directory route
  * (`app/routes/index.tsx`) passes `mapEnabled` and the selected view round-trips
- * through `?view=`. `mapEnabled` itself stays available (defaulting to hidden)
- * for any other consumer that isn't ready to show the placeholder. Do NOT delete
- * this component or the Map segment below — AUB-111 swaps in a real map behind
- * the same prop.
+ * through `?view=`. As of AUB-111 the map view renders a REAL Google map when
+ * the public `VITE_GOOGLE_MAPS_BROWSER_KEY` is provisioned, and the stylized
+ * CSS-placeholder fallback otherwise (see `DirectoryMap.tsx`). `mapEnabled`
+ * itself stays available (defaulting to hidden) for any other consumer that
+ * isn't ready to show a map. Do NOT delete this component or the Map segment
+ * below.
  */
 export function ViewToggle({
   view,

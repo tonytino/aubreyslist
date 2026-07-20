@@ -53,10 +53,10 @@ body:
     id: safety
     attributes:
       label: Safety
-      description: Does this task require human approval before the agent begins?
+      description: Who merges the resulting PR? safe:human gates the merge, not the work — agents implement either way (see docs/agents/governance.md for owner-gated surfaces).
       options:
-        - "safe:agent — no pre-approval needed"
-        - "safe:human — human must approve before agent acts"
+        - "safe:agent — agent may merge the PR once CI passes"
+        - "safe:human — agent implements; a human reviews and merges (never auto-merged)"
     validations:
       required: true
 

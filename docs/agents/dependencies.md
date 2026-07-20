@@ -121,6 +121,21 @@ popover, dropdown, etc.) — never speculatively. See ADR-011 and
 `docs/agents/styling.md` for the icon import conventions (lucide is imported from
 the `"lucide-react"` barrel — it is SSR-safe, no special entrypoint needed).
 
+### Maps: @vis.gl/react-google-maps (AUB-111, sanctioned)
+
+`@vis.gl/react-google-maps` (runtime `dependency`, `^1.8.3`) renders the
+directory Map view's REAL Google map — it is Google's endorsed React wrapper
+for the Maps JavaScript API (`APIProvider`/`Map`/`AdvancedMarker`), and nothing
+in the existing stack renders map tiles. The "no new dependencies" Hard Rule
+was satisfied via the AUB-111 issue explicitly sanctioning it. Its companion
+`@types/google.maps` is a `devDependency` (ambient `google.maps.*` namespace;
+listed in tsconfig `types` because automatic `@types` inclusion is off). Note
+the 1.9.0 line was quarantined by `minimumReleaseAge` at adoption time
+(published < 7 days prior); bump the range once it matures if needed. The map
+is key-gated at runtime (`VITE_GOOGLE_MAPS_BROWSER_KEY`,
+`docs/agents/environment.md`) with a CSS-placeholder fallback, so the
+dependency is inert in keyless environments.
+
 ## Unused Dependency Check
 
 The unused-dependency guard is now one facet of the repo's full dead-code check

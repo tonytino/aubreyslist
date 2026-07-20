@@ -20,7 +20,7 @@ test("robots.txt exists and includes sitemap reference", async ({ page }) => {
   // Should disallow API endpoints
   expect(content).toContain("Disallow: /api/");
   // Should reference sitemap
-  expect(content).toContain("Sitemap: https://aubreyslist.com/sitemap.xml");
+  expect(content).toContain("Sitemap: https://www.aubreys-list.com/sitemap.xml");
 });
 
 test("/style-guide has noindex,nofollow meta tag", async ({ page }) => {
