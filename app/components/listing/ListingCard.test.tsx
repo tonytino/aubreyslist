@@ -51,6 +51,7 @@ const baseVm: RestaurantCardVM = {
   safetyState: "celiac-safe",
   suggestedByBot: false,
   suggestedAttributes: [],
+  confirmedAttributes: [],
   hasRecentIncident: false,
   accent: "lavender",
 };
@@ -203,7 +204,7 @@ describe("RestaurantCard", () => {
     expect(screen.queryByText("Suggested by Aubrey's Bot")).not.toBeInTheDocument();
   });
 
-  it("renders one bot-provenance badge per suggested attribute with a VISIBLE 'Suggested:' prefix (owner nit 7)", async () => {
+  it("renders one shared ClaimBadge per suggested attribute (owner nit 7)", async () => {
     renderCard({
       safetyState: null,
       suggestedByBot: true,
@@ -212,28 +213,26 @@ describe("RestaurantCard", () => {
     const badges = await screen.findAllByTestId("suggested-attribute");
     expect(badges).toHaveLength(2);
     // Clearly a suggestion, never a community-confirmed verdict (ADR-007): the
-    // "Suggested:" prefix is VISIBLE text, so the distinction never rests on
-    // colour or a screen reader; no SafetySignal state marker either.
-    expect(badges[0]).toHaveTextContent("Suggested: Dedicated fryer");
-    expect(badges[1]).toHaveTextContent("Suggested: GF substitutes");
+    // distinction rests on the attribute icon + gradient ring + "AI" marker +
+    // tooltip, never colour alone; no SafetySignal state marker either.
+    expect(badges[0]).toHaveTextContent("Dedicated fryer");
+    expect(badges[1]).toHaveTextContent("GF substitutes");
     for (const badge of badges) {
       expect(badge).not.toHaveAttribute("data-safety-state");
     }
   });
 
-  it("prefixes even the suggested CELIAC badge so it can never mirror the real verdict chip (ADR-007)", async () => {
-    // The celiac badge shares the verdict chip's icon shape (ShieldCheck) and
-    // attribute label — the visible "Suggested:" prefix is what keeps it
-    // readable as a suggestion at a glance, colour-blind and greyscale-safe.
+  it("keeps even the suggested CELIAC badge structurally distinct from the real verdict chip (ADR-007)", async () => {
+    // The celiac badge shares the verdict chip's attribute label — the attribute
+    // icon + gradient ring + "AI" marker + tooltip are what keep it readable as a
+    // suggestion, never resting on colour alone.
     renderCard({
       safetyState: null,
       suggestedByBot: true,
       suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
     });
     const badge = await screen.findByTestId("suggested-attribute");
-    expect(badge).toHaveTextContent("Suggested: Celiac-safe");
-    // Never the bare verdict text: the label is always prefix-qualified.
-    expect(badge.textContent?.trim().startsWith("Suggested:")).toBe(true);
+    expect(badge).toHaveTextContent("Celiac-safe");
     expect(badge).not.toHaveAttribute("data-safety-state");
   });
 
@@ -255,6 +254,53 @@ describe("RestaurantCard", () => {
     renderCard();
     await screen.findByText("Celiac-safe");
     expect(screen.queryByTestId("suggested-attribute")).not.toBeInTheDocument();
+  });
+
+  it("renders a CONFIRMED non-headline attribute as a NON-suggested ClaimBadge (AUB-226)", async () => {
+    // Detail-page parity: a confirmed non-headline claim (e.g. "Off-menu GF on
+    // request") shows on the card as the affirmed (non-suggested) ClaimBadge.
+    renderCard({
+      safetyState: "celiac-safe",
+      confirmedAttributes: ["off_menu_gf_on_request"],
+    });
+    const badge = await screen.findByTestId("claim-badge");
+    expect(badge).toHaveTextContent("Off-menu GF on request");
+    // Real evidence, never the suggested/provenance variant, and never dressed as
+    // the SafetySignal verdict (ADR-007).
+    expect(screen.queryByTestId("suggested-attribute")).not.toBeInTheDocument();
+    expect(badge).not.toHaveAttribute("data-safety-state");
+  });
+
+  it("renders CONFIRMED badges BEFORE suggested ones (evidence before provenance)", async () => {
+    renderCard({
+      safetyState: "celiac-safe",
+      confirmedAttributes: ["off_menu_gf_on_request"],
+      suggestedByBot: true,
+      suggestedAttributes: ["gf_substitutes"],
+    });
+    const confirmed = await screen.findByTestId("claim-badge");
+    const suggested = screen.getByTestId("suggested-attribute");
+    // The confirmed (evidence) badge precedes the suggested (provenance) one.
+    expect(
+      confirmed.compareDocumentPosition(suggested) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("renders one confirmed ClaimBadge per attribute in taxonomy order", async () => {
+    renderCard({
+      safetyState: "celiac-safe",
+      confirmedAttributes: ["dedicated_fryer", "off_menu_gf_on_request"],
+    });
+    const badges = await screen.findAllByTestId("claim-badge");
+    expect(badges).toHaveLength(2);
+    expect(badges[0]).toHaveTextContent("Dedicated fryer");
+    expect(badges[1]).toHaveTextContent("Off-menu GF on request");
+  });
+
+  it("renders no confirmed ClaimBadge when confirmedAttributes is empty", async () => {
+    renderCard({ safetyState: "celiac-safe", confirmedAttributes: [] });
+    await screen.findByText("Celiac-safe");
+    expect(screen.queryByTestId("claim-badge")).not.toBeInTheDocument();
   });
 
   it("shows the recent-incident warning when a recent incident exists", async () => {
@@ -551,6 +597,7 @@ describe("ListingCard (mapping wrapper)", () => {
     safetyState: "celiac-safe",
     suggestedByBot: false,
     suggestedAttributes: [],
+    confirmedAttributes: [],
     hasRecentIncident: false,
     evidence: null,
     freshness: null,
@@ -615,12 +662,21 @@ describe("listingToCardVM (bot-provenance threading)", () => {
     freshness: null,
     suggestedByBot: true,
     suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
+    confirmedAttributes: [],
   };
 
   it("threads the glance's suggested attributes + label flag onto the VM", () => {
     const vm = listingToCardVM(baseListing, glance);
     expect(vm.suggestedByBot).toBe(true);
     expect(vm.suggestedAttributes).toEqual(["dedicated_fryer", "gf_substitutes"]);
+  });
+
+  it("threads the glance's CONFIRMED non-headline attributes onto the VM (AUB-226)", () => {
+    const vm = listingToCardVM(baseListing, {
+      ...glance,
+      confirmedAttributes: ["off_menu_gf_on_request"],
+    });
+    expect(vm.confirmedAttributes).toEqual(["off_menu_gf_on_request"]);
   });
 
   it("threads a provided save count onto the VM (trailing param)", () => {

@@ -51,6 +51,15 @@ describe("ClaimTrustSummaryRow", () => {
     expect(screen.queryByText("No confirmations or disputes yet")).not.toBeInTheDocument();
     // A suggestion is not evidence: no fabricated count.
     expect(screen.queryByText(/confirm \//)).not.toBeInTheDocument();
+    // AUB-227: it now renders through the SHARED suggested-chip treatment — the
+    // `Badge` shell at the shared family size, wrapped in the ONE `SuggestedRing`
+    // gradient primitive (not a hand-rolled gradient/chip). Assert the shell +
+    // the surviving family-size token so a regression back to bespoke markup, or
+    // a size drift away from the badge family, fails here.
+    const chip = screen.getByTestId("suggested-provenance");
+    expect(chip).toHaveTextContent("Suggested by Aubrey's Bot");
+    expect(chip.getAttribute("class")).toContain("rounded-chip");
+    expect(chip.getAttribute("class")).toContain("text-body-sm");
   });
 
   it("suppresses the suggestion badge once the claim has real evidence", () => {

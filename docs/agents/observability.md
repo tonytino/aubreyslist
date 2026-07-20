@@ -123,12 +123,13 @@ variable** (Settings > Secrets and variables > Actions > Variables — a
 Variable, not a Secret, since it's a public URL), falling back to the
 triggering deployment's own `target_url` when the variable is unset, and
 failing loudly otherwise. It deliberately does **not** default to
-`SITE_URL` (`app/lib/seo.ts`, hardcoded to `https://aubreyslist.com`): per
-ADR-009 the site currently runs on a free `*.vercel.app` subdomain, so
-`SITE_URL` is the aspirational SEO domain, not necessarily where the app is
-live today. Update the `PRODUCTION_URL` variable if/when a custom domain is
-attached. See the workflow file's header comment for the full precedence
-rule.
+`SITE_URL` (`app/lib/seo.ts`, hardcoded to `https://www.aubreys-list.com`):
+keeping the smoke-check target decoupled from the SEO constant means a future
+domain migration can't silently point the check at a host that isn't serving
+the app yet. The custom domain (hyphenated `www.aubreys-list.com` — the
+unhyphenated `aubreyslist.com` is not ours) is now attached and indexed by
+Google, so `PRODUCTION_URL` should be set to it. See the workflow file's
+header comment for the full precedence rule.
 
 **Relationship to AUB-155 (uptime monitoring):** AUB-155 tracks configuring a
 third-party always-on monitor (e.g. UptimeRobot / Better Uptime) polling

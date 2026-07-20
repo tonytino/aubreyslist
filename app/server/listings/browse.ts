@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "~/db/client";
 import {
@@ -373,9 +373,10 @@ export async function getBrowseListings(
 /**
  * Build browse cards — each listing paired with its at-a-glance trust — from a
  * set of listings. Owns ONLY the trust-glance derivation (ADR-007): it batches
- * the three visible signals for these listings (the headline celiac aggregate,
- * the recent-incident dates, and the live curator-bot-suggested attribute set)
- * and reduces each to a pure {@link ListingTrustGlance} via
+ * the four visible signals for these listings (the headline celiac aggregate,
+ * the recent-incident dates, the live curator-bot-suggested attribute set, and
+ * the CONFIRMED non-headline attribute set — those with positive community
+ * consensus, AUB-226) and reduces each to a pure {@link ListingTrustGlance} via
  * {@link deriveListingTrustGlance}.
  *
  * DISTANCE-AGNOSTIC by design: the "0.4 mi" `distanceLabel` is a browse-only
@@ -384,7 +385,7 @@ export async function getBrowseListings(
  * viewer-favorites loader with no distance origin) without change. Cards come
  * back in the SAME order as `listings`.
  *
- * NO N+1: the three signal queries are batched across ALL `listings` at once,
+ * NO N+1: the four signal queries are batched across ALL `listings` at once,
  * regardless of how many there are.
  *
  * SERVER-ONLY: it drives the db-backed aggregate helpers below, so it must never
@@ -407,11 +408,13 @@ export async function buildBrowseCards(
 
   const listingIds = listings.map((listing) => listing.id);
 
-  const [celiacAggregates, recentIncidentDates, botSuggestedAttributes] = await Promise.all([
-    getCeliacAggregatesByListing(listingIds),
-    getRecentIncidentDatesByListing(listingIds, now),
-    getBotSuggestedAttributesByListing(listingIds),
-  ]);
+  const [celiacAggregates, recentIncidentDates, botSuggestedAttributes, confirmedAttributes] =
+    await Promise.all([
+      getCeliacAggregatesByListing(listingIds),
+      getRecentIncidentDatesByListing(listingIds, now),
+      getBotSuggestedAttributesByListing(listingIds),
+      getConfirmedAttributesByListing(listingIds),
+    ]);
 
   return listings.map((listing) => {
     const celiac = celiacAggregates.get(listing.id) ?? null;
@@ -421,7 +424,8 @@ export async function buildBrowseCards(
       recentIncidentDates.get(listing.id) ?? null,
       now,
       stalenessMonths,
-      botSuggestedAttributes.get(listing.id) ?? []
+      botSuggestedAttributes.get(listing.id) ?? [],
+      confirmedAttributes.get(listing.id) ?? []
     );
     return { listing, glance };
   });
@@ -751,6 +755,72 @@ async function getBotSuggestedAttributesByListing(
       attributes.push(row.suggestedAttribute);
     } else {
       byListing.set(row.suggestedListingId, [row.suggestedAttribute]);
+    }
+  }
+  return byListing;
+}
+
+/**
+ * Batch-load which NON-headline claim ATTRIBUTES of each of `listingIds` have
+ * CONFIRMED positive community consensus (AUB-226): a VISIBLE claim — on any
+ * taxonomy attribute EXCEPT the headline `celiac_safe_vs_gluten_friendly` (which
+ * drives the SafetySignal verdict, not a claim badge) — whose attestations have
+ * strictly more confirms than disputes. One grouped `IN (…)` query for the whole
+ * page (NO N+1), mirroring the visibility bound the sibling batched queries apply.
+ *
+ * This is the browse-card analogue of the listing-detail page's `confirmed`
+ * badge branch (`hasPositiveConsensus(claim)` in `app/routes/listings.$id.tsx`):
+ * without it a CONFIRMED non-headline claim (e.g. "Off-menu GF on request")
+ * appeared on the detail page but never on the browse card. The consensus rule
+ * is the EXACT same SQL shape as `buildAttributeConsensusExists` in `./filter.ts`
+ * — the shared `gt(confirmCount, disputeCount)` strict-greater fragment — so a
+ * TIE (contested) or dispute-majority claim never qualifies (`hasPositiveConsensus`
+ * parity: contested ≠ affirmed, a celiac could be hurt by an overstated badge).
+ *
+ * Recency/staleness is deliberately NOT part of the match, mirroring
+ * `hasPositiveConsensus`/the taxonomy filter: a stale-but-uncontested consensus
+ * still represents real visible evidence and should badge (the card's own glance
+ * flags staleness separately). A live bot suggestion is NOT included here — it is
+ * provenance, not confirmed evidence, and stays on the separate suggested path.
+ *
+ * Returns a map from listing id → its confirmed non-headline attributes
+ * (unordered; the pure glance derivation dedupes and normalizes to taxonomy
+ * order, and drops any attribute already carried on the suggested path).
+ */
+async function getConfirmedAttributesByListing(
+  listingIds: string[]
+): Promise<Map<string, ClaimAttribute[]>> {
+  // The same conditional confirm/dispute tallies the celiac aggregate and the
+  // taxonomy filter use, so "positive consensus" means one thing everywhere.
+  const confirmCount = sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`;
+  const disputeCount = sql<number>`count(*) filter (where ${attestations.value} = 'dispute')`;
+
+  const rows = await getDb()
+    .select({ confirmedListingId: claims.listingId, confirmedAttribute: claims.attribute })
+    .from(claims)
+    .leftJoin(attestations, eq(attestations.claimId, claims.id))
+    .where(
+      and(
+        inArray(claims.listingId, listingIds),
+        // Non-headline only: the celiac headline is the SafetySignal verdict.
+        sql`${claims.attribute} <> 'celiac_safe_vs_gluten_friendly'`,
+        // Visibility (#41): only `visible` claims count toward consensus.
+        eq(claims.moderationStatus, "visible")
+      )
+    )
+    .groupBy(claims.id, claims.listingId, claims.attribute)
+    // Positive consensus: confirms STRICTLY outnumber disputes — the exact
+    // `gt(confirmCount, disputeCount)` fragment `buildAttributeConsensusExists`
+    // uses (parity with `hasPositiveConsensus`; a tie never qualifies).
+    .having(gt(confirmCount, disputeCount));
+
+  const byListing = new Map<string, ClaimAttribute[]>();
+  for (const row of rows) {
+    const attributes = byListing.get(row.confirmedListingId);
+    if (attributes) {
+      attributes.push(row.confirmedAttribute);
+    } else {
+      byListing.set(row.confirmedListingId, [row.confirmedAttribute]);
     }
   }
   return byListing;

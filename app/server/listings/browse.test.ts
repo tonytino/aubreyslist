@@ -51,6 +51,10 @@ const h = vi.hoisted(() => {
     suggestionRows: [] as Array<Record<string, unknown>>,
     /** The WHERE predicate handed to the bot-suggestion query (visibility). */
     suggestionWhere: undefined as unknown,
+    /** Rows returned by the confirmed non-headline attribute query (AUB-226). */
+    confirmedRows: [] as Array<Record<string, unknown>>,
+    /** The WHERE predicate handed to the confirmed-attribute query (AUB-226). */
+    confirmedWhere: undefined as unknown,
     /** Public per-listing save counts returned by the (mocked) favorites layer. */
     favoriteCounts: new Map<string, number>(),
     /** The listing ids passed to `getFavoriteCounts` (asserted batched, not N+1). */
@@ -137,6 +141,20 @@ const h = vi.hoisted(() => {
   // (The suggestion chain, above, routes by the `suggestedListingId` projection
   // key and now also carries a `suggestedAttribute` per row — AUB-193/owner nit 7.)
 
+  // The confirmed-attribute consensus chain (AUB-226):
+  //   select(proj).from().leftJoin().where().groupBy().having()  (awaited)
+  // Routed by its own `confirmedListingId` projection key so it never falls into
+  // the call-order-branched `celiacFromMock` (whose leftJoin counter distinguishes
+  // the trust subquery from the aggregate query).
+  const confirmedHavingMock = vi.fn(() => Promise.resolve(state.confirmedRows));
+  const confirmedGroupByMock = vi.fn(() => ({ having: confirmedHavingMock }));
+  const confirmedWhereMock = vi.fn((predicate?: unknown) => {
+    state.confirmedWhere = predicate;
+    return { groupBy: confirmedGroupByMock };
+  });
+  const confirmedLeftJoinMock = vi.fn(() => ({ where: confirmedWhereMock }));
+  const confirmedFromMock = vi.fn(() => ({ leftJoin: confirmedLeftJoinMock }));
+
   // The count chain: select({ total }).from().where()  (awaited)
   const countWhereMock = vi.fn((predicate?: unknown) => {
     state.countWhere = predicate;
@@ -149,12 +167,14 @@ const h = vi.hoisted(() => {
   //  - { total }                 → count
   //  - has `occurredOn`          → incidents
   //  - has `suggestedListingId`  → bot-suggestion existence (AUB-193)
+  //  - has `confirmedListingId`  → confirmed non-headline consensus (AUB-226)
   //  - otherwise (claim cols)    → celiac aggregate / trust subquery
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
     if (projection && "listing" in projection) return { from: pageFromMock };
     if (projection && "total" in projection) return { from: countFromMock };
     if (projection && "occurredOn" in projection) return { from: incidentFromMock };
     if (projection && "suggestedListingId" in projection) return { from: suggestionFromMock };
+    if (projection && "confirmedListingId" in projection) return { from: confirmedFromMock };
     return { from: celiacFromMock };
   });
 
@@ -215,6 +235,8 @@ beforeEach(() => {
   state.incidentWhere = undefined;
   state.suggestionRows = [];
   state.suggestionWhere = undefined;
+  state.confirmedRows = [];
+  state.confirmedWhere = undefined;
   state.favoriteCounts = new Map();
   state.favoriteCountIds = undefined;
   state.viewerFavoriteIds = [];
@@ -765,6 +787,11 @@ describe("getBrowseListings", () => {
     expect(sql).toContain("suggested_by");
     expect(sql).toContain("and not exists");
     expect(sql).toContain('inner join "attestations"');
+    // Pin the FULL correlated equality, not just the joined table name — an edit
+    // that aliased the outer `claims` table (breaking the correlation) would
+    // still render `inner join "attestations"` and pass the looser check, but
+    // must not silently change WHICH rows the evidence subquery joins.
+    expect(sql).toContain('"attestations"."claim_id" = "claims"."id"');
   });
 
   it("default (includeSuggested=true) folds NO exclusion into the WHERE — behavior unchanged", async () => {

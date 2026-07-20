@@ -1,5 +1,7 @@
 import { Clock, type LucideIcon, ShieldCheck, TriangleAlert } from "lucide-react";
 import type * as React from "react";
+import { cn } from "~/lib/utils";
+import { BADGE_FAMILY_SIZE } from "./badge-size";
 import { WheatStrike } from "./icons/WheatStrike";
 
 /**
@@ -32,14 +34,14 @@ interface SafetyStateConfig {
 const STATES: Record<SafetyState, SafetyStateConfig> = {
   "celiac-safe": {
     label: "Celiac-safe",
-    solid: "bg-celiac-safe text-celiac-safe-foreground",
+    solid: "bg-celiac-safe text-celiac-safe-foreground border border-transparent",
     soft: "bg-celiac-safe-soft text-celiac-safe border border-celiac-safe/30",
     // shield + check — headline trust
     icon: ShieldCheck,
   },
   "gluten-friendly": {
     label: "Gluten-friendly",
-    solid: "bg-gluten-friendly text-gluten-friendly-foreground",
+    solid: "bg-gluten-friendly text-gluten-friendly-foreground border border-transparent",
     soft: "bg-gluten-friendly-soft text-gluten-friendly border border-gluten-friendly/30",
     // brand ear-of-wheat with a diagonal strike ("gluten struck out") — reads as
     // "GF-ish options, deliberately NOT celiac-safe", and stays distinct from the
@@ -48,14 +50,14 @@ const STATES: Record<SafetyState, SafetyStateConfig> = {
   },
   stale: {
     label: "Needs update",
-    solid: "bg-stale text-stale-foreground",
+    solid: "bg-stale text-stale-foreground border border-transparent",
     soft: "bg-stale-soft text-stale border border-stale/30",
     // clock — freshness/recency
     icon: Clock,
   },
   incident: {
     label: "Recent incident",
-    solid: "bg-incident text-incident-foreground",
+    solid: "bg-incident text-incident-foreground border border-transparent",
     soft: "bg-incident-soft text-incident border border-incident/30",
     // warning triangle — recent harm
     icon: TriangleAlert,
@@ -102,12 +104,19 @@ export function SafetySignal({
   return (
     <span
       data-safety-state={state}
-      className={`inline-flex items-center gap-1.5 rounded-chip px-2.5 py-1 text-body-sm font-medium ${
-        variant === "solid" ? config.solid : config.soft
-      }${className ? ` ${className}` : ""}`}
+      // Sizing/shape comes from the shared {@link BADGE_FAMILY_SIZE} (AUB-224) so
+      // this headline chip is the EXACT same size as the per-claim `ClaimBadge`;
+      // only the SOLID colour fill (or the soft pastel) sets it apart. The icon
+      // is sized by that constant's `[&>svg]:size-4`, not a per-glyph class.
+      className={cn(
+        "inline-flex items-center",
+        BADGE_FAMILY_SIZE,
+        variant === "solid" ? config.solid : config.soft,
+        className
+      )}
       {...rest}
     >
-      <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={2.25} />
+      <Icon aria-hidden="true" className="shrink-0" strokeWidth={2.25} />
       <span>{text}</span>
     </span>
   );

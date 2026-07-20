@@ -21,6 +21,20 @@ describe("contentSecurityPolicy", () => {
     expect(csp).toContain("https://fonts.gstatic.com");
   });
 
+  it("permits the Maps JavaScript API for the directory map (AUB-111)", () => {
+    // The Maps JS loader + libraries (script) and its tile/attribution
+    // fetches (connect) both come from maps.googleapis.com.
+    expect(csp).toMatch(/script-src [^;]*https:\/\/maps\.googleapis\.com/);
+    expect(csp).toMatch(/connect-src [^;]*https:\/\/maps\.googleapis\.com/);
+    // Static map assets + map-label webfonts are fetched via XHR.
+    expect(csp).toMatch(/connect-src [^;]*https:\/\/maps\.gstatic\.com/);
+    expect(csp).toMatch(/connect-src [^;]*https:\/\/fonts\.gstatic\.com/);
+    // The vector renderer spawns blob: workers — scoped to worker-src ONLY,
+    // never script-src (which would loosen script execution globally).
+    expect(csp).toMatch(/worker-src 'self' blob:/);
+    expect(csp).not.toMatch(/script-src [^;]*blob:/);
+  });
+
   it("never grants unsafe-eval", () => {
     expect(csp).not.toContain("unsafe-eval");
   });

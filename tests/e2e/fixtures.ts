@@ -124,6 +124,38 @@ export class Seeder {
     return listing!;
   }
 
+  /**
+   * Read a listing's current legacy `menu_url` column (`null` once cleared or
+   * when the row is absent). Specs use this as a DB-SIDE BARRIER after a
+   * links-dialog save: the client-side refresh can be lost to a mid-save
+   * document reload (AUB-223), so post-save UI assertions must first poll the
+   * database — the server contract — until the write has landed, then assert
+   * against a fresh `page.reload()`.
+   */
+  async getListingMenuUrl(listingId: string): Promise<string | null> {
+    const listing = await this.db.query.listings.findFirst({
+      where: sql`${schema.listings.id} = ${listingId}`,
+      columns: { menuUrl: true },
+    });
+    return listing?.menuUrl ?? null;
+  }
+
+  /**
+   * Read a listing's typed link URL for one kind (`null` when no row exists).
+   * The insert-side counterpart of {@link getListingMenuUrl} — the same
+   * DB-side barrier for specs that save a typed link and then assert the UI.
+   */
+  async getListingLinkUrl(
+    listingId: string,
+    kind: schema.ListingLink["kind"]
+  ): Promise<string | null> {
+    const link = await this.db.query.listingLinks.findFirst({
+      where: sql`${schema.listingLinks.listingId} = ${listingId} and ${schema.listingLinks.kind} = ${kind}`,
+      columns: { url: true },
+    });
+    return link?.url ?? null;
+  }
+
   /** Insert a claim on a listing for the given taxonomy attribute. */
   async createClaim(listingId: string, attribute: ClaimAttribute): Promise<schema.Claim> {
     const [claim] = await this.db

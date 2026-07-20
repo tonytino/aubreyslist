@@ -1,0 +1,1 @@
+- `[manual]` Browse cards now render CONFIRMED non-headline claim badges (e.g. "Off-menu GF on request") with positive community consensus, matching the listing-detail page (AUB-226).

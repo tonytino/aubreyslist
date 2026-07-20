@@ -181,12 +181,18 @@ export const reportIncidentInputSchema = z.object({
       { message: "occurredOn cannot be in the future" }
     ),
   severity: z.enum(INCIDENT_SEVERITIES).optional(),
+  // `.optional()` OUTERMOST (after the transform): under zod 4 a
+  // `.optional().transform(...)` pipe infers `note` as a REQUIRED key of type
+  // `string | undefined`, forcing every caller to spell out `note: undefined`.
+  // Wrapping the whole pipe keeps the key omittable, with identical runtime
+  // semantics: an omitted note short-circuits to `undefined`, an empty/blank
+  // note still normalises to `undefined` via the transform.
   note: z
     .string()
     .trim()
     .max(2000, "note is too long")
-    .optional()
-    .transform((value) => (value ? value : undefined)),
+    .transform((value) => (value ? value : undefined))
+    .optional(),
 });
 export type ReportIncidentInput = z.infer<typeof reportIncidentInputSchema>;
 
@@ -223,12 +229,14 @@ export const editIncidentInputSchema = z.object({
       { message: "occurredOn cannot be in the future" }
     ),
   severity: z.enum(INCIDENT_SEVERITIES).optional(),
+  // `.optional()` outermost for the same zod-4 key-optionality reason as
+  // `reportIncidentInputSchema.note` above; runtime semantics unchanged.
   note: z
     .string()
     .trim()
     .max(2000, "note is too long")
-    .optional()
-    .transform((value) => (value ? value : undefined)),
+    .transform((value) => (value ? value : undefined))
+    .optional(),
 });
 export type EditIncidentInput = z.infer<typeof editIncidentInputSchema>;
 

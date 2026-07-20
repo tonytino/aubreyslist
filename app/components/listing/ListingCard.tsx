@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
 import { type ComponentProps, useState } from "react";
+import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
 import { Badge } from "~/components/ui/badge";
@@ -14,7 +15,6 @@ import type { ClaimAttribute } from "~/listings/taxonomy";
 // type-only imports already in this app, e.g. `~/server/attestations`).
 import type { PlacePhoto, PlacePhotoAttribution } from "~/server/places-photos";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
-import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
 
 /**
  * Width requested from the `/api/places/photo` media proxy for browse-surface
@@ -67,12 +67,24 @@ export interface RestaurantCardVM {
   suggestedByBot: boolean;
   /**
    * The claim attributes the bot suggested that are still live (deduped, in
-   * taxonomy order). Each renders as a bot-provenance badge in the badge row
-   * with a VISIBLE "Suggested:" prefix plus the lavender + Sparkles treatment —
-   * clearly distinct from real evidence signals without relying on colour
-   * (ADR-007: a suggestion must never read as a community-confirmed verdict).
+   * taxonomy order). Each renders as a shared {@link ClaimBadge} (`suggested`
+   * variant) in the badge row: the attribute's OWN icon, a gradient ring, and an
+   * always-visible "AI" marker after the label (AUB-225) — clearly distinct from
+   * real evidence signals without relying on colour alone or on a hover/focus-only
+   * tooltip (ADR-007: a suggestion must never read as a community-confirmed
+   * verdict, and that distinction must reach touch-only users too).
    */
   suggestedAttributes: ClaimAttribute[];
+  /**
+   * The NON-headline claim attributes with CONFIRMED positive community
+   * consensus (AUB-226), deduped and in taxonomy order. Each renders as a shared
+   * {@link ClaimBadge} in its NON-suggested (affirmed) variant in the badge row,
+   * BEFORE the suggested ones (evidence before provenance). This gives the browse
+   * card the same confirmed claim badges the listing-detail page shows (e.g.
+   * "Off-menu GF on request"). The headline celiac attribute is excluded — it is
+   * the {@link safetyState} verdict, rendered via {@link SafetySignal}, not a badge.
+   */
+  confirmedAttributes: ClaimAttribute[];
   /** A recent "got glutened" report flags the card regardless of confirmations. */
   hasRecentIncident: boolean;
   /** Freshness/recency cue, e.g. `{ kind: "fresh", label: "Verified 3d ago" }`. */
@@ -176,10 +188,10 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  * bot suggestions shows a "Suggested by Aubrey's Bot" label in the meta row's
  * freshness slot (so bot-suggested cards read uniformly with verified ones —
  * when a real freshness cue exists it wins the slot, evidence over provenance)
- * plus one lavender + Sparkles badge per suggested attribute in the badge row,
- * each with a VISIBLE "Suggested:" prefix. Suggestions are provenance, never
- * evidence: distinguishable from {@link SafetySignal} by text alone (never
- * colour alone) and never read as a community-confirmed verdict.
+ * plus one shared {@link ClaimBadge} (`suggested` variant) per suggested
+ * attribute in the badge row. Suggestions are provenance, never evidence:
+ * structurally distinguishable from {@link SafetySignal} and never read as a
+ * community-confirmed verdict.
  *
  * CONSISTENT HEIGHT (AUB-194): every card in a directory grid renders at the
  * same height regardless of which optional attributes its VM carries. Two
@@ -352,7 +364,14 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
         </p>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        {/* `relative z-10` (matching AttributedPill/FavoriteButton above): the
+            suggested-attribute ClaimBadge's "AI" tooltip trigger is a real
+            interactive <button>, so this row must be raised above the card's
+            stretched-link overlay (`after:absolute after:inset-0` on the media
+            Link) or that overlay intercepts every pointer event over it —
+            hover/click would silently never reach the button, even though
+            keyboard Tab-focus still works (hit-testing doesn't gate focus). */}
+        <div className="relative z-10 mt-2 flex flex-wrap items-center gap-2">
           {vm.safetyState ? (
             <SafetySignal state={vm.safetyState} />
           ) : vm.suggestedByBot ? null : (
@@ -372,33 +391,26 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           {/* Recent harm flags the card regardless of older confirmations. */}
           {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
 
-          {/* Curator-bot suggested claims (AUB-31, owner nit 7): one badge per
-              live-suggested attribute — PROVENANCE, never evidence (ADR-007).
-              Every badge carries a VISIBLE "Suggested:" prefix, so the
-              distinction from a real verdict never rests on colour or a screen
-              reader (styling.md) — without it, the celiac badge's ShieldCheck +
-              "Celiac-safe" would mirror the SafetySignal verdict chip exactly,
-              and a celiac could be hurt by misreading a suggestion as
-              community-confirmed. The lavender + Sparkles bot-provenance
-              treatment stays as the secondary visual cue. */}
-          {vm.suggestedAttributes.map((attribute) => {
-            const AttributeIcon = CLAIM_ATTRIBUTE_ICONS[attribute];
-            return (
-              <Badge
-                key={attribute}
-                variant="outline"
-                data-testid="suggested-attribute"
-                className="gap-1 border-accent-lavender bg-accent-lavender/30 px-2 py-0.5 text-caption font-medium text-foreground"
-              >
-                <Sparkles className="h-3 w-3" aria-hidden="true" />
-                <AttributeIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>
-                  <span className="font-normal">Suggested:</span>{" "}
-                  {CLAIM_ATTRIBUTE_LABELS[attribute]}
-                </span>
-              </Badge>
-            );
-          })}
+          {/* CONFIRMED non-headline claims (AUB-226): one shared {@link ClaimBadge}
+              in its NON-suggested (affirmed) variant per attribute with positive
+              community consensus — real EVIDENCE, so it reads as confirmed, never
+              the suggested/provenance variant. Rendered BEFORE the suggested badges
+              (evidence before provenance) and in taxonomy order, so the browse card
+              shows the SAME confirmed claim badges as the listing-detail page. */}
+          {vm.confirmedAttributes.map((attribute) => (
+            <ClaimBadge key={attribute} attribute={attribute} />
+          ))}
+
+          {/* Curator-bot suggested claims (AUB-31, owner nit 7): one shared
+              {@link ClaimBadge} per live-suggested attribute — PROVENANCE, never
+              evidence (ADR-007). The suggested variant keeps the attribute's OWN
+              icon, wraps a gradient ring, and shows an always-visible "AI" marker
+              after the label (AUB-225) — a real painted text label alongside the
+              icon, never colour/shape alone, and never gated on a hover/focus-only
+              tooltip that touch users could never reach. */}
+          {vm.suggestedAttributes.map((attribute) => (
+            <ClaimBadge key={attribute} attribute={attribute} suggested />
+          ))}
         </div>
 
         {/* Meta row — freshness cue (left) + evidence counts (right). The left
@@ -561,6 +573,7 @@ export function listingToCardVM(
     safetyState: glance.safetyState,
     suggestedByBot: glance.suggestedByBot,
     suggestedAttributes: glance.suggestedAttributes,
+    confirmedAttributes: glance.confirmedAttributes,
     hasRecentIncident: glance.hasRecentIncident,
     accent: accentForId(listing.id),
     // Already-derived on the server (batched query set); mapped straight through.

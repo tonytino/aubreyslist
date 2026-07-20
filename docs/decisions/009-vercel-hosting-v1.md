@@ -29,6 +29,9 @@ during initial build.
 - The **Vercel project is human-provisioned** (`safe:human`, Bucket 1); env/
   secrets set there, mirrored in `.env.example`.
 - Launch on a **free Vercel subdomain**; attach a custom domain later.
+  *(Update 2026-07: the custom domain `www.aubreys-list.com` is attached and
+  indexed by Google — `SITE_URL` in `app/lib/seo.ts` and the `PRODUCTION_URL`
+  repo variable both point at it. Note it is the hyphenated spelling.)*
 - **Free tiers only** for v1 (Vercel hobby + Neon free + Places free allowance);
   paid spend waits for ad revenue.
 - The **Cloudflare port lives in the post-launch backlog**, not v1 scope.

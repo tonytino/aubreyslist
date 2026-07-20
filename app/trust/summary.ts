@@ -58,9 +58,10 @@ export function claimAttributeLabel(attribute: ClaimAttribute): string {
 /**
  * A distinct lucide glyph per claim attribute — shape reinforces the attribute
  * identity on compact surfaces (e.g. the review-step outcome chip), independent
- * of colour. The headline `celiac_safe_vs_gluten_friendly` icon is included for
- * completeness/exhaustiveness, but the review chip keeps its `SafetySignal` for
- * the headline; these icons are used only for the four non-headline facts.
+ * of colour. The headline `celiac_safe_vs_gluten_friendly` icon (ShieldCheck) is
+ * live too: `ClaimVoteControls` renders it on the headline claim's confirm badge
+ * (the Celiac-safe toggle). The add-listing review chip still keeps its
+ * `SafetySignal` for the headline rather than this bare glyph.
  *
  * Exhaustive by the `ClaimAttribute` key so adding a taxonomy value forces an
  * icon here too. All glyphs are verified exports of the installed `lucide-react`.

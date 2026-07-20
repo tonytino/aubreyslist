@@ -129,7 +129,17 @@ export function isAnyBrowseFilterActive(search: BrowseSearchLike): boolean {
 }
 
 export const browseSearchSchema = z.object({
-  page: z.number().int().min(1).catch(BROWSE_SEARCH_DEFAULTS.page),
+  // `.catch(...).default(...)` (like every defaulted sibling below): `.catch`
+  // degrades garbage to the default, `.default` keeps the param OPTIONAL on the
+  // INPUT side under zod 4 (zod 3 inferred catch-only params as optional inputs;
+  // zod 4 does not, which would force every `navigate`/`<Link>` to spell out
+  // `page` and `sort`). Output value for an omitted/garbage param is identical.
+  page: z
+    .number()
+    .int()
+    .min(1)
+    .catch(BROWSE_SEARCH_DEFAULTS.page)
+    .default(BROWSE_SEARCH_DEFAULTS.page),
   /** Comma-separated taxonomy attributes (#35); defaults to "" (no filter). */
   attrs: z.string().catch(BROWSE_SEARCH_DEFAULTS.attrs).default(BROWSE_SEARCH_DEFAULTS.attrs),
   // Free-text search over name + address (#34). URL-driven like page/attrs/sort so
@@ -141,9 +151,12 @@ export const browseSearchSchema = z.object({
   // works. A plain enum (NOT a `.transform()`) so the value round-trips cleanly
   // when the router re-serializes search state on navigation; unknown/garbage
   // tokens degrade to the stable alphabetical default via `.catch`.
+  // `.default(...)` added alongside `.catch(...)` for the same zod-4 input-
+  // optionality reason as `page` above; unknown tokens still degrade via `.catch`.
   sort: z
     .enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]])
-    .catch(BROWSE_SEARCH_DEFAULTS.sort),
+    .catch(BROWSE_SEARCH_DEFAULTS.sort)
+    .default(BROWSE_SEARCH_DEFAULTS.sort),
   // The user's location for the "near me" distance sort (#37), kept in the URL
   // (so a distance-sorted view is linkable/back-forwardable like the rest).
   lat: z.number().finite().min(-90).max(90).optional().catch(undefined),

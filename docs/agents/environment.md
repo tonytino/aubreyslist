@@ -14,12 +14,35 @@ All environment variables are validated with Zod in `app/env.ts`. Validation run
 | `SESSION_SECRET`        | Optional* | human (#14)    | Random string for session signing, **min 32 chars** (`openssl rand -base64 32`). Promoted to required by #15. |
 | `VERCEL_ENV`            | Optional  | runtime        | Auto-set by Vercel: `production` \| `preview` \| `development`; absent locally. Preview dev-login is **fail-closed** — enabled only for `preview`/`development` (set `VERCEL_ENV=development` in `.env` for local dev-login); unset/`production`/other → disabled (AUB-138). |
 | `PREVIEW_LOGIN_SECRET`  | Optional* | human (AUB-138) | Gates the preview-only dev-login endpoint, **min 32 chars** (`openssl rand -base64 32`). Provision **Preview-scoped only** in Vercel, NEVER Production. Absent → endpoint disabled. |
+| `VITE_GOOGLE_MAPS_BROWSER_KEY` | Optional | human (AUB-217) | **Public, client-side** browser key for Maps JavaScript API + Maps Embed API (ADR-014). Deliberately client-exposed — its security model is HTTP-referrer restriction + API restriction to those two Maps APIs only; it must never be able to call Places. Distinct from `GOOGLE_PLACES_API_KEY` (server-only); never cross-use the two. NOT in `app/env.ts` — read via the typed accessor in `app/lib/public-env.ts` (see "Public client-side variables" below). Optional by design: map surfaces degrade gracefully to the CSS placeholder / Google Maps deep-link when absent. |
 
 \* The human-provisioned secrets are declared `optional()` for now so
 `pnpm preflight` / CI stay green while they're unprovisioned. The auth (#15) and
 Places (#22) issues promote them to required as they're wired up. The var names
 above are finalized here (#44) and in `.env.example` — they are the source of
 truth if the provisioning guide differs.
+
+## Public client-side variables (`VITE_*`)
+
+`app/env.ts`/`getEnv()` guards **runtime, server-side** variables — it is
+server-only and unreachable from the browser bundle. A variable the CLIENT
+needs is a different animal: Vite statically inlines any `VITE_`-prefixed var
+into the shipped JavaScript at **build time**, which makes it public by
+definition. Rules for these:
+
+- **Never put a secret in a `VITE_` var.** Only values that are safe to print
+  in view-source belong here (e.g. a referrer-restricted Google Maps browser
+  key, whose security model is console-side restriction, not concealment).
+- **Read them only through a typed accessor in `app/lib/public-env.ts`** —
+  never scatter raw `import.meta.env.VITE_*` reads through components. The
+  accessor normalizes absent/blank to `null` so callers must handle the
+  unprovisioned case explicitly (graceful degradation, e.g. the directory
+  map's CSS-placeholder fallback).
+- **Type them in `app/vite-env.d.ts`** (the `ImportMetaEnv` augmentation) and
+  document them in `.env.example` with an explicit "public by design" note.
+- The Hard Rule "no `process.env` outside `app/env.ts`" is untouched: a
+  `VITE_` read is `import.meta.env`, compile-time, and non-secret — it is not
+  a runtime `process.env` access.
 
 ## Adding a New Variable
 

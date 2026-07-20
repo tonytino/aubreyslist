@@ -1,0 +1,1 @@
+- `[manual]` Pointed all SEO surfaces (`SITE_URL` canonical/OG/JSON-LD URLs, sitemap `<loc>` entries, robots.txt `Sitemap:` line) at the live custom domain `https://www.aubreys-list.com` — they previously advertised the aspirational, unowned `aubreyslist.com`, telling crawlers every page's canonical home was a domain the site isn't on.

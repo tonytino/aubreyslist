@@ -52,9 +52,14 @@ unprefixed utility is the mobile base; `sm:`/`md:`/`lg:` add to it.
   mobile/desktop designs, unless there's a clear reason to differ. Fewer
   viewport-conditional branches means fewer places to regress.
 - **The site header is the canonical example** (`app/components/SiteHeader.tsx`):
-  a hamburger menu (left) + centred wordmark + right-aligned controls, identical
-  at every size. When a control can't fit at 375px, shrink it (smaller wordmark,
-  compact button) rather than introducing a separate desktop layout.
+  it is built mobile-first with a single, deliberate breakpoint switch at `sm`
+  (640px). Below `sm`: a left-aligned wordmark and one thumb-reachable,
+  right-anchored combined menu (`app/components/SiteMenu.tsx`) whose panel groups
+  a **Navigate** section and an **Account** section (the theme toggle folds in as
+  a row). At `sm:`+: the layout splits into the wordmark + an inline primary
+  `<nav>` + a standalone theme toggle + a separate account menu
+  (`app/components/UserMenu.tsx`). The `<nav aria-label="Primary">` landmark and
+  the account rows are shared across both layouts, so they can't drift.
 - When you change a header/nav element's role, label, or visibility, re-check the
   e2e selectors in `tests/e2e/` (and component tests) that target it — a
   mobile-first restructure commonly moves an inline element into a menu.
@@ -139,7 +144,60 @@ so the signal survives greyscale.
 `SAFETY_STATES` and `safetyLabel()` are exported for legends, filters, and the
 `/style-guide` route, which showcases the palette, type scale, and every signal.
 
+### One shared badge size (AUB-224)
+
+The whole badge family — the headline `SafetySignal` chip AND the per-claim
+`ClaimBadge` (`app/components/listing/ClaimBadge.tsx`) — must render at the EXACT
+same size and shape everywhere, including the listing-detail hero. There is ONE
+size source: `BADGE_FAMILY_SIZE` in `app/components/badge-size.ts` (padding,
+radius, text size, gap, and icon size via `[&>svg]:size-4`). Both components
+compose that constant; never hand-tune `px`/`py`/`text`/`rounded`/icon-size on an
+individual badge, and do not up-scale the headline in the hero (the old
+`text-lead px-4 py-2` override is gone). The headline stays the primary verdict
+by its SOLID colour fill + hero position, not by size; the other claim badges
+keep their soft/outline fill at the identical size. `SafetySignal`'s `solid`
+variants carry a `border border-transparent` so their box metrics match the
+bordered soft/outline badges to the pixel.
+
 The header wordmark is `app/components/Wordmark.tsx` (`<Wordmark size="lg" />`).
+
+### One shared chip source per concept (AUB-227)
+
+The badge FAMILY is one visual language; each distinct chip concept has ONE
+implementation, so add-listing and listing-detail can't drift. Every per-claim
+chip — static AND interactive — composes ONE primitive:
+
+- **The shared chip primitive** — `ClaimChip`
+  (`app/components/listing/ClaimChip.tsx`) is the single source for the per-claim
+  chip: a leading `aria-hidden` glyph + a visible text label at
+  `BADGE_FAMILY_SIZE`. It is `asChild`-capable (Radix `Slot` + `Slottable`), so an
+  interactive caller can render it THROUGH a real element (a `<button>`) that adds
+  only its own concerns. `ClaimChip` owns just the shared visual (box, family
+  size/shape, glyph, label span); fills/tints and interactive props stay with the
+  caller, so nothing conflicts under `cn()` or `Slot`'s className merge.
+- **Per-claim badge** — `ClaimBadge` (`app/components/listing/ClaimBadge.tsx`) is
+  the canonical static claim chip; it composes `ClaimChip` (default `<span>`). The
+  add-listing review outcome chip (`FactOutcomeChip`, exported from
+  `app/components/add-listing/ReviewStep.tsx`) composes the SAME `ClaimChip`; it
+  keeps distinct content (attribute icon + a "Confirmed"/"Disputed" outcome word in
+  a neutral, non-safety tint) but IS the same component.
+- **Bot "suggested" treatment** — the purple gradient provenance ring is the ONE
+  `SuggestedRing` primitive (`app/components/listing/SuggestedRing.tsx`), shared by
+  the `ClaimBadge` `suggested` variant AND the `ClaimTrustSummaryRow` provenance
+  chip. Don't hand-roll the `bg-gradient-to-r from-brand via-accent-lavender …`
+  ring again — wrap `SuggestedRing`.
+- **Vote toggle** — `ClaimVoteControls`' `VoteBadgeButton` renders THROUGH the
+  shared `ClaimChip` (`<ClaimChip asChild …><button …/></ClaimChip>`): the confirm/
+  dispute toggle IS the shared badge, not a look-alike. The `<button>` supplies
+  ONLY its interactive concerns — `aria-pressed`, `disabled`, `onClick`, the
+  pressed safety-colour fill, the focus-visible ring — while the chip supplies the
+  icon + label + family size/shape. Meaning still never rests on colour alone
+  (icon + visible label + `aria-pressed`), and the button stays a first-class
+  native element (native keyboard/focus/disabled semantics).
+- **Parity guard** — `app/components/listing/claim-chip-parity.test.tsx` fails if
+  the review chip, the detail `ClaimBadge`, OR the vote toggle's confirm chip
+  diverge on the taxonomy icon/label (all sourced from `~/trust/summary`) or on the
+  shared family-size class. Run it as the tripwire whenever you touch any of them.
 
 ## Component primitives (shadcn/ui — ADR-011)
 

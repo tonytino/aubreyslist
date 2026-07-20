@@ -24,6 +24,14 @@ describe("ThemeToggle", () => {
     expect(button).toBeInTheDocument();
   });
 
+  it("gives the trigger a >= 44px hit area on coarse pointers (#269 touch target)", () => {
+    // Matches the hamburger + avatar triggers: the 36px icon Button grows to
+    // 44px on a touch (coarse) pointer while staying compact on desktop.
+    render(<ThemeToggle />);
+    const button = screen.getByRole("button", { name: "Switch to dark theme" });
+    expect(button.className).toContain("pointer-coarse:size-11");
+  });
+
   it("shows the Sun (go-light) action when dark is already applied on mount", () => {
     document.documentElement.classList.add("dark");
     render(<ThemeToggle />);
