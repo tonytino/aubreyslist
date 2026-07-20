@@ -9,6 +9,7 @@ import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { ListingLinks, listingLinksQueryKey } from "~/components/listing/ListingLinks";
+import { ListingMap } from "~/components/listing/ListingMap";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
 import { SafetySummary } from "~/components/listing/SafetySummary";
 import { Card, CardContent } from "~/components/ui/card";
@@ -380,14 +381,27 @@ function ListingDetail() {
         <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
       ) : null}
 
-      {/* Links (AUB-202): the Google Maps deep-link (ADR-009 — no embedded
-          map) plus the listing's typed links in LINK_KINDS order, with the
-          legacy menuUrl as the menu fallback and — for signed-in viewers — the
-          wiki-style edit-links dialog. Every href is `isHttpUrl`-guarded at
-          the render sink inside the component (#90). Both the typed links AND
-          the legacy fallback come from the invalidatable links QUERY (not the
-          loader's listing row), so an edit that clears the legacy column
-          refreshes the section without a full route reload. */}
+      {/* Embedded map preview (AUB-216; ADR-014 — revises v1's "no embedded
+          map — deep-link only" decision, previously mislabeled here as
+          ADR-009, which is Vercel hosting — now that the Maps Embed API is
+          free and unrestricted-quota). Renders nothing when the public
+          browser key is unset (no empty block, no layout shift).
+          Deliberately a SIBLING of the "Links" region below, never inside
+          it: the edit-listing-links E2E spec asserts link/button roles
+          within that region, and the map must not perturb them. The "Open in
+          Google Maps" deep-link inside ListingLinks is KEPT — it is the
+          mobile hand-off to turn-by-turn in the native Maps app; the embed
+          is only a preview. */}
+      <ListingMap name={listing.name} address={listing.address} placeId={listing.placeId} />
+
+      {/* Links (AUB-202): the Google Maps deep-link plus the listing's typed
+          links in LINK_KINDS order, with the legacy menuUrl as the menu
+          fallback and — for signed-in viewers — the wiki-style edit-links
+          dialog. Every href is `isHttpUrl`-guarded at the render sink inside
+          the component (#90). Both the typed links AND the legacy fallback
+          come from the invalidatable links QUERY (not the loader's listing
+          row), so an edit that clears the legacy column refreshes the
+          section without a full route reload. */}
       <ListingLinks
         listingId={listing.id}
         mapsUrl={listing.mapsUrl}

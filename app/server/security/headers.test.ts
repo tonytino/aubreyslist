@@ -38,6 +38,13 @@ describe("contentSecurityPolicy", () => {
   it("never grants unsafe-eval", () => {
     expect(csp).not.toContain("unsafe-eval");
   });
+
+  it("permits the Maps Embed API iframe for the listing-detail map (AUB-216, ADR-014)", () => {
+    // Pinned EXACTLY: the frame-src directive is the Embed API's iframe
+    // origin and nothing else — any future widening (another host, 'self', a
+    // wildcard) must consciously fail this assertion and update it.
+    expect(csp).toMatch(/frame-src https:\/\/www\.google\.com(;|$)/);
+  });
 });
 
 describe("buildSecurityHeaders", () => {
