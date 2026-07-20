@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
@@ -16,12 +16,24 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
 }));
 
 /**
- * Tests for the stylized Map view (AUB-61, Phase 2b). Safety-relevant behaviour:
- * every pin/mini-card carries an accessible name that includes the restaurant AND
- * its safety state (never colour alone); pin and carousel selection stay in sync;
- * and the carousel is stacked ABOVE the pins with an opaque band so a pin can
- * never bleed over a different restaurant's card.
+ * Tests for the Map view's KEY-ABSENT path (AUB-61 Phase 2b, kept as the
+ * fallback by AUB-111). Safety-relevant behaviour: every pin/mini-card carries
+ * an accessible name that includes the restaurant AND its safety state (never
+ * colour alone); pin and carousel selection stay in sync; and the carousel is
+ * stacked ABOVE the pins with an opaque band so a pin can never bleed over a
+ * different restaurant's card. The real-map path is covered (against a mocked
+ * Maps module) in `DirectoryMapLive.test.tsx`.
  */
+
+// Pin the browser key to ABSENT for this whole file so the fallback renders
+// deterministically even on a machine whose .env provisions a real key
+// (Vitest loads .env like any Vite build).
+beforeAll(() => {
+  vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_KEY", "");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 function vm(overrides: Partial<RestaurantCardVM>): RestaurantCardVM {
   return {
@@ -62,6 +74,17 @@ function renderMap(selectedId: string | null = "a") {
   );
   return { onSelect };
 }
+
+describe("DirectoryMap — key-absent fallback (AUB-111)", () => {
+  it("renders the stylized CSS placeholder when no browser key is provisioned", () => {
+    renderMap();
+    // The decorative backdrop only exists on the fallback path — with a key the
+    // live Google canvas renders instead (DirectoryMapLive.test.tsx).
+    expect(screen.getByTestId("map-placeholder-backdrop")).toBeInTheDocument();
+    // The recenter FAB is present but unwired in the fallback.
+    expect(screen.getByRole("button", { name: "Recenter map" })).toBeInTheDocument();
+  });
+});
 
 describe("DirectoryMap — pins", () => {
   it("labels each pin with the restaurant name AND its safety state", () => {

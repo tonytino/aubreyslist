@@ -278,13 +278,12 @@ function BrowseListings() {
   // rather than local `useState` — refresh/back-forward/a shared link all restore
   // it by construction. `setView` below writes it via `navigate`.
   //
-  // OWNER OVERRIDE of AUB-164: the map view is still a CSS placeholder with no
-  // real map provider wired up (see `DirectoryMap.tsx`) — a real provider remains
-  // deferred to AUB-111 — but the repo owner has explicitly asked for the Map
-  // segment to come back on the public directory ahead of that, accepting the
-  // placeholder for now. `ViewToggle` below is rendered with `mapEnabled`, so
-  // `view === "map"` is reachable again. AUB-111 swaps in a real map behind the
-  // same `DirectoryMap` component; do NOT delete the `view === "map"` branch,
+  // OWNER OVERRIDE of AUB-164: the repo owner explicitly asked for the Map
+  // segment on the public directory, so `ViewToggle` below is rendered with
+  // `mapEnabled` and `view === "map"` is reachable. As of AUB-111 the map view
+  // is a REAL Google map when the public `VITE_GOOGLE_MAPS_BROWSER_KEY` is
+  // provisioned, falling back to the stylized CSS placeholder otherwise (see
+  // `DirectoryMap.tsx`); do NOT delete the `view === "map"` branch,
   // `ViewToggle`'s Map segment, or `DirectoryMap` itself.
   //
   // The map's selected pin stays genuinely ephemeral local state (not shareable
@@ -602,9 +601,9 @@ function BrowseListings() {
                 truthfulness — the filtered results themselves are the answer. */}
             <DistanceSelector value={radius} onChange={changeRadius} />
             {/* OWNER OVERRIDE of AUB-164: `mapEnabled` passed explicitly so the Map
-                segment is back on the public directory ahead of AUB-111's real map
-                provider (the placeholder is accepted for now). See the comment on
-                `view`/`setView` above. */}
+                segment is on the public directory. AUB-111 landed the real map
+                provider (key-gated, with a CSS-placeholder fallback). See the
+                comment on `view`/`setView` above. */}
             <ViewToggle view={view} onChange={setView} mapEnabled />
           </div>
         </div>
@@ -622,18 +621,20 @@ function BrowseListings() {
             <DirectoryEmpty onBrowseCeliac={() => toggleQuick("celiac")} />
           )
         ) : view === "map" ? (
-          // OWNER OVERRIDE of AUB-164: reachable again on the public directory —
+          // OWNER OVERRIDE of AUB-164: reachable on the public directory —
           // `ViewToggle`'s Map segment is enabled (see the comment on `view`/
-          // `setView` above), so `view` can be "map" via `?view=map`. Still a CSS
-          // placeholder (`DirectoryMap.tsx`); a real map provider remains
-          // deferred to AUB-111.
+          // `setView` above), so `view` can be "map" via `?view=map`. As of
+          // AUB-111 this renders a real Google map when the public browser key
+          // is provisioned, and the stylized CSS placeholder otherwise
+          // (`DirectoryMap.tsx`).
           //
           // The map is absolutely positioned (`inset-0`) inside its own root, so
           // under natural document scroll it needs a BOUNDED, positioned box to
           // fill. A viewport-relative height (minus the sticky header's footprint)
-          // with a sensible floor keeps the backdrop, pins, and the opaque bottom
-          // carousel band all visible — preserving the carousel-above-pins safety
-          // invariant and pin/mini-card selection sync unchanged.
+          // with a sensible floor keeps the map canvas/backdrop, pins, and the
+          // opaque bottom carousel band all visible — preserving the
+          // carousel-above-pins safety invariant and pin/mini-card selection sync
+          // unchanged.
           <div className="relative h-[calc(100dvh-14rem)] min-h-[26rem]">
             <DirectoryMap entries={mapEntries} selectedId={selectedId} onSelect={setSelectedId} />
           </div>

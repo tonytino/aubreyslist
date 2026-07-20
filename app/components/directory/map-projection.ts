@@ -1,10 +1,13 @@
 /**
  * Pure lat/lng → map-percentage projection for the stylized directory map
- * (AUB-61, Phase 2b). The real map provider (Mapbox / Google) is deferred to
- * AUB-111; until then the map is a CSS backdrop, and each listing's REAL stored
- * `lat`/`lng` is projected into the backdrop with a FIXED metro-Denver bounding
- * box so pins land in believable relative positions (north-west spots up-left,
- * etc.) rather than being faked with hard-coded coordinates.
+ * (AUB-61, Phase 2b). Since AUB-111 a real Google map renders whenever the
+ * public `VITE_GOOGLE_MAPS_BROWSER_KEY` is provisioned; this projection powers
+ * the KEY-ABSENT FALLBACK (local dev, CI, E2E, un-provisioned deploys): a CSS
+ * backdrop where each listing's REAL stored `lat`/`lng` is projected with a
+ * FIXED metro-Denver bounding box so pins land in believable relative positions
+ * (north-west spots up-left, etc.) rather than being faked with hard-coded
+ * coordinates. Do NOT delete it — the fallback keeps the map view
+ * deterministic without a key.
  *
  * CLIENT-SAFE + PURE: no `db`/server import, no React — just arithmetic, so it is
  * trivially unit-testable and safe in the browse client bundle.
