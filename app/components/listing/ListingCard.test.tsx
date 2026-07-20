@@ -698,6 +698,7 @@ describe("listingToCardVM (photo threading, AUB-219)", () => {
     hasRecentIncident: false,
     evidence: null,
     freshness: null,
+    confirmedAttributes: [],
     suggestedByBot: false,
     suggestedAttributes: [],
   };
