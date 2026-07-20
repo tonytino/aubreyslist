@@ -33,6 +33,13 @@ describe("reportIncidentInputSchema — validation", () => {
       occurredOn: "2026-06-01",
     });
     expect(result.success).toBe(true);
+    if (result.success) {
+      // An OMITTED note must keep validating (zod 4 regression guard: the
+      // `.transform(...).optional()` chain must keep the key omittable) and
+      // parse to undefined, never a required key the caller must spell out.
+      expect(result.data.note).toBeUndefined();
+      expect(result.data.severity).toBeUndefined();
+    }
   });
 
   it("rejects an unknown severity", () => {
