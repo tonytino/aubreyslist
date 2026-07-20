@@ -1,0 +1,74 @@
+# Code owners — the owner-review guardrail, Layer 1 (ADR-015, docs/agents/governance.md).
+#
+# GitHub requests/requires a review from a code owner ONLY when a PR changes a
+# file matched below. Everything NOT listed here is intentionally UNOWNED, so the
+# vast majority of PRs need zero owner review and helpers/agents ship them on
+# green CI. The paths below are the seven owner-gated categories — cost, legal,
+# security, trust & safety model, destructive data changes, data-collection /
+# privacy posture, and safety/medical-disclaimer copy.
+#
+# THE TEETH: this file only *requests* review until branch protection on `main`
+# is set to "Require review from Code Owners" + "Dismiss stale approvals on new
+# commits" + "Do not allow bypassing". With that on, an owned-path PR CANNOT be
+# merged until @tonytino approves — no collaborator, bot, admin, or agent can
+# satisfy or dismiss it. See the owner checklist in docs/agents/governance.md.
+#
+# DO NOT edit the path list without keeping .github/scripts/owner-review-paths.mjs
+# in sync — tests/unit/check-owner-review.test.ts fails the build if they drift.
+# This file is itself owner-owned (via `/.github/` below), so loosening the
+# guardrail requires the owner's own review.
+
+# ── Cost / billed infrastructure ──────────────────────────────────────────────
+/app/server/places.ts            @tonytino
+/app/server/rate-limit/          @tonytino
+/instrument.server.mjs           @tonytino
+
+# ── Security: auth, session, middleware, privilege/RBAC ───────────────────────
+/app/server/auth/                @tonytino
+/app/server/security/            @tonytino
+/app/server/admin/               @tonytino
+/scripts/seed-admin.ts           @tonytino
+/app/server/routes/auth.ts       @tonytino
+/app/server/index.ts             @tonytino
+/app/start.ts                    @tonytino
+/app/routes/api.$.ts             @tonytino
+
+# ── Trust & safety model (ADR-007/008/010) ────────────────────────────────────
+/app/trust/                      @tonytino
+/app/server/attestations/        @tonytino
+/app/server/incidents/           @tonytino
+/app/server/moderation/          @tonytino
+/app/server/flags/               @tonytino
+
+# ── Secrets / environment ─────────────────────────────────────────────────────
+/app/env.ts                      @tonytino
+/.env.example                    @tonytino
+/.gitignore                      @tonytino
+
+# ── Data / PII schema + migrations + DB connection ────────────────────────────
+/db/schema.ts                    @tonytino
+/db/migrations/                  @tonytino
+/db/client.ts                    @tonytino
+/drizzle.config.ts               @tonytino
+
+# ── Supply chain / legal ──────────────────────────────────────────────────────
+/package.json                    @tonytino
+/pnpm-lock.yaml                  @tonytino
+/LICENSE                         @tonytino
+
+# ── Safety / medical-disclaimer copy (content check catches it if it moves) ───
+/app/components/SiteFooter.tsx   @tonytino
+
+# ── Guardrail integrity + CI-config surface (self-protecting) ─────────────────
+# `/.github/` owns CODEOWNERS itself, every workflow, and every guard script.
+# `/*.config.ts` covers root vite/vitest/drizzle/playwright configs.
+/.github/                        @tonytino
+/scripts/labels.mjs              @tonytino
+/AGENTS.md                       @tonytino
+/docs/decisions/                 @tonytino
+/*.config.ts                     @tonytino
+/tsconfig*.json                  @tonytino
+/commitlint.config.mjs           @tonytino
+/biome.json                      @tonytino
+/knip.jsonc                      @tonytino
+/stryker.conf.json               @tonytino

@@ -20,18 +20,24 @@ test("About page renders its content and is reachable from the header nav", asyn
   await expect(page.getByRole("heading", { name: "How to contribute" })).toBeVisible();
 });
 
-test("header About nav link resolves to the About route", async ({ page }) => {
-  await page.goto("/");
-  // The nav lives in the hamburger menu, which only opens after hydration.
-  await waitForHydration(page);
+// Below `sm` the primary nav lives inside the combined menu's Navigate section;
+// drive it at the minimum supported mobile width.
+test.describe("mobile combined menu", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
 
-  const nav = page.getByRole("navigation", { name: "Primary" });
-  await nav.getByRole("button", { name: "Open menu" }).click();
+  test("header About nav link resolves to the About route", async ({ page }) => {
+    await page.goto("/");
+    // The nav lives in the combined menu, which only opens after hydration.
+    await waitForHydration(page);
 
-  const aboutItem = page.getByRole("menuitem", { name: "About" });
-  await expect(aboutItem).toHaveAttribute("href", "/about");
+    const nav = page.getByRole("navigation", { name: "Primary" });
+    await nav.getByRole("button", { name: "Open menu" }).click();
 
-  await aboutItem.click();
-  await expect(page).toHaveURL("/about");
-  await expect(page.getByRole("heading", { name: "Our mission" })).toBeVisible();
+    const aboutItem = page.getByRole("menuitem", { name: "About" });
+    await expect(aboutItem).toHaveAttribute("href", "/about");
+
+    await aboutItem.click();
+    await expect(page).toHaveURL("/about");
+    await expect(page.getByRole("heading", { name: "Our mission" })).toBeVisible();
+  });
 });

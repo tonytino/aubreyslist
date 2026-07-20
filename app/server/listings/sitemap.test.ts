@@ -50,8 +50,8 @@ describe("buildSitemapXml (AUB-161)", () => {
     expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
     expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
     expect(xml).toContain("</urlset>");
-    expect(xml).toContain("<loc>https://aubreyslist.com/</loc>");
-    expect(xml).toContain("<loc>https://aubreyslist.com/about</loc>");
+    expect(xml).toContain("<loc>https://www.aubreys-list.com/</loc>");
+    expect(xml).toContain("<loc>https://www.aubreys-list.com/about</loc>");
 
     // Excludes auth-gated/admin routes — never advertise them to a crawler.
     expect(xml).not.toContain("/favorites");
@@ -64,8 +64,8 @@ describe("buildSitemapXml (AUB-161)", () => {
 
     const xml = await buildSitemapXml();
 
-    expect(xml).toContain("<loc>https://aubreyslist.com/listings/listing-1</loc>");
-    expect(xml).toContain("<loc>https://aubreyslist.com/listings/listing-2</loc>");
+    expect(xml).toContain("<loc>https://www.aubreys-list.com/listings/listing-1</loc>");
+    expect(xml).toContain("<loc>https://www.aubreys-list.com/listings/listing-2</loc>");
   });
 
   it("constrains the listing query to moderation_status = 'visible'", async () => {
@@ -87,7 +87,7 @@ describe("buildSitemapXml (AUB-161)", () => {
 
     const xml = await buildSitemapXml();
 
-    expect(xml).toContain("<loc>https://aubreyslist.com/listings/a&amp;b</loc>");
-    expect(xml).not.toContain("<loc>https://aubreyslist.com/listings/a&b</loc>");
+    expect(xml).toContain("<loc>https://www.aubreys-list.com/listings/a&amp;b</loc>");
+    expect(xml).not.toContain("<loc>https://www.aubreys-list.com/listings/a&b</loc>");
   });
 });

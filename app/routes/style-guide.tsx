@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
+import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { SAFETY_STATES, SAFETY_TOOLTIP, SafetySignal } from "~/components/SafetySignal";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -143,6 +144,25 @@ function StyleGuide() {
           {SAFETY_STATES.map((state) => (
             <SafetySignal key={state} state={state} variant="solid" />
           ))}
+        </div>
+      </Section>
+
+      <Section title="Claim badges">
+        <p className="text-body-sm text-muted-foreground">
+          The per-claim <code>ClaimBadge</code> shares ONE size source with the headline{" "}
+          <code>SafetySignal</code> (<code>BADGE_FAMILY_SIZE</code>), so the whole family renders at
+          the EXACT same size and shape (AUB-224). The headline is set apart only by its solid fill;
+          the claim badges keep their soft/outline treatment. The <code>suggested</code> variant
+          keeps the attribute's own icon, adds a gradient ring, and shows an always-visible "AI"
+          marker after the label (AUB-225).
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* A solid headline chip beside the claim badges — same size, the only
+              difference is the fill. */}
+          <SafetySignal state="celiac-safe" variant="solid" />
+          <ClaimBadge attribute="dedicated_fryer" />
+          <ClaimBadge attribute="off_menu_gf_on_request" />
+          <ClaimBadge attribute="gf_substitutes" suggested />
         </div>
       </Section>
 

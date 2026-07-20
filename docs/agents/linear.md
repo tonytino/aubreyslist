@@ -82,7 +82,9 @@ taxonomy, **create these labels once** (setup step, not per-task):
    merge transitions the issue to **Done** automatically.
 
 5. **Hand off:** move the issue to **In Review**. The merged PR closes it —
-   don't set Done by hand.
+   don't set Done by hand. For `safe:agent` PRs the orchestrating session
+   self-merges once CI is green (runbook: `docs/agents/orchestration.md`),
+   then archives the issue.
 
 6. **Archive it once Done.** After the issue reaches **Done** (or `Canceled` /
    `Duplicate`), **archive it** so it drops out of the 250-issue budget. See

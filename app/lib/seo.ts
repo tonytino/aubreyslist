@@ -13,10 +13,22 @@
  * Canonical production origin — used to build ABSOLUTE URLs for `og:image` and
  * `og:url`, which social scrapers (notably Apple/iMessage) require; relative
  * paths are unreliable. Update this single constant if the domain changes.
+ *
+ * The live custom domain is the HYPHENATED `www.aubreys-list.com` — that is
+ * the host Google indexes (per Search results) and the one attached to the
+ * Vercel project. The unhyphenated `aubreyslist.com` (the repo's name) is NOT
+ * our domain; do not "fix" the spelling back.
  */
-export const SITE_URL = "https://aubreyslist.com";
+export const SITE_URL = "https://www.aubreys-list.com";
 
 export const SITE_NAME = "Aubrey's List";
+
+/**
+ * Alternate spellings Google may see in queries or the URL. Feeding these to
+ * the `WebSite` markup helps Search show the branded "Aubrey's List" site name
+ * instead of the bare "aubreys-list.com" host in results.
+ */
+export const SITE_ALTERNATE_NAMES = ["Aubreys List", "aubreys-list.com"];
 
 /** Descriptive title used for link previews (the browser tab title stays "Aubrey's List"). */
 export const SITE_SOCIAL_TITLE = "Aubrey's List: gluten-free restaurants you can trust";
@@ -117,6 +129,7 @@ export function siteJsonLd(): Record<string, unknown> {
       {
         "@type": "WebSite",
         name: SITE_NAME,
+        alternateName: SITE_ALTERNATE_NAMES,
         url: SITE_URL,
         description: SITE_DESCRIPTION,
         potentialAction: {
@@ -135,6 +148,27 @@ export function siteJsonLd(): Record<string, unknown> {
         logo: absoluteUrl(LOGO_PATH),
       },
     ],
+  };
+}
+
+/**
+ * A `BreadcrumbList` JSON-LD payload for a page's location in the site
+ * hierarchy (e.g. Home → a restaurant). Search engines use it to render the
+ * breadcrumb trail under a result instead of the raw URL path. Items are
+ * ordered root-first; each `path` is resolved to an absolute URL.
+ */
+export function breadcrumbJsonLd(
+  items: Array<{ name: string; path: string }>
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: absoluteUrl(item.path),
+    })),
   };
 }
 

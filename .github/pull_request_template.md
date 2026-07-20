@@ -31,6 +31,21 @@ Resolves #
   - [ ] A new migration guide at `docs/migrations/vX.Y.md`
   - [ ] The migration guide covers every `[propagate]` CHANGELOG entry
 
+## Owner sign-off (cost / legal / security / safety)
+<!-- Owner-review guardrail (docs/agents/governance.md). Check one. If any box in
+the second group applies, this PR is `safe:human` — @tonytino reviews and merges
+it, and the `owner-review` CI job will fail it if it's labeled `safe:agent`. -->
+
+- [ ] This PR touches **no** owner-gated surface → `safe:agent`.
+- [ ] This PR touches an owner-gated surface → `safe:human` (check all that apply):
+  - [ ] **Cost** — billed Google API / Neon / Vercel / Sentry volume
+  - [ ] **Legal** — license, PII, terms/privacy, third-party ToS
+  - [ ] **Security** — auth, session, middleware, secrets, RBAC
+  - [ ] **Trust & safety model** — attestations, incidents, moderation, flags, trust scoring
+  - [ ] **Destructive / irreversible data** — data-loss migration
+  - [ ] **Data-collection / privacy posture** — new tracking / PII capture / outbound data
+  - [ ] **Safety / medical-disclaimer copy**
+
 ## Notes for reviewer
 <!-- Optional: anything the reviewer should know — tradeoffs, open questions, areas of risk. -->
 

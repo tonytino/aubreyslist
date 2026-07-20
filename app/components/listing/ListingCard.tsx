@@ -53,13 +53,23 @@ export interface RestaurantCardVM {
   /**
    * The claim attributes the bot suggested that are still live (deduped, in
    * taxonomy order). Each renders as a shared {@link ClaimBadge} (`suggested`
-   * variant) in the badge row: Sparkles icon, gradient ring, and an always-
-   * visible "AI" tag — clearly distinct from real evidence signals without
-   * relying on colour alone or on a hover/focus-only tooltip (ADR-007: a
-   * suggestion must never read as a community-confirmed verdict, and that
-   * distinction must reach touch-only users too).
+   * variant) in the badge row: the attribute's OWN icon, a gradient ring, and an
+   * always-visible "AI" marker after the label (AUB-225) — clearly distinct from
+   * real evidence signals without relying on colour alone or on a hover/focus-only
+   * tooltip (ADR-007: a suggestion must never read as a community-confirmed
+   * verdict, and that distinction must reach touch-only users too).
    */
   suggestedAttributes: ClaimAttribute[];
+  /**
+   * The NON-headline claim attributes with CONFIRMED positive community
+   * consensus (AUB-226), deduped and in taxonomy order. Each renders as a shared
+   * {@link ClaimBadge} in its NON-suggested (affirmed) variant in the badge row,
+   * BEFORE the suggested ones (evidence before provenance). This gives the browse
+   * card the same confirmed claim badges the listing-detail page shows (e.g.
+   * "Off-menu GF on request"). The headline celiac attribute is excluded — it is
+   * the {@link safetyState} verdict, rendered via {@link SafetySignal}, not a badge.
+   */
+  confirmedAttributes: ClaimAttribute[];
   /** A recent "got glutened" report flags the card regardless of confirmations. */
   hasRecentIncident: boolean;
   /** Freshness/recency cue, e.g. `{ kind: "fresh", label: "Verified 3d ago" }`. */
@@ -318,13 +328,23 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           {/* Recent harm flags the card regardless of older confirmations. */}
           {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
 
+          {/* CONFIRMED non-headline claims (AUB-226): one shared {@link ClaimBadge}
+              in its NON-suggested (affirmed) variant per attribute with positive
+              community consensus — real EVIDENCE, so it reads as confirmed, never
+              the suggested/provenance variant. Rendered BEFORE the suggested badges
+              (evidence before provenance) and in taxonomy order, so the browse card
+              shows the SAME confirmed claim badges as the listing-detail page. */}
+          {vm.confirmedAttributes.map((attribute) => (
+            <ClaimBadge key={attribute} attribute={attribute} />
+          ))}
+
           {/* Curator-bot suggested claims (AUB-31, owner nit 7): one shared
               {@link ClaimBadge} per live-suggested attribute — PROVENANCE, never
-              evidence (ADR-007). The suggested variant swaps in the Sparkles
-              icon, a gradient ring, and an always-visible "AI" tag (terser than
-              the old "Suggested: " prefix, but still a real painted text label
-              alongside the icon — never colour/shape alone, and never gated on
-              a hover/focus-only tooltip that touch users could never reach). */}
+              evidence (ADR-007). The suggested variant keeps the attribute's OWN
+              icon, wraps a gradient ring, and shows an always-visible "AI" marker
+              after the label (AUB-225) — a real painted text label alongside the
+              icon, never colour/shape alone, and never gated on a hover/focus-only
+              tooltip that touch users could never reach. */}
           {vm.suggestedAttributes.map((attribute) => (
             <ClaimBadge key={attribute} attribute={attribute} suggested />
           ))}
@@ -479,6 +499,7 @@ export function listingToCardVM(
     safetyState: glance.safetyState,
     suggestedByBot: glance.suggestedByBot,
     suggestedAttributes: glance.suggestedAttributes,
+    confirmedAttributes: glance.confirmedAttributes,
     hasRecentIncident: glance.hasRecentIncident,
     accent: accentForId(listing.id),
     // Already-derived on the server (batched query set); mapped straight through.

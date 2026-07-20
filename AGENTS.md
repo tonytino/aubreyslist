@@ -24,6 +24,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Cutting the v1 release (readiness checklist)   | `docs/product/v1-readiness.md` |
 | Domain: listings, GF taxonomy, trust, roles   | `docs/agents/domain.md`       |
 | Finding and claiming work                     | `docs/agents/tasks.md`        |
+| What needs the owner's sign-off (cost/legal/security/safety) | `docs/agents/governance.md` |
 | Planning, epics, tracked work (Linear)        | `docs/agents/linear.md`       |
 | Epics via GitHub issues (legacy/in-flight)    | `docs/agents/issues.md`       |
 | Acting on Vercel preview comments (visual feedback) | `docs/agents/preview-feedback.md` |
@@ -50,6 +51,23 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Architecture decisions, tradeoffs             | `docs/decisions/`             |
 
 When you face a fork-in-the-road decision — choosing between technologies, patterns, or approaches — check `docs/decisions/` first. The ADRs there explain why specific choices were made and what constraints apply. This prevents re-litigating settled decisions.
+
+---
+
+## Default Operating Mode: Orchestrator
+
+Every session in this repo **orchestrates by default** — read
+`docs/agents/orchestration.md` before any multi-step work. Dispatch worker
+subagents at deliberately chosen model tiers, and run the adversarial review
+loop on **all** worker output before shipping it. `safe:agent` PRs self-merge
+once CI is green; `safe:human` PRs stop at green for a human to review and
+merge (see the Hard Rules and `docs/agents/governance.md`). Tiny tasks —
+answering questions, typo-class doc fixes — may be handled directly, but any
+committed change still ships per the PR conventions. Prefer structured
+question tools (AskUserQuestion in Claude Code) over questions embedded in
+prose replies. Claude Code sessions get this automatically via `CLAUDE.md`, a
+SessionStart hook, and the `/orchestrate` skill — other harnesses must apply
+it manually.
 
 ---
 
@@ -99,6 +117,14 @@ These apply everywhere, always, with no exceptions.
 - **No manual edits to `app/routeTree.gen.ts` or `db/migrations/`.** Both are auto-generated.
 - **No new dependencies** without checking if the existing stack already covers the need.
 - **No skipping tests** for code you add.
+- **Owner-gated changes are `safe:human`, never `safe:agent`.** Any change
+  touching a cost, legal, security, trust-&-safety-model, destructive-data,
+  privacy, or safety-disclaimer surface requires the owner's explicit review. The
+  exact surfaces and mechanism are in `docs/agents/governance.md`; the
+  `owner-review` CI job enforces it and there is **no bypass label**.
+- **Agents never merge (or enable auto-merge on) a `safe:human` PR** — a human
+  always clicks merge for those. More broadly, never take an action-as-a-human the
+  human would disapprove of.
 - **pnpm only.** Never use npm or yarn.
 - **Run `pnpm preflight` before declaring work complete.** This single command runs lint, typecheck, and tests. See `docs/agents/tooling.md` for when to use `check` vs `preflight` vs the pre-commit hook.
 
@@ -129,6 +155,10 @@ Branch naming: `issue-<NUMBER>-<short-slug>`
 After work is done, open a PR with `Closes #<NUMBER>` and relabel to `status:needs-review`.
 
 **The repo owner's default expectation is that completed code changes ship as a PR.** A pushed branch on its own isn't a finished hand-off — the normal last step is opening its PR against the default branch, with the body filled from `.github/pull_request_template.md`. If you're unsure whether to open one, the answer here is yes. Skip it only when the user says "just push / no PR" for that change, or there's no committable diff. (Some environments still prompt for approval before a PR is created; that approval gate stays in force — this note is about the repo's preferred default, not a way around any prompt.)
+
+`safe:agent` PRs are self-merged by the orchestrating session once CI is green;
+`safe:human` PRs stop at green for human review — runbook in
+`docs/agents/orchestration.md`.
 
 ---
 

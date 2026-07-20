@@ -1,8 +1,12 @@
 import { Sparkles } from "lucide-react";
+import { BADGE_FAMILY_SIZE } from "~/components/badge-size";
+import { Badge } from "~/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { ClaimAttribute } from "~/db/schema";
+import { cn } from "~/lib/utils";
 import type { ClaimAggregate } from "~/server/attestations";
 import { type ClaimTrustSummary, claimAttributeDescription, summarizeClaim } from "~/trust/summary";
+import { SuggestedRing } from "./SuggestedRing";
 
 interface ClaimTrustSummaryProps {
   /** The claim's attribute (its taxonomy slot — drives the label). */
@@ -74,21 +78,32 @@ export function ClaimTrustSummaryRow({
         </p>
       ) : summary.suggested ? (
         // Curator-bot suggestion (AUB-31): a starter label seeded by "Aubrey's
-        // Bot" from public info, NOT community evidence. Same gradient-ring +
-        // Sparkles treatment as the shared `ClaimBadge` suggested variant, so
-        // every "suggested" surface in the app reads consistently. It clears the
-        // instant a real user confirms or disputes below.
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex w-fit cursor-help items-center gap-1.5 rounded-chip bg-gradient-to-r from-brand via-accent-lavender to-accent-peach p-[1.5px]">
-              <span className="inline-flex items-center gap-1.5 rounded-chip bg-background px-2 py-1 text-caption font-semibold text-foreground">
-                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+        // Bot" from public info, NOT community evidence. Renders through the ONE
+        // shared `SuggestedRing` gradient primitive + the shared `Badge` shell at
+        // the `BADGE_FAMILY_SIZE`, so it is the SAME suggested treatment as the
+        // per-claim `ClaimBadge` suggested variant (AUB-227) — no hand-rolled
+        // gradient/chip duplication. The content still DIFFERS by design: this is
+        // the full-text provenance chip (Sparkles + "Suggested by Aubrey's Bot"),
+        // whereas `ClaimBadge` keeps the attribute's own icon + an "AI" marker
+        // (AUB-225). It clears the instant a real user confirms or disputes below.
+        <SuggestedRing>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                data-testid="suggested-provenance"
+                className={cn(
+                  BADGE_FAMILY_SIZE,
+                  "cursor-help border-transparent bg-background text-foreground"
+                )}
+              >
+                <Sparkles aria-hidden="true" />
                 <span>Suggested by Aubrey's Bot</span>
-              </span>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Suggested by Aubrey's Bot</TooltipContent>
-        </Tooltip>
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>Suggested by Aubrey's Bot</TooltipContent>
+          </Tooltip>
+        </SuggestedRing>
       ) : (
         // Honest empty state: a claim exists but no one has attested yet. We
         // never fabricate a verdict (a celiac could be hurt) — domain.md. The
