@@ -1,4 +1,4 @@
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AddSpotFab } from "~/components/directory/AddSpotFab";
@@ -34,6 +34,7 @@ import { type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 import { useGeolocation } from "~/listings/use-geolocation";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
+import { fetchBrowsePhotos } from "~/server/places-photos.fn";
 
 /**
  * The Denver restaurant directory — the HOME PAGE (`/`) and the default discovery
@@ -338,16 +339,52 @@ function BrowseListings() {
     return () => clearTimeout(timer);
   }, [searchInput, qParam, navigate]);
 
+  // Render-time Google Place photos for the CURRENT page's cards (AUB-219).
+  // Deliberately OUTSIDE the critical loader path — never `ensureQueryData`d,
+  // so SSR/the initial paint never waits on the Places Photos Pro call: cards
+  // paint with their existing gradient placeholder first, and photos swap in
+  // client-side, after hydration, with no layout shift (the photo tile already
+  // reserves a fixed height). Keyed on the page's listing ids, so paging /
+  // filtering to a new set of cards fetches (and independently caches) that
+  // set's photos. Server-side, the batch fn is bounded and cached the same way
+  // the listing-detail hero is (`~/server/places-photos`), so this costs at
+  // most one photos-only call per NEW place per 12h window, however many
+  // visitors browse it.
+  // SORTED for the query key: the photo SET only depends on which ids are on
+  // the page, not their order, so re-sorting the directory (which permutes the
+  // same page of ids) must hit the same cache entry instead of refiring the
+  // batch. Sorting the payload too keeps key and request trivially in sync
+  // (the server dedupes; order is irrelevant to it).
+  const listingIds = useMemo(() => data.cards.map((card) => card.listing.id).sort(), [data.cards]);
+  const { data: photosById } = useQuery({
+    queryKey: ["browse-photos", listingIds],
+    queryFn: () => fetchBrowsePhotos({ data: { listingIds } }),
+    enabled: listingIds.length > 0,
+    // Server-side metadata is cached ~12h per place; within a session there is
+    // nothing to refetch for decorative images (mirrors HeroPhoto.tsx).
+    staleTime: Infinity,
+    retry: 1,
+  });
+
   // The server page as VMs (mapped once, via the shared `listingToCardVM`). Search
   // AND the quick chip are both applied SERVER-side now, so `data.cards` is already
   // the exact set to show — no client-side refinement. The public save-count (F10)
-  // is threaded straight through as the trailing VM arg.
+  // is threaded straight through as the trailing VM arg, followed by this
+  // listing's photo (AUB-219) when the batch query above has resolved one —
+  // absent (kill switch off, no key, manual listing, still loading, upstream
+  // miss) simply leaves `photoUrl` unset and the card renders its gradient tile.
   const vms = useMemo(
     () =>
       data.cards.map((card) =>
-        listingToCardVM(card.listing, card.glance, card.distanceLabel, card.favoriteCount)
+        listingToCardVM(
+          card.listing,
+          card.glance,
+          card.distanceLabel,
+          card.favoriteCount,
+          photosById?.[card.listing.id]
+        )
       ),
-    [data.cards]
+    [data.cards, photosById]
   );
 
   // Map entries pair each VM with its real coordinates to project (never

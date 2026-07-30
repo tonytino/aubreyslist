@@ -1,11 +1,14 @@
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { getDb } from "~/db/client";
+import { listings } from "~/db/schema";
 import { getEnv } from "~/env";
 import { getListing } from "~/server/listings/get-listing";
 import { getSetting } from "~/server/settings";
 
 /**
  * Render-time Google Place photos for the listing-detail hero (AUB-215,
- * ADR-014).
+ * ADR-014) AND the browse-surface cards / map carousel (AUB-219).
  *
  * COMPLIANCE POSTURE (ADR-014): Google content is NEVER persisted — no DB
  * column, no blob store, no committed JSON. This module fetches photo metadata
@@ -24,6 +27,18 @@ import { getSetting } from "~/server/settings";
  * manual listing without a Place ID, upstream/network/shape errors) returns
  * `[]` — a `console.warn` server-side at most — and the hero falls back to its
  * brand gradient. This module must never break the listing page.
+ *
+ * BROWSE SURFACES (AUB-219): {@link getPhotosForListings} answers a whole PAGE
+ * of listing ids in one call — the list cards and the map-carousel mini-cards
+ * both derive their photo from it through the single `listingToCardVM` mapping
+ * site (`~/components/listing/ListingCard`). It shares {@link fetchPhotosForPlace}
+ * (and therefore the SAME per-Place-ID {@link listingPhotosCache}) with the hero
+ * path, so a place already warmed by a detail-page view costs zero browse calls
+ * and vice versa — at most one billed photos-only call per place per
+ * {@link PLACE_PHOTOS_CACHE_TTL_MS} window, however many surfaces render it.
+ * Every listing degrades independently to "no photo" (never throws), and a
+ * cold cache fetches at most {@link BATCH_PHOTO_CONCURRENCY} places at once so
+ * a full page of misses doesn't fire dozens of parallel Google calls.
  */
 
 // ---------------------------------------------------------------------------
@@ -177,33 +192,24 @@ function normalizeAttributionUri(uri: string | undefined): string | undefined {
 // ---------------------------------------------------------------------------
 
 /**
- * Listing id -> up to {@link MAX_LISTING_PHOTOS} client-safe photo descriptors.
+ * Fetch (or serve from cache) up to {@link MAX_LISTING_PHOTOS} client-safe
+ * photo descriptors for ONE Place ID. Shared by {@link runListingPhotos} (hero,
+ * one listing) and {@link getPhotosForListings} (browse, a page of listings) so
+ * both paths write/read the SAME per-Place-ID {@link listingPhotosCache} — a
+ * place warmed by either surface is warm for the other.
  *
- * Guard order (each short-circuits to `[]` with no upstream call):
- * 1. `place_photos_enabled` kill switch off (AppSetting, default on),
- * 2. `GOOGLE_PLACES_API_KEY` unset,
- * 3. listing missing/hidden ({@link getListing} is visibility-aware) or has no
- *    Place ID (manual entry).
- *
- * Successful lookups (including a legit "this place has no photos" empty
- * result) are cached per Place ID for {@link PLACE_PHOTOS_CACHE_TTL_MS}.
- * Failures are NOT cached — decorative data may retry on a later page view —
- * and always resolve to `[]` after a `console.warn`, never a throw.
+ * Never throws: a successful lookup (including a legit "this place has no
+ * photos" empty result) is cached for {@link PLACE_PHOTOS_CACHE_TTL_MS} and
+ * returned; any failure (non-2xx, bad shape, network error) is logged via
+ * `console.warn` (status/message only — never the response body, which may
+ * reference the key/quota) and resolves to `[]`, NOT cached, so a later page
+ * view may retry.
  */
-export async function runListingPhotos({ listingId }: ListingPhotosInput): Promise<PlacePhoto[]> {
+async function fetchPhotosForPlace(placeId: string, apiKey: string): Promise<PlacePhoto[]> {
+  const cached = listingPhotosCache.get(placeId);
+  if (cached) return cached;
+
   try {
-    if (!(await getSetting("place_photos_enabled"))) return [];
-
-    const apiKey = getEnv().GOOGLE_PLACES_API_KEY;
-    if (!apiKey) return [];
-
-    const listing = await getListing({ id: listingId });
-    const placeId = listing?.placeId;
-    if (!placeId) return [];
-
-    const cached = listingPhotosCache.get(placeId);
-    if (cached) return cached;
-
     const res = await fetch(`${DETAILS_URL_BASE}/${encodeURIComponent(placeId)}`, {
       method: "GET",
       headers: {
@@ -243,8 +249,192 @@ export async function runListingPhotos({ listingId }: ListingPhotosInput): Promi
     return photos;
   } catch (err) {
     // Decorative surface: any unexpected failure (network, DB, …) degrades to
+    // the gradient fallback rather than breaking the page.
+    console.warn("Place photos lookup failed:", err);
+    return [];
+  }
+}
+
+/**
+ * Listing id -> up to {@link MAX_LISTING_PHOTOS} client-safe photo descriptors.
+ *
+ * Guard order (each short-circuits to `[]` with no upstream call):
+ * 1. `place_photos_enabled` kill switch off (AppSetting, default on),
+ * 2. `GOOGLE_PLACES_API_KEY` unset,
+ * 3. listing missing/hidden ({@link getListing} is visibility-aware) or has no
+ *    Place ID (manual entry).
+ *
+ * Delegates the actual fetch+cache to {@link fetchPhotosForPlace}; see its doc
+ * for the caching/failure contract.
+ */
+export async function runListingPhotos({ listingId }: ListingPhotosInput): Promise<PlacePhoto[]> {
+  try {
+    if (!(await getSetting("place_photos_enabled"))) return [];
+
+    const apiKey = getEnv().GOOGLE_PLACES_API_KEY;
+    if (!apiKey) return [];
+
+    const listing = await getListing({ id: listingId });
+    const placeId = listing?.placeId;
+    if (!placeId) return [];
+
+    return await fetchPhotosForPlace(placeId, apiKey);
+  } catch (err) {
+    // Decorative surface: any unexpected failure (network, DB, …) degrades to
     // the gradient fallback rather than breaking the listing page.
     console.warn("Place photos lookup failed:", err);
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Batch operation — browse cards + map carousel (AUB-219)
+// ---------------------------------------------------------------------------
+
+/** Hard cap on how many listing ids one {@link getPhotosForListings} call accepts. */
+export const MAX_BATCH_LISTING_IDS = 60;
+
+/**
+ * How many upstream Place Details calls {@link getPhotosForListings} allows in
+ * flight at once. A cold cache (e.g. right after a deploy recycles the
+ * in-process cache) could otherwise fire one parallel Google call per
+ * uncached listing on the page — this keeps a full page of misses to a modest,
+ * steady trickle instead of a burst.
+ */
+export const BATCH_PHOTO_CONCURRENCY = 5;
+
+/**
+ * Per-id length cap for the batch input. Listing ids are `crypto.randomUUID()`
+ * (36 chars, `db/schema.ts`); 64 leaves headroom while stopping an anonymous
+ * GET caller from stuffing megabyte-scale strings into the array (they'd only
+ * ever miss the DB lookup, but the request shouldn't get to carry them at all).
+ */
+export const MAX_LISTING_ID_LENGTH = 64;
+
+/** Validated input for {@link getPhotosForListings}. */
+export const listingIdsInputSchema = z.object({
+  listingIds: z
+    .array(z.string().min(1).max(MAX_LISTING_ID_LENGTH))
+    .min(1)
+    .max(MAX_BATCH_LISTING_IDS),
+});
+
+/** Validated shape accepted by {@link getPhotosForListings}. */
+export type ListingIdsInput = z.infer<typeof listingIdsInputSchema>;
+
+/** Client-safe result of {@link getPhotosForListings}: listing id -> its ONE hero photo. */
+export type ListingPhotoMap = Record<string, PlacePhoto>;
+
+/**
+ * Run `fn` over `items` with at most `limit` calls in flight at once,
+ * collecting each result keyed by its input item. A tiny, dependency-free
+ * worker-pool (no new dependency needed for a bound this narrow) — `limit`
+ * workers each pull the next unclaimed index off a shared cursor until the
+ * queue is empty.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<Map<T, R>> {
+  const results = new Map<T, R>();
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      const item = items[index];
+      if (item === undefined) continue;
+      results.set(item, await fn(item));
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+
+/**
+ * Look up the Place ID for every VISIBLE listing among `listingIds`, in one
+ * batched query (no N+1) — mirrors the visibility rule in {@link getListing}
+ * (a hidden/removed listing is treated as if it didn't exist). Manual listings
+ * (`placeId` null) are simply absent from the returned map.
+ */
+async function getPlaceIdsForListings(listingIds: string[]): Promise<Map<string, string>> {
+  const rows = await getDb()
+    .select({ id: listings.id, placeId: listings.placeId })
+    .from(listings)
+    .where(and(inArray(listings.id, listingIds), eq(listings.moderationStatus, "visible")));
+
+  const placeIdByListingId = new Map<string, string>();
+  for (const row of rows) {
+    if (row.placeId) placeIdByListingId.set(row.id, row.placeId);
+  }
+  return placeIdByListingId;
+}
+
+/**
+ * Batched browse-surface lookup (AUB-219): listing id -> its single hero photo
+ * (the FIRST photo {@link fetchPhotosForPlace} returns for that listing's
+ * Place ID), for every id in `listingIds` that has one. Powers the browse list
+ * cards AND the map-carousel mini-cards through the one `listingToCardVM`
+ * mapping site — both surfaces agree because they both read this same map.
+ *
+ * Guard order (each short-circuits to `{}` with no upstream call, mirroring
+ * {@link runListingPhotos}):
+ * 1. `place_photos_enabled` kill switch off,
+ * 2. `GOOGLE_PLACES_API_KEY` unset.
+ *
+ * Cost bounding:
+ * - Reuses the SAME per-Place-ID {@link listingPhotosCache} as the hero path —
+ *   a place already warmed by a detail-page view (or an earlier browse page)
+ *   costs zero calls here, and vice versa.
+ * - Distinct Place IDs are deduped BEFORE fetching (two listings can't double
+ *   the cost of one place), and fetched with at most
+ *   {@link BATCH_PHOTO_CONCURRENCY} calls in flight (`mapWithConcurrency`).
+ * - Manual listings (no Place ID) are omitted with no DB/upstream cost.
+ *
+ * Failure isolation: a single listing/place's failure resolves to that
+ * listing being ABSENT from the returned map (never a thrown error, never a
+ * partial/malformed entry) — `fetchPhotosForPlace` already degrades
+ * per-place failures to `[]` internally. A failure in the batch's own DB
+ * lookup (or any other unexpected error) degrades the WHOLE call to `{}` via
+ * the outer catch, exactly like `runListingPhotos` degrades to `[]` — photos
+ * are decorative and must never fail the browse page.
+ */
+export async function getPhotosForListings({
+  listingIds,
+}: ListingIdsInput): Promise<ListingPhotoMap> {
+  try {
+    if (!(await getSetting("place_photos_enabled"))) return {};
+
+    const apiKey = getEnv().GOOGLE_PLACES_API_KEY;
+    if (!apiKey) return {};
+
+    // Defensive de-dup: the browse route already sends a page's unique ids, but
+    // a batch entry point shouldn't do (or bill) redundant work if it doesn't.
+    const uniqueListingIds = Array.from(new Set(listingIds));
+    const placeIdByListingId = await getPlaceIdsForListings(uniqueListingIds);
+    if (placeIdByListingId.size === 0) return {};
+
+    const uniquePlaceIds = Array.from(new Set(placeIdByListingId.values()));
+    const photosByPlaceId = await mapWithConcurrency(
+      uniquePlaceIds,
+      BATCH_PHOTO_CONCURRENCY,
+      (placeId) => fetchPhotosForPlace(placeId, apiKey)
+    );
+
+    const result: ListingPhotoMap = {};
+    for (const [listingId, placeId] of placeIdByListingId) {
+      const photo = photosByPlaceId.get(placeId)?.[0];
+      if (photo) result[listingId] = photo;
+    }
+    return result;
+  } catch (err) {
+    // Decorative surface: any unexpected failure (network, DB, …) degrades to
+    // "no photos this page" rather than breaking browse.
+    console.warn("Batch place photos lookup failed:", err);
+    return {};
   }
 }
