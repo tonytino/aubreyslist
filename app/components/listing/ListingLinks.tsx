@@ -62,10 +62,18 @@ const LINK_KIND_ICONS: Record<LinkKind, LucideIcon> = {
 
 /**
  * The listing-detail "Links" section (AUB-202): the Google Maps deep-link
- * (ADR-009 — no embedded map) plus the listing's typed links in `LINK_KINDS`
- * order, and — for signed-in viewers — an edit affordance that opens a dialog
- * of per-kind URL fields (the same `ListingLinksFields` the intake wizard
- * uses) with save/remove semantics.
+ * plus the listing's typed links in `LINK_KINDS` order, and — for signed-in
+ * viewers — an edit affordance that opens a dialog of per-kind URL fields
+ * (the same `ListingLinksFields` the intake wizard uses) with save/remove
+ * semantics.
+ *
+ * The deep-link is KEPT even now that the detail page embeds a map above
+ * this section (`ListingMap`, AUB-216): it is the mobile hand-off to
+ * turn-by-turn in the native Maps app. ADR-014 revises v1's "no embedded map
+ * — deep-link only" decision (previously mislabeled here as ADR-009, which
+ * is Vercel hosting); the embed renders as a SIBLING of this region, never
+ * inside it, so the role assertions the edit-listing-links E2E spec makes
+ * within this region are unaffected.
  *
  * Legacy fallback: a listing created before typed links may carry only the
  * legacy `listings.menu_url`. When there is no `menu`-kind row, that legacy

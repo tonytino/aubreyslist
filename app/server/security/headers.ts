@@ -85,6 +85,12 @@ const CSP_DIRECTIVES: Readonly<Record<string, readonly string[]>> = {
   // globally) — so scope blob: to workers only, the narrowest grant that lets
   // the map render.
   "worker-src": ["'self'", "blob:"],
+  // The listing-detail embedded map (AUB-216, ADR-014): a plain `<iframe>` to
+  // the Maps Embed API, a DIFFERENT surface from the Maps JavaScript API above
+  // (script-src/connect-src, AUB-111) — Embed is free/unrestricted-quota with
+  // no JS SDK. Scoped to exactly this one origin; no wildcard, no 'self' (the
+  // app embeds nothing else in an iframe).
+  "frame-src": ["https://www.google.com"],
 };
 
 /** Serialize {@link CSP_DIRECTIVES} into a Content-Security-Policy header value. */
