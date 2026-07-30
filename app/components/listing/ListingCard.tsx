@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
-import type { ComponentProps } from "react";
+import { type ComponentProps, useState } from "react";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
@@ -8,8 +8,23 @@ import { Badge } from "~/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
 import { cn } from "~/lib/utils";
+import { placePhotoProxyUrl } from "~/listings/place-photo-url";
 import type { ClaimAttribute } from "~/listings/taxonomy";
+// Type-only: erased at build time, so this never drags `getDb`/the Places key
+// into the browse route's client bundle (same posture as the other `~/server/*`
+// type-only imports already in this app, e.g. `~/server/attestations`).
+import type { PlacePhoto, PlacePhotoAttribution } from "~/server/places-photos";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
+
+/**
+ * Width requested from the `/api/places/photo` media proxy for browse-surface
+ * cards (AUB-219) — the list card's photo tile renders at a fixed 158px tall
+ * within a grid column, comfortably covered by this ladder rung (`PHOTO_WIDTH_LADDER`
+ * in `app/server/routes/places.ts`) even at 2x DPR, well short of the hero's
+ * 1280px (`HERO_PHOTO_MAX_WIDTH_PX`, `HeroPhoto.tsx`) since the card is much
+ * smaller. Off-ladder asks get quantized server-side regardless.
+ */
+export const CARD_PHOTO_MAX_WIDTH_PX = 640;
 
 /**
  * The photo-placeholder accent (a decorative pastel gradient, never load-bearing
@@ -96,6 +111,13 @@ export interface RestaurantCardVM {
   saveCount?: number;
   /** A real food photo when available; otherwise the placeholder tile is shown. */
   photoUrl?: string | null;
+  /**
+   * Author credits for {@link photoUrl} (AUB-219), required by Google's
+   * attribution terms when a photo IS shown. Absent/empty when there is no
+   * photo, or the photo carries no attribution data — mirrors the hero's
+   * `PlacePhoto.attributions` (`HeroPhoto.tsx`).
+   */
+  photoAttributions?: PlacePhotoAttribution[];
 }
 
 /**
@@ -191,6 +213,15 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
 export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
   const freshness = vm.freshness ? FRESHNESS[vm.freshness.kind] : null;
 
+  // Ephemeral render state, not data fetching (mirrors HeroPhoto.tsx): a broken
+  // image (a stale token, a proxy 503 after the kill switch flips mid-session,
+  // …) falls back to the gradient placeholder. The FAILED SRC is stored (not a
+  // boolean) so the suppression is scoped to the exact image that broke — a VM
+  // update with a different `photoUrl` (a refetch resolving a new photo) is
+  // unaffected.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const showPhoto = Boolean(vm.photoUrl) && vm.photoUrl !== failedSrc;
+
   return (
     // Overlay stretched-link pattern: a relatively-positioned card SHELL holds the
     // Link, whose visible content is only the MEDIA but whose `after:inset-0`
@@ -212,15 +243,47 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
         aria-label={vm.name}
         className="block shrink-0 after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
       >
-        {/* Photo area — a real <img> when available, else the accent placeholder tile. */}
+        {/* Photo area — a real <img> when available, else the accent placeholder
+            tile (AUB-194's stable per-listing gradient, unchanged when photos
+            are off/absent — AUB-219 non-negotiable #5). */}
         <div className="relative h-[158px] shrink-0 overflow-hidden">
-          {vm.photoUrl ? (
-            <img
-              src={vm.photoUrl}
-              alt=""
-              data-testid="food-photo"
-              className="h-full w-full object-cover"
-            />
+          {showPhoto ? (
+            <>
+              <img
+                src={vm.photoUrl ?? undefined}
+                alt=""
+                data-testid="food-photo"
+                loading="lazy"
+                onError={() => setFailedSrc(vm.photoUrl ?? null)}
+                className="h-full w-full object-cover"
+              />
+              {/* Compact author credit (Google's attribution terms) — plain TEXT,
+                  never a link: this sits INSIDE the stretched-link `<Link>` above
+                  (the whole media tile is one tap target), and an `<a>` nested in
+                  an `<a>` is invalid HTML (the same reason the hero's linked
+                  credit lives OUTSIDE its non-link hero band). Small, AA-contrast
+                  overlay text — same posture as `HeroPhoto.tsx`'s scrim-assisted
+                  credit line, scaled down for the card's shorter media band: a
+                  subtle bottom gradient scrim guarantees the white caption stays
+                  legible on a light photo (text-shadow alone can't). Both layers
+                  are decorative (`aria-hidden` scrim; the credit reads normally). */}
+              {vm.photoAttributions && vm.photoAttributions.length > 0 ? (
+                <>
+                  <div
+                    aria-hidden="true"
+                    data-testid="food-photo-attribution-scrim"
+                    className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/60 to-transparent"
+                  />
+                  <p
+                    data-testid="food-photo-attribution"
+                    className="absolute bottom-1 right-2 max-w-[80%] truncate text-caption text-white/90 [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]"
+                  >
+                    Photo:{" "}
+                    {vm.photoAttributions.map((attribution) => attribution.displayName).join(", ")}
+                  </p>
+                </>
+              ) : null}
+            </>
           ) : (
             <div
               className={`flex h-full w-full items-center justify-center ${ACCENT_GRADIENTS[vm.accent]}`}
@@ -479,8 +542,18 @@ interface ListingCardProps {
  * trust/accent logic. The glance already carries the server-derived evidence
  * counts, freshness cue, and bot-suggested attribute set, so this only maps them
  * onto the VM; it never touches `db` or re-derives trust. `accent` is a stable
- * per-listing gradient hashed from `listing.id`; `googleRating`/`photoUrl` are
- * left undefined until a later phase supplies them.
+ * per-listing gradient hashed from `listing.id`; `googleRating` is left
+ * undefined until a later phase supplies it.
+ *
+ * `photo` (AUB-219) is the render-time Google photo for this listing, when the
+ * caller has one — the browse route threads it in from a client-side batch
+ * fetch (`fetchBrowsePhotos`, never the route loader) keyed on the page's
+ * visible listing ids; other callers (favorites, the map carousel's own VM
+ * derivation) simply omit it and the card renders its existing gradient
+ * placeholder, unchanged. This is the ONLY place `photoUrl`/`photoAttributions`
+ * are derived, from the raw `PlacePhoto` token, via {@link placePhotoProxyUrl}
+ * at {@link CARD_PHOTO_MAX_WIDTH_PX} — so the list card and the map-carousel
+ * mini-card (once it renders photos) can never disagree on the URL/width.
  *
  * CLIENT-SAFE: imports only pure/client-safe/type-only modules (the `Listing`
  * type, the pure `ListingTrustGlance` type, and the presentational card) — no
@@ -490,7 +563,8 @@ export function listingToCardVM(
   listing: Listing,
   glance: ListingTrustGlance,
   distanceLabel?: string | undefined,
-  saveCount?: number | undefined
+  saveCount?: number | undefined,
+  photo?: PlacePhoto | undefined
 ): RestaurantCardVM {
   return {
     id: listing.id,
@@ -513,6 +587,17 @@ export function listingToCardVM(
     // in only when provided so the prop stays truly absent under
     // `exactOptionalPropertyTypes`.
     ...(saveCount !== undefined ? { saveCount } : {}),
+    // Photo is OPTIONAL and trailing (AUB-219), same pattern as saveCount: a
+    // caller with no photo for this listing (kill switch off, manual listing,
+    // upstream miss, or a caller that simply hasn't fetched photos at all)
+    // stays truly absent, so the card falls back to its gradient tile exactly
+    // as before this feature existed.
+    ...(photo
+      ? {
+          photoUrl: placePhotoProxyUrl(photo.photoToken, CARD_PHOTO_MAX_WIDTH_PX),
+          photoAttributions: photo.attributions,
+        }
+      : {}),
   };
 }
 
