@@ -221,7 +221,8 @@ describe("setRole — admin-only role management (ADR-010)", () => {
     const result = await setRole({ userId: "target-1", role: "user" });
 
     expect(result).toEqual({ user: target });
-    expect((setMock.mock.calls[0]?.[0] as { role: Role }).role).toBe("user");
+    const setArg = setMock.mock.calls[0]?.[0] as { role: Role };
+    expect(setArg.role).toBe("user");
   });
 
   // --- Last-admin guard (#127) ---------------------------------------------
@@ -254,7 +255,8 @@ describe("setRole — admin-only role management (ADR-010)", () => {
 
     expect(result).toEqual({ user: target });
     expect(updateMock).toHaveBeenCalledTimes(1);
-    expect((setMock.mock.calls[0]?.[0] as { role: Role }).role).toBe("moderator");
+    const setArg = setMock.mock.calls[0]?.[0] as { role: Role };
+    expect(setArg.role).toBe("moderator");
     expect(selectWhereMock).toHaveBeenCalledTimes(2);
   });
 
@@ -271,7 +273,8 @@ describe("setRole — admin-only role management (ADR-010)", () => {
 
     expect(result).toEqual({ user: target });
     expect(updateMock).toHaveBeenCalledTimes(1);
-    expect((setMock.mock.calls[0]?.[0] as { role: Role }).role).toBe("user");
+    const setArg = setMock.mock.calls[0]?.[0] as { role: Role };
+    expect(setArg.role).toBe("user");
   });
 
   it("BLOCKS a sole admin from self-demoting — fails if `ne(users.id, userId)` is dropped", async () => {
