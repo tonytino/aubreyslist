@@ -20,15 +20,26 @@ blockExoticSubdeps: true
 
 # Dependency version pins. Moved here from the package.json `pnpm.overrides`
 # field, which pnpm 11 no longer reads (see https://pnpm.io/settings). Several
-# of these are security floors (shell-quote, h3, tar, ws, qs, brace-expansion),
-# so keeping them effective is part of the same supply-chain posture.
+# of these are security floors (shell-quote, h3, tar, ws, qs, fast-uri,
+# brace-expansion), so keeping them effective is part of the same supply-chain
+# posture.
+#
+# brace-expansion is floored PER MAJOR LINE, deliberately — do not collapse the
+# two entries into a blanket `^5`. v2 is CommonJS (`module.exports = expandTop`)
+# while v5 is `type: module` whose CJS emit exports a NAMED `expand` with no
+# default. minimatch@5 (`require("brace-expansion")`) and minimatch@9
+# (`__importDefault(...).default`) — both reached via archiver → readdir-glob /
+# glob@10 — would get a namespace object with no callable default and throw a
+# runtime TypeError. Only minimatch@10 uses the named `.expand`.
 overrides:
   shell-quote: "^1.8.4"
   h3: "^1.15.9"
   nitropack: "^2.13.4"
-  tar: "^7.5.16"
+  tar: "^7.5.21"
   ws: "^8.21.0"
-  brace-expansion@5: "5.0.6"
+  fast-uri: "^3.1.4"
+  brace-expansion@2: "^2.1.2"
+  brace-expansion@5: "^5.0.7"
   "@babel/core": "^7.29.6"
   qs: "^6.15.2"
   diff: "^8.0.3"

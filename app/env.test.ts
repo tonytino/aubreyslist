@@ -156,19 +156,18 @@ describe("parseEnv", () => {
       expect(message).toMatch(/SESSION_SECRET/);
     });
 
-    it.each([
-      "development",
-      "preview",
-      undefined,
-    ] as const)("passes without the three secrets when VERCEL_ENV=%s", (vercelEnv) => {
-      const env = parseEnv({
-        DATABASE_URL: "postgres://user:pass@host/db",
-        ...(vercelEnv ? { VERCEL_ENV: vercelEnv } : {}),
-      });
-      expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
-      expect(env.GOOGLE_CLIENT_SECRET).toBeUndefined();
-      expect(env.SESSION_SECRET).toBeUndefined();
-    });
+    it.each(["development", "preview", undefined] as const)(
+      "passes without the three secrets when VERCEL_ENV=%s",
+      (vercelEnv) => {
+        const env = parseEnv({
+          DATABASE_URL: "postgres://user:pass@host/db",
+          ...(vercelEnv ? { VERCEL_ENV: vercelEnv } : {}),
+        });
+        expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+        expect(env.GOOGLE_CLIENT_SECRET).toBeUndefined();
+        expect(env.SESSION_SECRET).toBeUndefined();
+      }
+    );
 
     it("does not require GOOGLE_PLACES_API_KEY or PREVIEW_LOGIN_SECRET in production (untouched by AUB-150)", () => {
       const env = parseEnv(fullProdEnv);

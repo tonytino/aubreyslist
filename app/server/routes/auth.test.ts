@@ -178,7 +178,8 @@ describe("GET /callback/google (OAuth callback)", () => {
     // The token exchange must include the PKCE verifier and our client secret.
     const tokenCall = fetchMock.mock.calls.find((c) => String(c[0]).includes("/token"));
     expect(tokenCall).toBeDefined();
-    const tokenBody = (tokenCall?.[1]?.body as URLSearchParams).toString();
+    const tokenInit = tokenCall?.[1] as RequestInit;
+    const tokenBody = (tokenInit.body as URLSearchParams).toString();
     expect(tokenBody).toContain("code=auth-code");
     expect(tokenBody).toContain("code_verifier=verifier-123");
     expect(tokenBody).toContain("client_secret=test-client-secret");

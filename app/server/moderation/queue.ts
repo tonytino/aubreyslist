@@ -3,7 +3,9 @@ import { getDb } from "~/db/client";
 import { type ClaimAttribute, claims, flags, incidents, listings, users } from "~/db/schema";
 import { requireCurrentRole } from "~/server/auth/guards";
 import { claimAttributeLabel } from "~/trust/summary";
-import type { ModerationQueue, QueueItem, QueueTargetType } from "./queue.fn";
+// Types live in `./queue.fn` (client-safe) — the canonical declaration site every
+// consumer imports from. Imported here for this module's own signatures only.
+import type { ModerationQueue, QueueItem } from "./queue.fn";
 
 /**
  * Server-only moderation-queue query behind the `fetchModerationQueue` server fn
@@ -171,7 +173,3 @@ function resolveTarget(row: TargetRow): QueueItem["target"] {
 function truncate(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 }
-
-// Re-export the target type so callers needing only the type don't import from
-// two modules; the canonical declaration lives in `./queue.fn` (client-safe).
-export type { ModerationQueue, QueueItem, QueueTargetType };

@@ -76,56 +76,64 @@ for (const token of FAMILY_TOKENS) {
 }
 
 describe("claim-chip parity (add-listing review ⇄ listing detail)", () => {
-  it.each(
-    FACT_ATTRIBUTES
-  )("renders the SAME taxonomy icon for '%s' on both the ReviewStep chip and the detail ClaimBadge", (attribute) => {
-    // The canonical glyph, taken straight from the shared source of truth.
-    const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
-    const canonical = render(<Icon aria-hidden="true" />);
-    const canonicalToken = lucideToken(canonical.container.querySelector("svg"));
-    expect(canonicalToken).toMatch(/^lucide-/);
+  it.each(FACT_ATTRIBUTES)(
+    "renders the SAME taxonomy icon for '%s' on both the ReviewStep chip and the detail ClaimBadge",
+    (attribute) => {
+      // The canonical glyph, taken straight from the shared source of truth.
+      const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
+      const canonical = render(<Icon aria-hidden="true" />);
+      const canonicalToken = lucideToken(canonical.container.querySelector("svg"));
+      expect(canonicalToken).toMatch(/^lucide-/);
 
-    const detail = render(<ClaimBadge attribute={attribute} />);
-    const detailBadge = detail.container.querySelector<HTMLElement>('[data-testid="claim-badge"]');
-    expect(detailBadge).not.toBeNull();
+      const detail = render(<ClaimBadge attribute={attribute} />);
+      const detailBadge = detail.container.querySelector<HTMLElement>(
+        '[data-testid="claim-badge"]'
+      );
+      expect(detailBadge).not.toBeNull();
 
-    const review = render(<FactOutcomeChip attribute={attribute} confirmed />);
-    const reviewChip = review.container.querySelector<HTMLElement>(
-      '[data-testid="fact-confirmed"]'
-    );
-    expect(reviewChip).not.toBeNull();
+      const review = render(<FactOutcomeChip attribute={attribute} confirmed />);
+      const reviewChip = review.container.querySelector<HTMLElement>(
+        '[data-testid="fact-confirmed"]'
+      );
+      expect(reviewChip).not.toBeNull();
 
-    // Both surfaces render the exact same glyph the shared source dictates.
-    const detailToken = lucideToken(detailBadge?.querySelector("svg") ?? null);
-    const reviewToken = lucideToken(reviewChip?.querySelector("svg") ?? null);
-    expect(detailToken).toBe(canonicalToken);
-    expect(reviewToken).toBe(canonicalToken);
-  });
-
-  it.each(
-    FACT_ATTRIBUTES
-  )("applies the shared BADGE_FAMILY_SIZE tokens on both chips for '%s'", (attribute) => {
-    const detail = render(<ClaimBadge attribute={attribute} />);
-    const detailClass =
-      detail.container.querySelector('[data-testid="claim-badge"]')?.getAttribute("class") ?? "";
-
-    const review = render(<FactOutcomeChip attribute={attribute} confirmed />);
-    const reviewClass =
-      review.container.querySelector('[data-testid="fact-confirmed"]')?.getAttribute("class") ?? "";
-
-    for (const token of FAMILY_TOKENS) {
-      expect(detailClass).toContain(token);
-      expect(reviewClass).toContain(token);
+      // Both surfaces render the exact same glyph the shared source dictates.
+      const detailToken = lucideToken(detailBadge?.querySelector("svg") ?? null);
+      const reviewToken = lucideToken(reviewChip?.querySelector("svg") ?? null);
+      expect(detailToken).toBe(canonicalToken);
+      expect(reviewToken).toBe(canonicalToken);
     }
-  });
+  );
 
-  it.each(
-    FACT_ATTRIBUTES
-  )("labels the detail ClaimBadge from the shared claimAttributeLabel for '%s'", (attribute) => {
-    const label = claimAttributeLabel(attribute);
-    const detail = render(<ClaimBadge attribute={attribute} />);
-    expect(detail.container.querySelector('[data-testid="claim-badge"]')).toHaveTextContent(label);
-  });
+  it.each(FACT_ATTRIBUTES)(
+    "applies the shared BADGE_FAMILY_SIZE tokens on both chips for '%s'",
+    (attribute) => {
+      const detail = render(<ClaimBadge attribute={attribute} />);
+      const detailClass =
+        detail.container.querySelector('[data-testid="claim-badge"]')?.getAttribute("class") ?? "";
+
+      const review = render(<FactOutcomeChip attribute={attribute} confirmed />);
+      const reviewClass =
+        review.container.querySelector('[data-testid="fact-confirmed"]')?.getAttribute("class") ??
+        "";
+
+      for (const token of FAMILY_TOKENS) {
+        expect(detailClass).toContain(token);
+        expect(reviewClass).toContain(token);
+      }
+    }
+  );
+
+  it.each(FACT_ATTRIBUTES)(
+    "labels the detail ClaimBadge from the shared claimAttributeLabel for '%s'",
+    (attribute) => {
+      const label = claimAttributeLabel(attribute);
+      const detail = render(<ClaimBadge attribute={attribute} />);
+      expect(detail.container.querySelector('[data-testid="claim-badge"]')).toHaveTextContent(
+        label
+      );
+    }
+  );
 
   it("keeps the confirmed and disputed fact chips distinguishable by icon + text, not colour alone", () => {
     const confirmed = render(<FactOutcomeChip attribute="dedicated_fryer" confirmed />);
@@ -160,29 +168,30 @@ describe("claim-chip parity (add-listing review ⇄ listing detail)", () => {
   // `ClaimChip` primitive as the static chips. These assertions FAIL if the vote
   // toggle is ever re-hand-rolled off the shared chip — the confirm affordance
   // must keep the family icon + size, proving the unify is real, not cosmetic.
-  it.each(
-    FACT_ATTRIBUTES
-  )("renders the vote toggle's confirm chip on the SAME shared primitive (icon + family size) for '%s'", (attribute) => {
-    const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
-    const canonicalToken = lucideToken(
-      render(<Icon aria-hidden="true" />).container.querySelector("svg")
-    );
+  it.each(FACT_ATTRIBUTES)(
+    "renders the vote toggle's confirm chip on the SAME shared primitive (icon + family size) for '%s'",
+    (attribute) => {
+      const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
+      const canonicalToken = lucideToken(
+        render(<Icon aria-hidden="true" />).container.querySelector("svg")
+      );
 
-    // The confirm affordance IS the attribute's own badge (its role name is the
-    // attribute label), and it renders as a real native <button>.
-    const label = claimAttributeLabel(attribute);
-    const { getByRole } = render(renderVoteControls(attribute));
-    const confirm = getByRole("button", { name: label });
+      // The confirm affordance IS the attribute's own badge (its role name is the
+      // attribute label), and it renders as a real native <button>.
+      const label = claimAttributeLabel(attribute);
+      const { getByRole } = render(renderVoteControls(attribute));
+      const confirm = getByRole("button", { name: label });
 
-    // Same taxonomy glyph as the static detail badge…
-    expect(lucideToken(confirm.querySelector("svg"))).toBe(canonicalToken);
-    // …and the same shared family-size tokens (merged onto the button via Slot).
-    const confirmClass = confirm.getAttribute("class") ?? "";
-    for (const token of FAMILY_TOKENS) {
-      expect(confirmClass).toContain(token);
+      // Same taxonomy glyph as the static detail badge…
+      expect(lucideToken(confirm.querySelector("svg"))).toBe(canonicalToken);
+      // …and the same shared family-size tokens (merged onto the button via Slot).
+      const confirmClass = confirm.getAttribute("class") ?? "";
+      for (const token of FAMILY_TOKENS) {
+        expect(confirmClass).toContain(token);
+      }
+      // Icon + visible text label are both present — meaning never rests on colour.
+      expect(confirm.querySelector("svg")).not.toBeNull();
+      expect(confirm).toHaveTextContent(label);
     }
-    // Icon + visible text label are both present — meaning never rests on colour.
-    expect(confirm.querySelector("svg")).not.toBeNull();
-    expect(confirm).toHaveTextContent(label);
-  });
+  );
 });
