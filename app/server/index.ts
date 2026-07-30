@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { authRoutes } from "./routes/auth";
 import { healthRoutes } from "./routes/health";
+import { placesRoutes } from "./routes/places";
 import { honoSecurityHeaders } from "./security/headers";
 import { honoOriginCheck } from "./security/origin";
 
@@ -27,6 +28,10 @@ app.route("/health", healthRoutes);
 // Google OAuth sign-in/out + session (ADR-006). Callback lives at the
 // human-provisioned path /api/auth/callback/google.
 app.route("/auth", authRoutes);
+
+// Google Place photo media proxy (AUB-215, ADR-014) — resolves a transient
+// photo token to Google's short-lived media URL server-side and 302s to it.
+app.route("/places", placesRoutes);
 
 // Consistent JSON for unmatched routes instead of Hono's default text 404.
 app.notFound((c) => c.json({ error: "Not Found" }, 404));

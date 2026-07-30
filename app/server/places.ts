@@ -58,13 +58,19 @@ export {
 const AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
 const DETAILS_URL_BASE = "https://places.googleapis.com/v1/places";
 
-// Field mask for place details — request only what we persist on a listing.
-// `id` is the canonical Place ID; the rest map onto `listings` columns.
-// `googleMapsUri` is Google's own share link for the place (what the Maps
-// "Share" button produces) — the most reliable `mapsUrl` we can store. It is
-// billed in the same (Pro) SKU tier as `displayName`, so requesting it does not
-// change the cost of this call.
-const DETAILS_FIELD_MASK = "id,displayName,formattedAddress,location,googleMapsUri";
+// Field mask for place details — request only what we persist on a listing,
+// plus `photos`. `id` is the canonical Place ID; the rest map onto `listings`
+// columns. `googleMapsUri` is Google's own share link for the place (what the
+// Maps "Share" button produces) — the most reliable `mapsUrl` we can store. It
+// is billed in the same (Pro) SKU tier as `displayName`, so requesting it does
+// not change the cost of this call. `photos` (AUB-215) is likewise in the Pro
+// SKU — each entry carries `name` (`places/PLACE_ID/photos/RESOURCE`),
+// `widthPx`/`heightPx`, and `authorAttributions[]`. NOTE: photos are Google
+// content and must NEVER be persisted (ADR-014) — `detailsResponseSchema`
+// deliberately does not parse them, so nothing photo-shaped can reach the
+// `listings` insert. The render-time photo fetch lives in
+// `~/server/places-photos` (its own tight, `photos`-only call).
+const DETAILS_FIELD_MASK = "id,displayName,formattedAddress,location,googleMapsUri,photos";
 
 /** App-settings key whose value selects the active intake mode (ADR-008). */
 const INTAKE_MODE_KEY = "intake_mode";
