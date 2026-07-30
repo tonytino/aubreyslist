@@ -180,6 +180,35 @@ describe("runPlaceDetails", () => {
     expect(init.headers["X-Goog-FieldMask"]).toContain("location");
     // The share link must be requested, or Google never returns it.
     expect(init.headers["X-Goog-FieldMask"]).toContain("googleMapsUri");
+    // Photos ride along in the same Pro SKU (AUB-215) — but are never parsed
+    // into the details result, so nothing photo-shaped can be persisted.
+    expect(init.headers["X-Goog-FieldMask"]).toContain("photos");
+  });
+
+  it("ignores upstream photos — nothing photo-shaped reaches the details result (ADR-014)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce({
+        id: "ChIJ_target",
+        displayName: { text: "Aubrey's Cafe" },
+        formattedAddress: "123 Main St, Denver, CO",
+        location: { latitude: 39.7392, longitude: -104.9903 },
+        photos: [{ name: "places/ChIJ_target/photos/abc", widthPx: 100, heightPx: 100 }],
+      })
+    );
+
+    const result = await runPlaceDetails({ placeId: "ChIJ_target" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected ok");
+    expect(Object.keys(result.data).sort()).toEqual([
+      "formattedAddress",
+      "lat",
+      "lng",
+      "mapsUrl",
+      "name",
+      "placeId",
+    ]);
   });
 
   it("prefers Google's own share link (googleMapsUri) when present", async () => {

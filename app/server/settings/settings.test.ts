@@ -41,15 +41,18 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("in-code defaults (ADR-007 + ADR-008)", () => {
-  it("seeds intake_mode=places and staleness_months=6", () => {
+describe("in-code defaults (ADR-007 + ADR-008 + AUB-215)", () => {
+  it("seeds intake_mode=places, staleness_months=6, place_photos_enabled=true", () => {
     expect(getDefault("intake_mode")).toBe("places");
     expect(getDefault("staleness_months")).toBe(6);
+    expect(getDefault("place_photos_enabled")).toBe(true);
   });
 
   it("returns the default when the key is unset (empty table, no throw)", async () => {
     expect(await getSetting("intake_mode")).toBe("places");
     expect(await getSetting("staleness_months")).toBe(6);
+    // Photos default ON when the row is absent — mirrors intake_mode (AUB-215).
+    expect(await getSetting("place_photos_enabled")).toBe(true);
   });
 });
 
@@ -95,6 +98,29 @@ describe("typed read parsing", () => {
     expect(await getSetting("staleness_months")).toBe(9);
   });
 
+  it("parses stored boolean values and falls back to the default on garbage", async () => {
+    selectRows = [{ value: "false" }];
+    expect(await getSetting("place_photos_enabled")).toBe(false);
+
+    selectRows = [{ value: "true" }];
+    expect(await getSetting("place_photos_enabled")).toBe(true);
+
+    // Hand-run SQL is forgiven: parsing is case-insensitive and trimmed, so an
+    // operator's 'TRUE' / ' False ' lands on the intended side of the kill
+    // switch — 'FALSE' must never silently read as enabled (the spend-incurring
+    // direction).
+    selectRows = [{ value: "TRUE" }];
+    expect(await getSetting("place_photos_enabled")).toBe(true);
+    selectRows = [{ value: " False " }];
+    expect(await getSetting("place_photos_enabled")).toBe(false);
+
+    // Anything else falls back to the default (on) rather than guessing.
+    selectRows = [{ value: "0" }];
+    expect(await getSetting("place_photos_enabled")).toBe(true);
+    selectRows = [{ value: "off" }];
+    expect(await getSetting("place_photos_enabled")).toBe(true);
+  });
+
   it("filters the read by the requested key", async () => {
     selectRows = [{ value: "manual" }];
     await getSetting("intake_mode");
@@ -114,6 +140,11 @@ describe("typed write (serialize)", () => {
   it("serializes an integer value to TEXT", async () => {
     await setSetting("staleness_months", 9);
     expect(lastInsertValues).toEqual({ key: "staleness_months", value: "9" });
+  });
+
+  it("serializes a boolean value to canonical TEXT", async () => {
+    await setSetting("place_photos_enabled", false);
+    expect(lastInsertValues).toEqual({ key: "place_photos_enabled", value: "false" });
   });
 });
 
@@ -142,10 +173,11 @@ describe("seedDefaults", () => {
     expect(lastInsertValues).toEqual([
       { key: "intake_mode", value: "places" },
       { key: "staleness_months", value: "6" },
+      { key: "place_photos_enabled", value: "true" },
     ]);
   });
 
   it("covers every key in the registry", () => {
-    expect(SETTING_KEYS).toEqual(["intake_mode", "staleness_months"]);
+    expect(SETTING_KEYS).toEqual(["intake_mode", "staleness_months", "place_photos_enabled"]);
   });
 });

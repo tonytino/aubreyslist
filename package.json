@@ -41,6 +41,7 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.8.0",
     "@neondatabase/serverless": "^1.1.0",
     "@radix-ui/react-dialog": "^1.1.17",
     "@radix-ui/react-dropdown-menu": "^2.1.18",
