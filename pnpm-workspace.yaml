@@ -28,10 +28,28 @@ blockExoticSubdeps: true
 # load-bearing — brace-expansion must never be raised past v2 without minimatch
 # also being at ^10, or the v2 consumers below break. brace-expansion v2 is
 # CommonJS (`module.exports = expandTop`) while v5 is `type: module` whose CJS
-# emit exports a NAMED `expand` with no default. minimatch@5
-# (`require("brace-expansion")`) and minimatch@9 (`__importDefault(...).default`)
-# would get a namespace object with no callable default and throw at runtime;
-# only minimatch@10 uses the named `.expand`.
+# emit exports a NAMED `expand` with no default. minimatch@5 does
+# `require("brace-expansion")` and calls the module object itself; minimatch@9
+# does `__importDefault(...)` and calls `.default`; brace-expansion v5 provides
+# neither. Only minimatch@10 uses the named `.expand`.
+#
+# That mismatch fails LAZILY and CONDITIONALLY, which is what makes it a trap.
+# require() succeeds, and braceExpand() short-circuits on any pattern with no
+# {...} group (`if (options.nobrace || !/\{(?:(?!\{).)*\}/.test(pattern))` —
+# minimatch 5.1.9 minimatch.js:114, 9.0.9 dist/commonjs/index.js:156), so
+# expand() is never reached. Only compiling a BRACE-CONTAINING pattern throws.
+# A green build therefore proves nothing here: when these two pins were briefly
+# mismatched, the patterns the build and suite exercised never hit the brace
+# path, so nothing went red. Re-verify this pairing by resolving the tree, not
+# by trusting CI.
+#
+# Note the minimatch key is global, so it is a CEILING as well as a floor: it
+# pins the whole tree to the minimatch 10.x line, and it governs
+# @stryker-mutator/core's declared `~10.2.4` too — compatible today (10.2.5
+# satisfies both), but `^10.2.5` is the broader range, so a future 10.3.x would
+# pull stryker past its own declared ceiling. Whenever either pin moves, check
+# the invariant in both directions: the brace-expansion major pinned here must
+# be the one the pinned minimatch line actually declares.
 #
 # GHSA-mh99-v99m-4gvg is fixed ONLY in brace-expansion 5.0.8 — its OSV record is
 # a single `{introduced: 0} → {fixed: 5.0.8}` range with no per-major backports,
