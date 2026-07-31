@@ -28,12 +28,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # pnpm version comes from `packageManager` in package.json
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: "pnpm"
@@ -92,7 +92,7 @@ jobs:
     steps:
       # The validator is a zero-dep ESM script; node is already on ubuntu-latest,
       # so we only need a checkout to read the script file — no pnpm/setup-node.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Pass the body via env (not inline ${{ }}) to avoid shell injection via an
       # attacker-controlled PR body — exactly like the adversarial-review job.
@@ -140,7 +140,7 @@ jobs:
 
       # The parser is a zero-dep ESM script; node is already on ubuntu-latest, so
       # we only need a checkout to read the script file — no pnpm/setup-node/install.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.SKIP != 'true'
 
       # Pass the body via env (not inline ${{ }}) to avoid shell injection via an
@@ -171,7 +171,7 @@ jobs:
     steps:
       # fetch-depth: 0 so the merge-base against the PR base resolves (the gate
       # diffs base…HEAD to find this PR's changed files + added lines).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
