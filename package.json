@@ -80,7 +80,7 @@
     "@tanstack/nitro-v2-vite-plugin": "^1.155.0",
     "@tanstack/router-cli": "^1.167.21",
     "@tanstack/start-storage-context": "^1.167.17",
-    "@testing-library/jest-dom": "^6.6.0",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.2.0",
     "@types/google.maps": "^3.65.3",
     "@types/node": "^26.1.1",
