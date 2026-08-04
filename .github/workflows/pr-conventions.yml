@@ -57,7 +57,7 @@ jobs:
     # via the orchestrator), and a bot can't run that workflow. .github/dependabot.yml
     # already applies the labels it *can* know up front (dependencies,
     # skip-changelog, safe:human); requiring type:*/size:* on top of that would
-    # make every Dependabot PR permanently unmergeable.
+    # leave every Dependabot PR red until a human hand-labels each one.
     if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
@@ -123,7 +123,8 @@ jobs:
     # Dependabot is exempt: the 2-round adversarial review loop is a worker/
     # reviewer-subagent workflow step in docs/agents/orchestration.md that a bot
     # has no way to run, and it has no author who could apply `skip-review`
-    # either — the gate would just permanently fail every Dependabot PR.
+    # either — the gate would stay red on every Dependabot PR until a human
+    # hand-applied `skip-review` to each one.
     if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
