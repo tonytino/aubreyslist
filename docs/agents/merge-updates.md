@@ -42,12 +42,15 @@ so a `## TL;DR` inside a fenced example doesn't satisfy the gate. The validator
 is `.github/scripts/check-tldr-block.mjs` (zero-dep ESM, unit-tested from
 `tests/unit/tldr-block.test.ts`).
 
-**Dependabot is the ONLY exemption** (`dependabot[bot]` PRs skip the job): it
-cannot author our template sections — the same rationale as its
-`skip-changelog` label for the changelog gate (see `.github/dependabot.yml`).
-Unlike the changelog gate, `release/*` branches and any other bots are
-**intentionally in scope**: a release PR can trivially say what's shipping, and
-that's exactly the audience the Slack feed exists for. There is no skip label.
+**Dependabot is exempt** (`dependabot[bot]` PRs skip the job): it cannot author
+our template sections — the same rationale as its `skip-changelog` label for
+the changelog gate (see `.github/dependabot.yml`). `pr-labels` and
+`adversarial-review` in the same workflow carry the identical Dependabot
+exemption, for the same reason — a bot can't run the agent-orchestration steps
+those gates check for. Unlike the changelog gate, `release/*` branches and any
+other bots are **intentionally in scope** for `pr-tldr`: a release PR can
+trivially say what's shipping, and that's exactly the audience the Slack feed
+exists for. There is no skip label.
 PRs opened before this gate existed will fail on their next
 `synchronize`/`edited` event until a TL;DR is added — expected forcing-function
 behavior, not a bug.
