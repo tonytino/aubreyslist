@@ -51,6 +51,14 @@ jobs:
   pr-labels:
     name: Required PR labels
     # Every PR must carry one each of type:*, size:*, and safe:*.
+    #
+    # Dependabot is exempt: labeling a PR with the full trio is part of the
+    # agent-orchestration workflow (an author picks type:*/size:* by hand or
+    # via the orchestrator), and a bot can't run that workflow. .github/dependabot.yml
+    # already applies the labels it *can* know up front (dependencies,
+    # skip-changelog, safe:human); requiring type:*/size:* on top of that would
+    # leave every Dependabot PR red until a human hand-labels each one.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     steps:
@@ -80,9 +88,10 @@ jobs:
     # to Slack when the PR merges, so this gate is what guarantees the feed has
     # real material to work with (see docs/agents/merge-updates.md).
     #
-    # Dependabot is the ONLY exemption: its PR bodies are bot-generated release
-    # notes and it cannot author our template sections — the same reason its PRs
-    # carry `skip-changelog` for the changelog gate (see .github/dependabot.yml).
+    # Dependabot is exempt here too (like pr-labels and adversarial-review
+    # below): its PR bodies are bot-generated release notes and it cannot
+    # author our template sections — the same reason its PRs carry
+    # `skip-changelog` for the changelog gate (see .github/dependabot.yml).
     # Unlike the changelog gate, release/* branches stay in scope on purpose: a
     # release PR can trivially say what's shipping, and that's exactly what the
     # Slack feed is for. No skip label exists for this gate.
@@ -110,6 +119,13 @@ jobs:
     # `skip-review` bypasses the gate (trivial / human-only change). Otherwise BOTH
     # must hold: the `review:adversarial-passed` label is present AND the PR body
     # contains a well-formed review record (validated by check-review-block.mjs).
+    #
+    # Dependabot is exempt: the 2-round adversarial review loop is a worker/
+    # reviewer-subagent workflow step in docs/agents/orchestration.md that a bot
+    # has no way to run, and it has no author who could apply `skip-review`
+    # either — the gate would stay red on every Dependabot PR until a human
+    # hand-applied `skip-review` to each one.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     steps:
