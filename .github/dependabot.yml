@@ -8,6 +8,14 @@
 #   so each lands its own reviewable PR.
 # - PRs carry `skip-changelog` so they satisfy the changelog-fragment CI gate
 #   (Dependabot can't author changelog fragments).
+# - PRs carry `safe:human` because every Dependabot PR touches an owner-gated
+#   surface — package.json/pnpm-lock.yaml (npm bumps) or /.github/ (actions
+#   bumps) — so they are honestly human-merged, never agent self-merged (see
+#   docs/agents/governance.md). Applying it here satisfies the `owner-review`
+#   CI tripwire (.github/workflows/pr-conventions.yml) at PR-open time instead
+#   of failing until someone labels it by hand. This only labels *newly opened*
+#   PRs going forward — pre-existing open Dependabot PRs still need the label
+#   applied manually.
 #
 # NOTE: cooldown also delays version-update-driven security bumps by 7 days.
 # Enable **Dependabot security updates** + **alerts** in repo Settings for
@@ -27,6 +35,7 @@ updates:
     labels:
       - dependencies
       - skip-changelog
+      - safe:human
     commit-message:
       prefix: "chore(actions)"
     groups:
@@ -45,6 +54,7 @@ updates:
     labels:
       - dependencies
       - skip-changelog
+      - safe:human
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(dev-deps)"
