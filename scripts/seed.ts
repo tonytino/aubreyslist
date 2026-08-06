@@ -252,12 +252,6 @@ export async function runCli(
     log.log(
       `Seed complete — bot=${result.botUserId} listings: +${result.listingsInserted} new, ${result.listingsExisting} existing · ${result.claimsSuggested} label(s) suggested · ${result.menuLinksSeeded} menu link(s) seeded · ${result.skipped.length} skipped.`
     );
-    /* jscpd:ignore-start -- Accepted clone of the runCli epilogue in
-       ./refresh-seed-data.ts. The shared parts are already extracted into
-       ./cli.ts (`logSkipped`, `errorMessage`, `runWhenInvokedDirectly`); what
-       remains is the try/catch shape itself. Hoisting that too would have to
-       swallow each script's own summary line and exit codes (seed-admin returns
-       2 for usage errors), which costs more clarity than the repetition does. */
     logSkipped((m) => log.log(m), result.skipped);
     return 0;
   } catch (error) {
@@ -269,4 +263,3 @@ export async function runCli(
 // Run when invoked directly (not when imported by tests). `getDb()`/`getEnv()` —
 // and thus DATABASE_URL validation — are only touched on this path.
 runWhenInvokedDirectly(import.meta.url, () => runCli());
-/* jscpd:ignore-end */

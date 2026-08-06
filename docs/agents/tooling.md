@@ -81,6 +81,7 @@ open a follow-up issue instead of forcing it into an unrelated PR. Never delete
 ## Duplication check
 
 `pnpm duplication` runs [`jscpd`](https://github.com/kucherenko/jscpd) over `app/`,
+`.github/scripts/`,
 `db/`, and `scripts/` at `minTokens: 70` and fails on textual code clones
 (copy-pasted blocks).
 
@@ -93,14 +94,15 @@ Config lives in **`.jscpd.json`** at the repo root.
 
 ### Why test files are excluded
 
-A baseline sweep found 164 clones total. Of these, 149 were test-to-test
-(tests repeat by design — arrange, act, assert). Only 15 were source-to-source.
-With test files excluded at `minTokens: 70`, the baseline dropped to 8 clones.
-Test duplication is acceptable and does not signal a real problem.
+A baseline sweep **at `minTokens: 50`** found 164 clones. Of these, 149 were
+test-to-test (tests repeat by design — arrange, act, assert). Only 15 were
+source-to-source. Test duplication is acceptable and does not signal a real
+problem, so tests are excluded.
 
-Those 8 were then resolved before the gate was switched on: 5 were refactored
-away (see `scripts/cli.ts`), and 3 were consciously accepted and marked. The
-tree reports 0 clones today, so any clone the gate reports is new.
+Raising the floor to the shipped `minTokens: 70` and excluding tests left a
+baseline of 8 clones. Those 8 were resolved before the gate was switched on: 6
+were refactored away (see `scripts/cli.ts`) and 2 were consciously accepted and
+marked. The tree reports 0 clones today, so any clone the gate reports is new.
 
 ### Textual vs. semantic duplication
 
@@ -124,13 +126,16 @@ narrowest possible span instead, and always leave a reason:
 ```
 
 Marking **one** side of a pair is enough. Grep `jscpd:ignore-start` to see every
-clone the repo has consciously accepted. There are three today:
+clone the repo has consciously accepted. There are two today:
 
 | Accepted clone | Why it stays |
 | -------------- | ------------ |
-| `app/server/flags/flags.fn.ts` ↔ `app/server/flags/index.ts` | The server-fn seam is client-callable; `index.ts` imports `db`. Sharing the schema would pull the database into the browser bundle. |
+| `app/server/flags/flags.fn.ts` ↔ `app/server/flags/index.ts` | The server-fn seam is client-callable; `index.ts` imports `db`. A schema used by `.validator()` runs client-side and is not strippable, so sharing it would pull the database into the browser bundle. |
 | `scripts/refresh-seed-data.ts` ↔ `app/server/places.ts` | Two different Places API responses (searchText vs Place Details). They collide only because Google reuses field names. |
-| `scripts/seed.ts` ↔ `scripts/refresh-seed-data.ts` | Residual `runCli` try/catch. The shared parts already live in `scripts/cli.ts`; hoisting the rest would hide each script's own summary and exit codes. |
+
+Before you add a marker, confirm the clone is actually still there. A marker
+that suppresses nothing is worse than none: it silently exempts its whole span
+from the gate forever.
 
 Raising `minTokens` to silence a specific clone is the wrong fix. It weakens the
 gate everywhere to solve one case.

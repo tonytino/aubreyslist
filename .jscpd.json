@@ -1,6 +1,6 @@
 {
   "//": "Copy-paste duplication gate (ADR-less; see docs/agents/tooling.md, 'Duplication check'). jscpd has no JSONC support, so the rationale for each choice lives in that doc rather than inline here. minTokens=70 is measured, not guessed: at 50 the signal is swamped by noise, and 149 of the 164 clones a full sweep found were test-to-test (arrange/act/assert repeats by design), which is why tests are ignored. threshold=0 is what makes the run exit non-zero -- any clone at all fails the build; it is verified in both directions, so do not add a redundant exitCode key. Non-test ignores mirror biome.json files.includes. To accept a specific clone, wrap it in jscpd:ignore-start/end WITH a reason -- never widen these globs.",
-  "path": ["app", "db", "scripts"],
+  "path": ["app", "db", "scripts", ".github/scripts"],
   "minTokens": 70,
   "ignore": [
     "**/*.test.ts",
@@ -18,7 +18,7 @@
     "**/test-results/**",
     "**/playwright-report/**"
   ],
-  "format": ["typescript", "tsx", "javascript"],
+  "format": ["typescript", "tsx", "javascript", "jsx"],
   "threshold": 0,
   "reporters": ["console"]
 }
