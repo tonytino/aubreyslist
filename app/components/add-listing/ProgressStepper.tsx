@@ -1,24 +1,27 @@
 import { Check } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { CLAIM_ATTRIBUTES } from "~/listings/taxonomy";
-import { claimAttributeLabel } from "~/trust/summary";
 import type { AnswerMap } from "./AddListingWizard";
 
 /**
- * The 7-node progress rail for the add-listing wizard. Each node is a button for
+ * The 3-node progress rail for the add-listing wizard (collapsed for the
+ * ClaimCardDeck, AUB-231): find-the-place → ONE attest stage (the deck keeps
+ * its own internal "n of 5" indicator) → review. Each node is a button for
  * back-navigation; forward jumps are gated until a place is chosen (there is
  * nothing to attest before then). Status is derived — never alarming:
  *
- *   current  — brand-filled (the step you're on)
- *   done     — celiac-safe green + check (a confirm/dispute answer, or a chosen place)
- *   skipped  — muted DASHED (non-alarming — a skip is a valid, honest choice, NOT incident-red)
- *   todo     — neutral border + number
+ *   current  — brand-filled (the stage you're on)
+ *   done     — celiac-safe green + check (a chosen place, or every attribute
+ *              answered with confirm/dispute)
+ *   skipped  — muted DASHED (every attribute answered but at least one skip —
+ *              a valid, honest choice, NOT incident-red)
+ *   todo     — neutral border + number (any attribute still unanswered)
  *
- * An `aria-live="polite"` line announces "Step N of 7 · <name>" as the step
+ * An `aria-live="polite"` line announces "Step N of 3 · <name>" as the stage
  * changes, so the position is conveyed without relying on the colour rail.
  */
 
-export const WIZARD_STEP_COUNT = 7;
+export const WIZARD_STEP_COUNT = 3;
 
 export type StepStatus = "current" | "done" | "skipped" | "todo";
 
@@ -27,12 +30,8 @@ export interface StepperNode {
   status: StepStatus;
 }
 
-/** Node labels, in order: find-the-place, the five attributes, review. */
-const STEP_LABELS: readonly string[] = [
-  "Find the place",
-  ...CLAIM_ATTRIBUTES.map((attribute) => claimAttributeLabel(attribute)),
-  "Review",
-];
+/** Node labels, in order: find-the-place, the deck stage, review. */
+const STEP_LABELS: readonly string[] = ["Find the place", "Attest what you know", "Review"];
 
 /**
  * Pure status derivation for the rail — the single, testable specification of
@@ -63,17 +62,17 @@ function nodeStatus(
   if (index === 0) {
     return hasPlace ? "done" : "todo";
   }
-  // Attribute nodes (1..N): reflect the confirm/dispute/skip answer.
-  const attribute = CLAIM_ATTRIBUTES[index - 1];
-  if (index >= 1 && index <= CLAIM_ATTRIBUTES.length && attribute !== undefined) {
-    const answer = answers[attribute];
-    if (answer === "confirm" || answer === "dispute") {
-      return "done";
+  // The single attest node rolls the whole deck up: done when every attribute
+  // is confirm/dispute; dashed "skipped" when every card was answered but at
+  // least one was an honest skip; todo while any card is still unanswered.
+  if (index === 1) {
+    const values = CLAIM_ATTRIBUTES.map((attribute) => answers[attribute]);
+    if (values.some((answer) => answer === undefined)) {
+      return "todo";
     }
-    if (answer === "skip") {
-      return "skipped";
-    }
-    return "todo";
+    return values.every((answer) => answer === "confirm" || answer === "dispute")
+      ? "done"
+      : "skipped";
   }
   // Review node.
   return "todo";
