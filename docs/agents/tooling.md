@@ -101,7 +101,8 @@ problem, so tests are excluded.
 
 Raising the floor to the shipped `minTokens: 70` and excluding tests left a
 baseline of 8 clones. Those 8 were resolved before the gate was switched on: 6
-were refactored away (see `scripts/cli.ts`) and 2 were consciously accepted and
+were refactored away (4 into `scripts/cli.ts`, the other 2 into the
+`IncidentFields` component and shared incident schemas) and 2 were accepted and
 marked. The tree reports 0 clones today, so any clone the gate reports is new.
 
 ### Textual vs. semantic duplication

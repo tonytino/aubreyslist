@@ -107,7 +107,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Copy-paste duplication gate: fails the PR on textual clones across
-      # app/db/scripts above the token/threshold floor set in .jscpd.json. This
+      # app/db/scripts/.github/scripts above the token/threshold floor set in
+      # .jscpd.json. This
       # only catches literal copy-paste (jscpd tokenizes and diffs source, it has
       # no notion of intent) — the semantic "does an equivalent helper already
       # exist?" case is NOT covered here; that's what the adversarial review loop
