@@ -142,7 +142,9 @@ ship.
 ## CI enforcement (the `adversarial-review` gate)
 
 The loop is enforced as a hard PR gate by the `adversarial-review` job in
-`.github/workflows/pr-conventions.yml`. To merge, a PR must satisfy **one** of:
+`.github/workflows/pr-conventions.yml`. (Dependabot PRs are exempt — a bot can't
+run the review loop; they remain covered by the `owner-review` gate and
+CODEOWNERS, see the job's comment.) To merge, any other PR must satisfy **one** of:
 
 - **`skip-review` label** — bypasses the gate for a trivial or human-only change; **or**
 - **both** the **`review:adversarial-passed` label** **and** a well-formed

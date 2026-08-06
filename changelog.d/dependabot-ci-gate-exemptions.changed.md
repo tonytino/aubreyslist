@@ -1,0 +1,1 @@
+- `[manual]` Dependabot PRs now skip the `pr-labels` and `adversarial-review` checks in CI, since a bot can't run the agent-orchestration steps those gates require. Dependabot PRs are also labeled `safe:human` by default, since they always touch owner-gated files and are always merged by a human.

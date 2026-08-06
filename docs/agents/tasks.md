@@ -123,6 +123,12 @@ enforces this and names any missing dimension):
 
 These usually carry over from the issue; add any that are missing to the PR.
 
+**Dependabot PRs are exempt** from the `pr-labels` gate (and from `pr-tldr` and
+the adversarial-review gate): a bot can't run the labeling/review workflow.
+`.github/dependabot.yml` applies the labels it can know up front (`dependencies`,
+`skip-changelog`, `safe:human`); the `pr-title` and `owner-review` gates still
+run on its PRs.
+
 Then update the issue label:
 
 ```bash
