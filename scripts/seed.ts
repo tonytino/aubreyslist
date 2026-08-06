@@ -45,6 +45,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "~/db/client";
 import { claims, listingLinks, listings, users } from "~/db/schema";
 import { isHttpUrl } from "~/server/listings/url";
+import { errorMessage, logSkipped, runWhenInvokedDirectly } from "./cli";
 import { CURATOR_BOT, SEED_LISTINGS, type SeededListing } from "./seed-data";
 
 /** The real Drizzle client type, injected so tests can pass a structural mock. */
@@ -251,25 +252,21 @@ export async function runCli(
     log.log(
       `Seed complete — bot=${result.botUserId} listings: +${result.listingsInserted} new, ${result.listingsExisting} existing · ${result.claimsSuggested} label(s) suggested · ${result.menuLinksSeeded} menu link(s) seeded · ${result.skipped.length} skipped.`
     );
-    if (result.skipped.length > 0) {
-      log.log(`Skipped: ${result.skipped.map((s) => s.query).join("; ")}`);
-    }
+    /* jscpd:ignore-start -- Accepted clone of the runCli epilogue in
+       ./refresh-seed-data.ts. The shared parts are already extracted into
+       ./cli.ts (`logSkipped`, `errorMessage`, `runWhenInvokedDirectly`); what
+       remains is the try/catch shape itself. Hoisting that too would have to
+       swallow each script's own summary line and exit codes (seed-admin returns
+       2 for usage errors), which costs more clarity than the repetition does. */
+    logSkipped((m) => log.log(m), result.skipped);
     return 0;
   } catch (error) {
-    log.error(error instanceof Error ? error.message : String(error));
+    log.error(errorMessage(error));
     return 1;
   }
 }
 
 // Run when invoked directly (not when imported by tests). `getDb()`/`getEnv()` —
 // and thus DATABASE_URL validation — are only touched on this path.
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runCli()
-    .then((code) => {
-      process.exitCode = code;
-    })
-    .catch((error: unknown) => {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    });
-}
+runWhenInvokedDirectly(import.meta.url, () => runCli());
+/* jscpd:ignore-end */

@@ -95,8 +95,12 @@ Config lives in **`.jscpd.json`** at the repo root.
 
 A baseline sweep found 164 clones total. Of these, 149 were test-to-test
 (tests repeat by design — arrange, act, assert). Only 15 were source-to-source.
-With test files excluded at `minTokens: 70`, the baseline drops to 8 clones. Test
-duplication is acceptable and does not signal a real problem.
+With test files excluded at `minTokens: 70`, the baseline dropped to 8 clones.
+Test duplication is acceptable and does not signal a real problem.
+
+Those 8 were then resolved before the gate was switched on: 5 were refactored
+away (see `scripts/cli.ts`), and 3 were consciously accepted and marked. The
+tree reports 0 clones today, so any clone the gate reports is new.
 
 ### Textual vs. semantic duplication
 
@@ -105,3 +109,28 @@ component re-implemented from scratch with different names and structure. That
 **semantic** case (duplicate logic under different code) is covered by the
 "Reuse / duplication" dimension in the adversarial review loop
 (`docs/agents/orchestration.md`).
+
+### Handling an accepted clone
+
+Some duplication is correct. When the gate flags one of those, **be conservative
+— do not delete code to make the gate quiet, and do not widen the `ignore`
+globs** (a glob blinds the whole file, including future clones). Wrap the
+narrowest possible span instead, and always leave a reason:
+
+```ts
+/* jscpd:ignore-start -- why this duplication is deliberate */
+// ...the accepted clone...
+/* jscpd:ignore-end */
+```
+
+Marking **one** side of a pair is enough. Grep `jscpd:ignore-start` to see every
+clone the repo has consciously accepted. There are three today:
+
+| Accepted clone | Why it stays |
+| -------------- | ------------ |
+| `app/server/flags/flags.fn.ts` ↔ `app/server/flags/index.ts` | The server-fn seam is client-callable; `index.ts` imports `db`. Sharing the schema would pull the database into the browser bundle. |
+| `scripts/refresh-seed-data.ts` ↔ `app/server/places.ts` | Two different Places API responses (searchText vs Place Details). They collide only because Google reuses field names. |
+| `scripts/seed.ts` ↔ `scripts/refresh-seed-data.ts` | Residual `runCli` try/catch. The shared parts already live in `scripts/cli.ts`; hoisting the rest would hide each script's own summary and exit codes. |
+
+Raising `minTokens` to silence a specific clone is the wrong fix. It weakens the
+gate everywhere to solve one case.
