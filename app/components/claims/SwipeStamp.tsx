@@ -38,14 +38,18 @@ export function SwipeStamp({
 }) {
   const confirm = kind === "confirm";
   const Icon: LucideIcon = isHeadline ? (confirm ? ShieldCheck : WheatStrike) : confirm ? Check : X;
+  // Headline stamps ride on the SOFT safety fills (kept light in BOTH themes —
+  // styling.md dark-mode rule) so the strong-colour text stays WCAG AA in dark
+  // mode too; `text-celiac-safe` on the dark surface would not be. Fact stamps
+  // are neutral on the card surface — never the safety verdict colours.
   const tint = isHeadline
     ? confirm
-      ? "border-celiac-safe text-celiac-safe"
-      : "border-gluten-friendly text-gluten-friendly"
-    : "border-foreground/70 text-foreground";
+      ? "border-celiac-safe bg-celiac-safe-soft text-celiac-safe"
+      : "border-gluten-friendly bg-gluten-friendly-soft text-gluten-friendly"
+    : "border-foreground/70 bg-surface/90 text-foreground";
 
   const box = cn(
-    "pointer-events-none absolute top-4 inline-flex items-center gap-1.5 rounded-card border-2 bg-surface/90 px-3 py-1.5 font-display text-body-sm font-bold uppercase tracking-wide",
+    "pointer-events-none absolute top-4 inline-flex items-center gap-1.5 rounded-card border-2 px-3 py-1.5 font-display text-body-sm font-bold uppercase tracking-wide",
     confirm ? "left-4 -rotate-12" : "right-4 rotate-12",
     tint
   );

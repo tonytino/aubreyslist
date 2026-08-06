@@ -184,13 +184,21 @@ export function ClaimCardDeck({
   const showBack = single || index > 0 || onBack !== undefined;
 
   return (
-    <section aria-label="Attest what you know" className="flex flex-col gap-4">
+    // Width-capped ~28rem and centered from `sm:` up (spec §9) so the cards
+    // keep a thumbable aspect inside wider host columns.
+    <section
+      aria-label="Attest what you know"
+      className="mx-auto flex w-full flex-col gap-4 sm:max-w-md"
+    >
       <DeckProgress index={index} answers={answers} />
 
       {/* The stack: the peek card sits behind; AnimatePresence swaps the top
           card with answer-directional exits (popLayout frees the exiting card
-          from the grid so the next one takes its slot immediately). */}
-      <div className="grid">
+          from the grid so the next one takes its slot immediately).
+          `overflow-x-clip` keeps drags and the sideways exit flights from ever
+          widening the page (no horizontal overflow — styling.md hard rule);
+          vertical overflow stays visible for the skip drop. */}
+      <div className="relative grid overflow-x-clip">
         {nextAttribute !== undefined ? (
           <PeekCard attribute={nextAttribute} caption={cardCaption?.(nextAttribute) ?? null} />
         ) : null}
