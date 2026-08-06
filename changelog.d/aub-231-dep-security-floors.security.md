@@ -1,0 +1,1 @@
+- `[manual]` Raised dependency security floors for `postcss` (GHSA-fxqj-rqcc-2cmp) and `undici` (GHSA-4cwx-7wf7-3272 and four others) flagged by osv-scanner. The remaining `brace-expansion` / `fast-uri` fixes are quarantined by `minimumReleaseAge` until 2026-08-06/07 and noted in `pnpm-workspace.yaml` for follow-up.

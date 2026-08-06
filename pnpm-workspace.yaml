@@ -61,7 +61,15 @@ blockExoticSubdeps: true
 # a single `{introduced: 0} → {fixed: 5.0.8}` range with no per-major backports,
 # so the 2.x and 3.x lines cannot satisfy it and every copy has to reach 5.0.8.
 # Floor minimatch at ^10 so the last v2 consumers (archiver → readdir-glob, and
-# glob@10) move off it and a single brace-expansion@5.0.8 can serve the tree.
+# glob@10) move off it and a single brace-expansion@5 pin can serve the tree
+# (5.0.8 for GHSA-mh99-v99m-4gvg; 5.0.9 fixes GHSA-rgw5-rvv9-x895 but was
+# published 2026-07-30 and is quarantined by minimumReleaseAge until
+# 2026-08-06T10:00Z — raise this pin to 5.0.9 once it matures; ditto
+# fast-uri ^3.1.5 for GHSA-7p8r-x3mc-p8w7, matures 2026-08-07T09:17Z).
+#
+# postcss + undici are security floors added with the 2026-08 osv-scanner
+# sweep (GHSA-fxqj-rqcc-2cmp; GHSA-4cwx-7wf7-3272 et al.) — each has a single
+# resolved line in the tree, so a global floor is safe.
 overrides:
   shell-quote: "^1.8.4"
   h3: "^1.15.9"
@@ -71,6 +79,8 @@ overrides:
   fast-uri: "^3.1.4"
   minimatch: "^10.2.5"
   brace-expansion: "5.0.8"
+  postcss: "^8.5.23"
+  undici: "^7.29.0"
   "@babel/core": "^7.29.6"
   qs: "^6.15.2"
   diff: "^8.0.3"
