@@ -11,6 +11,7 @@ This project uses Biome, Lefthook, and a `preflight` script for code quality. Th
 | "Is my change ready to ship?" | `pnpm preflight` | Runs `biome check .` + `tsc --noEmit` + `vitest run` — **read-only**, whole repo, all validators. Required before declaring work complete |
 | Validating a dependency bump | `pnpm preflight && pnpm build` | Preflight plus production build. Catches issues that only surface at build time |
 | Hunting dead code / before a big cleanup PR | `pnpm deadcode` | Runs `knip` — **read-only** — flagging unused files, exports, types, and dependencies. Runs as its own CI job; NOT part of `preflight` |
+| Hunting copy-paste duplication / validating a cleanup PR | `pnpm duplication` | Runs `jscpd` — **read-only** — detecting repeated code blocks by textual match. Runs as its own CI job; NOT part of `preflight` |
 
 ## Why Three Commands
 
@@ -76,3 +77,31 @@ not an RPC/server-fn seam, not a test fixture — **delete it** (and any test th
 only exists to exercise the deleted code). If a safe removal is large or risky,
 open a follow-up issue instead of forcing it into an unrelated PR. Never delete
 `db/migrations/**` or generated files (`app/routeTree.gen.ts`).
+
+## Duplication check
+
+`pnpm duplication` runs [`jscpd`](https://github.com/kucherenko/jscpd) over `app/`,
+`db/`, and `scripts/` at `minTokens: 70` and fails on textual code clones
+(copy-pasted blocks).
+
+It runs as its own CI job (**Duplication**) on every PR, so new duplication fails
+the build. It is deliberately **not** part of `pnpm preflight` (preflight is
+lint + types + tests); run `pnpm duplication` yourself before a cleanup PR or when
+you suspect repeated code.
+
+Config lives in **`.jscpd.json`** at the repo root.
+
+### Why test files are excluded
+
+A baseline sweep found 164 clones total. Of these, 149 were test-to-test
+(tests repeat by design — arrange, act, assert). Only 15 were source-to-source.
+With test files excluded at `minTokens: 70`, the baseline drops to 8 clones. Test
+duplication is acceptable and does not signal a real problem.
+
+### Textual vs. semantic duplication
+
+`jscpd` catches **textual** clones only — repeated source text. It cannot catch a
+component re-implemented from scratch with different names and structure. That
+**semantic** case (duplicate logic under different code) is covered by the
+"Reuse / duplication" dimension in the adversarial review loop
+(`docs/agents/orchestration.md`).
