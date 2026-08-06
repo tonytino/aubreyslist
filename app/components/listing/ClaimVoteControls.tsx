@@ -1,14 +1,12 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { WheatStrike } from "~/components/icons/WheatStrike";
 import type { AttestationValue, ClaimAttribute } from "~/db/schema";
 import { cn } from "~/lib/utils";
-import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
 import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
 import { ClaimChip } from "./ClaimChip";
-import { claimsQueryKey } from "./CommunityClaims";
+import { useClaimVoteMutations } from "./use-claim-vote-mutations";
 
 interface ClaimVoteControlsProps {
   listingId: string;
@@ -60,38 +58,14 @@ export function ClaimVoteControls({
   viewerVote,
   isSignedIn,
 }: ClaimVoteControlsProps) {
-  const queryClient = useQueryClient();
-
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: claimsQueryKey(listingId) });
-
-  // Both onSuccess handlers RETURN the invalidation promise so `isPending`
-  // (and thus `busy`) holds until the roll-up refetch settles. The toggle
-  // branches on `viewerVote`, which comes from that query — re-enabling before
-  // it lands would let a quick second click act on a stale vote (e.g. re-submit
-  // a confirm it should retract).
-  const vote = useMutation({
-    mutationFn: (value: AttestationValue) => submitVote({ data: { listingId, attribute, value } }),
-    onSuccess: () => {
-      // A single neutral message regardless of confirm vs dispute — the button's
-      // own pressed state already conveys which one was cast.
-      toast.success("Vote recorded");
-      return invalidate();
-    },
-    onError: () => {
-      toast.error("Could not record your vote. Please try again.");
-    },
-  });
-
-  const retract = useMutation({
-    mutationFn: () => removeVote({ data: { listingId, attribute } }),
-    onSuccess: () => {
-      toast.success("Vote retracted");
-      return invalidate();
-    },
-    onError: () => {
-      toast.error("Could not retract your vote. Please try again.");
-    },
-  });
+  // The shared mutation seam (AUB-231): write + roll-up invalidation live in
+  // the hook — its onSuccess RETURNS the invalidation promise so `isPending`
+  // (and thus `busy`) holds until the refetch settles. The toggle branches on
+  // `viewerVote`, which comes from that query — re-enabling before it lands
+  // would let a quick second click act on a stale vote (e.g. re-submit a
+  // confirm it should retract). The toasts here are THIS surface's UI concern,
+  // supplied per-mutate.
+  const { vote, retract } = useClaimVoteMutations(listingId);
 
   if (!isSignedIn) {
     return (
@@ -111,9 +85,31 @@ export function ClaimVoteControls({
   // other side switches it (the server upsert handles the change in one call).
   const toggle = (value: AttestationValue) => {
     if (viewerVote === value) {
-      retract.mutate();
+      retract.mutate(
+        { attribute },
+        {
+          onSuccess: () => {
+            toast.success("Vote retracted");
+          },
+          onError: () => {
+            toast.error("Could not retract your vote. Please try again.");
+          },
+        }
+      );
     } else {
-      vote.mutate(value);
+      vote.mutate(
+        { attribute, value },
+        {
+          onSuccess: () => {
+            // A single neutral message regardless of confirm vs dispute — the
+            // button's own pressed state already conveys which one was cast.
+            toast.success("Vote recorded");
+          },
+          onError: () => {
+            toast.error("Could not record your vote. Please try again.");
+          },
+        }
+      );
     }
   };
 
