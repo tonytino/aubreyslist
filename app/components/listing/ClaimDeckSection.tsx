@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ClaimCardDeck,
@@ -37,9 +37,14 @@ import { useClaimVoteMutations } from "./use-claim-vote-mutations";
  *     hero badges refresh live.
  *   - SKIP IS SAFE: "Not sure" on an already-voted card leaves the existing
  *     vote untouched (retract stays available via the inline toggles).
- *   - MIS-SWIPE UNDO: every write raises a "Vote recorded · Undo" toast whose
- *     Undo restores the previous state — the previous vote via another upsert,
- *     or a retract when there was none.
+ *   - MIS-SWIPE UNDO: every write surfaces an INLINE "Vote recorded · Undo"
+ *     row inside the sheet whose Undo restores the previous state — the
+ *     previous vote via another upsert, or a retract when there was none. It
+ *     is deliberately NOT a sonner toast: the sheet is a MODAL Radix dialog
+ *     (body pointer-events disabled + focus trapped while open), so a toast's
+ *     action would be unreachable until the sheet closed. The row always
+ *     targets only the LATEST write — a newer write replaces it — so a stale
+ *     Undo can never clobber a newer vote (a write-id guard backstops this).
  *
  * The sheet never dismisses on horizontal drag (Radix has no drag-to-dismiss;
  * the deck additionally keeps ~24px edge dead zones for the OS back gesture).
@@ -61,6 +66,15 @@ export function ClaimDeckSection({
   const [votes, setVotes] = useState<Record<ClaimAttribute, AttestationValue | null>>(() =>
     emptyVotes()
   );
+  // The latest write's undo target — the inline "Vote recorded · Undo" row.
+  // Each new write REPLACES it (one live undo at a time), and `id` against the
+  // monotonic counter guards any stale callback from clobbering a newer vote.
+  const [lastWrite, setLastWrite] = useState<{
+    id: number;
+    attribute: ClaimAttribute;
+    previous: AttestationValue | null;
+  } | null>(null);
+  const writeIdRef = useRef(0);
   const { vote, retract } = useClaimVoteMutations(listingId);
 
   if (!isSignedIn) {
@@ -81,11 +95,21 @@ export function ClaimDeckSection({
     setOpen(true);
   };
 
-  /** Roll one card's answer back to the pre-write state (the Undo action). */
-  const undo = (attribute: ClaimAttribute, previous: AttestationValue | null) => {
+  /**
+   * Roll the LATEST write back to its pre-write state (the inline Undo). The
+   * write-id check no-ops any stale invocation — only the newest write is
+   * undoable, so an older Undo can never blind-retract a newer vote.
+   */
+  const undoLastWrite = () => {
+    if (lastWrite === null || lastWrite.id !== writeIdRef.current) {
+      return;
+    }
+    const { attribute, previous } = lastWrite;
+    setLastWrite(null);
     const restore = () => {
       setVotes((prev) => ({ ...prev, [attribute]: previous }));
       setAnswers((prev) => ({ ...prev, [attribute]: previous ?? undefined }));
+      // Passive confirmation only (no action) — fine from inside the modal.
       toast.success(previous === null ? "Vote removed" : "Previous vote restored");
     };
     const fail = () => {
@@ -109,21 +133,21 @@ export function ClaimDeckSection({
       return;
     }
     const previous = votes[attribute];
+    const id = ++writeIdRef.current;
     setAnswers((prev) => ({ ...prev, [attribute]: answer }));
     setVotes((prev) => ({ ...prev, [attribute]: answer }));
+    // Offer the undo immediately (optimistic, like the answer itself); a
+    // failed write clears it again alongside the rollback below.
+    setLastWrite({ id, attribute, previous });
     vote.mutate(
       { attribute, value: answer },
       {
-        onSuccess: () => {
-          toast.success("Vote recorded", {
-            action: { label: "Undo", onClick: () => undo(attribute, previous) },
-          });
-        },
         onError: () => {
           // Roll the local snapshot back so the summary never shows a vote
-          // the server rejected.
+          // the server rejected, and retire this write's undo affordance.
           setAnswers((prev) => ({ ...prev, [attribute]: previous ?? undefined }));
           setVotes((prev) => ({ ...prev, [attribute]: previous }));
+          setLastWrite((current) => (current?.id === id ? null : current));
           toast.error("Could not record your vote. Please try again.");
         },
       }
@@ -149,12 +173,24 @@ export function ClaimDeckSection({
         Been here? Confirm what you know
       </Button>
 
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) {
+            // The undo affordance lives inside the sheet — retire it on close.
+            setLastWrite(null);
+          }
+        }}
+      >
         <SheetContent
           side="bottom"
           // Bottom sheet on mobile; a centered, card-radius dialog from `sm:`
           // up (composing the one Sheet primitive instead of a second drawer).
-          className="max-h-[90dvh] overflow-y-auto rounded-t-card sm:inset-x-auto sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-card sm:border"
+          // At `sm:` the bottom-sheet slide keyframes are zeroed out in favour
+          // of a dialog-like fade + zoom (matching ui/dialog.tsx), so the
+          // centered panel never sweeps up from the viewport bottom.
+          className="max-h-[90dvh] overflow-y-auto rounded-t-card sm:inset-x-auto sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-card sm:border sm:data-[state=closed]:duration-200 sm:data-[state=closed]:fade-out-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=open]:duration-200 sm:data-[state=open]:fade-in-0 sm:data-[state=open]:zoom-in-95 sm:data-[state=open]:slide-in-from-bottom-0"
         >
           <SheetHeader className="pb-0">
             <SheetTitle>Confirm what you know</SheetTitle>
@@ -163,7 +199,7 @@ export function ClaimDeckSection({
               immediately.
             </SheetDescription>
           </SheetHeader>
-          <div className="p-4 pt-0">
+          <div className="flex flex-col gap-3 p-4 pt-0">
             <ClaimCardDeck
               answers={answers}
               onAnswer={handleAnswer}
@@ -171,6 +207,27 @@ export function ClaimDeckSection({
               onDone={() => setOpen(false)}
               cardCaption={caption}
             />
+            {/* Inline mis-swipe recovery (AUB-231 review round 1): the sheet is
+                MODAL, so a toast action would sit outside the focus trap and
+                behind Radix's body pointer-events lock — this row is inside
+                both. It always reflects only the LATEST write. */}
+            {lastWrite !== null ? (
+              <div
+                role="status"
+                className="flex items-center justify-between gap-2 rounded-card border border-border bg-muted/40 py-1.5 pr-1.5 pl-3"
+              >
+                <span className="text-body-sm text-muted-foreground">Vote recorded</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={undoLastWrite}
+                  className="min-h-11"
+                >
+                  Undo
+                </Button>
+              </div>
+            ) : null}
           </div>
         </SheetContent>
       </Sheet>

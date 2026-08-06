@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MotionGlobalConfig } from "motion/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -64,17 +64,6 @@ function renderWithQuery(ui: ReactElement): QueryClient {
 
 const CTA = "Been here? Confirm what you know";
 
-/** The Undo action captured from the last "Vote recorded" success toast. */
-function lastUndoAction(): { label: string; onClick: () => void } {
-  const successMock = vi.mocked(toast.success);
-  const lastCall = successMock.mock.calls.at(-1);
-  const options = lastCall?.[1] as { action?: { label: string; onClick: () => void } } | undefined;
-  if (!options?.action) {
-    throw new Error("expected the last success toast to carry an Undo action");
-  }
-  return options.action;
-}
-
 describe("ClaimDeckSection", () => {
   it("renders NOTHING for anonymous viewers (the existing sign-in prompts remain the path)", () => {
     renderWithQuery(
@@ -123,15 +112,10 @@ describe("ClaimDeckSection", () => {
       },
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: claimsQueryKey("listing-1") });
-    // The mis-swipe escape hatch rides on the success toast.
-    await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith(
-        "Vote recorded",
-        expect.objectContaining({
-          action: expect.objectContaining({ label: "Undo" }),
-        })
-      );
-    });
+    // The mis-swipe escape hatch is an INLINE row inside the (modal) sheet —
+    // a real, reachable control, not a toast action outside the focus trap.
+    expect(await screen.findByText("Vote recorded")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
   });
 
   it("skip ('Not sure') leaves an existing vote untouched — no write, vote kept in the summary", async () => {
@@ -163,19 +147,16 @@ describe("ClaimDeckSection", () => {
     expect(screen.getAllByText("Not yet attested")).toHaveLength(4);
   });
 
-  it("Undo after a first-time vote retracts it (there was no previous vote)", async () => {
+  it("clicking the rendered Undo after a first-time vote retracts it (no previous vote)", async () => {
     renderWithQuery(<ClaimDeckSection listingId="listing-1" claims={fullTaxonomy()} isSignedIn />);
 
     fireEvent.click(screen.getByRole("button", { name: CTA }));
     await screen.findByRole("heading", { name: "Celiac-safe" });
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
-    await waitFor(() => {
-      expect(toast.success).toHaveBeenCalled();
-    });
 
-    act(() => {
-      lastUndoAction().onClick();
-    });
+    // The REAL DOM path: click the inline Undo control rendered INSIDE the
+    // modal sheet (a toast action would sit outside its focus trap).
+    fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
 
     await waitFor(() => {
       expect(removeVoteMock).toHaveBeenCalledTimes(1);
@@ -183,9 +164,16 @@ describe("ClaimDeckSection", () => {
     expect(removeVoteMock).toHaveBeenCalledWith({
       data: { listingId: "listing-1", attribute: "celiac_safe_vs_gluten_friendly" },
     });
+    // The affordance retires itself once used.
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Vote removed");
+    });
   });
 
-  it("Undo after changing a vote restores the PREVIOUS vote via submitVote", async () => {
+  it("clicking the rendered Undo after changing a vote restores the PREVIOUS vote", async () => {
     renderWithQuery(
       <ClaimDeckSection
         listingId="listing-1"
@@ -203,9 +191,7 @@ describe("ClaimDeckSection", () => {
       expect(submitVoteMock).toHaveBeenCalledTimes(1);
     });
 
-    act(() => {
-      lastUndoAction().onClick();
-    });
+    fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
 
     // The undo re-submits the previous dispute — never a blind retract.
     await waitFor(() => {
@@ -219,6 +205,36 @@ describe("ClaimDeckSection", () => {
       },
     });
     expect(removeVoteMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("Previous vote restored");
+    });
+  });
+
+  it("a newer write replaces the undo target — Undo can never clobber the newer vote", async () => {
+    renderWithQuery(<ClaimDeckSection listingId="listing-1" claims={fullTaxonomy()} isSignedIn />);
+
+    fireEvent.click(screen.getByRole("button", { name: CTA }));
+    await screen.findByRole("heading", { name: "Celiac-safe" });
+    // Write #1 (headline), then advance and write #2 (dedicated fryer) while
+    // the first undo affordance is still live.
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await screen.findByRole("heading", { name: "Dedicated fryer" });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    // Exactly ONE undo affordance exists, targeting only the LATEST write.
+    const undoButtons = await screen.findAllByRole("button", { name: "Undo" });
+    expect(undoButtons).toHaveLength(1);
+    const undoButton = undoButtons[0];
+    if (!undoButton) throw new Error("unreachable");
+    fireEvent.click(undoButton);
+
+    await waitFor(() => {
+      expect(removeVoteMock).toHaveBeenCalledTimes(1);
+    });
+    // It retracts the fryer vote (write #2); the headline vote is untouched.
+    expect(removeVoteMock).toHaveBeenCalledWith({
+      data: { listingId: "listing-1", attribute: "dedicated_fryer" },
+    });
   });
 
   it("completes to the deck-internal summary whose Done closes the sheet", async () => {
