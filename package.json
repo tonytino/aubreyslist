@@ -89,7 +89,7 @@
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
     "drizzle-kit": "^0.31.10",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "knip": "^6.31.0",
     "lefthook": "^2.1.10",
     "tailwindcss": "^4.3.3",
