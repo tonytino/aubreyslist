@@ -150,6 +150,9 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  * `h-full flex flex-col` with a `flex-1` body, and the meta row's space is always
  * reserved — an `invisible` placeholder of the same composition when a VM has no
  * signal. Reserved space, never a fixed total height, so wrapped text is never clipped.
+ * The claim row holds to that too: it is a single never-wrapping line that scrolls
+ * horizontally, so a listing's badge count changes what you scroll to, not the card's
+ * height.
  *
  * Client-safe: imports only pure/client-safe/type-only modules.
  */
@@ -286,11 +289,28 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
         </p>
 
-        {/* `relative z-10`: the suggested ClaimBadge's "AI" tooltip trigger is a real
+        {/* Claim row — one line that scrolls horizontally on overflow instead of
+            wrapping (the `SafetySummary` hero / `FilterChips` pattern), so badge
+            count changes what you scroll to, never how tall the card is: a
+            one-badge and a five-badge card are the same height. Every chip in
+            here is already `shrink-0` + `whitespace-nowrap`, so the row overflows
+            rather than squeezing its labels. The scrollbar is hidden in both
+            engines — a painted one would put the height back on the badge count.
+            `min-w-0` lets the row shrink inside the flex-column body and hand its
+            overflow to the scroller instead of widening the card at 375px, and
+            `-mx-1 px-1 py-1` (net `mt-1 + py-1` = the old `mt-2` rhythm) keeps the
+            suggested ring's gradient edge and the "AI" trigger's focus-visible ring
+            inside the scroll box instead of clipped by it.
+
+            `relative z-10`: the suggested ClaimBadge's "AI" tooltip trigger is a real
             <button>, so this row must be raised above the stretched-link overlay or
             the overlay intercepts every pointer event — hover/click silently never
-            reaches the button, even though Tab-focus still works. */}
-        <div className="relative z-10 mt-2 flex flex-wrap items-center gap-2">
+            reaches the button, even though Tab-focus still works. It is also what
+            lets a touch drag scroll the row rather than hitting the card link. */}
+        <div
+          data-testid="card-claim-row"
+          className="relative z-10 -mx-1 mt-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {vm.safetyState ? (
             <SafetySignal state={vm.safetyState} />
           ) : vm.suggestedByBot ? null : (

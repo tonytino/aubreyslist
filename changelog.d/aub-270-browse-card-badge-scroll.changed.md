@@ -1,0 +1,1 @@
+- `[manual]` Browse-card claim badges now scroll sideways in a single row instead of wrapping, so a card's height no longer depends on how many badges it carries.

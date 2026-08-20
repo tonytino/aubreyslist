@@ -516,6 +516,37 @@ describe("RestaurantCard", () => {
     expect(metaRow).toHaveClass("mt-3", "pt-3", "border-t");
   });
 
+  it("scrolls the claim row sideways instead of wrapping, so badge count never changes card height", async () => {
+    // Five badges is the taxonomy maximum; wrapped, they would stack the card
+    // several rows taller than a one-badge neighbour. The row stays one line and
+    // hands the overflow to a horizontal scroller instead.
+    renderCard({
+      confirmedAttributes: ["dedicated_fryer", "dedicated_gf_menu"],
+      suggestedAttributes: ["off_menu_gf_on_request", "gf_substitutes"],
+      suggestedByBot: true,
+    });
+    await screen.findByTestId("card-claim-row");
+
+    const claimRow = screen.getByTestId("card-claim-row");
+    expect(claimRow).toHaveClass("flex", "items-center", "overflow-x-auto", "min-w-0");
+    // The wrap is what made the height vary — it must stay off at every width.
+    expect(claimRow.className).not.toContain("flex-wrap");
+    // A painted scrollbar would put height back on the badge count, so both
+    // engines' scrollbars are hidden.
+    expect(claimRow.className).toContain("[scrollbar-width:none]");
+    expect(claimRow.className).toContain("[&::-webkit-scrollbar]:hidden");
+
+    // Every chip in the row keeps its own width (never squeezed to fit), which is
+    // what makes the row overflow instead of compressing its labels.
+    for (const badge of [
+      ...screen.getAllByTestId("claim-badge"),
+      ...screen.getAllByTestId("suggested-attribute"),
+    ]) {
+      expect(badge.className).toContain("shrink-0");
+      expect(badge.className).toContain("whitespace-nowrap");
+    }
+  });
+
   it("stretches to fill its grid cell so cards equalize within a row (AUB-194)", async () => {
     renderCard();
     const link = await screen.findByRole("link");
