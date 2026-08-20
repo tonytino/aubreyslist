@@ -1,3 +1,5 @@
+import { pathToFileURL } from "node:url";
+
 /**
  * Shared CLI plumbing for the `scripts/` commands (`pnpm db:seed`,
  * `db:seed:refresh`, `db:seed-admin`, `db:verify`, `db:backfill:*`).
@@ -47,7 +49,11 @@ export function logSkipped(
  * each `runCli` already handles its expected failures — and reports as exit 1.
  */
 export function runWhenInvokedDirectly(moduleUrl: string, main: () => Promise<number>): void {
-  if (moduleUrl !== `file://${process.argv[1]}`) {
+  // `import.meta.url` is a properly percent-encoded file URL, so the comparison
+  // must build one the same way. Concatenating `file://` + argv[1] silently
+  // fails on any path needing encoding (a space, `#`, `?`, non-ASCII) and the
+  // script exits 0 having done nothing. Matches the `.mjs` scripts (AUB-261).
+  if (!process.argv[1] || moduleUrl !== pathToFileURL(process.argv[1]).href) {
     return;
   }
 

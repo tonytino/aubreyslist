@@ -16,7 +16,7 @@
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = process.cwd();
 
@@ -51,7 +51,11 @@ export async function resolve(specifier, context, nextResolve) {
   // Relative TS imports (e.g. `db/client.ts` → `./schema`) omit the extension,
   // which Node's resolver rejects. Append it against the importing module's dir.
   if ((specifier.startsWith("./") || specifier.startsWith("../")) && context.parentURL) {
-    const parentDir = path.dirname(new URL(context.parentURL).pathname);
+    // fileURLToPath, NOT `new URL(...).pathname`: WHATWG pathname stays
+    // percent-encoded, so a repo path containing a space (or `#`, `?`,
+    // non-ASCII) resolved to a directory that does not exist and relative
+    // imports failed. Same bug class as the cli.ts entry check (AUB-261).
+    const parentDir = path.dirname(fileURLToPath(context.parentURL));
     const absolute = resolveWithExtension(path.resolve(parentDir, specifier));
     if (existsSync(absolute)) {
       return nextResolve(pathToFileURL(absolute).href, context);

@@ -47,6 +47,27 @@ describe("logSkipped", () => {
 });
 
 describe("runWhenInvokedDirectly", () => {
+  it("runs main when the repo path contains a space (percent-encoded URL)", async () => {
+    // `import.meta.url` is percent-encoded, so the guard must build its
+    // comparison URL the same way. Concatenating `file://` + argv[1] produced
+    // "file:///Users/some one/..." which never equals the encoded
+    // "file:///Users/some%20one/..." — the script exited 0 having done nothing.
+    process.argv[1] = "/Users/some one/repo/scripts/seed.ts";
+    const main = vi.fn(() => Promise.resolve(0));
+
+    runWhenInvokedDirectly("file:///Users/some%20one/repo/scripts/seed.ts", main);
+    await vi.waitFor(() => expect(main).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not run main when argv[1] is absent", () => {
+    // pathToFileURL(undefined) throws; the guard must short-circuit instead.
+    process.argv = [process.argv[0] as string];
+    const main = vi.fn(() => Promise.resolve(0));
+
+    expect(() => runWhenInvokedDirectly("file:///repo/scripts/seed.ts", main)).not.toThrow();
+    expect(main).not.toHaveBeenCalled();
+  });
+
   it("does not run main when the module is imported, not executed", () => {
     process.argv[1] = "/repo/scripts/seed.ts";
     const main = vi.fn(() => Promise.resolve(0));
