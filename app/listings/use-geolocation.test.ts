@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useGeolocation } from "./use-geolocation";
+import { geolocationPermission, useGeolocation } from "./use-geolocation";
 
 /**
  * The grant / deny / unavailable fallback behaviour the distance sort depends
@@ -12,6 +12,19 @@ type SuccessCb = (position: GeolocationPosition) => void;
 type ErrorCb = (error: GeolocationPositionError) => void;
 
 const originalGeolocation = navigator.geolocation;
+const originalPermissions = navigator.permissions;
+
+function mockPermissions(state: PermissionState | "throws"): void {
+  Object.defineProperty(navigator, "permissions", {
+    configurable: true,
+    value: {
+      query: () =>
+        state === "throws"
+          ? Promise.reject(new TypeError("geolocation is not a valid PermissionName"))
+          : Promise.resolve({ state }),
+    },
+  });
+}
 
 function mockGeolocation(impl: {
   getCurrentPosition: (success: SuccessCb, error: ErrorCb) => void;
@@ -62,6 +75,10 @@ afterEach(() => {
     configurable: true,
     value: originalGeolocation,
   });
+  Object.defineProperty(navigator, "permissions", {
+    configurable: true,
+    value: originalPermissions,
+  });
 });
 
 describe("useGeolocation", () => {
@@ -106,7 +123,7 @@ describe("useGeolocation", () => {
       outcome = await result.current.request();
     });
 
-    expect(outcome?.status).toBe("error");
+    expect(outcome).toMatchObject({ status: "error", reason: "denied" });
     expect(result.current.status).toBe("error");
     expect(result.current.error).toMatch(/denied/i);
     // The accessible message names the fallback so the user understands the result.
@@ -125,7 +142,7 @@ describe("useGeolocation", () => {
       outcome = await result.current.request();
     });
 
-    expect(outcome?.status).toBe("error");
+    expect(outcome).toMatchObject({ status: "error", reason: "error" });
     expect(result.current.error).toMatch(/couldn’t get your location/i);
   });
 
@@ -143,7 +160,7 @@ describe("useGeolocation", () => {
       outcome = await result.current.request();
     });
 
-    expect(outcome?.status).toBe("error");
+    expect(outcome).toMatchObject({ status: "error", reason: "unavailable" });
     expect(result.current.error).toMatch(/isn’t available/i);
   });
 
@@ -159,8 +176,75 @@ describe("useGeolocation", () => {
       outcome = await result.current.request();
     });
 
-    expect(outcome?.status).toBe("error");
+    expect(outcome).toMatchObject({ status: "error", reason: "error" });
     expect(result.current.status).toBe("error");
+  });
+
+  it("reports a blocked browser without requesting, when the grant is already denied", async () => {
+    const getCurrentPosition = vi.fn();
+    mockGeolocation({ getCurrentPosition });
+    mockPermissions("denied");
+
+    const { result } = renderHook(() => useGeolocation());
+
+    let outcome: Awaited<ReturnType<typeof result.current.request>> | undefined;
+    await act(async () => {
+      outcome = await result.current.request();
+    });
+
+    // No prompt can appear, so we never ask — and the message names the
+    // browser setting instead of implying the user declined a prompt.
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+    expect(outcome).toMatchObject({ status: "error", reason: "blocked" });
+    expect(result.current.error).toMatch(/blocks location for this site/i);
+    expect(result.current.error).toMatch(/browser settings/i);
+  });
+
+  it("still requests when the grant is pending (the prompt is coming)", async () => {
+    mockPermissions("prompt");
+    mockGeolocation({
+      getCurrentPosition: (success) => success(makePosition(39.7392, -104.9903)),
+    });
+
+    const { result } = renderHook(() => useGeolocation());
+
+    let outcome: Awaited<ReturnType<typeof result.current.request>> | undefined;
+    await act(async () => {
+      outcome = await result.current.request();
+    });
+
+    expect(outcome).toEqual({ status: "success", coords: { lat: 39.7392, lng: -104.9903 } });
+  });
+
+  it("still requests when the Permissions API rejects the geolocation name", async () => {
+    mockPermissions("throws");
+    mockGeolocation({
+      getCurrentPosition: (success) => success(makePosition(39.7392, -104.9903)),
+    });
+
+    const { result } = renderHook(() => useGeolocation());
+
+    let outcome: Awaited<ReturnType<typeof result.current.request>> | undefined;
+    await act(async () => {
+      outcome = await result.current.request();
+    });
+
+    expect(outcome?.status).toBe("success");
+  });
+
+  it("keeps the declined-prompt message when the request itself is denied", async () => {
+    mockPermissions("prompt");
+    mockGeolocation({
+      getCurrentPosition: (_success, error) => error(makeError(1)),
+    });
+
+    const { result } = renderHook(() => useGeolocation());
+
+    await act(async () => {
+      await result.current.request();
+    });
+
+    expect(result.current.error).toMatch(/access was denied/i);
   });
 
   it("reset() returns the hook to idle", async () => {
@@ -180,5 +264,22 @@ describe("useGeolocation", () => {
     });
     expect(result.current.status).toBe("idle");
     expect(result.current.error).toBeNull();
+  });
+});
+
+describe("geolocationPermission", () => {
+  it("reads the stored grant when the Permissions API answers", async () => {
+    mockPermissions("granted");
+    await expect(geolocationPermission()).resolves.toBe("granted");
+  });
+
+  it("is unknown without a Permissions API", async () => {
+    Object.defineProperty(navigator, "permissions", { configurable: true, value: undefined });
+    await expect(geolocationPermission()).resolves.toBe("unknown");
+  });
+
+  it("is unknown when the query rejects", async () => {
+    mockPermissions("throws");
+    await expect(geolocationPermission()).resolves.toBe("unknown");
   });
 });
