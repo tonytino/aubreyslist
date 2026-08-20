@@ -2,8 +2,8 @@ name: Refresh seed data
 
 # Re-bakes the Denver seed listings (AUB-31) by resolving the human-curated
 # `SEED_SOURCES` (`scripts/seed-sources.ts`) against the Google Places API and
-# committing the regenerated `scripts/seed-listings.generated.json` back to the
-# branch this workflow is run from.
+# opening a PR with the regenerated `scripts/seed-listings.generated.json`
+# against the branch this workflow is run from.
 #
 # This is the ONE step that spends Places API calls (~one per curated source). Run
 # it from the Actions tab ("Run workflow") whenever you curate the source list or
@@ -12,12 +12,26 @@ name: Refresh seed data
 # touches Places.
 #
 # Skips gracefully (a warning, not a failure) if GOOGLE_PLACES_API_KEY is unset.
+#
+# Branch protection ("Changes must be made through a pull request") rejects a
+# direct push to main (GH013), so this pushes the regenerated JSON to a
+# short-lived `seed-refresh/<run_id>` branch and opens a PR instead. The PR is
+# pre-labeled to clear every PR-conventions gate on its own (no human fixing
+# required): `type:chore` / `size:s` / `safe:human` satisfy the required-labels
+# gate, `skip-review` bypasses the adversarial-review gate (this is a
+# mechanical data refresh with no code to review), and `skip-changelog`
+# bypasses the changelog-fragment gate (baked seed data isn't a
+# user-/propagation-facing change). `safe:human` (rather than `safe:agent`) is
+# deliberate even though no owner-gated path is touched: the data was bought
+# with billed Google Places API calls, so a human should be the one to glance
+# at it and merge.
 on:
   workflow_dispatch: {}
 
-# Needs write access to push the regenerated baked JSON back to the branch.
+# Needs write access to push the seed-refresh branch and open a PR from it.
 permissions:
   contents: write
+  pull-requests: write
 
 # Never let two refreshes race a push to the same branch.
 concurrency:
@@ -32,8 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Check out the branch the workflow was dispatched from so we can commit
-          # the regenerated JSON straight back onto it.
+          # Check out the branch the workflow was dispatched from — the PR opened
+          # below targets this branch as its base.
           ref: ${{ github.ref_name }}
 
       # pnpm version comes from `packageManager` in package.json
@@ -66,15 +80,65 @@ jobs:
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
 
-      - name: Commit the regenerated baked JSON
+      - name: Commit the regenerated baked JSON to a seed-refresh branch
+        id: commit
         if: steps.cfg.outputs.enabled == 'true'
         run: |
           if git diff --quiet -- scripts/seed-listings.generated.json; then
             echo "No change to scripts/seed-listings.generated.json — nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="seed-refresh/${{ github.run_id }}"
+          git checkout -b "$branch"
           git add scripts/seed-listings.generated.json
           git commit -m "chore: refresh baked Denver seed data (AUB-31)"
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin "HEAD:$branch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      # Branch protection blocks a direct push to main, so hand the regenerated
+      # data off as a PR instead. Pre-label it so every pr-conventions.yml gate
+      # (required labels, TL;DR, adversarial-review) is satisfied without a
+      # human touching the PR first — see the header comment for why
+      # `safe:human` + `skip-review` + `skip-changelog` are the right trio here.
+      - name: Open a PR with the refreshed seed data
+        if: steps.cfg.outputs.enabled == 'true' && steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base "${{ github.ref_name }}" \
+            --head "${{ steps.commit.outputs.branch }}" \
+            --title "chore: refresh baked Denver seed data (AUB-31)" \
+            --label "type:chore" \
+            --label "size:s" \
+            --label "safe:human" \
+            --label "skip-review" \
+            --label "skip-changelog" \
+            --body "$(cat <<'EOF'
+          ## TL;DR
+
+          Refreshed the directory's baked-in restaurant data from Google Places so listings stay accurate.
+
+          ## Summary
+
+          - Automated refresh: re-baked `scripts/seed-listings.generated.json` by resolving the curated `SEED_SOURCES` (`scripts/seed-sources.ts`) against the Google Places API via `pnpm db:seed:refresh`, run by the "Refresh seed data" workflow (`.github/workflows/refresh-seed-data.yml`).
+          - No code changed — this is a data-only refresh of the file `pnpm db:seed` inserts locally/preview/prod.
+
+          ## Test plan
+
+          - [x] CI (`pnpm preflight` equivalent jobs) runs on this PR like any other.
+
+          ## Owner sign-off (cost / legal / security / safety)
+
+          - [x] This PR touches an owner-gated surface → `safe:human`:
+            - [x] **Cost** — the refreshed data was captured with billed Google Places API calls.
+
+          ## Adversarial review
+
+          Skipped via `skip-review` — automated, data-only refresh with no code to review (see docs/agents/orchestration.md).
+          EOF
+          )"
