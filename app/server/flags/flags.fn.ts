@@ -37,6 +37,13 @@ const reasonSchema = z
  * Client-safe mirror of `createFlagInputSchema`: exactly one target (exclusive
  * arc) plus a reason. A discriminated union rejects zero or multiple targets.
  */
+/* jscpd:ignore-start -- Accepted clone of `createFlagInputSchema` in
+   ./index.ts. The mirror is deliberate and load-bearing: this file is the
+   CLIENT-CALLABLE server-fn seam, while ./index.ts imports `db`. Importing the
+   schema from there would pull the database into the browser bundle, breaking
+   the "no db imports in client code" Hard Rule and the client-bundle guard in
+   ci.yml. NOTE: nothing currently asserts the two stay in sync — ./index.test.ts
+   exercises `createFlagInputSchema` only. Edit one, edit the other. */
 const flagFnInputSchema = z.discriminatedUnion("target", [
   z
     .object({
@@ -60,6 +67,7 @@ const flagFnInputSchema = z.discriminatedUnion("target", [
     })
     .strict(),
 ]);
+/* jscpd:ignore-end */
 
 /** Flag-content server function (login-gated, validated). See {@link createFlag}. */
 export const submitFlag = createServerFn({ method: "POST" })

@@ -116,6 +116,7 @@ These apply everywhere, always, with no exceptions.
 - **No raw `fetch` against Hono routes from the frontend.** Use the RPC client.
 - **No manual edits to `app/routeTree.gen.ts` or `db/migrations/`.** Both are auto-generated.
 - **No new dependencies** without checking if the existing stack already covers the need.
+- **No new component, hook, or utility** without checking if one already exists. Search `app/components/ui/` first for UI primitives (vendored shadcn source, ADR-011), then `app/components/`, `app/lib/`, and `app/server/`.
 - **No skipping tests** for code you add.
 - **Owner-gated changes are `safe:human`, never `safe:agent`.** Any change
   touching a cost, legal, security, trust-&-safety-model, destructive-data,

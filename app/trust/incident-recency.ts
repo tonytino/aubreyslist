@@ -137,41 +137,53 @@ export function todayUtcMidnight(now: Date = new Date()): number {
 // ---------------------------------------------------------------------------
 
 /**
- * A reported incident. `occurredOn` is required and stored as a calendar date
- * (`YYYY-MM-DD`, matching the `date` column); severity/note are optional. An
- * empty note string is normalised to `undefined` so a blank is never persisted.
+ * The `occurredOn` calendar date shared by the report and edit schemas: a
+ * real calendar date (rejecting `2026-02-31` et al. before they reach the
+ * Postgres `date` column) that is not in the future. Declared once so an edit
+ * can never sneak a future or impossible date past the report path.
+ */
+const occurredOnSchema = z
+  .string()
+  .refine((value) => parseCalendarDay(value) !== null, {
+    message: "occurredOn must be a real YYYY-MM-DD date",
+  })
+  .refine(
+    (value) => {
+      const day = parseCalendarDay(value);
+      return day !== null && day <= todayUtcMidnight();
+    },
+    { message: "occurredOn cannot be in the future" }
+  );
+
+/**
+ * The optional free-text note shared by the report and edit schemas. An empty
+ * note string is normalised to `undefined` so a blank is never persisted.
  *
- * `occurredOn` is validated as a real calendar date and constrained to not be
- * in the future. The server function in `app/server/incidents` uses this as
- * its validator, so the no-future rule is enforced server-side (not just in
- * the UI) and a future date can never pin the recent-incident banner forever.
+ * `.optional()` sits outermost (after the transform): under zod 4 a
+ * `.optional().transform(...)` pipe infers `note` as a required key of type
+ * `string | undefined`, forcing every caller to spell out `note: undefined`.
+ * Wrapping the whole pipe keeps the key omittable with identical runtime
+ * semantics.
+ */
+const noteSchema = z
+  .string()
+  .trim()
+  .max(2000, "note is too long")
+  .transform((value) => (value ? value : undefined))
+  .optional();
+
+/**
+ * A reported incident. `occurredOn` is required and stored as a calendar date
+ * (`YYYY-MM-DD`, matching the `date` column); severity/note are optional.
+ * The server function in `app/server/incidents` uses this as its validator, so
+ * the {@link occurredOnSchema} no-future rule holds server-side and a future
+ * date can never pin the recent-incident banner forever.
  */
 export const reportIncidentInputSchema = z.object({
   listingId: z.string().min(1, "listingId is required"),
-  occurredOn: z
-    .string()
-    .refine((value) => parseCalendarDay(value) !== null, {
-      message: "occurredOn must be a real YYYY-MM-DD date",
-    })
-    .refine(
-      (value) => {
-        const day = parseCalendarDay(value);
-        return day !== null && day <= todayUtcMidnight();
-      },
-      { message: "occurredOn cannot be in the future" }
-    ),
+  occurredOn: occurredOnSchema,
   severity: z.enum(INCIDENT_SEVERITIES).optional(),
-  // `.optional()` outermost (after the transform): under zod 4 a
-  // `.optional().transform(...)` pipe infers `note` as a required key of type
-  // `string | undefined`, forcing every caller to spell out `note: undefined`.
-  // Wrapping the whole pipe keeps the key omittable, with identical runtime
-  // semantics.
-  note: z
-    .string()
-    .trim()
-    .max(2000, "note is too long")
-    .transform((value) => (value ? value : undefined))
-    .optional(),
+  note: noteSchema,
 });
 export type ReportIncidentInput = z.infer<typeof reportIncidentInputSchema>;
 
@@ -187,34 +199,15 @@ export type ListIncidentsInput = z.infer<typeof listIncidentsInputSchema>;
  * enforced server-side (the incident's `userId` must match) — this schema
  * carries no user id, so a caller can never spoof one.
  *
- * Reuses the exact `occurredOn` rules from {@link reportIncidentInputSchema}
- * so an edit can never sneak a future or impossible date past the report path,
- * and editing a date outside the window correctly drops the recent-incident
- * banner (and vice versa).
+ * Shares the exact {@link occurredOnSchema} / {@link noteSchema} rules with
+ * {@link reportIncidentInputSchema}, so an edit can never sneak a future or
+ * impossible date past the report path.
  */
 export const editIncidentInputSchema = z.object({
   id: z.string().min(1, "id is required"),
-  occurredOn: z
-    .string()
-    .refine((value) => parseCalendarDay(value) !== null, {
-      message: "occurredOn must be a real YYYY-MM-DD date",
-    })
-    .refine(
-      (value) => {
-        const day = parseCalendarDay(value);
-        return day !== null && day <= todayUtcMidnight();
-      },
-      { message: "occurredOn cannot be in the future" }
-    ),
+  occurredOn: occurredOnSchema,
   severity: z.enum(INCIDENT_SEVERITIES).optional(),
-  // `.optional()` outermost for the same zod-4 key-optionality reason as
-  // `reportIncidentInputSchema.note` above.
-  note: z
-    .string()
-    .trim()
-    .max(2000, "note is too long")
-    .transform((value) => (value ? value : undefined))
-    .optional(),
+  note: noteSchema,
 });
 export type EditIncidentInput = z.infer<typeof editIncidentInputSchema>;
 

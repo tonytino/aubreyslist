@@ -116,6 +116,9 @@ describe("ClaimDeckSection", () => {
     // a real, reachable control, not a toast action outside the focus trap.
     expect(await screen.findByText("Vote recorded")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+    // Single announcer (AUB-269): the deck's aria-live region carries the
+    // "Recorded: …" announcement; the undo row is NOT a second status region.
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("skip ('Not sure') leaves an existing vote untouched — no write, vote kept in the summary", async () => {
@@ -254,5 +257,31 @@ describe("ClaimDeckSection", () => {
     });
     // Back on the tab with the CTA still available.
     expect(screen.getByRole("button", { name: CTA })).toBeInTheDocument();
+  });
+
+  it("reopening after a Done close starts with a CLEAN undo slot (AUB-269)", async () => {
+    renderWithQuery(<ClaimDeckSection listingId="listing-1" claims={fullTaxonomy()} isSignedIn />);
+
+    // Session 1: write once (the undo row appears), finish, close via Done —
+    // which does NOT pass through Radix's onOpenChange.
+    fireEvent.click(screen.getByRole("button", { name: CTA }));
+    await screen.findByRole("heading", { name: "Celiac-safe" });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(await screen.findByText("Vote recorded")).toBeInTheDocument();
+    for (let index = 0; index < 4; index += 1) {
+      fireEvent.click(await screen.findByRole("button", { name: "Not sure" }));
+    }
+    await screen.findByRole("region", { name: "Your answers" });
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Your answers" })).not.toBeInTheDocument();
+    });
+
+    // Session 2: the previous session's "Vote recorded · Undo" must NOT greet
+    // the reopen — a stale Undo here would retract the earlier, settled vote.
+    fireEvent.click(screen.getByRole("button", { name: CTA }));
+    await screen.findByRole("heading", { name: "Celiac-safe" });
+    expect(screen.queryByText("Vote recorded")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
   });
 });
