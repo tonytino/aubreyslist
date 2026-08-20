@@ -19,11 +19,10 @@ const selectMock = vi.fn(() => ({ from: fromMock }));
 vi.mock("~/db/client", () => ({ getDb: () => ({ select: selectMock }) }));
 
 // The `autocompletePlaces` / `getPlaceDetails` server-fn wrappers gate the paid
-// Places API behind auth + a per-user rate limit (issue #86), mirroring the
-// `createListing` write path. We mock both guards so we can assert the wrappers
-// wire them in the right order (auth gate, then per-user limit) without cookie/DB
-// plumbing; the guards' own logic is covered in `auth/guards.test.ts` and
-// `rate-limit/index.test.ts`.
+// Places API behind auth + a per-user rate limit, mirroring the `createListing`
+// write path. Both guards are mocked so the wrappers' wiring order (auth gate,
+// then per-user limit) is asserted without cookie/DB plumbing; the guards' own
+// logic is covered in `auth/guards.test.ts` and `rate-limit/index.test.ts`.
 const requireCurrentUserMock = vi.fn(() => Promise.resolve({ id: "user-1" }));
 vi.mock("~/server/auth/guards", () => ({ requireCurrentUser: () => requireCurrentUserMock() }));
 
@@ -180,8 +179,8 @@ describe("runPlaceDetails", () => {
     expect(init.headers["X-Goog-FieldMask"]).toContain("location");
     // The share link must be requested, or Google never returns it.
     expect(init.headers["X-Goog-FieldMask"]).toContain("googleMapsUri");
-    // Photos ride along in the same Pro SKU (AUB-215) — but are never parsed
-    // into the details result, so nothing photo-shaped can be persisted.
+    // Photos ride along in the same Pro SKU — but are never parsed into the
+    // details result, so nothing photo-shaped can be persisted.
     expect(init.headers["X-Goog-FieldMask"]).toContain("photos");
   });
 
@@ -231,8 +230,8 @@ describe("runPlaceDetails", () => {
   });
 
   it("falls back to the built link when googleMapsUri is not https", async () => {
-    // The detail page only renders http(s) links (#90) — never trust an
-    // unexpected upstream scheme into a stored URL.
+    // The detail page only renders http(s) links — never trust an unexpected
+    // upstream scheme into a stored URL.
     vi.stubGlobal(
       "fetch",
       mockFetchOnce({
@@ -285,12 +284,13 @@ describe("runPlaceDetails", () => {
   });
 });
 
-// --- Server-fn wrappers (auth + rate limit, #86) ---------------------------
+// --- Server-fn wrappers (auth + rate limit) --------------------------------
 //
-// Both wrappers proxy the *paid* Places API, so they must reject anonymous
-// callers and meter authed ones BEFORE any upstream call (mirrors `createListing`).
-// We assert the order of operations (auth gate, then per-user limit) and that an
-// anonymous caller / over-limit burst never reaches `fetch`.
+// Both wrappers proxy the paid Places API, so they must reject anonymous
+// callers and meter authed ones before any upstream call (mirrors
+// `createListing`). The tests assert the order of operations (auth gate, then
+// per-user limit) and that an anonymous caller / over-limit burst never
+// reaches `fetch`.
 
 describe("autocompletePlaces — auth + rate limit (#86)", () => {
   it("requires auth and meters the authed user before the upstream call", async () => {

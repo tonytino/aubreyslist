@@ -51,7 +51,7 @@ describe("in-code defaults (ADR-007 + ADR-008 + AUB-215)", () => {
   it("returns the default when the key is unset (empty table, no throw)", async () => {
     expect(await getSetting("intake_mode")).toBe("places");
     expect(await getSetting("staleness_months")).toBe(6);
-    // Photos default ON when the row is absent — mirrors intake_mode (AUB-215).
+    // Photos default on when the row is absent — mirrors intake_mode.
     expect(await getSetting("place_photos_enabled")).toBe(true);
   });
 });

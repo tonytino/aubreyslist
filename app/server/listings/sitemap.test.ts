@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for `/sitemap.xml` (AUB-161).
- *
- * Exercises `buildSitemapXml` directly (mocking `~/db/client` the same way
- * `get-listing.test.ts` does) rather than invoking the route’s `GET` handler
- * through a mounted router — no live DB, no router-tree wiring needed to
- * assert the XML shape.
+ * Exercises `buildSitemapXml` directly with a mocked `~/db/client`, not the
+ * route's `GET` handler through a mounted router — no live DB or router-tree
+ * wiring needed to assert the XML shape.
  */
 
 const h = vi.hoisted(() => {

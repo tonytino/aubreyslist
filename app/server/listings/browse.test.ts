@@ -3,18 +3,18 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the browse-list loader (#33, extended for taxonomy filter in #35 and
- * sort in #36).
+ * Tests for the browse-list loader.
  *
- * `getBrowseListings` issues a FIXED number of batched queries (page of listings
- * LEFT JOINed to a per-listing celiac-trust subquery for ordering, a total count
- * under the SAME WHERE, one grouped celiac-aggregate query, one incidents query)
- * — no N+1. We model the distinct drizzle chains so we can assert the assembled
- * cards' trust glance, pagination math, the empty-page short-circuit, the ORDER
- * BY produced per sort (#36), AND the WHERE composed from search + taxonomy
- * filter (#34/#35) threaded into both the page and count queries — without a live
- * database (docs/agents/testing.md). The exact filter SQL shape is asserted in
- * `filter.test.ts`; here we assert composition (search + filter + sort + paging).
+ * `getBrowseListings` issues a fixed number of batched queries (page of
+ * listings LEFT JOINed to a per-listing celiac-trust subquery for ordering, a
+ * total count under the same WHERE, one grouped celiac-aggregate query, one
+ * incidents query) — no N+1. The mocks model the distinct drizzle chains to
+ * assert the assembled cards' trust glance, pagination math, the empty-page
+ * short-circuit, the ORDER BY produced per sort, and the WHERE composed from
+ * search + taxonomy filter threaded into both the page and count queries —
+ * without a live database (docs/agents/testing.md). The exact filter SQL
+ * shape is asserted in `filter.test.ts`; here we assert composition (search +
+ * filter + sort + paging).
  */
 
 interface ListingRow {
@@ -41,27 +41,27 @@ const h = vi.hoisted(() => {
     pageWhere: undefined as unknown,
     /** The WHERE predicate handed to the count query (must match the page's). */
     countWhere: undefined as unknown,
-    /** The WHERE predicate handed to the celiac-aggregate query (#41 visibility). */
+    /** The WHERE predicate handed to the celiac-aggregate query (visibility). */
     aggWhere: undefined as unknown,
-    /** The WHERE predicate handed to the trust subquery (#41 visibility). */
+    /** The WHERE predicate handed to the trust subquery (visibility). */
     subqueryWhere: undefined as unknown,
-    /** The WHERE predicate handed to the incidents query (#41 visibility). */
+    /** The WHERE predicate handed to the incidents query (visibility). */
     incidentWhere: undefined as unknown,
-    /** Rows returned by the bot-suggested-attribute query (AUB-193). */
+    /** Rows returned by the bot-suggested-attribute query. */
     suggestionRows: [] as Array<Record<string, unknown>>,
     /** The WHERE predicate handed to the bot-suggestion query (visibility). */
     suggestionWhere: undefined as unknown,
-    /** Rows returned by the confirmed non-headline attribute query (AUB-226). */
+    /** Rows returned by the confirmed non-headline attribute query. */
     confirmedRows: [] as Array<Record<string, unknown>>,
-    /** The WHERE predicate handed to the confirmed-attribute query (AUB-226). */
+    /** The WHERE predicate handed to the confirmed-attribute query. */
     confirmedWhere: undefined as unknown,
     /** Public per-listing save counts returned by the (mocked) favorites layer. */
     favoriteCounts: new Map<string, number>(),
     /** The listing ids passed to `getFavoriteCounts` (asserted batched, not N+1). */
     favoriteCountIds: undefined as string[] | undefined,
     /**
-     * The viewer's VISIBLE favorite ids returned by the (mocked)
-     * `getViewerFavoriteIds` — drives the F11 `savedOnly` path. `[]` models both
+     * The viewer's visible favorite ids returned by the (mocked)
+     * `getViewerFavoriteIds` — drives the `savedOnly` path. `[]` models both
      * an anonymous caller and a signed-in user with no favorites.
      */
     viewerFavoriteIds: [] as string[],
@@ -132,16 +132,16 @@ const h = vi.hoisted(() => {
   });
   const incidentFromMock = vi.fn(() => ({ where: incidentWhereMock }));
 
-  // The bot-suggestion existence chain (AUB-193): select(proj).from().where()
+  // The bot-suggestion existence chain: select(proj).from().where()
   const suggestionWhereMock = vi.fn((predicate?: unknown) => {
     state.suggestionWhere = predicate;
     return Promise.resolve(state.suggestionRows);
   });
   const suggestionFromMock = vi.fn(() => ({ where: suggestionWhereMock }));
-  // (The suggestion chain, above, routes by the `suggestedListingId` projection
-  // key and now also carries a `suggestedAttribute` per row — AUB-193/owner nit 7.)
+  // The suggestion chain routes by the `suggestedListingId` projection key
+  // and carries a `suggestedAttribute` per row.
 
-  // The confirmed-attribute consensus chain (AUB-226):
+  // The confirmed-attribute consensus chain:
   //   select(proj).from().leftJoin().where().groupBy().having()  (awaited)
   // Routed by its own `confirmedListingId` projection key so it never falls into
   // the call-order-branched `celiacFromMock` (whose leftJoin counter distinguishes
@@ -166,8 +166,8 @@ const h = vi.hoisted(() => {
   //  - { listing }               → page listings (joined to the trust subquery)
   //  - { total }                 → count
   //  - has `occurredOn`          → incidents
-  //  - has `suggestedListingId`  → bot-suggestion existence (AUB-193)
-  //  - has `confirmedListingId`  → confirmed non-headline consensus (AUB-226)
+  //  - has `suggestedListingId`  → bot-suggestion existence
+  //  - has `confirmedListingId`  → confirmed non-headline consensus
   //  - otherwise (claim cols)    → celiac aggregate / trust subquery
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
     if (projection && "listing" in projection) return { from: pageFromMock };
@@ -189,18 +189,19 @@ vi.mock("~/db/client", () => ({
   getDb: () => ({ select: h.selectMock }),
 }));
 
-// The public save-count aggregate is a SEPARATE server-only helper
+// The public save-count aggregate is a separate server-only helper
 // (`~/server/favorites`) that `getBrowseListings` batches alongside the trust
-// signals. We stub it here so this loader test stays focused on the loader's
+// signals. Stubbed here so this loader test stays focused on the loader's
 // composition/attachment (the aggregate's own SQL is pinned in the favorites
-// tests), and capture the ids to assert the call is batched (one call, all ids).
+// tests); the ids are captured to assert the call is batched (one call, all
+// ids).
 vi.mock("~/server/favorites/index", () => ({
   getFavoriteCounts: (listingIds: string[]) => {
     h.state.favoriteCountIds = listingIds;
     return Promise.resolve(h.state.favoriteCounts);
   },
-  // The F11 `savedOnly` path resolves the viewer's VISIBLE favorite ids here.
-  // `[]` (anonymous OR empty favorites) must SHORT-CIRCUIT to an empty page.
+  // The `savedOnly` path resolves the viewer's visible favorite ids here.
+  // `[]` (anonymous or empty favorites) must short-circuit to an empty page.
   getViewerFavoriteIds: () => Promise.resolve(h.state.viewerFavoriteIds),
 }));
 
@@ -436,7 +437,7 @@ describe("getBrowseListings", () => {
     expect(result.hasMore).toBe(false);
   });
 
-  // --- #36: sort ordering ---------------------------------------------------
+  // --- Sort ordering ----------------------------------------------------------
 
   it("orders by name ascending for the default alphabetical sort", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
@@ -458,9 +459,9 @@ describe("getBrowseListings", () => {
 
     expect(state.orderByArgs).toHaveLength(4);
     const [first, second, third, fourth] = state.orderByArgs.map(renderArg);
-    // SAFETY-CRITICAL: the displayed safety tier (a CASE over confirm/dispute +
-    // staleness) leads — NOT raw net confirms — so a stale/contested listing
-    // can't outrank a fresh celiac-safe one. Desc = safest tier first.
+    // Safety-critical: the displayed safety tier (a CASE over confirm/dispute
+    // + staleness) leads — not raw net confirms — so a stale/contested
+    // listing can't outrank a fresh celiac-safe one. Desc = safest first.
     expect(first).toContain("case");
     expect(first).toContain("desc");
     // Then net confirm consensus within the tier, desc.
@@ -495,11 +496,12 @@ describe("getBrowseListings", () => {
 
     await getBrowseListings({ ...baseInput, sort: "trust" }, NOW);
 
-    // The trust tier CASE is the first ORDER BY term. Its `fresh` predicate must
-    // mirror `isStale` exactly: an INCLUSIVE lower bound (`>=`, so an exact-edge
-    // confirmation is fresh, not flipped to stale) and NULL lastConfirmedAt
-    // counted as fresh (a never-confirmed confirm-majority is celiac-safe, not
-    // stale — ADR-007), not bare `>` which would drift from the displayed card.
+    // The trust tier CASE is the first ORDER BY term. Its `fresh` predicate
+    // must mirror `isStale` exactly: an inclusive lower bound (`>=`, so an
+    // exact-edge confirmation is fresh, not flipped to stale) and null
+    // lastConfirmedAt counted as fresh (a never-confirmed confirm-majority is
+    // celiac-safe, not stale — ADR-007), not bare `>` which would drift from
+    // the displayed card.
     const tierSql = renderArg(state.orderByArgs[0]);
     expect(tierSql).toContain(">=");
     expect(tierSql).toContain("is null");
@@ -530,7 +532,7 @@ describe("getBrowseListings", () => {
     expect(result.sort).toBe("trust");
   });
 
-  // --- #37: "near me" distance sort -----------------------------------------
+  // --- "Near me" distance sort ------------------------------------------------
 
   it("orders distance by the haversine term ascending, then name, when coords are given", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
@@ -640,7 +642,7 @@ describe("getBrowseListings", () => {
     expect(result.cards[0]?.distanceLabel).toBeUndefined();
   });
 
-  // --- F10: public, user-agnostic save-count attachment ---------------------
+  // --- Public, user-agnostic save-count attachment ----------------------------
 
   it("attaches the public favorite count to each card from the batched aggregate", async () => {
     state.pageListings = [
@@ -657,7 +659,7 @@ describe("getBrowseListings", () => {
 
     expect(result.cards[0]?.favoriteCount).toBe(12);
     expect(result.cards[1]?.favoriteCount).toBe(3);
-    // Batched (NO N+1): the count helper is called ONCE with ALL page listing ids.
+    // Batched (no N+1): the count helper is called once with all page listing ids.
     expect(state.favoriteCountIds).toEqual(["l1", "l2"]);
   });
 
@@ -686,7 +688,7 @@ describe("getBrowseListings", () => {
     expect(result.cards[0]?.distanceLabel).toBe("0.4 mi");
   });
 
-  // --- #34/#35: WHERE composition (search + taxonomy filter) ----------------
+  // --- WHERE composition (search + taxonomy filter) ---------------------------
 
   it("always constrains to visible listings even when no attrs/search are given (#41)", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
@@ -694,7 +696,7 @@ describe("getBrowseListings", () => {
 
     await getBrowseListings(baseInput, NOW);
 
-    // No search term + no attributes → the ONLY constraint is the visibility
+    // No search term + no attributes: the only constraint is the visibility
     // predicate (hidden/removed listings are excluded from this public read),
     // applied identically to both the page and count queries.
     expect(state.pageWhere).toBeDefined();
@@ -717,14 +719,14 @@ describe("getBrowseListings", () => {
     expect(state.countWhere).toBe(state.pageWhere);
   });
 
-  // --- AUB-31: includeSuggested threading -----------------------------------
-  // Pins that `getBrowseListings` actually THREADS `input.includeSuggested` into
-  // BOTH predicate builders — dropping the argument at either call site in
-  // browse.ts would silently turn `?bot=false` into a no-op while every
-  // builder-level test stayed green. `?bot=false` has TWO effects: it strips
-  // the live-suggestion OR-branch from filter MATCHING, and it folds the
-  // bot-suggested-only RESULT-SET exclusion (owner bug report: the chip must
-  // actually HIDE the "Suggested by Aubrey's Bot" cards) into the shared WHERE.
+  // --- includeSuggested threading ---------------------------------------------
+  // Pins that `getBrowseListings` actually threads `input.includeSuggested`
+  // into both predicate builders — dropping the argument at either call site
+  // in browse.ts would silently turn `?bot=false` into a no-op while every
+  // builder-level test stayed green. `?bot=false` has two effects: it strips
+  // the live-suggestion OR-branch from filter matching, and it folds the
+  // bot-suggested-only result-set exclusion (the chip must actually hide the
+  // "Suggested by Aubrey's Bot" cards) into the shared WHERE.
 
   it("threads includeSuggested=true (the default) into the taxonomy AND quick filter SQL", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
@@ -770,8 +772,8 @@ describe("getBrowseListings", () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
 
-    // Nothing else active — no q, attrs, quick, radius, saved. Previously this
-    // rendered ONLY the visibility predicate, making the chip a visible no-op.
+    // Nothing else active — no q, attrs, quick, radius, saved. The exclusion
+    // must still constrain, or the chip is a visible no-op.
     await getBrowseListings({ ...baseInput, includeSuggested: false }, NOW);
 
     expect(state.pageWhere).toBeDefined();
@@ -779,18 +781,18 @@ describe("getBrowseListings", () => {
     // total/hasMore honestly reflect the exclusion (pagination stays correct).
     expect(state.countWhere).toBe(state.pageWhere);
     const sql = renderArg(state.pageWhere);
-    // Visibility (#41) still applies…
+    // Visibility still applies…
     expect(sql).toContain("moderation_status");
-    // …AND the exclusion is present: a live suggestion with no community
+    // …and the exclusion is present: a live suggestion with no community
     // evidence anywhere means the listing is dropped from the result set.
     expect(sql).toContain("not (exists");
     expect(sql).toContain("suggested_by");
     expect(sql).toContain("and not exists");
     expect(sql).toContain('inner join "attestations"');
-    // Pin the FULL correlated equality, not just the joined table name — an edit
-    // that aliased the outer `claims` table (breaking the correlation) would
-    // still render `inner join "attestations"` and pass the looser check, but
-    // must not silently change WHICH rows the evidence subquery joins.
+    // Pin the full correlated equality, not just the joined table name — an
+    // edit that aliased the outer `claims` table (breaking the correlation)
+    // would still render `inner join "attestations"` and pass the looser
+    // check, but must not silently change which rows the subquery joins.
     expect(sql).toContain('"attestations"."claim_id" = "claims"."id"');
   });
 
@@ -856,14 +858,14 @@ describe("getBrowseListings", () => {
 
     await getBrowseListings({ ...baseInput, q: "  " }, NOW);
 
-    // A blank search adds no text constraint, but the public read still excludes
-    // hidden/removed listings (#41).
+    // A blank search adds no text constraint, but the public read still
+    // excludes hidden/removed listings.
     expect(state.pageWhere).toBeDefined();
     expect(state.countWhere).toBe(state.pageWhere);
     expect(dialect.sqlToQuery(state.pageWhere as SQL).params).toContain("visible");
   });
 
-  // --- feedback #7: distance-radius filter ----------------------------------
+  // --- Distance-radius filter -------------------------------------------------
 
   it("folds the radius predicate into the SHARED where (page AND count) so total is honest", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
@@ -891,7 +893,7 @@ describe("getBrowseListings", () => {
     expect(rendered.params).toContain(-104.9999);
     // The comparison bound is the radius converted to KM (5 mi × 1.609344).
     expect(rendered.params).toContain(5 * 1.609344);
-    // Still constrained to visible listings (#41 preserved).
+    // Still constrained to visible listings.
     expect(rendered.params).toContain("visible");
   });
 
@@ -1017,13 +1019,13 @@ describe("getBrowseListings", () => {
 });
 
 // ---------------------------------------------------------------------------
-// F11 (AUB-129): server-side "Saved" filter (savedOnly)
+// Server-side "Saved" filter (savedOnly)
 //
-// The blocker this fixes: the Saved filter MUST be server-side so pagination and
-// the honest total cover the FULL favorites set, not a client-side slice of the
-// loaded page. So `savedOnly` folds `listings.id IN (viewer favorite ids)` into
-// the SHARED where — applied to the page AND count queries BEFORE paginating —
-// and short-circuits an anonymous/empty caller to an empty page WITHOUT a broad
+// The Saved filter must be server-side so pagination and the honest total
+// cover the full favorites set, not a client-side slice of the loaded page.
+// `savedOnly` folds `listings.id IN (viewer favorite ids)` into the shared
+// where — applied to the page and count queries before paginating — and
+// short-circuits an anonymous/empty caller to an empty page without a broad
 // (unconstrained) query.
 // ---------------------------------------------------------------------------
 describe("getBrowseListings — savedOnly (F11)", () => {
@@ -1039,14 +1041,14 @@ describe("getBrowseListings — savedOnly (F11)", () => {
 
     await getBrowseListings({ ...baseInput, savedOnly: true, pageSize: 2 }, NOW);
 
-    // The SAME predicate object constrains the page AND the count query, so the
-    // total is honest over the favorites subset (count-honesty).
+    // The same predicate object constrains the page and the count query, so
+    // the total is honest over the favorites subset.
     expect(state.pageWhere).toBeDefined();
     expect(state.countWhere).toBe(state.pageWhere);
 
     const rendered = dialect.sqlToQuery(state.pageWhere as SQL);
-    // `listings.id IN (...)` over the viewer's favorite ids, still AND-folded with
-    // the visibility predicate (#41 preserved).
+    // `listings.id IN (...)` over the viewer's favorite ids, still AND-folded
+    // with the visibility predicate.
     expect(rendered.sql.toLowerCase()).toContain(" in (");
     expect(rendered.params).toContain("visible");
     for (const id of FIVE_FAVES) {
@@ -1103,16 +1105,17 @@ describe("getBrowseListings — savedOnly (F11)", () => {
     expect(result.cards).toEqual([]);
     expect(result.total).toBe(0);
     expect(result.hasMore).toBe(false);
-    // Proof there was NO broad query: no select() ran, so neither the page nor the
-    // count WHERE was ever built.
+    // Proof there was no broad query: no select() ran, so neither the page
+    // nor the count WHERE was ever built.
     expect(h.selectMock).not.toHaveBeenCalled();
     expect(state.pageWhere).toBeUndefined();
     expect(state.countWhere).toBeUndefined();
   });
 
   it("does NOT constrain by favorites when savedOnly is false (unchanged behavior)", async () => {
-    // A signed-in viewer WITH favorites, but savedOnly off → the normal browse:
-    // getViewerFavoriteIds is never consulted and the WHERE has no id IN (...).
+    // A signed-in viewer with favorites, but savedOnly off — the normal
+    // browse: getViewerFavoriteIds is never consulted and the WHERE has no
+    // id IN (...).
     state.viewerFavoriteIds = FIVE_FAVES;
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
@@ -1126,7 +1129,7 @@ describe("getBrowseListings — savedOnly (F11)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// #41: every browse signal query excludes non-visible content + recomputes
+// Every browse signal query excludes non-visible content + recomputes
 // ---------------------------------------------------------------------------
 describe("browse visibility filtering (#41)", () => {
   it("filters the celiac aggregate, the trust subquery, AND incidents to visible", async () => {
@@ -1144,19 +1147,19 @@ describe("browse visibility filtering (#41)", () => {
     expect(dialect.sqlToQuery(state.subqueryWhere as SQL).sql.toLowerCase()).toContain("'visible'");
 
     // The recent-incident signal excludes hidden/removed incidents, so a
-    // moderated-away incident no longer flags the card — but a still-visible one
+    // moderated-away incident never flags the card — but a still-visible one
     // always does ("recent harm is never buried").
     expect(renderArg(state.incidentWhere)).toContain("moderation_status");
     expect(dialect.sqlToQuery(state.incidentWhere as SQL).params).toContain("visible");
 
-    // The bot-suggested-attribute check (AUB-193) counts only VISIBLE claims
-    // with a live `suggested_by`, so a hidden/removed suggested claim can never
+    // The bot-suggested-attribute check counts only visible claims with a
+    // live `suggested_by`, so a hidden/removed suggested claim can never
     // drive the "Suggested by Aubrey's Bot" cue.
     expect(renderArg(state.suggestionWhere)).toContain("moderation_status");
     expect(renderArg(state.suggestionWhere)).toContain("suggested_by");
     expect(renderArg(state.suggestionWhere)).toContain("is not null");
     expect(dialect.sqlToQuery(state.suggestionWhere as SQL).params).toContain("visible");
-    // ...AND only UNVOTED claims (the correlated NOT EXISTS attestations vote
+    // ...and only unvoted claims (the correlated NOT EXISTS attestations vote
     // gate): castVote's clear of `suggested_by` is not atomic with the
     // attestation upsert, so a transiently-stale suggestion on a voted claim
     // must never badge the card as suggested (ADR-007, belt-and-braces).
@@ -1165,9 +1168,10 @@ describe("browse visibility filtering (#41)", () => {
   });
 
   it("recomputes the recent-incident flag from VISIBLE incidents only — none survive → no flag", async () => {
-    // The browse incidents query excludes hidden incidents at the DB (asserted in
-    // SQL above). Here we prove the RECOMPUTE: with no visible incident rows, the
-    // glance flag is false even though a hidden one may exist in the DB.
+    // The browse incidents query excludes hidden incidents at the DB
+    // (asserted in SQL above). Here we prove the recompute: with no visible
+    // incident rows, the glance flag is false even though a hidden one may
+    // exist in the DB.
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
     state.incidentRows = []; // a moderated-away incident does not reach the loader
@@ -1177,8 +1181,8 @@ describe("browse visibility filtering (#41)", () => {
   });
 
   it("recomputes the recent-incident flag from VISIBLE incidents only — a visible one still flags", async () => {
-    // A still-visible recent incident survives the filter → the card flags it,
-    // upholding "recent harm is never buried".
+    // A still-visible recent incident survives the filter, so the card flags
+    // it — "recent harm is never buried".
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
     state.incidentRows = [{ listingId: "l1", occurredOn: "2026-06-18" }];
@@ -1189,36 +1193,37 @@ describe("browse visibility filtering (#41)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// SQL trust-tier ↔ JS spec equivalence (#114)
+// SQL trust-tier ↔ JS spec equivalence
 //
-// The browse sort is SAFETY-CRITICAL: the DB ordering MUST reproduce the exact
-// safety tier the card displays (ADR-007). The pure spec lives in
-// `safetyTierRank`/`deriveHeadlineSafetyState`; the SQL CASE in `buildOrderBy`
-// is the server-side mirror. If the two ever drift, a celiac could be sent to a
-// stale/contested listing the product down-ranks — and the existing string
-// assertions ("contains case", ">=") would still pass.
+// The browse sort is safety-critical: the DB ordering must reproduce the
+// exact safety tier the card displays (ADR-007). The pure spec lives in
+// `safetyTierRank`/`deriveHeadlineSafetyState`; the SQL CASE in
+// `buildOrderBy` is the server-side mirror. If the two ever drift, a celiac
+// could be sent to a stale/contested listing the product down-ranks — and
+// bare string assertions ("contains case", ">=") would still pass.
 //
-// So we drive a SHARED case table `(confirms, disputes, lastConfirmedAt)` →
-// expected tier and assert BOTH paths produce the SAME tier for every case:
+// So a shared case table `(confirms, disputes, lastConfirmedAt)` → expected
+// tier drives both paths, which must produce the same tier for every case:
 //   - the pure `safetyTierRank` (the spec), and
-//   - the SQL CASE, evaluated through a faithful JS mirror of the exact rendered
-//     arithmetic. We FIRST pin that rendered structure (so the mirror can't
-//     silently diverge from the real SQL), then evaluate the mirror per case.
-// A `>` vs `>=`, a flipped confirm/dispute side, or a dropped NULL guard in the
-// SQL would break the structural pins; a spec change would break the tier match.
+//   - the SQL CASE, evaluated through a faithful JS mirror of the exact
+//     rendered arithmetic. The rendered structure is pinned first (so the
+//     mirror can't silently diverge from the real SQL), then the mirror is
+//     evaluated per case.
+// A `>` vs `>=`, a flipped confirm/dispute side, or a dropped null guard in
+// the SQL breaks the structural pins; a spec change breaks the tier match.
 // ---------------------------------------------------------------------------
 
 /**
  * Evaluate the trust-tier CASE the SAME WAY `buildOrderBy` renders it — a
- * faithful JS mirror of the exact SQL arithmetic asserted below. Kept tiny and
- * literal so it can't drift: a coalesce-sum evidence check, a strict
- * confirms-coalesce `>` disputes-coalesce lead, and a `lastConfirmedAt IS NULL
- * OR >= cutoff` freshness test (inclusive edge, NULL = fresh).
+ * faithful JS mirror of the exact SQL arithmetic asserted below. Kept tiny
+ * and literal so it can't drift: a coalesce-sum evidence check, a strict
+ * confirms-coalesce `>` disputes-coalesce lead, and a `lastConfirmedAt IS
+ * NULL OR >= cutoff` freshness test (inclusive edge, null = fresh).
  *
- * HONESTY NOTE: this mirror is only trustworthy because the sibling
- * "pins the rendered SQL CASE structure" test (below) asserts the real rendered
- * SQL matches this arithmetic. If that structural-pin test is ever deleted, the
- * equivalence test turns into a tautology (mirror vs mirror) — keep them paired.
+ * This mirror is only trustworthy because the sibling "pins the rendered SQL
+ * CASE structure" test asserts the real rendered SQL matches this arithmetic.
+ * Deleting that structural-pin test turns the equivalence test into a
+ * tautology (mirror vs mirror) — keep them paired.
  */
 function sqlTierFor(
   confirms: number,
@@ -1336,12 +1341,13 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
     // Evidence = coalesced confirm + dispute > 0 (strict, so 0/0 → no evidence),
     // matching the JS mirror's `hasEvidence`.
     expect(tierSql).toMatch(/coalesce\([^)]*\)\s*\+\s*coalesce\([^)]*\)\s*>\s*0/);
-    // Confirms-lead = STRICT `>` between the coalesced confirm and dispute tallies
-    // — a `>=` here (a tie reading as affirmed) is exactly the regression the JS
-    // mirror's `confirmsLead` would NOT make, so we pin the strict form.
+    // Confirms-lead = strict `>` between the coalesced confirm and dispute
+    // tallies — a `>=` here (a tie reading as affirmed) is exactly the
+    // regression the JS mirror's `confirmsLead` would not make, so the strict
+    // form is pinned.
     expect(tierSql).toMatch(/coalesce\([^)]*\)\s*>\s*coalesce\([^)]*\)/);
-    // Freshness edge mirrors `isStale`: NULL recency counts as fresh and the
-    // lower bound is INCLUSIVE (`>=`), not bare `>` — the JS mirror's `fresh`.
+    // Freshness edge mirrors `isStale`: null recency counts as fresh and the
+    // lower bound is inclusive (`>=`), not bare `>` — the JS mirror's `fresh`.
     expect(tierSql).toContain("is null");
     expect(tierSql).toContain(">=");
     expect(tierSql).not.toContain("> $"); // no bare strict `>` against the cutoff param
@@ -1357,8 +1363,8 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
       const sqlTier = sqlTierFor(c.confirms, c.disputes, c.lastConfirmedAt, cutoff);
       const specTier = safetyTierRank(aggregate, NOW, DEFAULT_STALENESS_MONTHS);
 
-      // The case table's expected tier, the SQL mirror, and the pure spec must
-      // ALL agree — three independent encodings of the same ADR-007 rule.
+      // The case table's expected tier, the SQL mirror, and the pure spec
+      // must all agree — three independent encodings of the same ADR-007 rule.
       expect(sqlTier, `${c.label}: case-table tier`).toBe(c.tier);
       expect(specTier, `${c.label}: spec vs case-table`).toBe(c.tier);
       expect(sqlTier, `${c.label}: SQL mirror vs spec`).toBe(specTier);
@@ -1366,8 +1372,8 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
   });
 
   it("orders a mixed set by SQL tier identically to the JS spec", () => {
-    // The whole point of the sort: descending tier puts the safest first. Both
-    // the SQL mirror and the pure spec must produce the SAME ordering.
+    // The whole point of the sort: descending tier puts the safest first.
+    // Both the SQL mirror and the pure spec must produce the same ordering.
     const byCase = (rankOf: (c: (typeof cases)[number]) => number) =>
       [...cases]
         .sort((a, b) => rankOf(b) - rankOf(a) || a.label.localeCompare(b.label))
@@ -1408,16 +1414,17 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Quick filter (AUB-135) — composition + glance-spec equivalence
+// Quick filter — composition + glance-spec equivalence
 // ---------------------------------------------------------------------------
 
 /**
- * Faithful JS mirrors of the correlated `quick` predicates in `./quick-filter.ts`,
- * kept tiny and literal so they can't drift from the SQL. Their exact SQL rendering
- * (strict `>`, `<=`, `>=` cutoff, `not exists` incident window) is pinned
- * structurally in `quick-filter.test.ts`; here we prove that same boolean logic
- * lands on the SAME row the DISPLAYED glance shows — so a `quick` filter can never
- * surface a listing whose card reads differently (ADR-007).
+ * Faithful JS mirrors of the correlated `quick` predicates in
+ * `./quick-filter.ts`, kept tiny and literal so they can't drift from the
+ * SQL. Their exact SQL rendering (strict `>`, `<=`, `>=` cutoff, `not exists`
+ * incident window) is pinned structurally in `quick-filter.test.ts`; here we
+ * prove that same boolean logic lands on the same row the displayed glance
+ * shows — a `quick` filter can never surface a listing whose card reads
+ * differently (ADR-007).
  */
 function quickCeliacMatches(
   confirms: number,
@@ -1453,8 +1460,8 @@ describe("quick filter composition (AUB-135)", () => {
     const pageWhere = renderArg(state.pageWhere);
     const countWhere = renderArg(state.countWhere);
     expect(pageWhere).toContain("exists");
-    // The SAME predicate constrains the page and the count, so the total honestly
-    // reflects the filter (no fetch-then-filter).
+    // The same predicate constrains the page and the count, so the total
+    // honestly reflects the filter (no fetch-then-filter).
     expect(countWhere).toBe(pageWhere);
   });
 
@@ -1468,7 +1475,7 @@ describe("quick filter composition (AUB-135)", () => {
     expect(renderArg(state.pageWhere)).not.toContain("exists");
   });
 
-  // NOTE: one `getBrowseListings` call per test — the mock's leftJoin call-counter
+  // One `getBrowseListings` call per test — the mock's leftJoin call-counter
   // (trust subquery vs celiac aggregate) only resets in `beforeEach`.
   it("friendly encodes the contested (confirms <= disputes) direction", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
@@ -1521,12 +1528,12 @@ describe("quick filter composition (AUB-135)", () => {
 });
 
 describe("quick filter ↔ glance spec equivalence (AUB-135/AUB-140)", () => {
-  // DO NOT WEAKEN. Each quick token must select EXACTLY the rows whose displayed
-  // glance matches — `celiac`→"celiac-safe", `friendly`→"gluten-friendly",
-  // `recent`→freshness "fresh" — and a faceted SET must select EXACTLY the rows
-  // matching EVERY selected token (conjunction). We drive the same evidence shapes
-  // the trust-tier suite uses and assert the quick predicate's boolean ⟺ the pure
-  // glance reading.
+  // Do not weaken. Each quick token must select exactly the rows whose
+  // displayed glance matches — `celiac`→"celiac-safe",
+  // `friendly`→"gluten-friendly", `recent`→freshness "fresh" — and a faceted
+  // set must select exactly the rows matching every selected token
+  // (conjunction). The same evidence shapes the trust-tier suite uses drive
+  // the assertion: the quick predicate's boolean ⟺ the pure glance reading.
   const MONTH = 30 * 24 * 60 * 60 * 1000;
   const cutoff = stalenessCutoff(NOW, DEFAULT_STALENESS_MONTHS);
   const ago = (ms: number) => new Date(NOW.getTime() - ms);
@@ -1605,9 +1612,10 @@ describe("quick filter ↔ glance spec equivalence (AUB-135/AUB-140)", () => {
         lastConfirmedAt: ago(1 * MONTH),
         recentIncidentAt: null,
       },
-      // celiac-safe by the safety glance, but a recent incident makes freshness
-      // "incident" not "fresh" → `recent` fails → the SET excludes it even though
-      // `celiac` alone would match. This is the whole point of AND-composition.
+      // celiac-safe by the safety glance, but a recent incident makes
+      // freshness "incident" not "fresh", so `recent` fails and the set
+      // excludes it even though `celiac` alone would match — the whole point
+      // of AND-composition.
       {
         label: "celiac-safe but recent incident",
         confirms: 8,
@@ -1633,14 +1641,15 @@ describe("quick filter ↔ glance spec equivalence (AUB-135/AUB-140)", () => {
       },
     ];
     for (const c of cases) {
-      // The server AND-composes each token's predicate, so the SET matches a row iff
-      // every token's per-row predicate matches.
+      // The server AND-composes each token's predicate, so the set matches a
+      // row iff every token's per-row predicate matches.
       const setMatches =
         quickCeliacMatches(c.confirms, c.disputes, c.lastConfirmedAt, cutoff) &&
         quickRecentMatches(c.lastConfirmedAt, cutoff, c.recentIncidentAt);
-      // Cross-checked against the DISPLAYED glance directly: a row belongs in the
-      // {celiac, recent} result iff its safety glance is "celiac-safe" AND its
-      // freshness cue is "fresh" — never a row whose card would read differently.
+      // Cross-checked against the displayed glance directly: a row belongs in
+      // the {celiac, recent} result iff its safety glance is "celiac-safe"
+      // and its freshness cue is "fresh" — never a row whose card would read
+      // differently.
       const headline = deriveHeadlineSafetyState(
         { confirmCount: c.confirms, disputeCount: c.disputes, lastConfirmedAt: c.lastConfirmedAt },
         NOW,

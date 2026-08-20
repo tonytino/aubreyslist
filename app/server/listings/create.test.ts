@@ -4,16 +4,14 @@ import type { Listing } from "~/db/schema";
 import type { PlaceDetails, PlacesResult } from "~/server/places";
 
 /**
- * Unit tests for the add-listing write logic (`runCreateListing`).
+ * Exercises the pure add-listing write logic against mocked collaborators (no
+ * live DB, no real Places call): the intake-mode read (`getSetting`), the
+ * Places details provider (`runPlaceDetails`), and the drizzle handle.
  *
- * We exercise the pure logic against mocked collaborators (no live DB, no real
- * Places call): the active intake-mode read (`getSetting`), the Places details
- * provider (`runPlaceDetails`), and the drizzle handle.
- *
- * The auth gate and per-user write rate limit (#18) live on the `createListing`
+ * The auth gate and per-user write rate limit live on the `createListing`
  * server-fn wrapper, not on `runCreateListing`; their own logic is covered in
- * `auth/guards.test.ts` and `rate-limit/index.test.ts`. Here we only assert the
- * wrapper wires them in the right order (auth, then limit, then the write).
+ * `auth/guards.test.ts` and `rate-limit/index.test.ts`. Here we only assert
+ * the wrapper wires them in the right order (auth, then limit, then write).
  */
 
 // --- Mocks -----------------------------------------------------------------
@@ -21,8 +19,8 @@ import type { PlaceDetails, PlacesResult } from "~/server/places";
 const getSettingMock = vi.fn();
 vi.mock("~/server/settings", () => ({ getSetting: (key: string) => getSettingMock(key) }));
 
-// The links-insert degrade path reports through Sentry (like the favorites
-// read-degrade); mock it so the test can assert the report without a DSN.
+// The links-insert degrade path reports through Sentry; mock it so the test
+// can assert the report without a DSN.
 const captureExceptionMock = vi.fn();
 vi.mock("@sentry/tanstackstart-react", () => ({
   captureException: (error: unknown) => captureExceptionMock(error),
@@ -39,9 +37,9 @@ vi.mock("~/server/places", async (importOriginal) => {
 
 // Model the DB shapes `insertListing` + `insertListingLinks` use:
 //   db.query.listings.findFirst({ where })  — places dedup lookup
-//   db.query.listings.findMany({ where })   — manual dedup candidate fetch (#25)
+//   db.query.listings.findMany({ where })   — manual dedup candidate fetch
 //   db.insert(...).values(...).onConflictDoNothing(...).returning()  — the listing write
-//   db.insert(...).values([...]).onConflictDoNothing(...)            — the links write (AUB-202)
+//   db.insert(...).values([...]).onConflictDoNothing(...)            — the links write
 let findFirstResult: Listing | undefined;
 let findManyResult: Listing[] = [];
 let returningResult: Listing[] = [];
@@ -50,10 +48,10 @@ const findFirstMock = vi.fn((_args?: { where?: unknown }) => Promise.resolve(fin
 const findManyMock = vi.fn((_args?: { where?: unknown }) => Promise.resolve(findManyResult));
 
 /**
- * Collect the DB column names a drizzle predicate references (recursively walking
- * its `queryChunks`). Lets a test assert the manual-dedup candidate query is
- * scoped to both `place_id` (manual only) AND `moderation_status` (visible only,
- * #25 fix) without depending on the exact SQL string.
+ * Collect the DB column names a drizzle predicate references (recursively
+ * walking its `queryChunks`). Lets a test assert the manual-dedup candidate
+ * query is scoped to both `place_id` (manual only) and `moderation_status`
+ * (visible only) without depending on the exact SQL string.
  */
 function columnsReferenced(predicate: unknown): string[] {
   const found: string[] = [];
@@ -192,7 +190,7 @@ describe("runCreateListing — places mode", () => {
   it("does NOT write intake links onto an already-existing listing (created: false)", async () => {
     // A places pick that dedups to an existing listing must not overwrite (or
     // seed) that listing's links from an intake form — the detail page's
-    // edit-links flow is the deliberate surface for that (AUB-202).
+    // edit-links flow is the deliberate surface for that.
     findFirstResult = listingRow({ id: "existing-1" });
 
     await runCreateListing(
@@ -224,9 +222,10 @@ describe("runCreateListing — places mode", () => {
 
   it("scopes the Place-ID dedup lookup to visible rows only (no moderation leak)", async () => {
     // The pre-insert dedup `findFirst` must AND `place_id` with
-    // `moderation_status = 'visible'` so a moderator-hidden/removed row is never
-    // returned to the client as `created: false` (metadata leak + moderation-state
-    // oracle). We assert both columns are referenced rather than pin the exact SQL.
+    // `moderation_status = 'visible'` so a hidden/removed row is never
+    // returned to the client as `created: false` (metadata leak +
+    // moderation-state oracle). Both columns are asserted as referenced
+    // rather than pinning the exact SQL.
     const created = listingRow();
     returningResult = [created];
 
@@ -240,10 +239,10 @@ describe("runCreateListing — places mode", () => {
 
   it("does NOT return a hidden/removed existing Place-ID row with created:false (#41 leak)", async () => {
     // In production the `moderation_status = 'visible'` filter excludes the
-    // hidden/removed row at the DB, so the pre-insert dedup lookup misses and we
-    // proceed to insert. We model that filtered miss here (findFirst → undefined)
-    // while the row physically exists. The new add should succeed — the moderated
-    // row is NEVER surfaced.
+    // hidden/removed row at the DB, so the pre-insert dedup lookup misses and
+    // the insert proceeds. The mock models that filtered miss (findFirst →
+    // undefined) while the row physically exists. The new add should succeed;
+    // the moderated row is never surfaced.
     findFirstResult = undefined; // visible-only filter hides the moderated row
     const created = listingRow({ id: "readd-1" });
     returningResult = [created];
@@ -255,12 +254,12 @@ describe("runCreateListing — places mode", () => {
   });
 
   it("errors (not leaks) when a hidden row owns the Place ID and the insert conflicts", async () => {
-    // Re-add of a place that maps ONLY to a hidden/removed row: the visible-only
-    // pre-insert lookup misses → we attempt the insert → it conflicts on the
-    // UNIQUE place_id (`onConflictDoNothing` ⇒ empty returning) → the visible-only
-    // re-read ALSO misses (the owning row is moderated). We surface a clear,
-    // non-leaky "can't be added right now" error instead of returning the
-    // moderated row or a confusing null/success.
+    // Re-add of a place that maps only to a hidden/removed row: the
+    // visible-only pre-insert lookup misses, the insert conflicts on the
+    // unique place_id (`onConflictDoNothing` ⇒ empty returning), and the
+    // visible-only re-read also misses (the owning row is moderated). A
+    // clear, non-leaky "can't be added right now" error surfaces instead of
+    // the moderated row or a confusing null/success.
     findFirstMock
       .mockResolvedValueOnce(undefined) // pre-insert dedup miss (hidden row filtered)
       .mockResolvedValueOnce(undefined); // post-conflict re-read also filtered
@@ -272,12 +271,11 @@ describe("runCreateListing — places mode", () => {
     // Never returns the moderated row.
     expect(onConflictDoNothingMock).toHaveBeenCalledWith({ target: expect.anything() });
 
-    // Regression guard for the #41 leak on the *conflict* branch specifically:
-    // the POST-conflict re-read (the second `findFirst`) must ALSO scope to
-    // `moderation_status = 'visible'`, not just `place_id`. Without this the leak
-    // could silently return on the conflict path (the pre-insert lookup's filter
-    // alone is not enough). We inspect the second call's predicate so that
-    // stripping the visible filter from the re-read fails here.
+    // Guard the conflict branch specifically: the post-conflict re-read (the
+    // second `findFirst`) must also scope to `moderation_status = 'visible'`,
+    // not just `place_id` — the pre-insert lookup's filter alone is not
+    // enough. Inspecting the second call's predicate makes stripping the
+    // visible filter from the re-read fail here.
     expect(findFirstMock).toHaveBeenCalledTimes(2);
     const reReadWhere = findFirstMock.mock.calls[1]?.[0]?.where;
     const reReadCols = columnsReferenced(reReadWhere);
@@ -333,8 +331,8 @@ describe("runCreateListing — manual mode", () => {
     const inserted = valuesMock.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
     expect(inserted?.placeId).toBeNull();
     expect(inserted?.name).toBe("Corner Cafe");
-    // The legacy menu_url column is NO LONGER written — typed links replace it
-    // (AUB-202); new rows keep it null via the column default.
+    // The legacy menu_url column is not written — typed links replace it;
+    // new rows keep it null via the column default.
     expect(inserted).not.toHaveProperty("menuUrl");
     expect(String(inserted?.mapsUrl)).toContain("https://www.google.com/maps/search/");
   });
@@ -398,12 +396,12 @@ describe("runCreateListing — manual mode", () => {
   });
 
   it("keeps the created listing when the links insert fails (degrade + report)", async () => {
-    // The listing insert has already committed and the Neon HTTP driver has no
-    // interactive transaction to roll it back with — and failing the create
+    // The listing insert has already committed and the Neon HTTP driver has
+    // no interactive transaction to roll it back — and failing the create
     // would strand the user: their retry dedups to `created: false`, dropping
-    // the links silently anyway. So the create degrades to success-without-
-    // links (the detail page's edit dialog is the recovery path) and reports
-    // the failure to Sentry + the server log.
+    // the links silently anyway. So the create degrades to
+    // success-without-links (the detail page's edit dialog is the recovery
+    // path) and reports the failure to Sentry + the server log.
     const created = listingRow({ id: "degrade-1", placeId: null });
     returningResult = [created];
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -451,8 +449,8 @@ describe("runCreateListing — manual mode", () => {
     });
 
     // Manual entries never carry a Place ID, so they never hit the Place-ID
-    // `findFirst` dedup lookup; they use the name+address `findMany` candidate
-    // fetch instead (#25).
+    // `findFirst` dedup lookup; they use the name+address `findMany`
+    // candidate fetch instead.
     expect(findFirstMock).not.toHaveBeenCalled();
     expect(findManyMock).toHaveBeenCalledTimes(1);
   });
@@ -468,11 +466,11 @@ describe("runCreateListing — manual mode", () => {
       lng: -104.99,
     });
 
-    // The candidate `where` must AND `place_id IS NULL` with
-    // `moderation_status = 'visible'` — a hidden/removed listing must never be a
-    // dedup candidate (it would wrongly block a re-add and point at a row the
-    // user can't see → 404). We assert both columns are referenced rather than
-    // pin the exact SQL string.
+    // The candidate `where` must AND `place_id is null` with
+    // `moderation_status = 'visible'` — a hidden/removed listing must never
+    // be a dedup candidate (it would wrongly block a re-add and point at a
+    // row the user can't see). Both columns are asserted as referenced rather
+    // than pinning the exact SQL string.
     const where = findManyMock.mock.calls[0]?.[0]?.where;
     const cols = columnsReferenced(where);
     expect(cols).toContain("place_id");
@@ -481,8 +479,8 @@ describe("runCreateListing — manual mode", () => {
 
   it("does NOT block a re-add when the only match is a hidden/removed listing (#25)", async () => {
     // In production the `moderation_status = 'visible'` filter excludes the
-    // hidden/removed row at the DB, so the candidate set comes back empty and the
-    // new manual add proceeds. We model that filtered result here.
+    // hidden/removed row at the DB, so the candidate set comes back empty and
+    // the new manual add proceeds. The mock models that filtered result.
     findManyResult = [];
     const created = listingRow({ id: "readd-1", placeId: null });
     returningResult = [created];
@@ -546,8 +544,8 @@ describe("runCreateListing — manual mode", () => {
   });
 
   it("accepts a manual submission while intake is in places mode (manual is always a fallback)", async () => {
-    // Manual is a first-class fallback in EVERY mode (ADR-008 amendment): the
-    // wizard's "Enter manually instead" path must still write while Places is the
+    // Manual is a first-class fallback in every mode (ADR-008): the wizard's
+    // "Enter manually instead" path must still write while Places is the
     // active intake. The manual path never calls the Places provider.
     getSettingMock.mockResolvedValue("places");
     const created = listingRow({ placeId: null });
@@ -569,12 +567,12 @@ describe("runCreateListing — manual mode", () => {
   });
 });
 
-// --- typed-links scheme allowlist (#90, AUB-202) ----------------------------
+// --- typed-links scheme allowlist -------------------------------------------
 
 describe("createListingInputSchema — typed-links scheme allowlist (#90, AUB-202)", () => {
   // The full valid/invalid matrix lives with the client-safe schema in
   // `app/listings/create-input.test.ts` + `app/listings/links.test.ts`; this
-  // block just proves the RE-EXPORTED schema (this module's import surface)
+  // block just proves the re-exported schema (this module's import surface)
   // still enforces the allowlist.
   const base = { mode: "places" as const, placeId: "place-123" };
 
@@ -612,8 +610,9 @@ describe("createListing — write rate limiting (#18)", () => {
 
     await callServerFn(() => createListing({ data: { mode: "places", placeId: "place-123" } }));
 
-    // Metered on the authenticated user's id, after the auth gate resolved them,
-    // and before any DB write (the insert ran, so the limiter let it through).
+    // Metered on the authenticated user's id, after the auth gate resolved
+    // them, and before any DB write (the insert ran, so the limiter let it
+    // through).
     expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
     expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
     expect(insertMock).toHaveBeenCalledTimes(1);

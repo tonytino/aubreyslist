@@ -7,14 +7,10 @@ import {
 import { listListingLinks, removeListingLink, saveListingLink } from "./index";
 
 /**
- * Client-callable listing-link server functions (AUB-202).
- *
- * These `createServerFn` entry points are the ONLY part of the listing-links
- * server layer that client code (the listing-detail route + the edit-links
- * dialog) imports. Following the established `*.fn.ts` convention (see
- * `app/server/incidents/incidents.fn.ts`, `get-listing.fn.ts`), the db-touching
- * implementations live in `./index.ts` and the TanStack Start plugin strips
- * their handler bodies out of the browser bundle — so importing from here never
+ * Client-callable listing-link server functions — the only part of the
+ * listing-links server layer that client code imports. The db-touching
+ * implementations live in `./index.ts`; the TanStack Start plugin strips
+ * these handler bodies from the browser bundle, so importing from here never
  * drags `getDb` (neon/drizzle) into the client build. The `.validator()`s are
  * backed by the client-safe schemas in `~/listings/links`.
  *

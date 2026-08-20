@@ -70,7 +70,7 @@ describe("GET /api/places/photo", () => {
     expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
 
     // Upstream call: media endpoint for the token, skipHttpRedirect, key in a
-    // header — NEVER in the URL (it must not be leakable via redirects/logs).
+    // header — never in the URL (it must not be leakable via redirects/logs).
     const [url, init] = fetchSpy.mock.calls[0] ?? [];
     expect(url).toBe(
       "https://places.googleapis.com/v1/places/ChIJ_place/photos/resource-1/media?maxWidthPx=640&skipHttpRedirect=true"
@@ -87,8 +87,8 @@ describe("GET /api/places/photo", () => {
     await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}`);
     expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("maxWidthPx=960");
 
-    // Snap UP to the nearest rung; above the top rung snaps down to it; a rung
-    // stays itself. The LADDER value reaches the upstream URL — never the raw ask.
+    // Snap up to the nearest rung; above the top rung snaps down to it; a rung
+    // stays itself. The ladder value reaches the upstream URL — never the raw ask.
     const cases: Array<[requested: number, rung: number]> = [
       [1, 320],
       [64, 320],
@@ -109,9 +109,9 @@ describe("GET /api/places/photo", () => {
   });
 
   it("quantization collapses the per-token cache key space to the ladder", async () => {
-    // A harvested token can cost at most one upstream call per LADDER RUNG per
-    // TTL window — sweeping many distinct widths must NOT mint distinct billed
-    // calls (the quota-oracle attack from review finding 1a).
+    // A harvested token can cost at most one upstream call per ladder rung
+    // per TTL window — sweeping many distinct widths must not mint distinct
+    // billed calls (the quota-oracle attack).
     const fetchSpy = mockMediaFetch({ photoUri: PHOTO_URI });
     vi.stubGlobal("fetch", fetchSpy);
 
@@ -218,7 +218,7 @@ describe("GET /api/places/photo", () => {
       expect(second.headers.get("location")).toBe(PHOTO_URI);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-      // A DIFFERENT ladder width is a different cache entry.
+      // A different ladder width is a different cache entry.
       await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}&maxWidthPx=1280`);
       expect(fetchSpy).toHaveBeenCalledTimes(2);
 
@@ -235,9 +235,8 @@ describe("GET /api/places/photo", () => {
 
       const query = `name=${encodeURIComponent(PHOTO_NAME)}`;
       expect((await photoRequest(query)).status).toBe(502);
-      // Repeats inside the negative-cache window still 502 but cost NO new
-      // upstream call (review finding 1b — a bogus token can't drive one
-      // billed call per request).
+      // Repeats inside the negative-cache window still 502 but cost no new
+      // upstream call — a bogus token can't drive one billed call per request.
       expect((await photoRequest(query)).status).toBe(502);
       expect((await photoRequest(query)).status).toBe(502);
       expect(failSpy).toHaveBeenCalledTimes(1);

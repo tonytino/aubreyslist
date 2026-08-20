@@ -25,31 +25,27 @@ import { buildQuickFilterPredicate } from "./quick-filter";
 import { buildSearchPredicate } from "./search";
 
 /**
- * Browse-list loader: every listing WITH its at-a-glance trust (issue #33).
+ * Browse-list loader: every listing with its at-a-glance trust.
  *
- * The default Denver browse view (domain.md → Discovery) is list-first: a page
- * of listing cards, each showing the headline celiac-safe vs. gluten-friendly
- * state and a recent-incident flag at a glance. Reads are open/anonymous.
+ * The default browse view is list-first: a page of listing cards, each
+ * showing the headline celiac-safe vs. gluten-friendly state and a
+ * recent-incident flag at a glance. Reads are open/anonymous.
  *
- * NO N+1: the page is assembled from a small, FIXED number of batched queries
- * regardless of how many listings are on the page —
- *   1. the page of listings (paginated, alphabetical),
- *   2. the `celiac_safe_vs_gluten_friendly` claim aggregate for THAT page's
- *      listings, batched with one grouped query (mirrors
- *      `getListingClaimAggregates`'s conditional-count pattern, scoped by
- *      `listingId IN (…)`),
- *   3. each page-listing's incidents, batched with one `IN (…)` query, reduced
- *      to a recent-incident boolean per listing via #30's `findRecentIncident`,
- *      and
- *   4. which claim attributes on each page-listing still carry a live
- *      curator-bot suggestion (AUB-193, owner nit 7), batched with one
+ * No N+1: the page assembles from a small, fixed number of batched queries
+ * regardless of page size —
+ *   1. the page of listings (paginated),
+ *   2. the `celiac_safe_vs_gluten_friendly` claim aggregate for that page,
+ *      one grouped query scoped by `listingId IN (…)`,
+ *   3. each page-listing's incidents, one `IN (…)` query reduced to a
+ *      recent-incident boolean per listing via `findRecentIncident`, and
+ *   4. which claim attributes still carry a live curator-bot suggestion, one
  *      `IN (…)` query.
  * The trust glance is then derived purely (`deriveListingTrustGlance`) from
  * those visible aggregates — a roll-up of visible evidence, never a score.
  *
- * Server-only: imports the DB client. The client-callable `createServerFn`
- * entry point lives in `./browse.fn.ts` (the `*.fn.ts` convention) so the
- * browse route's client bundle never drags in `getDb`.
+ * Server-only: imports the DB client. The client-callable entry point lives
+ * in `./browse.fn.ts` (the `*.fn.ts` convention), so the browse route's
+ * client bundle never drags in `getDb`.
  */
 
 /** Validated input for a page of the browse list. */
@@ -59,106 +55,105 @@ export const browseListingsInputSchema = z.object({
   /** Page size; clamped to a sane maximum. Defaults to {@link BROWSE_PAGE_SIZE}. */
   pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(BROWSE_PAGE_SIZE),
   /**
-   * Free-text search over name/address (#34). Empty/whitespace → no constraint.
-   * Threaded through so the GF taxonomy filter (#35) composes with search via
-   * `and(...)` — the count and page reflect search + filters together.
+   * Free-text search over name/address. Empty/whitespace means no constraint.
+   * Composes with the GF taxonomy filter via `and(...)`, so the count and
+   * page reflect search + filters together.
    */
   q: z.string().max(256).optional(),
   /**
-   * Selected GF taxonomy attributes to filter by (#35), validated against the
-   * fixed `claim_attribute` enum so an unknown value can never reach the query.
-   * A listing matches only when each selected attribute has positive community
-   * consensus (confirms outnumber disputes) — see `./filter.ts`. Empty/omitted →
-   * no taxonomy constraint.
+   * Selected GF taxonomy attributes to filter by, validated against the fixed
+   * `claim_attribute` enum so an unknown value can never reach the query. A
+   * listing matches only when each selected attribute has positive community
+   * consensus (confirms outnumber disputes) — see `./filter.ts`.
+   * Empty/omitted means no taxonomy constraint.
    */
   attrs: z.array(z.enum(claimAttributes)).default([]),
   /**
-   * Sort order (#36). One of the {@link BrowseSort} tokens; an unknown token
-   * degrades to the stable {@link DEFAULT_BROWSE_SORT} (alphabetical) rather than
-   * erroring. COMBINABLE with search + filters — sort only changes `ORDER BY`,
-   * never the `WHERE`, so the filtered total + pagination stay correct.
+   * Sort order. One of the {@link BrowseSort} tokens; an unknown token
+   * degrades to the stable {@link DEFAULT_BROWSE_SORT} (alphabetical) rather
+   * than erroring. Combines with search + filters — sort only changes
+   * `ORDER BY`, never the `WHERE`, so the filtered total and pagination stay
+   * correct.
    */
   sort: z.enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]]).catch(DEFAULT_BROWSE_SORT),
   /**
-   * The user's location for the "near me" distance sort (#37). Optional and
-   * validated to WGS84 ranges; only USED as a complete pair when `sort=distance`.
-   * When `sort=distance` but coords are absent (geolocation denied/unavailable,
-   * or SSR before the browser grants permission), the loader FALLS BACK to the
-   * default alphabetical order rather than erroring — the sort never crashes the
-   * page. Coords are ignored entirely for any non-distance sort.
+   * The user's location for the "near me" distance sort. Optional and
+   * validated to WGS84 ranges; used only as a complete pair when
+   * `sort=distance`. When `sort=distance` but coords are absent (geolocation
+   * denied/unavailable, or SSR before the browser grants permission), the
+   * loader falls back to alphabetical order rather than erroring — the sort
+   * never crashes the page. Coords are ignored for any non-distance sort.
    */
   userLat: z.number().finite().min(-90).max(90).optional(),
   userLng: z.number().finite().min(-180).max(180).optional(),
   /**
-   * Distance-radius FILTER (user feedback #7): keep only listings within
-   * `radiusMiles` of the origin (`originLat`/`originLng`). Optional. This is
-   * INDEPENDENT of `userLat`/`userLng` above — those drive the "near me" SORT
-   * order; these constrain the result SET. Kept separate because the origin
-   * defaults to Denver Union Station when geolocation is unavailable, whereas the
-   * near-me sort has no such fallback (it degrades to alphabetical instead).
+   * Distance-radius filter: keep only listings within `radiusMiles` of the
+   * origin (`originLat`/`originLng`). Optional. Independent of
+   * `userLat`/`userLng` above — those drive the "near me" sort order; these
+   * constrain the result set. Kept separate because the origin defaults to
+   * Denver Union Station when geolocation is unavailable, whereas the
+   * near-me sort degrades to alphabetical instead.
    *
-   * The predicate applies ONLY when a complete triple is present — `radiusMiles`
-   * AND both `originLat` and `originLng`. When any is missing there is no radius
-   * constraint (unchanged behavior). The origin is validated to the same WGS84
-   * ranges as the coords schema so a garbage value can never reach the SQL.
+   * The predicate applies only when the complete triple is present:
+   * `radiusMiles` plus both origin coordinates. Otherwise there is no radius
+   * constraint. The origin is validated to the same WGS84 ranges as the
+   * coords schema so a garbage value can never reach the SQL.
    */
   radiusMiles: z.number().finite().positive().optional(),
   originLat: z.number().finite().min(-90).max(90).optional(),
   originLng: z.number().finite().min(-180).max(180).optional(),
   /**
-   * SERVER-SIDE "Saved" filter (AUB-129 / F11). When set AND the caller is
-   * signed in, the browse is constrained to the viewer's VISIBLE favorite
-   * listing ids ({@link getViewerFavoriteIds}) — folded into the WHERE BEFORE
-   * paginating, so `page`/`total`/`hasMore` stay honest over the FULL favorites
-   * subset (never a client-side filter over the loaded page). An anonymous
-   * caller or an empty favorite set yields an empty page WITHOUT a broad query.
+   * Server-side "Saved" filter. When set and the caller is signed in, the
+   * browse is constrained to the viewer's visible favorite listing ids
+   * ({@link getViewerFavoriteIds}) — folded into the WHERE before paginating,
+   * so `page`/`total`/`hasMore` stay honest over the full favorites subset
+   * (never a client-side filter over the loaded page). An anonymous caller or
+   * an empty favorite set yields an empty page without a broad query.
    *
-   * PRIVACY (spec §11.1): a `savedOnly` response is viewer-specific, NOT
-   * user-agnostic — it must never be shared/edge/CDN-cached. See `./browse.fn.ts`.
+   * Privacy (spec §11.1): a `savedOnly` response is viewer-specific — it must
+   * never be shared/edge/CDN-cached. See `./browse.fn.ts`.
    */
   savedOnly: z.boolean().default(false),
   /**
-   * Prebuilt "quick" filter (AUB-135): one mutually-exclusive constraint on the
-   * DISPLAYED safety glance — `celiac` (celiac-safe), `friendly` (gluten-friendly),
-   * `recent` (freshly verified, no recent incident). A faceted SET (AUB-140): each
-   * selected token's correlated predicate is AND-composed and folded into the SAME
-   * `where` as search/taxonomy/radius, so the page, total, and pagination all reflect
-   * the conjunction (see `./quick-filter.ts`). Empty → no quick constraint. COMPOSES
-   * with `attrs` (AND) and is orthogonal to `sort` (which only reorders). Mutual
-   * exclusivity within the `safety` group is enforced upstream by `parseQuick`.
+   * Prebuilt "quick" filters over the displayed safety glance — `celiac`
+   * (celiac-safe), `friendly` (gluten-friendly), `recent` (freshly verified,
+   * no recent incident). A faceted set: each selected token's correlated
+   * predicate AND-composes into the same `where` as search/taxonomy/radius,
+   * so page, total and pagination all reflect the conjunction (see
+   * `./quick-filter.ts`). Empty means no quick constraint. Composes with
+   * `attrs` (AND) and is orthogonal to `sort` (which only reorders). Mutual
+   * exclusivity within the `safety` group is enforced upstream by
+   * `parseQuick`.
    */
   quick: z
     .array(z.enum(QUICK_FILTER_VALUES as unknown as [QuickFilterValue, ...QuickFilterValue[]]))
     .default([]),
   /**
-   * Whether curator-bot SUGGESTIONS (AUB-31) participate in the browse.
-   * Default TRUE (a live, unvoted suggestion also satisfies the taxonomy
-   * `attrs` filter and the `quick=celiac` chip — a discovery aid that surfaces
-   * candidates worth validating). Card-cue scope (AUB-193, owner nit 7): the
-   * browse card labels EVERY listing with a live suggestion on ANY visible
-   * claim "Suggested by Aubrey's Bot" and badges each suggested attribute —
-   * provenance is always visible, so a suggestion-matched card always shows
-   * where its labels came from. FALSE (the `?bot=` URL param's "Hide bot
-   * suggestions" chip) does TWO things: (1) reverts filter MATCHING to
-   * community-evidence-only, and (2) EXCLUDES bot-suggested-only listings —
-   * those with a live suggestion and NO real community attestation evidence on
-   * any visible claim — from the result set itself
+   * Whether curator-bot suggestions participate in the browse. Default true:
+   * a live, unvoted suggestion also satisfies the taxonomy `attrs` filter and
+   * the `quick=celiac` chip — a discovery aid surfacing candidates worth
+   * validating. The browse card labels every listing with a live suggestion
+   * on any visible claim "Suggested by Aubrey's Bot" and badges each
+   * suggested attribute, so a suggestion-matched card always shows where its
+   * labels came from. False (the `?bot=` param's "Hide bot suggestions" chip)
+   * does two things: (1) reverts filter matching to community-evidence-only,
+   * and (2) excludes bot-suggested-only listings — a live suggestion with no
+   * community attestation evidence on any visible claim — from the result set
    * (`buildSuggestedOnlyExclusion` in `./filter.ts`, AND-folded into the
-   * SHARED where so the page AND the honest total both reflect it). A listing
+   * shared where so the page and the honest total both reflect it). A listing
    * with any real community evidence stays visible either way. Affects only
-   * filter matching and which listings are RETURNED — never the trust glance,
-   * its counts, or the sort (ADR-007: a suggestion is provenance, not
-   * evidence, and trust derivation/display is untouched).
+   * matching and which listings are returned — never the trust glance, its
+   * counts, or the sort (ADR-007: a suggestion is provenance, not evidence).
    */
   includeSuggested: z.boolean().default(true),
 });
 export type BrowseListingsInput = z.infer<typeof browseListingsInputSchema>;
 
 /**
- * The trust CORE of a browse card — the listing plus its precomputed trust
- * glance — before any browse-only concerns (distance, save-count) are layered
- * on. This is what the distance-agnostic {@link buildBrowseCards} produces; the
- * browse-only fields below are attached by {@link getBrowseListings}.
+ * The trust core of a browse card — the listing plus its precomputed trust
+ * glance — before browse-only concerns (distance, save-count) are layered on.
+ * Produced by the distance-agnostic {@link buildBrowseCards}; the browse-only
+ * fields below are attached by {@link getBrowseListings}.
  */
 export interface BrowseListingCardCore {
   listing: Listing;
@@ -168,17 +163,17 @@ export interface BrowseListingCardCore {
 /** One browse card's data: the trust core plus browse-only display concerns. */
 export interface BrowseListingCard extends BrowseListingCardCore {
   /**
-   * A "0.4 mi" distance label, present ONLY when the page is distance-sorted
-   * with a complete user coordinate pair. Reused from the distance-sort path's
-   * haversine (never recomputed client-side); omitted for every other sort.
+   * A "0.4 mi" distance label, present only when the page is distance-sorted
+   * with a complete user coordinate pair. Reused from the distance-sort
+   * path's haversine (never recomputed client-side); omitted for other sorts.
    */
   distanceLabel?: string;
   /**
-   * PUBLIC, user-agnostic count of how many people have saved this listing —
-   * the grouped `favorites` aggregate ({@link getFavoriteCounts}), `0` when the
-   * listing has no favorites. A plain number on the (client-safe) card, never a
+   * Public, user-agnostic count of how many people saved this listing — the
+   * grouped `favorites` aggregate ({@link getFavoriteCounts}), `0` when the
+   * listing has no favorites. A plain number on the client-safe card, never a
    * viewer-scoped or safety signal (ADR-007): the card renders it as the
-   * heart-glyph save-count pill.
+   * save-count pill.
    */
   favoriteCount: number;
 }
@@ -212,14 +207,13 @@ export async function getBrowseListings(
   const { page, pageSize, sort } = input;
   const offset = (page - 1) * pageSize;
 
-  // Compose the WHERE from the text search (#34) and the GF taxonomy filter
-  // (#35), AND-combined. The SAME predicate constrains both the page query and
-  // the count query, so the total reflects the active filters and pagination
-  // stays correct. `undefined` (nothing selected) → drizzle applies no WHERE.
+  // Compose the WHERE from the text search and the GF taxonomy filter,
+  // AND-combined. The same predicate constrains both the page query and the
+  // count query, so the total reflects the active filters and pagination
+  // stays correct. `undefined` (nothing selected) — drizzle applies no WHERE.
   //
-  // Visibility (#41): this is a PUBLIC read, so non-`visible` listings
-  // (hidden/removed) are excluded — `AND`-folded with the search/filter so the
-  // page, the total count, and pagination all reflect ONLY visible listings.
+  // Public read: non-visible listings are excluded, AND-folded with the
+  // search/filter so page, total and pagination reflect only visible rows.
   const visibleListing = eq(listings.moderationStatus, "visible");
   const searchAndFilter = buildBrowseWhere(
     buildSearchPredicate(input.q ?? ""),
@@ -227,23 +221,22 @@ export async function getBrowseListings(
     input.includeSuggested
   );
 
-  // Distance-radius FILTER (user feedback #7). Applies ONLY when a complete
-  // triple is present — a radius AND both origin coordinates. It is AND-folded
-  // into the SHARED `where` below, so the SAME predicate constrains BOTH the page
-  // query and the count query — the total honestly reflects the radius (a "Within
-  // 5 mi" filter can never report a count that includes out-of-range listings).
-  // Independent of `userLat`/`userLng` (those only drive the sort ORDER BY).
+  // Distance-radius filter. Applies only when the complete triple is present
+  // — a radius plus both origin coordinates. AND-folded into the shared
+  // `where` below, so the same predicate constrains both the page and count
+  // queries: a "Within 5 mi" filter can never report a count that includes
+  // out-of-range listings. Independent of `userLat`/`userLng` (those only
+  // drive the sort ORDER BY).
   const radiusPredicate = buildRadiusPredicate(input.radiusMiles, input.originLat, input.originLng);
 
-  // SERVER-SIDE "Saved" filter (AUB-129 / F11). When `savedOnly` is set we
-  // resolve the viewer's VISIBLE favorite ids and constrain the query to
-  // `listings.id IN (those ids)` — folded into the SHARED `where` below so it
-  // applies to BOTH the page query and the count query, keeping `page`/`total`/
-  // `hasMore` honest over the FULL favorites subset (NOT a client-side filter
-  // over the loaded page). `getViewerFavoriteIds()` returns `[]` for an
-  // anonymous caller AND for a signed-in user with no visible favorites; either
-  // way we SHORT-CIRCUIT to an empty page here WITHOUT ever issuing a broad
-  // (unconstrained) query.
+  // Server-side "Saved" filter. When `savedOnly` is set, resolve the viewer's
+  // visible favorite ids and constrain to `listings.id IN (…)` — folded into
+  // the shared `where` below so it applies to both the page and count
+  // queries, keeping `page`/`total`/`hasMore` honest over the full favorites
+  // subset (not a client-side filter over the loaded page).
+  // `getViewerFavoriteIds()` returns `[]` for an anonymous caller and for a
+  // signed-in user with no visible favorites; either way, short-circuit to an
+  // empty page without ever issuing a broad (unconstrained) query.
   let savedPredicate: SQL | undefined;
   if (input.savedOnly) {
     const favoriteIds = await getViewerFavoriteIds();
@@ -253,15 +246,15 @@ export async function getBrowseListings(
     savedPredicate = inArray(listings.id, favoriteIds);
   }
 
-  // Resolve the staleness window ONCE, up front: it is the boundary BOTH the quick
-  // filter's freshness predicate (below) and the trust sort's ORDER BY use, so the
-  // SQL "fresh"/"stale" edge matches the displayed glance EXACTLY (no drift).
+  // Resolve the staleness window once, up front: both the quick filter's
+  // freshness predicate and the trust sort's ORDER BY use it, so the SQL
+  // fresh/stale edge matches the displayed glance exactly (no drift).
   const resolvedStalenessMonths = stalenessMonths ?? DEFAULT_STALENESS_MONTHS;
 
-  // Prebuilt quick filter (AUB-135): a correlated predicate over the DISPLAYED
-  // safety glance (celiac-safe / gluten-friendly / freshly-verified). Undefined
-  // when no chip is active. AND-folded into the SHARED `where` below so it
-  // constrains the page query AND the count query — the total honestly reflects it.
+  // Prebuilt quick filter: a correlated predicate over the displayed safety
+  // glance (celiac-safe / gluten-friendly / freshly-verified). Undefined when
+  // no chip is active. AND-folded into the shared `where` below, so it
+  // constrains the page and count queries alike — the total reflects it.
   const quickPredicate = buildQuickFilterPredicate(
     input.quick,
     now,
@@ -269,39 +262,39 @@ export async function getBrowseListings(
     input.includeSuggested
   );
 
-  // Compose visibility (#41) with the search/filter (#34/#35), the radius filter
-  // (feedback #7), the saved filter (F11), and the quick filter (AUB-135).
-  // `and(...)` drops `undefined` terms, so any inactive constraint simply
+  // Compose visibility with the search/filter, radius, saved and quick
+  // predicates. `and(...)` drops `undefined` terms, so an inactive constraint
   // contributes nothing.
   const where =
     searchAndFilter || radiusPredicate || savedPredicate || quickPredicate
       ? and(visibleListing, searchAndFilter, radiusPredicate, savedPredicate, quickPredicate)
       : visibleListing;
 
-  // The ORDER BY (#36). Search/filter live in the WHERE above; sort only touches
-  // the ORDER BY, so the three compose cleanly. The trust sort joins a per-listing
-  // celiac-trust subquery and ranks by the SAME displayed safety tier (confirm/
-  // dispute counts + `lastConfirmedAt` staleness), a roll-up of visible evidence,
-  // NOT an opaque score (ADR-007).
+  // The ORDER BY. Search/filter live in the WHERE above; sort only touches
+  // the ORDER BY, so the three compose cleanly. The trust sort joins a
+  // per-listing celiac-trust subquery and ranks by the same displayed safety
+  // tier (confirm/dispute counts + `lastConfirmedAt` staleness) — a roll-up
+  // of visible evidence, not an opaque score (ADR-007).
   const trust = celiacTrustSubquery();
-  // Distance sort needs a COMPLETE coordinate pair; a half-pair (or none) means
-  // we can't compute distance, so `buildOrderBy` falls back to the default order.
+  // Distance sort needs a complete coordinate pair; with a half-pair (or
+  // none) distance can't be computed, so `buildOrderBy` falls back to the
+  // default order.
   const coords: Coords | undefined =
     input.userLat !== undefined && input.userLng !== undefined
       ? { lat: input.userLat, lng: input.userLng }
       : undefined;
   const orderBy = buildOrderBy(sort, trust, now, resolvedStalenessMonths, coords);
 
-  // Only compute a distance VALUE when actually distance-sorting with a complete
-  // coord pair — the label is shown solely in that case (Phase 2a). We reuse the
-  // SAME haversine the ordering derives from (`distanceKmExpr`), so the label and
-  // the sort never disagree, and no distance is computed for other sorts.
+  // Compute a distance value only when distance-sorting with a complete coord
+  // pair — the label is shown solely then. Reuses the same haversine the
+  // ordering derives from (`distanceKmExpr`), so the label and the sort never
+  // disagree, and no distance is computed for other sorts.
   const distanceKm = sort === "distance" && coords ? distanceKmExpr(coords) : null;
 
-  // 1. The page of listings under the current search + filter + sort, plus the
-  //    matching total (same `WHERE`) so the UI can render "X of Y" + has-more.
-  //    The trust subquery is LEFT JOINed so the sort can order by its columns;
-  //    rows are wrapped as `{ listing }` because of the projection. When
+  // 1. The page of listings under the current search + filter + sort, plus
+  //    the matching total (same `WHERE`) so the UI can render "X of Y" +
+  //    has-more. The trust subquery is LEFT JOINed so the sort can order by
+  //    its columns; rows are wrapped as `{ listing }` by the projection. When
   //    distance-sorting, the per-row distance (km) is selected alongside.
   const [pageListings, totalRows] = await Promise.all([
     db
@@ -317,16 +310,16 @@ export async function getBrowseListings(
 
   const total = Number(totalRows[0]?.total ?? 0);
 
-  // No listings on this page → return early; the batched signal queries below
-  // would otherwise run `IN ()` (empty), which is wasteful.
+  // No listings on this page: return early rather than running the batched
+  // signal queries with an empty `IN ()`.
   if (pageListings.length === 0) {
     return { cards: [], page, pageSize, sort, total, hasMore: false };
   }
 
   const pageRows = pageListings.map((row) => row.listing);
 
-  // The per-row distance (km), keyed by listing id, when distance-sorting. Some
-  // rows in tests (or a non-distance sort) omit the column; a missing/NaN value
+  // The per-row distance (km) by listing id, when distance-sorting. Some rows
+  // (tests, or a non-distance sort) omit the column; a missing/NaN value
   // yields no label rather than a fabricated "0.0 mi".
   const distanceByListing = new Map<string, number>();
   for (const row of pageListings) {
@@ -339,26 +332,26 @@ export async function getBrowseListings(
     }
   }
 
-  // 2. + 3. Derive each card's listing + at-a-glance trust. `buildBrowseCards`
+  // 2.+3. Derive each card's listing + at-a-glance trust. `buildBrowseCards`
   //    owns the trust-glance tail (celiac aggregate + recent incident +
-  //    suggested attributes → glance) and is DISTANCE-AGNOSTIC so a
-  //    distance-less caller can reuse it. The public save-count aggregate is
-  //    batched ALONGSIDE it (one grouped query for the whole page, NO N+1) — a
-  //    browse concern like distance, so it stays HERE rather than in the
-  //    reusable, distance-agnostic helper.
+  //    suggested attributes) and is distance-agnostic so a distance-less
+  //    caller can reuse it. The public save-count aggregate is batched
+  //    alongside (one grouped query for the whole page, no N+1) — a browse
+  //    concern like distance, so it stays here rather than in the reusable
+  //    helper.
   const pageListingIds = pageRows.map((listing) => listing.id);
   const [baseCards, favoriteCounts] = await Promise.all([
     buildBrowseCards(pageRows, now, resolvedStalenessMonths),
     getFavoriteCounts(pageListingIds),
   ]);
 
-  // Attach the public save-count and the "0.4 mi" distance label AFTER the
-  // (distance-agnostic) glance derivation — both are browse-only concerns, never
-  // part of the reusable trust glance. The count defaults to 0 for a listing with
-  // no favorites (absent from the grouped aggregate). The distance label is spread
-  // in conditionally so the optional prop is truly absent (not `undefined`) under
-  // `exactOptionalPropertyTypes` — and only when distance-sorting produced a value
-  // for this row.
+  // Attach the save-count and the "0.4 mi" distance label after the glance
+  // derivation — both are browse-only concerns, never part of the reusable
+  // trust glance. The count defaults to 0 for a listing absent from the
+  // grouped aggregate. The distance label is spread in conditionally so the
+  // optional prop is truly absent (not `undefined`) under
+  // `exactOptionalPropertyTypes` — and only when distance-sorting produced a
+  // value for this row.
   const cards: BrowseListingCard[] = baseCards.map((card) => {
     const favoriteCount = favoriteCounts.get(card.listing.id) ?? 0;
     const km = distanceByListing.get(card.listing.id);
@@ -371,28 +364,25 @@ export async function getBrowseListings(
 }
 
 /**
- * Build browse cards — each listing paired with its at-a-glance trust — from a
- * set of listings. Owns ONLY the trust-glance derivation (ADR-007): it batches
- * the four visible signals for these listings (the headline celiac aggregate,
- * the recent-incident dates, the live curator-bot-suggested attribute set, and
- * the CONFIRMED non-headline attribute set — those with positive community
- * consensus, AUB-226) and reduces each to a pure {@link ListingTrustGlance} via
+ * Build browse cards — each listing paired with its at-a-glance trust. Owns
+ * only the trust-glance derivation (ADR-007): it batches the four visible
+ * signals (the headline celiac aggregate, the recent-incident dates, the live
+ * bot-suggested attribute set, and the confirmed non-headline attribute set)
+ * and reduces each listing to a pure {@link ListingTrustGlance} via
  * {@link deriveListingTrustGlance}.
  *
- * DISTANCE-AGNOSTIC by design: the "0.4 mi" `distanceLabel` is a browse-only
- * concern (the near-me sort) and stays in {@link getBrowseListings}, so this
- * helper can be reused by a distance-less caller (e.g. a future
- * viewer-favorites loader with no distance origin) without change. Cards come
- * back in the SAME order as `listings`.
+ * Distance-agnostic by design: the "0.4 mi" `distanceLabel` is a browse-only
+ * concern and stays in {@link getBrowseListings}, so a distance-less caller
+ * can reuse this helper without change. Cards come back in the same order as
+ * `listings`.
  *
- * NO N+1: the four signal queries are batched across ALL `listings` at once,
- * regardless of how many there are.
+ * No N+1: the four signal queries batch across all `listings` at once.
  *
- * SERVER-ONLY: it drives the db-backed aggregate helpers below, so it must never
+ * Server-only: drives the db-backed aggregate helpers below, so it must never
  * be imported into client code (same rule as the rest of this module).
  *
  * `now` and `stalenessMonths` are injected so the glance's staleness boundary
- * matches the caller's already-resolved window EXACTLY (no drift between the
+ * matches the caller's already-resolved window exactly (no drift between the
  * sort and the displayed card).
  */
 export async function buildBrowseCards(
@@ -400,8 +390,8 @@ export async function buildBrowseCards(
   now: Date,
   stalenessMonths: number
 ): Promise<BrowseListingCardCore[]> {
-  // Nothing to build → no cards, and skip the batched signal queries (which
-  // would otherwise run `IN ()`), mirroring getBrowseListings' empty-page guard.
+  // Nothing to build: no cards, and skip the batched signal queries (which
+  // would otherwise run an empty `IN ()`), mirroring the empty-page guard.
   if (listings.length === 0) {
     return [];
   }
@@ -432,20 +422,20 @@ export async function buildBrowseCards(
 }
 
 /**
- * Subquery: per listing, the headline celiac claim's VISIBLE evidence — the raw
- * confirm/dispute counts and the recency timestamp the at-a-glance trust derives
- * from. We expose the raw counts (not just net) because the trust sort must
- * reproduce the displayed safety TIER, which needs the contested check
- * (`confirms <= disputes`) and the staleness comparison — the exact same signals
+ * Subquery: per listing, the headline celiac claim's visible evidence — the
+ * raw confirm/dispute counts and the recency timestamp the at-a-glance trust
+ * derives from. Raw counts (not just net) because the trust sort must
+ * reproduce the displayed safety tier, which needs the contested check
+ * (`confirms <= disputes`) and the staleness comparison — the same signals
  * `deriveHeadlineSafetyState` reads (ADR-007).
  *
  * - `confirmCount` / `disputeCount` — confirm and dispute tallies on the
  *   `celiac_safe_vs_gluten_friendly` claim.
- * - `lastConfirmedAt` — the claim's stored recency signal (NULL until first
+ * - `lastConfirmedAt` — the claim's stored recency signal (null until first
  *   confirm; only confirms bump it).
  *
- * Listings with no such claim have no row here (LEFT JOIN yields NULL → the
- * ORDER BY treats them as the lowest tier, so they sort last). This is a roll-up
+ * Listings with no such claim have no row here (the LEFT JOIN yields null, so
+ * the ORDER BY treats them as the lowest tier and they sort last). A roll-up
  * of evidence the user can also see, never a score.
  */
 function celiacTrustSubquery() {
@@ -463,8 +453,8 @@ function celiacTrustSubquery() {
       })
       .from(claims)
       .leftJoin(attestations, eq(attestations.claimId, claims.id))
-      // Visibility (#41): only `visible` claims feed the trust sort, so a hidden/
-      // removed claim cannot influence ordering (matches the displayed glance).
+      // Only visible claims feed the trust sort, so a hidden/removed claim
+      // cannot influence ordering (matches the displayed glance).
       .where(
         sql`${claims.attribute} = 'celiac_safe_vs_gluten_friendly' and ${claims.moderationStatus} = 'visible'`
       )
@@ -476,41 +466,40 @@ function celiacTrustSubquery() {
 type CeliacTrustSubquery = ReturnType<typeof celiacTrustSubquery>;
 
 /**
- * The explicit ORDER BY for each sort (#36). Defined here so the ordering rules
- * are single-sourced and the registry in `app/listings/sort.ts` stays the only
- * other place to touch when adding a sort.
+ * The explicit ORDER BY for each sort. Defined here so the ordering rules are
+ * single-sourced; the registry in `app/listings/sort.ts` is the only other
+ * place to touch when adding a sort.
  *
- * SAFETY-CRITICAL — the "trust" order MUST reproduce the same safety TIER the
- * card displays (ADR-007: the sort must be derivable from the visible glance). A
- * naive "net confirms desc" would rank a 30-confirm listing the card itself
- * flags as "may be stale" — or a contested 20/18 listing — ABOVE a fresh,
- * uncontested 3/0 celiac-safe listing, sending a celiac to a place the product
- * down-ranks. So the trust sort orders by tier FIRST, mirroring
- * `deriveHeadlineSafetyState` over the SAME signals (`confirmCount`,
- * `disputeCount`, staleness against `lastConfirmedAt`):
+ * Safety-critical: the "trust" order must reproduce the same safety tier the
+ * card displays (ADR-007: the sort must be derivable from the visible
+ * glance). A naive "net confirms desc" would rank a stale 30-confirm listing
+ * — or a contested 20/18 one — above a fresh, uncontested 3/0 celiac-safe
+ * listing, sending a celiac to a place the product down-ranks. So the trust
+ * sort orders by tier first, mirroring `deriveHeadlineSafetyState` over the
+ * same signals (`confirmCount`, `disputeCount`, staleness against
+ * `lastConfirmedAt`):
  *
- *   tier 4  celiac-safe  — has evidence, confirms > disputes, fresh (within window)
- *   tier 3  stale        — has evidence, confirms > disputes, but past the window
- *   tier 2  contested    — has evidence, confirms <= disputes (gluten-friendly)
+ *   tier 4  celiac-safe  — has evidence, confirms > disputes, fresh
+ *   tier 3  stale        — has evidence, confirms > disputes, past the window
+ *   tier 2  contested    — has evidence, confirms <= disputes
  *   tier 1  unattested   — no celiac claim / no attestation evidence
  *
- * Within a tier we order by net confirms (confirms − disputes) desc, then most
- * recently confirmed (`lastConfirmedAt DESC NULLS LAST`), then name. The
- * staleness cutoff is the caller's `now − stalenessMonths` so the SQL boundary
- * matches the displayed glance EXACTLY (no drift between sort and card).
+ * Within a tier: net confirms (confirms − disputes) desc, then most recently
+ * confirmed (`lastConfirmedAt DESC NULLS LAST`), then name. The staleness
+ * cutoff is the caller's `now − stalenessMonths`, so the SQL boundary matches
+ * the displayed glance exactly (no drift between sort and card).
  *
- * v1 NOTE: recent incidents deliberately do NOT influence the trust sort. The
- * card still shows the incident flag, so the warning remains visible; folding
- * incident-demotion into the ordering is a later issue, not v1.
+ * Recent incidents deliberately do not influence the trust sort in v1; the
+ * card still shows the incident flag, so the warning remains visible.
  *
- * "near me" (#37): the `distance` case orders by the great-circle (haversine)
- * distance from the user's coords (`coords`) to each listing's stored lat/lng,
- * ascending — the SAME formula as the pure `haversineKm` helper, in SQL. When no
- * coords are supplied (geolocation denied/unavailable, or SSR) it falls back to
- * the alphabetical default rather than erroring, so the sort degrades gracefully.
+ * "Near me": the `distance` case orders by the great-circle (haversine)
+ * distance from `coords` to each listing's stored lat/lng, ascending — the
+ * same formula as the pure `haversineKm` helper, in SQL. With no coords
+ * (geolocation denied/unavailable, or SSR) it falls back to the alphabetical
+ * default rather than erroring.
  *
- * Every sort ends with `name ASC` as a stable tiebreaker so the order is
- * deterministic (no arbitrary row shuffling between requests).
+ * Every sort ends with `name ASC` as a stable tiebreaker, so the order is
+ * deterministic (no row shuffling between requests).
  */
 function buildOrderBy(
   sort: BrowseSort,
@@ -521,23 +510,23 @@ function buildOrderBy(
 ): SQL[] {
   const nameTiebreak = asc(listings.name);
 
-  // The staleness cutoff instant, derived from the SAME shared `stalenessCutoff`
-  // helper the glance's `isStale` uses, so the SQL boundary equals the displayed
-  // one EXACTLY (no drift between sort and card). Bound as a parameter below.
+  // The staleness cutoff instant, from the same shared `stalenessCutoff`
+  // helper the glance's `isStale` uses, so the SQL boundary equals the
+  // displayed one exactly. Bound as a parameter below.
   const cutoff = stalenessCutoff(now, stalenessMonths);
 
   const hasEvidence = sql`coalesce(${trust.confirmCount}, 0) + coalesce(${trust.disputeCount}, 0) > 0`;
   const confirmsLead = sql`coalesce(${trust.confirmCount}, 0) > coalesce(${trust.disputeCount}, 0)`;
   // "Fresh" mirrors `isStale` exactly:
-  //  - INCLUSIVE lower bound (`>=`): a confirmation EXACTLY on the staleness edge
-  //    is fresh, matching `isStale`'s `age > window` rule (stale only once age
-  //    STRICTLY exceeds the window). A bare `>` would flip the exact-edge instant
-  //    to stale in SQL while the card showed it fresh.
-  //  - NULL lastConfirmedAt is fresh, NOT stale: a confirm-majority claim that
-  //    has never been confirmed is "not yet confirmed", which `isStale(null)`
-  //    treats as not-stale → celiac-safe (tier 4). Bare `lastConfirmedAt >= cutoff`
-  //    is NULL (false) for a null timestamp, which would wrongly demote it to the
-  //    stale tier (3); the explicit `IS NULL` keeps SQL and JS on the same tier.
+  //  - Inclusive lower bound (`>=`): a confirmation exactly on the staleness
+  //    edge is fresh, matching `isStale`'s `age > window` rule (stale only
+  //    once age strictly exceeds the window). A bare `>` would flip the
+  //    exact-edge instant to stale in SQL while the card showed it fresh.
+  //  - Null lastConfirmedAt is fresh, not stale: a confirm-majority claim
+  //    never confirmed is "not yet confirmed", which `isStale(null)` treats
+  //    as not-stale — celiac-safe (tier 4). Bare `lastConfirmedAt >= cutoff`
+  //    is null (false) for a null timestamp, which would wrongly demote it to
+  //    tier 3; the explicit `IS NULL` keeps SQL and JS on the same tier.
   const fresh = sql`(${trust.lastConfirmedAt} is null or ${trust.lastConfirmedAt} >= ${cutoff})`;
 
   // Safety tier mirroring `deriveHeadlineSafetyState` — higher sorts first.
@@ -557,24 +546,22 @@ function buildOrderBy(
       return [desc(safetyTier), desc(netConfirms), sql`${recency} desc nulls last`, nameTiebreak];
     case "recency":
       // Most recently confirmed first, then strongest consensus, then name.
-      // (Independent of tier by design: "recency" answers "what was just
-      // re-verified", a different question than "what is safest".)
+      // Independent of tier by design: "recency" answers "what was just
+      // re-verified", a different question than "what is safest".
       return [sql`${recency} desc nulls last`, desc(netConfirms), nameTiebreak];
     case "distance": {
-      // "Near me" (#37). Without a complete user coordinate pair (geolocation
-      // denied/unavailable, or SSR before the browser grants permission) we
-      // CANNOT compute distance, so we fall back to the stable alphabetical order
-      // rather than erroring — the sort degrades gracefully, never crashes.
+      // Without a complete user coordinate pair (geolocation denied or SSR
+      // before permission) distance can't be computed, so fall back to the
+      // stable alphabetical order rather than erroring.
       if (!coords) {
         return [nameTiebreak];
       }
-      // Closest first: order by great-circle distance from the user's coords to
-      // each listing's stored lat/lng. This is the SAME haversine the pure
-      // `haversineKm` helper computes (the explainable, shared definition of
-      // "distance"), expressed in SQL so the DB does the ranking. We omit the
-      // constant `2 * R` multiplier and the final `asin`/`sqrt` — both are
-      // monotonic in the haversine term `h`, so ordering by `h` ascending yields
-      // the identical order as the full helper while keeping the SQL cheap.
+      // Closest first: great-circle distance from the user's coords to each
+      // listing's stored lat/lng — the same haversine the pure `haversineKm`
+      // helper computes, expressed in SQL so the DB does the ranking. The
+      // constant `2 * R` multiplier and the final `asin`/`sqrt` are omitted:
+      // both are monotonic in the haversine term `h`, so ordering by `h`
+      // ascending yields the identical order while keeping the SQL cheap.
       const distanceTerm = sql`
         sin(radians(${listings.lat} - ${coords.lat}) / 2) ^ 2
         + cos(radians(${coords.lat})) * cos(radians(${listings.lat}))
@@ -588,15 +575,16 @@ function buildOrderBy(
 }
 
 /**
- * The great-circle distance in KILOMETRES from `coords` to each listing's stored
- * lat/lng, as a SQL expression — the FULL haversine (`2 * R * asin(sqrt(h))`),
- * NOT the ordering-only `h` term `buildOrderBy` uses. We need the actual value
- * (not just a monotonic rank) to render a "0.4 mi" label, so this is the exact
- * SQL analogue of the pure `haversineKm` helper (same `EARTH_RADIUS_KM`), keeping
- * the displayed distance and the ordering derived from the same definition.
+ * The great-circle distance in kilometres from `coords` to each listing's
+ * stored lat/lng, as a SQL expression — the full haversine
+ * (`2 * R * asin(sqrt(h))`), not the ordering-only `h` term `buildOrderBy`
+ * uses: rendering a "0.4 mi" label needs the actual value, not just a
+ * monotonic rank. The exact SQL analogue of the pure `haversineKm` helper
+ * (same `EARTH_RADIUS_KM`), so the displayed distance and the ordering share
+ * one definition.
  *
- * Selected into the page query ONLY when distance-sorting with a complete coord
- * pair (below), so a non-distance sort pays nothing for it.
+ * Selected into the page query only when distance-sorting with a complete
+ * coord pair, so a non-distance sort pays nothing for it.
  */
 function distanceKmExpr(coords: Coords): SQL<number> {
   const h = sql`
@@ -607,19 +595,18 @@ function distanceKmExpr(coords: Coords): SQL<number> {
 }
 
 /**
- * The distance-radius FILTER predicate (user feedback #7): "listing is within
- * `radiusMiles` of the origin", or `undefined` when the filter is inactive.
+ * The distance-radius filter predicate: "listing is within `radiusMiles` of
+ * the origin", or `undefined` when the filter is inactive.
  *
- * Inactive (→ `undefined`, no constraint) unless a COMPLETE triple is present —
- * a radius AND both origin coordinates — so a half-origin or a missing radius
- * leaves the result set unchanged. When active, it compares the SAME great-circle
- * km expression the near-me sort/label derive from ({@link distanceKmExpr}, the
- * full haversine against `listings.lat/lng`) to the radius converted to
- * kilometres ({@link milesToKm}). The comparison is INCLUSIVE (`<=`), so a
- * listing sitting EXACTLY on the radius boundary is kept.
+ * Inactive (no constraint) unless the complete triple is present — a radius
+ * plus both origin coordinates — so a half-origin or missing radius leaves
+ * the result set unchanged. When active, it compares the same great-circle km
+ * expression the near-me sort/label derive from ({@link distanceKmExpr}) to
+ * the radius converted to kilometres ({@link milesToKm}). Inclusive (`<=`),
+ * so a listing exactly on the radius boundary is kept.
  *
- * Returned as a plain `SQL` so the caller can AND-fold it into the shared `where`
- * — applying it to the page AND count queries alike keeps `total` honest.
+ * A plain `SQL` the caller AND-folds into the shared `where` — applying it to
+ * the page and count queries alike keeps `total` honest.
  */
 function buildRadiusPredicate(
   radiusMiles: number | undefined,
@@ -641,22 +628,20 @@ interface CeliacAggregateWithContributors {
 }
 
 /**
- * Batch-load the `celiac_safe_vs_gluten_friendly` claim aggregate (confirm/
- * dispute counts + recency) AND the distinct-contributor count for each of
- * `listingIds`, in ONE grouped query.
+ * Batch-load the `celiac_safe_vs_gluten_friendly` claim aggregate
+ * (confirm/dispute counts + recency) and the distinct-contributor count for
+ * each of `listingIds`, in one grouped query — one query for all cards, not
+ * one per card (no N+1).
  *
- * Mirrors `getListingClaimAggregates`'s conditional-count pattern but scoped to
- * the single headline attribute and across many listings (`listingId IN (…)`),
- * so the browse page needs one query for all cards rather than one per card
- * (NO N+1). Contributors is computed IN THE SAME grouped query as a
- * `count(distinct user_id)` over the LEFT-joined `attestations` — the unique
- * `(claim_id, user_id)` constraint means one row per person per claim, so a
- * distinct count of `user_id` is exactly "how many different people weighed in".
- * The LEFT JOIN yields a single NULL `user_id` row for a claim with no
- * attestations, which `count(distinct …)` correctly counts as `0`.
+ * Contributors is computed in the same grouped query as a
+ * `count(distinct user_id)` over the left-joined `attestations`: the unique
+ * `(claim_id, user_id)` constraint means one row per person per claim, so the
+ * distinct count is exactly "how many different people weighed in". The LEFT
+ * JOIN yields a single null `user_id` row for a claim with no attestations,
+ * which `count(distinct …)` correctly counts as 0.
  *
- * Returns a map keyed by `listingId`; a listing with no celiac claim is absent
- * (the caller treats that as "no evidence" → "Not yet attested").
+ * Returns a map keyed by `listingId`; a listing with no celiac claim is
+ * absent (the caller treats that as "no evidence" — "Not yet attested").
  */
 async function getCeliacAggregatesByListing(
   listingIds: string[]
@@ -666,22 +651,22 @@ async function getCeliacAggregatesByListing(
       listingId: claims.listingId,
       claimId: claims.id,
       lastConfirmedAt: claims.lastConfirmedAt,
-      // Curator-bot suggestion provenance (AUB-31) for the headline celiac claim,
-      // so a seeded-but-unvoted listing can show "Suggested by Aubrey's Bot" on
-      // its card instead of a bare "Not yet attested". Not a vote — never counted.
+      // Curator-bot suggestion provenance for the headline celiac claim, so a
+      // seeded-but-unvoted listing can show "Suggested by Aubrey's Bot"
+      // instead of a bare "Not yet attested". Not a vote — never counted.
       suggestedBy: claims.suggestedBy,
       confirmCount: sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`,
       disputeCount: sql<number>`count(*) filter (where ${attestations.value} = 'dispute')`,
-      // Distinct people who attested this claim either way — the "N neighbors"
-      // evidence count. Computed IN this grouped query (no extra round-trip), so
-      // it stays batched (no N+1). NULL user_id (no attestations) counts as 0.
+      // Distinct people who attested this claim either way — the "N
+      // neighbors" evidence count. Computed in this grouped query, so it
+      // stays batched (no N+1). Null user_id (no attestations) counts as 0.
       contributors: sql<number>`count(distinct ${attestations.userId})`,
     })
     .from(claims)
     .leftJoin(attestations, eq(attestations.claimId, claims.id))
-    // Visibility (#41): only `visible` claims contribute to a card's headline
-    // celiac aggregate, so a hidden/removed claim drops out and the confirm/
-    // dispute counts recompute from the survivors.
+    // Only visible claims contribute to a card's headline celiac aggregate,
+    // so a hidden/removed claim drops out and the confirm/dispute counts
+    // recompute from the survivors.
     .where(
       sql`${claims.listingId} in ${listingIds} and ${claims.attribute} = 'celiac_safe_vs_gluten_friendly' and ${claims.moderationStatus} = 'visible'`
     )
@@ -704,28 +689,26 @@ async function getCeliacAggregatesByListing(
 }
 
 /**
- * Batch-load which claim ATTRIBUTES of each of `listingIds` still carry a LIVE
- * curator-bot suggestion (AUB-193, owner nit 7): a VISIBLE claim — on ANY
- * taxonomy attribute, not just the headline celiac one — whose `suggested_by`
- * is set. One `IN (…)` query for the whole page (NO N+1), mirroring the
- * moderation-visibility predicate the sibling batched queries apply (only
- * `visible` claims count, so a hidden/removed suggested claim stops driving
- * the badge; the parent listing's own visibility is already enforced by the
- * page query that produced `listingIds`).
+ * Batch-load which claim attributes of each of `listingIds` still carry a
+ * live curator-bot suggestion: a visible claim — on any taxonomy attribute,
+ * not just the headline celiac one — whose `suggested_by` is set. One
+ * `IN (…)` query for the whole page (no N+1). Only visible claims count, so a
+ * hidden/removed suggested claim stops driving the badge; the parent
+ * listing's own visibility is already enforced by the page query that
+ * produced `listingIds`.
  *
  * The first real vote on a claim clears its `suggested_by` server-side
- * (`castVote`), so that attribute drops out of the set — and out of its card
- * badge — the moment real evidence arrives on it. Because that clear is NOT
- * atomic with the attestation upsert (a documented crash window in `castVote`
- * can transiently leave a claim with BOTH a vote and a stale `suggested_by`),
- * the query ALSO gates on "no attestation rows on this claim" (`NOT EXISTS`),
- * mirroring the belt-and-braces zero-evidence guard in `summarizeClaim` and
- * `buildLiveSuggestionHaving` — a voted claim can never badge the card as
- * suggested, even mid-window. A listing with no remaining live suggestions is
- * absent from the map entirely, which also clears the card's "Suggested by
- * Aubrey's Bot" label.
+ * (`castVote`), so that attribute drops out of the set — and its card badge —
+ * the moment real evidence arrives. That clear is not atomic with the
+ * attestation upsert (a documented crash window in `castVote` can transiently
+ * leave both a vote and a stale `suggested_by`), so the query also gates on
+ * "no attestation rows on this claim" (`NOT EXISTS`), mirroring the
+ * zero-evidence guard in `summarizeClaim` and `buildLiveSuggestionHaving`: a
+ * voted claim can never badge the card as suggested, even mid-window. A
+ * listing with no remaining live suggestions is absent from the map, which
+ * also clears the card's "Suggested by Aubrey's Bot" label.
  *
- * Returns a map from listing id → its live-suggested attributes (unordered;
+ * Returns a map from listing id to its live-suggested attributes (unordered;
  * the pure glance derivation dedupes and normalizes to taxonomy order).
  */
 async function getBotSuggestedAttributesByListing(
@@ -739,11 +722,11 @@ async function getBotSuggestedAttributesByListing(
         inArray(claims.listingId, listingIds),
         isNotNull(claims.suggestedBy),
         eq(claims.moderationStatus, "visible"),
-        // Vote gate (belt-and-braces): a suggestion is live only while the claim
-        // has ZERO attestations — the same "suggested AND no votes" rule
-        // buildLiveSuggestionHaving encodes for filter matching. A raw
-        // correlated NOT EXISTS (rather than a nested query builder) keeps this
-        // a single expression on the one batched query.
+        // Vote gate (belt-and-braces): a suggestion is live only while the
+        // claim has zero attestations — the same "suggested and no votes"
+        // rule buildLiveSuggestionHaving encodes for filter matching. A raw
+        // correlated NOT EXISTS (rather than a nested query builder) keeps
+        // this a single expression on the one batched query.
         sql`not exists (select 1 from ${attestations} where ${attestations.claimId} = ${claims.id})`
       )
     );
@@ -761,37 +744,37 @@ async function getBotSuggestedAttributesByListing(
 }
 
 /**
- * Batch-load which NON-headline claim ATTRIBUTES of each of `listingIds` have
- * CONFIRMED positive community consensus (AUB-226): a VISIBLE claim — on any
- * taxonomy attribute EXCEPT the headline `celiac_safe_vs_gluten_friendly` (which
- * drives the SafetySignal verdict, not a claim badge) — whose attestations have
- * strictly more confirms than disputes. One grouped `IN (…)` query for the whole
- * page (NO N+1), mirroring the visibility bound the sibling batched queries apply.
+ * Batch-load which non-headline claim attributes of each of `listingIds` have
+ * confirmed positive community consensus: a visible claim — on any taxonomy
+ * attribute except the headline `celiac_safe_vs_gluten_friendly` (which
+ * drives the SafetySignal verdict, not a claim badge) — whose attestations
+ * have strictly more confirms than disputes. One grouped `IN (…)` query for
+ * the whole page (no N+1), with the same visibility bound as the sibling
+ * batched queries.
  *
- * This is the browse-card analogue of the listing-detail page's `confirmed`
- * badge branch (`hasPositiveConsensus(claim)` in `app/routes/listings.$id.tsx`):
- * without it a CONFIRMED non-headline claim (e.g. "Off-menu GF on request")
- * appeared on the detail page but never on the browse card. The consensus rule
- * is the EXACT same SQL shape as `buildAttributeConsensusExists` in `./filter.ts`
- * — the shared `gt(confirmCount, disputeCount)` strict-greater fragment — so a
- * TIE (contested) or dispute-majority claim never qualifies (`hasPositiveConsensus`
- * parity: contested ≠ affirmed, a celiac could be hurt by an overstated badge).
+ * The browse-card analogue of the listing-detail page's `confirmed` badge
+ * branch (`hasPositiveConsensus`). The consensus rule is the same SQL shape
+ * as `buildAttributeConsensusExists` in `./filter.ts` — the shared
+ * `gt(confirmCount, disputeCount)` strict-greater fragment — so a tie or
+ * dispute-majority claim never qualifies (contested ≠ affirmed; an overstated
+ * badge could hurt a celiac).
  *
- * Recency/staleness is deliberately NOT part of the match, mirroring
- * `hasPositiveConsensus`/the taxonomy filter: a stale-but-uncontested consensus
- * still represents real visible evidence and should badge (the card's own glance
- * flags staleness separately). A live bot suggestion is NOT included here — it is
- * provenance, not confirmed evidence, and stays on the separate suggested path.
+ * Recency/staleness is deliberately not part of the match, mirroring
+ * `hasPositiveConsensus` and the taxonomy filter: a stale-but-uncontested
+ * consensus is still real visible evidence and should badge (the glance flags
+ * staleness separately). A live bot suggestion is not included — it is
+ * provenance, not confirmed evidence, and stays on the separate suggested
+ * path.
  *
- * Returns a map from listing id → its confirmed non-headline attributes
- * (unordered; the pure glance derivation dedupes and normalizes to taxonomy
+ * Returns a map from listing id to its confirmed non-headline attributes
+ * (unordered; the pure glance derivation dedupes, normalizes to taxonomy
  * order, and drops any attribute already carried on the suggested path).
  */
 async function getConfirmedAttributesByListing(
   listingIds: string[]
 ): Promise<Map<string, ClaimAttribute[]>> {
-  // The same conditional confirm/dispute tallies the celiac aggregate and the
-  // taxonomy filter use, so "positive consensus" means one thing everywhere.
+  // The same conditional tallies the celiac aggregate and the taxonomy
+  // filter use, so "positive consensus" means one thing everywhere.
   const confirmCount = sql<number>`count(*) filter (where ${attestations.value} = 'confirm')`;
   const disputeCount = sql<number>`count(*) filter (where ${attestations.value} = 'dispute')`;
 
@@ -804,14 +787,14 @@ async function getConfirmedAttributesByListing(
         inArray(claims.listingId, listingIds),
         // Non-headline only: the celiac headline is the SafetySignal verdict.
         sql`${claims.attribute} <> 'celiac_safe_vs_gluten_friendly'`,
-        // Visibility (#41): only `visible` claims count toward consensus.
+        // Only visible claims count toward consensus.
         eq(claims.moderationStatus, "visible")
       )
     )
     .groupBy(claims.id, claims.listingId, claims.attribute)
-    // Positive consensus: confirms STRICTLY outnumber disputes — the exact
-    // `gt(confirmCount, disputeCount)` fragment `buildAttributeConsensusExists`
-    // uses (parity with `hasPositiveConsensus`; a tie never qualifies).
+    // Positive consensus: confirms strictly outnumber disputes — the exact
+    // `gt(...)` fragment `buildAttributeConsensusExists` uses (parity with
+    // `hasPositiveConsensus`; a tie never qualifies).
     .having(gt(confirmCount, disputeCount));
 
   const byListing = new Map<string, ClaimAttribute[]>();
@@ -827,15 +810,15 @@ async function getConfirmedAttributesByListing(
 }
 
 /**
- * Batch-load incidents for `listingIds` in ONE query and reduce to a map from
- * listing id → the most recent RECENT incident's instant (within #30's recency
- * window), or absent when the listing has no recent incident. Uses the same pure
- * `findRecentIncident` helper the listing-detail banner uses, so "recent" means
- * exactly the same thing on the card as on the detail page.
+ * Batch-load incidents for `listingIds` in one query and reduce to a map from
+ * listing id to the most recent in-window incident's instant, or absent when
+ * the listing has no recent incident. Uses the same pure `findRecentIncident`
+ * helper as the listing-detail banner, so "recent" means exactly the same
+ * thing on the card as on the detail page.
  *
- * The returned `Date` is the incident day at UTC midnight (incidents are stored
- * as calendar dates, no time-of-day), so the card's freshness cue can phrase
- * "Reported Nd ago" from the incident's own recency without fabricating a time.
+ * The returned `Date` is the incident day at UTC midnight (incidents are
+ * stored as calendar dates, no time-of-day), so the card's freshness cue can
+ * phrase "Reported Nd ago" without fabricating a time.
  */
 async function getRecentIncidentDatesByListing(
   listingIds: string[],
@@ -844,22 +827,22 @@ async function getRecentIncidentDatesByListing(
   const rows = await getDb()
     .select({ listingId: incidents.listingId, occurredOn: incidents.occurredOn })
     .from(incidents)
-    // Visibility (#41): a hidden/removed incident no longer flags the card's
-    // recent-incident signal — only `visible` incidents count. This is the
-    // trust-model guarantee in reverse: moderation can drop a moderated-away
-    // incident, but a real, still-visible recent incident is never buried.
+    // Only visible incidents count toward the card's recent-incident signal.
+    // The trust-model guarantee in reverse: moderation can drop a
+    // moderated-away incident, but a real, still-visible recent incident is
+    // never buried.
     .where(
       and(inArray(incidents.listingId, listingIds), eq(incidents.moderationStatus, "visible"))
     );
 
-  // Group incidents per listing, then ask `findRecentIncident` per group so the
-  // window definition stays single-sourced (#30).
+  // Group incidents per listing, then ask `findRecentIncident` per group so
+  // the window definition stays single-sourced.
   const byListing = new Map<string, { occurredOn: string }[]>();
   for (const row of rows) {
-    // Normalize the driver's `date` value to the canonical YYYY-MM-DD string the
-    // recency helpers contract on (Neon HTTP returns a `date` as a Date — see
-    // toCalendarDayString / issue #45), so the card's recent-incident flag and
-    // the most-recent tiebreak are correct.
+    // Normalize the driver's `date` value to the canonical YYYY-MM-DD string
+    // the recency helpers contract on (Neon HTTP returns a `date` as a Date —
+    // see toCalendarDayString), so the card's recent-incident flag and the
+    // most-recent tiebreak are correct.
     const occurredOn = toCalendarDayString(row.occurredOn);
     const list = byListing.get(row.listingId);
     if (list) {

@@ -1,16 +1,12 @@
 /**
- * Shared URL-scheme guard for listing links (issue #90).
+ * URL-scheme guard shared by the add-listing intake validator and the listing
+ * detail render sink: only `http:`/`https:` may land in an anchor href.
+ * `z.string().url()` alone accepts `javascript:` and `data:`, a stored-XSS
+ * vector once rendered into an `href`. Applied at intake and again at the
+ * sink (defence in depth).
  *
- * Both the add-listing intake validator and the listing detail render sink need
- * the same notion of "a URL safe to put in an anchor href": an `http:`/`https:`
- * scheme only. A `z.string().url()` check alone accepts dangerous schemes like
- * `javascript:` and `data:`, which — rendered into an `href` — is a stored-XSS /
- * untrusted-navigation vector. Restricting to http(s) at intake AND defensively
- * guarding the sink (defence-in-depth) closes that.
- *
- * Intentionally a plain regex on the leading scheme rather than the `URL` parser:
- * it is total (never throws on garbage input), works identically on server and
- * in the browser, and is trivial to reason about for a security control.
+ * A plain regex on the leading scheme, not the `URL` parser: total (never
+ * throws), identical on server and browser, easy to audit.
  */
 export function isHttpUrl(value: string | null | undefined): value is string {
   return typeof value === "string" && /^https?:\/\//i.test(value);

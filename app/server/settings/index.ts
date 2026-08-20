@@ -4,23 +4,21 @@ import { appSettings } from "~/db/schema";
 import { DEFAULT_STALENESS_MONTHS } from "~/trust/summary";
 
 /**
- * App-settings / feature-flag system (issue #13, ADR-007 + ADR-008).
+ * App-settings / feature-flag system (ADR-007 + ADR-008).
  *
- * A reusable, admin-tunable runtime config layer persisted in the `app_settings`
- * key/value table. The table stores every value as TEXT; this module is the only
- * place that knows how to (de)serialize those strings into typed values.
+ * Admin-tunable runtime config persisted in the `app_settings` key/value
+ * table. The table stores every value as TEXT; this module is the only place
+ * that (de)serializes those strings into typed values.
  *
  * Design:
- * - A single `SETTINGS` registry is the source of truth. Each entry names a key,
- *   its in-code default, and a `codec` that parses TEXT -> value and serializes
- *   value -> TEXT. Adding a setting is one entry; nothing else changes.
- * - The registry drives the types: `SettingKey` and `SettingValue<K>` are derived
- *   from it, so {@link getSetting}/{@link setSetting} are fully typed per key with
- *   no `any` and no per-key overloads to maintain.
- * - Defaults live in code, so reads never fail on an empty table — a brand-new
- *   database returns the seeded defaults (`intake_mode=places`,
- *   `staleness_months=6`) without any row existing. DB seeding is therefore
- *   optional; {@link seedDefaults} is provided as an idempotent convenience.
+ * - A single `SETTINGS` registry is the source of truth. Each entry names a
+ *   key, its in-code default, and a `codec` that bridges TEXT and the typed
+ *   value. Adding a setting is one entry; nothing else changes.
+ * - The registry drives the types: `SettingKey` and `SettingValue<K>` derive
+ *   from it, so {@link getSetting}/{@link setSetting} are fully typed per key
+ *   with no `any` and no per-key overloads.
+ * - Defaults live in code, so reads never fail on an empty table. DB seeding
+ *   is optional; {@link seedDefaults} is an idempotent convenience.
  *
  * Server-only: imports the DB client. Never import this from client code.
  */
@@ -56,12 +54,11 @@ const intCodec: Codec<number> = {
 };
 
 /**
- * Codec for a POSITIVE integer setting (e.g. the staleness window in months). A
- * window must be a positive whole number of months: a zero/negative/fractional
- * value is meaningless and could break staleness (e.g. `0` would make a cutoff of
- * "now", flagging every confirmation stale; a negative would push the cutoff into
- * the future, flagging NONE). Any such stored value parses to `undefined` so the
- * read falls back to the in-code default (`DEFAULT_STALENESS_MONTHS`) — a bad
+ * Codec for a positive integer setting (e.g. the staleness window in months).
+ * A zero, negative, or fractional window is meaningless and could break
+ * staleness: `0` makes the cutoff "now", flagging everything stale; a
+ * negative pushes it into the future, flagging nothing. Such stored values
+ * parse to `undefined` so the read falls back to the in-code default — a bad
  * admin value can never break staleness.
  */
 const positiveIntCodec: Codec<number> = {
@@ -126,7 +123,7 @@ function define<T>(def: SettingDef<T>): SettingDef<T> {
 
 /**
  * The registry. Keys here are exactly the keys that exist; values carry the
- * default + codec. Seeds the two first consumers (ADR-007 / ADR-008).
+ * default + codec.
  */
 export const SETTINGS = {
   /** Listing intake mode — `places` (default) or `manual` (ADR-008). */
@@ -135,22 +132,20 @@ export const SETTINGS = {
     codec: enumCodec(INTAKE_MODES),
   }),
   /**
-   * Staleness window in months — claims unconfirmed past this are flagged stale
-   * (ADR-007). Guarded to a POSITIVE integer: a non-positive/invalid stored value
-   * falls back to the 6-month default (`DEFAULT_STALENESS_MONTHS`) so a bad admin
-   * value can never break staleness.
+   * Staleness window in months — claims unconfirmed past this are flagged
+   * stale (ADR-007). Guarded to a positive integer: an invalid stored value
+   * falls back to `DEFAULT_STALENESS_MONTHS`.
    */
   staleness_months: define<number>({
     default: DEFAULT_STALENESS_MONTHS,
     codec: positiveIntCodec,
   }),
   /**
-   * Kill switch for render-time Google Place photos (AUB-215, ADR-014). Defaults
-   * to ENABLED when the row is absent — mirroring `intake_mode`'s
-   * default-on-unset behaviour — so photos work out of the box; an admin (or an
-   * operator via SQL) flips it to `false` if the Places photo spend needs to be
-   * cut off. Reads never persist Google content; this only gates the
-   * render-time fetch + media proxy.
+   * Kill switch for render-time Google Place photos (ADR-014). Defaults to
+   * enabled when the row is absent, so photos work out of the box; an admin
+   * (or an operator via SQL) flips it to `false` to cut off Places photo
+   * spend. Gates only the render-time fetch + media proxy; nothing
+   * Google-sourced is persisted.
    */
   place_photos_enabled: define<boolean>({
     default: true,
@@ -218,22 +213,19 @@ export function getDefault<K extends SettingKey>(key: K): SettingValue<K> {
 }
 
 // ---------------------------------------------------------------------------
-// Write path — ADMIN-ONLY (see seam note below)
+// Write path — admin-only (see seam note below)
 // ---------------------------------------------------------------------------
 
 /**
- * Persist a single setting, typed by its key. Upserts the row (insert, or update
- * `value` + `updatedAt` on conflict), serializing the value through the key's
+ * Persist a single setting, typed by its key. Upserts the row (insert, or
+ * update `value` + `updatedAt` on conflict), serializing through the key's
  * codec so the TEXT column stays canonical.
  *
- * ADMIN-GUARD SEAM (issue #17): this is a plain server-side function and performs
- * **no authorization itself**. Managing app settings is admin-only
- * (`domain.md` Roles table). The `requireRole('admin')` guard from #17 is not yet
- * on this branch, so callers must ensure the actor is an admin before calling.
- * Once #17 lands, wrap this once at the call site / server-function boundary —
- * e.g. `requireRole('admin'); await setSetting(...)` — rather than threading auth
- * through this module. Keeping the check out here makes the guard a single clean
- * seam and avoids forking an auth guard.
+ * Admin-guard seam: this function performs no authorization itself. Managing
+ * app settings is admin-only (`domain.md` Roles table) — callers must gate on
+ * an admin check at the call site / server-function boundary, e.g.
+ * `requireRole('admin'); await setSetting(...)`. Keeping the check out of this
+ * module leaves the guard a single clean seam.
  */
 export async function setSetting<K extends SettingKey>(
   key: K,
@@ -252,11 +244,11 @@ export async function setSetting<K extends SettingKey>(
 
 /**
  * Idempotently write the in-code defaults for any keys missing a row, leaving
- * existing (admin-tuned) rows untouched. Optional — reads already fall back to
- * defaults — but handy for a seed script under `scripts/` or first-run setup.
+ * existing (admin-tuned) rows untouched. Optional — reads already fall back
+ * to defaults — but handy for a seed script or first-run setup.
  *
- * Like {@link setSetting}, this is an admin/operational action and does no auth
- * of its own (see the seam note on {@link setSetting}).
+ * Like {@link setSetting}, an admin/operational action with no auth of its
+ * own (see the seam note on {@link setSetting}).
  */
 export async function seedDefaults(): Promise<void> {
   const rows = SETTING_KEYS.map((key) => {
