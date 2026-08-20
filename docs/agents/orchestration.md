@@ -83,6 +83,7 @@ The Reviewer must adversarially probe each of these:
 | **Trust-model invariants** | ADR-007 transparent-evidence trust (no hidden scoring) and ADR-008 intake/dedup (Place ID key, manual fallback) must hold. |
 | **Test honesty**           | No skipped, weakened, or missing tests for new code; `pnpm preflight` must pass.                     |
 | **Scope creep**            | Unrequested changes, gold-plating, drive-by edits outside the spec.                                  |
+| **Reuse / duplication**    | New code that repeats what the repo already has. Search before you accept it: `app/components/ui/` (vendored shadcn primitives, ADR-011), `app/components/` (app components), `app/lib/` (helpers), `app/server/` (server modules), `app/trust/` (trust logic). A re-implementation with different names is still a duplicate. |
 | **Documentation drift**    | Docs that no longer match the code/behavior the change introduced.                                  |
 | **URL-state hygiene**      | Shareable/restorable UI state (filters, sort, search, page, tab) kept in `useState` instead of the URL; default params leaking into the querystring; a client-only param wrongly added to `loaderDeps` (spurious refetch) or a server param not resetting `page`. See `docs/agents/url-state.md`. |
 | **Prose terseness**        | History narration, ticket IDs in comments, comments restating the code, bloated docs or PR bodies. See `docs/agents/writing.md`. |
