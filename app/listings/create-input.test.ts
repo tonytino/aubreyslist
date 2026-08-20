@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createListingInputSchema } from "./create-input";
 
 /**
- * Unit tests for the CLIENT-SAFE add-listing input schema (issue #141; the
- * typed-links scheme allowlist is #90 / AUB-202). These prove the validator the
- * `submitCreateListing` server fn binds works from the db-free module,
- * including the http(s)-only guard that blocks the stored-XSS vector.
+ * The validator must work from the db-free module, including the http(s)-only
+ * guard that blocks the stored-XSS vector.
  */
 
 const placesBase = { mode: "places" as const, placeId: "place-123" };

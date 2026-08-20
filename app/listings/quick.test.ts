@@ -8,11 +8,10 @@ import {
 } from "./quick";
 
 /**
- * Unit tests for the faceted quick-filter selection helpers (AUB-140). These are
- * the pure rules behind the URL comma-set (`?quick=`) and the chip interaction:
- * `parseQuick` (validate + de-dupe + collapse the mutually-exclusive safety group),
- * `serializeQuick` (canonical order), and `applyQuickToggle` (the group-aware toggle
- * reducer). The SQL side is `quick-filter.test.ts`; the route only wires these.
+ * The pure rules behind the `?quick=` comma-set and the chip interaction:
+ * `parseQuick` (validate + de-dupe + collapse the exclusive safety group),
+ * `serializeQuick` (canonical order), and `applyQuickToggle` (the group-aware
+ * toggle reducer).
  */
 
 describe("group model", () => {

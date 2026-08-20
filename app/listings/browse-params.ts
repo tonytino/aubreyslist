@@ -1,14 +1,10 @@
 /**
- * Browse URL-param helpers + page-size constants — the client-safe shared module
- * for the `/listings` browse route (issues #33–#37).
+ * Browse URL-param helpers + page-size constants, shared so the browse route's
+ * client search-param handling and the browse server validator use one
+ * definition of `?attrs=`/`?lat=`/`?lng=` parsing and page sizing.
  *
- * CLIENT-SAFE: pure data + tiny parsers/serializers. Imports NO database client
- * and NO server-only code (only the `CLAIM_ATTRIBUTES` taxonomy tuple, a plain
- * `as const` array with no drizzle import — issue #126), mirroring
- * `app/listings/sort.ts` and `app/listings/distance.ts`. So the browse route's
- * search-param handling (client bundle) and the browse server validator (server)
- * share ONE definition of how `?attrs=`/`?lat=`/`?lng=` are parsed and how the
- * page is sized. Keep it free of any `db` client / server-only imports.
+ * Client-safe: pure data + tiny parsers. Keep it free of db-client and
+ * server-only imports.
  */
 
 import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
@@ -19,14 +15,12 @@ export const BROWSE_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 50;
 
 /**
- * Parse the `?attrs=` string into a de-duplicated list of valid taxonomy
- * attributes. The param is a COMMA-SEPARATED list (e.g.
- * `?attrs=dedicated_fryer,celiac_safe_vs_gluten_friendly`) — shareable and
- * human-readable, mirroring `?page=`. Unknown/garbage values are dropped (not an
- * error) so a hand-edited URL degrades gracefully to the valid subset.
+ * Parse the `?attrs=` comma-separated string into a de-duplicated list of
+ * valid taxonomy attributes. Unknown/garbage tokens are dropped, not an error,
+ * so a hand-edited URL degrades to the valid subset.
  *
- * Kept as a single STRING in the URL (rather than a router-serialized array) so
- * the encoding stays the clean comma form and not URL-encoded JSON.
+ * Kept a single string in the URL (not a router-serialized array) so the
+ * encoding stays the clean comma form rather than URL-encoded JSON.
  */
 export function parseAttrs(value: string): ClaimAttribute[] {
   const valid = new Set<ClaimAttribute>();

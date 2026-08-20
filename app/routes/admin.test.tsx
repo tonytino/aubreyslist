@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { Route } from "./admin";
 
 /**
- * Test for /admin route head() meta tags (AUB-163).
- *
- * Verifies that the noindex,nofollow robots meta tag is present in the route's
- * head() output, preventing search engine indexing of the admin panel.
+ * The noindex,nofollow robots meta tag must be present in the route's head()
+ * output so search engines never index the admin panel.
  */
 describe("Admin route — head() meta tags (AUB-163)", () => {
   it("includes noindex,nofollow robots meta tag in head", async () => {

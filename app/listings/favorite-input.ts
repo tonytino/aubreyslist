@@ -1,12 +1,8 @@
 /**
- * Client-safe favorite input contract (issue AUB-120 / F2).
- *
- * CLIENT-SAFE: the Zod validator + inferred input type for the favorite /
- * unfavorite writes. It imports only `z` — NO `~/db` / drizzle / neon value
- * import — mirroring `app/listings/create-input.ts` (#141), so the
- * `favoriteListing` / `unfavoriteListing` server-fn wrappers (`favorites.fn.ts`)
- * can back their `.validator()` with this schema without dragging the
- * db-touching `~/server/favorites/index` graph into the client bundle.
+ * Client-safe input contract for the favorite / unfavorite writes. Imports
+ * only `z` — no `~/db` / drizzle / neon value import — so the server-fn
+ * wrappers can back their `.validator()` with this schema without dragging
+ * the db-touching favorites graph into the client bundle.
  */
 
 import { z } from "zod";

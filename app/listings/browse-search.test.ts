@@ -9,13 +9,10 @@ import {
 } from "./browse-search";
 
 /**
- * Unit tests for the shared browse/directory search-param schema. This schema is
- * the ONE definition of how the directory's URL params are validated, and it is
- * consumed by both the directory route (now `/`, the home page) and the
- * `/listings` → `/` redirect stub — so its default/`.catch` behaviour is what
- * makes a shared or garbage link degrade gracefully instead of 500ing. Every
- * field is `.catch()`-guarded, so `.parse()` never throws; these assert the
- * fallbacks are the stable, expected values.
+ * The schema's default/`.catch` behaviour is what makes a shared or garbage
+ * link degrade gracefully instead of erroring. Every field is
+ * `.catch()`-guarded, so `.parse()` never throws; these assert the fallbacks
+ * are the stable, expected values.
  */
 describe("browseSearchSchema", () => {
   it("fills stable defaults for an empty search (a bare visit to the directory)", () => {
@@ -35,12 +32,11 @@ describe("browseSearchSchema", () => {
   });
 
   it("keeps BROWSE_SEARCH_DEFAULTS in lockstep with the schema's parsed defaults", () => {
-    // LOAD-BEARING invariant: the route's `stripSearchParams(BROWSE_SEARCH_DEFAULTS)`
-    // middleware drops any outbound param whose value deeply EQUALS its default. If
-    // this map ever drifts from what the schema actually fills for a bare visit, the
-    // URL would either leak a default (map value too low) or strip a real value (map
-    // value wrong). `lat`/`lng` are the only params with no default (always-optional,
-    // absent when unset), so they are excluded from the strip map by design.
+    // Load-bearing invariant: `stripSearchParams(BROWSE_SEARCH_DEFAULTS)`
+    // drops any outbound param whose value equals its default. If this map
+    // drifts from what the schema fills for a bare visit, the URL either
+    // leaks a default or strips a real value. `lat`/`lng` have no default
+    // (always-optional), so they are excluded from the strip map by design.
     const { lat: _lat, lng: _lng, ...parsedDefaults } = browseSearchSchema.parse({});
     expect(parsedDefaults).toEqual(BROWSE_SEARCH_DEFAULTS);
   });
@@ -77,8 +73,7 @@ describe("browseSearchSchema", () => {
 
   it("validates ?view=: passes through known tokens, degrades anything else to 'list'", () => {
     // A garbage/unknown token, or the field's absence, degrades to the stable
-    // "list" default via `.catch`/`.default` (owner override of AUB-164 — the
-    // Map segment is back on the public directory; see ViewToggle.tsx).
+    // "list" default via `.catch`/`.default`.
     expect(browseSearchSchema.parse({ view: "map" }).view).toBe("map");
     expect(browseSearchSchema.parse({ view: "list" }).view).toBe("list");
     expect(browseSearchSchema.parse({ view: "satellite" }).view).toBe("list");
@@ -114,10 +109,10 @@ describe("browseSearchSchema", () => {
   });
 
   it("stores the raw quick comma-string (validation/collapse deferred to parseQuick)", () => {
-    // Like `attrs`, the schema keeps the raw string; `parseQuick` (tested in
-    // quick.test.ts) does the vocabulary validation, de-dupe, and safety-group
-    // collapse. So the schema only guards the TYPE (string), degrading a non-string
-    // to "" and defaulting an omitted param to "" (so it's stripped from the URL).
+    // Like `attrs`, the schema keeps the raw string; `parseQuick` does the
+    // vocabulary validation, de-dupe, and safety-group collapse. The schema
+    // only guards the type: a non-string degrades to "" and an omitted param
+    // defaults to "" (stripped from the URL).
     expect(browseSearchSchema.parse({ quick: "celiac,recent" }).quick).toBe("celiac,recent");
     expect(browseSearchSchema.parse({ quick: "bogus" }).quick).toBe("bogus"); // raw passthrough
     expect(browseSearchSchema.parse({ quick: 42 }).quick).toBe(""); // non-string → catch
@@ -126,7 +121,7 @@ describe("browseSearchSchema", () => {
 
   it("coerces the bot-suggestions flag: only explicit false/0 forms exclude", () => {
     // `?bot=false` / `?bot=0` (boolean, number, or the string forms a hand-edited
-    // link produces) turn bot-suggestion matching OFF...
+    // link produces) turn bot-suggestion matching off...
     expect(browseSearchSchema.parse({ bot: false }).bot).toBe(false);
     expect(browseSearchSchema.parse({ bot: 0 }).bot).toBe(false);
     expect(browseSearchSchema.parse({ bot: "0" }).bot).toBe(false);
@@ -149,12 +144,9 @@ describe("browseSearchSchema", () => {
 });
 
 /**
- * Unit tests for {@link isAnyBrowseFilterActive} — the shared predicate that
- * gates the directory's "Reset" chip (repo-owner mobile feedback). Covers the
- * default-at-rest case, one-param-at-a-time activation across the WHOLE browse
- * param set (search, quick, taxonomy attrs, saved mode, sort, radius, page, and
- * the near-me coordinate pair), and that it returns to `false` once every param
- * is back at its default.
+ * {@link isAnyBrowseFilterActive} gates the directory's "Reset" chip. Covers
+ * the default-at-rest case, one-param-at-a-time activation across the whole
+ * browse param set, and the return to `false` at defaults.
  */
 describe("isAnyBrowseFilterActive", () => {
   const AT_DEFAULT: BrowseSearchLike = {

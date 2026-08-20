@@ -6,15 +6,13 @@ import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 import { claimAttributeLabel } from "~/trust/summary";
 
 /**
- * About — a static content route explaining the mission, the trust model, the GF
- * attribute taxonomy, and how to contribute (issue #151). The header's "About"
- * nav item links here. Copy is kept accurate to `docs/product/overview.md` and
- * `docs/agents/domain.md`: trust IS the product, evidence is never a black box,
- * recent harm is never buried.
+ * About — a static content route explaining the mission, the trust model, the
+ * GF attribute taxonomy, and how to contribute. Copy must stay accurate to
+ * `docs/product/overview.md` and `docs/agents/domain.md`: trust is the
+ * product, evidence is never a black box, recent harm is never buried.
  *
- * Content-only: no data fetching, no auth. Reads are open, so this renders for
- * anonymous visitors. Uses the brand design tokens (styling.md) and semantic
- * headings for accessibility.
+ * Content-only: no data fetching, no auth. Reads are open, so this renders
+ * for anonymous visitors.
  */
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -96,18 +94,17 @@ function AboutPage() {
           Safety signals never rely on color alone. Each state gets its own icon and text label, so
           the meaning survives greyscale and color-vision differences.
         </p>
-        {/* The concrete legend behind that claim (migrated from the retired home
-            hero, AUB-116): the headline trust verdicts plus one NEUTRAL GF
-            taxonomy-attribute example. Each is icon + text, never color alone
-            (styling.md), so the abstract "distinct icon and text label" reads as
-            something you can actually see. `stale` is a freshness meta-state, not
-            a headline verdict, so it is intentionally omitted here. */}
+        {/* The concrete legend behind that claim: the headline trust verdicts
+            plus one neutral GF taxonomy-attribute example. Each is icon +
+            text, never color alone (styling.md). `stale` is a freshness
+            meta-state, not a headline verdict, so it is omitted here on
+            purpose. */}
         <div className="flex flex-wrap items-center gap-2">
           {SAFETY_STATES.filter((state) => state !== "stale").map((state) => (
-            // The chip is the tooltip TRIGGER (colour + icon + label already carry
-            // the meaning); the tooltip adds the same centralized SAFETY_TOOLTIP
-            // explainer this legend is the copy source for. `tabIndex={0}` makes
-            // it reachable on keyboard focus as well as hover.
+            // The chip is the tooltip trigger (colour + icon + label already
+            // carry the meaning); the tooltip adds the centralized
+            // SAFETY_TOOLTIP explainer. `tabIndex={0}` makes it reachable on
+            // keyboard focus as well as hover.
             <Tooltip key={state}>
               <TooltipTrigger asChild>
                 <SafetySignal state={state} tabIndex={0} />
@@ -116,8 +113,8 @@ function AboutPage() {
             </Tooltip>
           ))}
           {/* An example GF taxonomy attribute (domain.md) — matches the
-              SafetySignal chip geometry but in a NEUTRAL tone so it never reads
-              as a safety verdict. */}
+              SafetySignal chip geometry but in a neutral tone so it never
+              reads as a safety verdict. */}
           <span className="inline-flex items-center gap-1.5 rounded-chip border border-border bg-muted px-2.5 py-1 text-body-sm font-medium text-muted-foreground">
             <Utensils aria-hidden className="h-4 w-4 shrink-0" />
             {claimAttributeLabel("dedicated_fryer")}

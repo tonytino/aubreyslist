@@ -1,31 +1,24 @@
 /**
- * Browse sort options — the small, extensible registry (issue #36).
+ * Browse sort options — a small, extensible registry.
  *
- * CLIENT-SAFE: this module is pure data + a tiny parser. It imports NO database
- * client and NO server-only code, so both the `/listings` route's sort control
- * (client bundle) and the browse loader (server) share ONE source of truth for
- * the option set, labels, default, and `?sort=` parsing. Keep it free of any
- * `db`/server-only imports.
+ * Client-safe: pure data + a tiny parser, shared so the sort control (client)
+ * and the browse loader (server) use one source of truth for the option set,
+ * labels, default, and `?sort=` parsing. Keep it free of db/server-only
+ * imports.
  *
- * EXTENSIBLE BY DESIGN (domain.md → Discovery names a "near me" distance sort):
- * the options live in a single ordered registry ({@link BROWSE_SORT_OPTIONS}).
- * Issue #37's `distance` sort is a CLEAN ADDITION — append one entry here (and
- * the matching ordering branch in the loader), and the `?sort=` schema, the
- * select control, and the type all pick it up automatically. No rewrite.
- *
- * The ordering rules each option maps to are DEFINED here (see option `help`),
- * and implemented over the TRANSPARENT trust signals (confirm/dispute counts +
- * `lastConfirmedAt` recency, ADR-007) in `app/server/listings/browse.ts` — never
- * an opaque score.
+ * The ordering rules each option maps to are defined here (see option `help`)
+ * and implemented over the transparent trust signals (confirm/dispute counts
+ * + `lastConfirmedAt` recency, ADR-007) in `app/server/listings/browse.ts` —
+ * never an opaque score.
  */
 
 /**
  * The ordered registry of browse sorts. Order here is the order shown in the
- * control. The FIRST entry is the default (see {@link DEFAULT_BROWSE_SORT}).
+ * control; the first entry is the default.
  *
- * To add a new sort (e.g. #37 `distance`): append an entry here and add the
- * matching ordering branch in `getBrowseListings`. Nothing else needs editing —
- * the schema, the union type, and the control derive from this array.
+ * To add a sort: append an entry here and add the matching ordering branch in
+ * `getBrowseListings`. The schema, the union type, and the control all derive
+ * from this array.
  */
 export const BROWSE_SORT_OPTIONS = [
   {
@@ -75,10 +68,10 @@ export function isBrowseSort(value: unknown): value is BrowseSort {
 }
 
 /**
- * Parse an untrusted `?sort=` value into a known {@link BrowseSort}, falling back
- * to the stable {@link DEFAULT_BROWSE_SORT} for anything unrecognized. Used by
- * both the route's search-param schema and the server validator so an unknown
- * token degrades gracefully (alphabetical) instead of erroring.
+ * Parse an untrusted `?sort=` value into a known {@link BrowseSort}, falling
+ * back to {@link DEFAULT_BROWSE_SORT} for anything unrecognized. Used by the
+ * route's search-param schema and the server validator so an unknown token
+ * degrades gracefully instead of erroring.
  */
 export function parseBrowseSort(value: unknown): BrowseSort {
   return isBrowseSort(value) ? value : DEFAULT_BROWSE_SORT;

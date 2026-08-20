@@ -1,28 +1,25 @@
 /**
  * The directory's "quick filter" vocabulary + faceted-selection helpers — the
- * prebuilt filters surfaced as chips (Celiac-safe / Gluten-friendly / Recently
- * verified).
+ * prebuilt filters surfaced as chips.
  *
- * URL-driven (`?quick=`, a comma-set like `?attrs=`) and applied SERVER-side
- * (AUB-135/AUB-140): the selection persists across refresh / back-forward / share,
- * and the count + pagination stay honest (the filter constrains the query, not just
- * the loaded page). The SQL EXPRESSION of each token lives in
- * `app/server/listings/quick-filter.ts`; the mapping to the displayed safety glance:
- *   - `celiac`   → `safetyState === "celiac-safe"`   (fresh, uncontested confirm-majority)
- *   - `friendly` → `safetyState === "gluten-friendly"` (contested: disputes tie/lead)
- *   - `recent`   → `freshness.kind === "fresh"`      (a within-window confirmation, no recent incident)
+ * URL-driven (`?quick=`, a comma-set like `?attrs=`) and applied server-side:
+ * the selection persists across refresh / back-forward / share, and the count
+ * + pagination stay honest. The SQL expression of each token lives in
+ * `app/server/listings/quick-filter.ts`; the mapping to the displayed glance:
+ *   - `celiac`   → `safetyState === "celiac-safe"`
+ *   - `friendly` → `safetyState === "gluten-friendly"`
+ *   - `recent`   → `freshness.kind === "fresh"`
  *
- * FACETED SELECTION (AUB-140): tokens belong to GROUPS. Members of an EXCLUSIVE
- * group are mutually exclusive (pick one or none); other groups are additive and
- * AND-compose across groups. Today: `safety` = {celiac, friendly} is exclusive;
- * `recency` = {recent} is a standalone additive toggle. A future `saved` = {favorited}
- * additive group slots in by adding the token + its group here (and leaving `saved`
- * out of `EXCLUSIVE_QUICK_GROUPS`).
+ * Faceted selection: tokens belong to groups. Members of an exclusive group
+ * are mutually exclusive (pick one or none); other groups are additive, and
+ * selections AND-compose across groups. `safety` = {celiac, friendly} is
+ * exclusive; `recency` = {recent} is a standalone additive toggle. A new
+ * additive group slots in by adding its tokens + group here and leaving the
+ * group out of `EXCLUSIVE_QUICK_GROUPS`.
  *
- * CLIENT-SAFE + pure: no db/server imports, so the client (schema + chips + route)
- * and the server (the SQL predicate builder) share this ONE definition of the
- * vocabulary and the selection rules — mirroring the co-located `sort.ts` /
- * `distance.ts` param modules.
+ * Client-safe + pure: no db/server imports, so the client (schema + chips +
+ * route) and the server (the SQL predicate builder) share one definition of
+ * the vocabulary and the selection rules.
  */
 
 /** The quick-filter tokens, in chip / canonical order. The single source of the vocabulary. */
@@ -35,9 +32,8 @@ export type QuickFilterValue = (typeof QUICK_FILTER_VALUES)[number];
 export type QuickFilterSelection = QuickFilterValue[];
 
 /**
- * The group a quick-filter token belongs to. Tokens in the same EXCLUSIVE group are
- * mutually exclusive; tokens in different groups AND-compose. (`"saved"` is reserved
- * for the future `favorited` toggle and added here when that lands.)
+ * The group a quick-filter token belongs to. Tokens in the same exclusive
+ * group are mutually exclusive; tokens in different groups AND-compose.
  */
 export type QuickFilterGroup = "safety" | "recency";
 
@@ -49,10 +45,10 @@ export const QUICK_FILTER_GROUPS: Record<QuickFilterValue, QuickFilterGroup> = {
 };
 
 /**
- * Groups whose members are mutually exclusive (at most one selected at a time). A
- * group NOT listed here is additive — every member can be on independently. Keeping
- * this as an explicit set (rather than hard-coding "safety") is what lets a future
- * additive group like `saved` slot in without touching the collapse/toggle logic.
+ * Groups whose members are mutually exclusive (at most one selected at a
+ * time). A group not listed here is additive — every member can be on
+ * independently. An explicit set (rather than a hard-coded "safety") lets a
+ * new additive group slot in without touching the collapse/toggle logic.
  */
 export const EXCLUSIVE_QUICK_GROUPS: ReadonlySet<QuickFilterGroup> = new Set<QuickFilterGroup>([
   "safety",
@@ -73,13 +69,11 @@ function canonicalize(values: readonly QuickFilterValue[]): QuickFilterValue[] {
 }
 
 /**
- * Parse a raw `?quick=` comma string into a valid, canonical selection. Mirrors
- * `parseAttrs`: splits on `,`, keeps only known tokens, de-dupes — THEN collapses
- * each exclusive group to at most one member, keeping the first in canonical
- * (`QUICK_FILTER_VALUES`) order. Because the survivor is chosen by vocab order (not
- * URL order), `?quick=celiac,friendly` and `?quick=friendly,celiac` both resolve to
- * `["celiac"]` — deterministic, and it avoids an always-empty `celiac AND friendly`
- * from a hand-typed or stale link.
+ * Parse a raw `?quick=` comma string into a valid, canonical selection: keep
+ * only known tokens, de-dupe, then collapse each exclusive group to at most
+ * one member — the first in canonical (`QUICK_FILTER_VALUES`) order. Choosing
+ * the survivor by vocab order (not URL order) is deterministic and avoids an
+ * always-empty `celiac AND friendly` from a hand-typed or stale link.
  */
 export function parseQuick(value: string): QuickFilterSelection {
   const valid = new Set<QuickFilterValue>();

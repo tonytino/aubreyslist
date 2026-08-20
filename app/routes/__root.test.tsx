@@ -13,23 +13,15 @@ import { previewLoginEnabledQuery } from "~/auth/preview-login-query";
 import { isProductionEnvironmentQuery } from "~/lib/deployment-env-query";
 
 /**
- * Component tests for `app/routes/__root.tsx`:
+ * Component tests for `app/routes/__root.tsx`: the skip-to-content link, the
+ * footer mount, and `RootErrorBoundary`'s sanitized-vs-raw error copy (driven
+ * by `isProductionEnvironmentQuery` — server-truth `VERCEL_ENV`, never
+ * `import.meta.env.PROD`, which can't distinguish a Vercel preview deployment
+ * from real production).
  *
- * - AUB-166: the skip-to-content link (rendered by `AppShell`) is present,
- *   first-focusable, and targets `<main>`.
- * - AUB-142: `SiteFooter` is mounted inside `AppShell` on every route.
- * - AUB-170: `RootErrorBoundary` renders the sanitized generic copy in
- *   production and keeps the raw `error.message` outside production — driven
- *   by `isProductionEnvironmentQuery` (server-truth `VERCEL_ENV`, NOT
- *   `import.meta.env.PROD`, which can't distinguish a Vercel preview
- *   deployment from real production) — and `rootErrorBoundaryMessage` (the
- *   pure helper) is covered directly for both branches.
- *
- * `RootComponent` itself renders a full `<html>`/`<body>` document (framework
- * requirement), which RTL can't mount into a container element — so these
- * tests exercise the exported `AppShell` and `RootErrorBoundary` pieces
- * directly, same rationale as `SiteHeader.test.tsx` testing `SiteHeader` in
- * isolation rather than the whole route tree.
+ * `RootComponent` renders a full `<html>`/`<body>` document, which RTL can't
+ * mount into a container element — so these tests exercise the exported
+ * `AppShell` and `RootErrorBoundary` pieces directly.
  */
 const h = vi.hoisted(() => ({
   captureExceptionMock: vi.fn(),
@@ -41,16 +33,16 @@ vi.mock("@sentry/tanstackstart-react", () => ({
 }));
 
 // Stubs the server fn `isProductionEnvironmentQuery` calls, so a query left
-// unseeded in a test never makes a real (server-only) call in jsdom — it's
-// only exercised by the one test that deliberately leaves the query pending.
+// unseeded never makes a real (server-only) call in jsdom — only exercised by
+// the one test that deliberately leaves the query pending.
 vi.mock("~/server/env.fn", () => ({
   fetchIsProductionEnvironment: () => h.fetchIsProductionEnvironmentMock(),
 }));
 
 import { AppShell, RootErrorBoundary, rootErrorBoundaryMessage } from "./__root";
 
-// Radix DropdownMenu (used by SiteHeader, which AppShell renders) needs the
-// same jsdom stubs as SiteHeader.test.tsx / dropdown-menu.test.tsx.
+// Radix DropdownMenu (used by SiteHeader, which AppShell renders) needs these
+// jsdom stubs.
 beforeAll(() => {
   if (!Element.prototype.hasPointerCapture) {
     Element.prototype.hasPointerCapture = () => false;
@@ -67,7 +59,7 @@ afterEach(() => {
 async function renderAppShell() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // Seed the cache so SiteHeader's useSuspenseQuery calls resolve without
-  // invoking the real server fns (mirrors SiteHeader.test.tsx).
+  // invoking the real server fns.
   queryClient.setQueryData(currentUserQuery.queryKey, null);
   queryClient.setQueryData(previewLoginEnabledQuery.queryKey, false);
 
@@ -92,8 +84,7 @@ async function renderAppShell() {
   // Test-only structural mismatch between the concrete router and the provider's
   // generic default — safe to assert through unknown.
   render(<RouterProvider router={router as unknown as never} />);
-  // RouterProvider resolves the initial match asynchronously (mirrors
-  // SiteHeader.test.tsx's `await screen.findByRole`).
+  // RouterProvider resolves the initial match asynchronously.
   await screen.findByRole("link", { name: "Skip to main content" });
 }
 
@@ -220,13 +211,10 @@ describe("RootErrorBoundary component", () => {
     expect(screen.queryByText(/stack trace leaking internals/)).not.toBeInTheDocument();
   });
 
-  // Regression guard for the reviewed bug: a Vercel PREVIEW deployment is
-  // still built in production mode, so `import.meta.env.PROD` is `true`
-  // there too — it cannot tell preview apart from real production.
-  // `isProductionEnvironmentQuery` is fed by `isProductionEnvironment()`
-  // (`app/env.ts`), which is unit-tested directly against `VERCEL_ENV=preview`
-  // in `app/env.test.ts`; here we confirm the boundary renders the RAW
-  // message for that "preview" value (`false`), never the sanitized one.
+  // A Vercel preview deployment is still built in production mode, so
+  // `import.meta.env.PROD` is `true` there too — it cannot tell preview apart
+  // from real production. This confirms the boundary renders the raw message
+  // for the preview query value (`false`), never the sanitized one.
   it("treats a preview deployment's query result (false) as non-production, not sanitized", async () => {
     await renderErrorBoundary(new Error("preview-only diagnostic detail"), false);
 

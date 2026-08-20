@@ -1,17 +1,14 @@
 /**
- * Client-safe Google Places intake contract (issues #26, #141).
+ * Client-safe Google Places intake contract: the Zod validators + inferred
+ * input types for the Places server functions, plus the result/prediction
+ * shapes the add-listing UI renders. Imports only `z` — no `~/db` / drizzle /
+ * neon value import.
  *
- * CLIENT-SAFE: the Zod validators + inferred input types for the Places provider
- * server functions, plus the result/prediction shapes the add-listing UI renders.
- * It imports only `z` — NO `~/db` / drizzle / neon value import, mirroring
- * `app/listings/create-input.ts` and `app/listings/taxonomy.ts` (#126).
- *
- * Living here (not in the db-touching `~/server/places`, whose module-level
- * `getIntakeMode()` reads `getDb()`) lets the `places.fn.ts` server-fn seam back
- * its `.validator()`s — and `PlacesIntakeForm` type its query results — WITHOUT
- * statically pulling `places.ts`'s drizzle/neon graph into the `listings.new`
- * client chunk. `~/server/places` re-exports these so server code and the
- * existing places tests keep one import surface.
+ * Living here (not in the db-touching `~/server/places`) lets `places.fn.ts`
+ * back its `.validator()`s — and `PlacesIntakeForm` type its query results —
+ * without pulling the drizzle/neon graph into the `listings.new` client
+ * chunk. `~/server/places` re-exports these so server code keeps one import
+ * surface.
  */
 
 import { z } from "zod";
@@ -41,9 +38,9 @@ export type PlacesErrorReason =
   | "network_error"; // fetch threw / response could not be parsed
 
 /**
- * Discriminated result for both operations. `ok: true` carries data; `ok: false`
- * carries a friendly, typed reason. We never surface raw upstream errors or the
- * API key — callers get a stable shape they can render.
+ * Discriminated result for both operations. `ok: true` carries data;
+ * `ok: false` carries a friendly, typed reason. Raw upstream errors and the
+ * API key are never surfaced — callers get a stable shape they can render.
  */
 export type PlacesResult<T> =
   | { ok: true; data: T }

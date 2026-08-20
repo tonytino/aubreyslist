@@ -1,22 +1,18 @@
 /**
- * Typed listing links — the single, client-safe source of truth (AUB-202).
+ * Typed listing links — the single, client-safe source of truth.
  *
- * A listing can carry one link per KIND (menu, gluten-free menu, website,
- * reservations, online ordering) in the `listing_links` table, replacing the
- * single undistinguished legacy `listings.menu_url` column for new writes.
+ * A listing carries at most one link per kind (menu, gluten-free menu,
+ * website, reservations, online ordering) in the `listing_links` table. New
+ * writes never touch the legacy `listings.menu_url` column.
  *
- * CLIENT-SAFE: a plain `as const` string tuple + Zod schemas with NO
- * drizzle/neon/db import, mirroring `app/listings/taxonomy.ts` (#126). The
- * add-listing wizard and the detail page's edit-links dialog (client bundle)
- * reference THIS module; the db-touching implementation lives in
- * `app/server/listing-links/`.
+ * Client-safe: a plain `as const` tuple + Zod schemas with no db import. The
+ * db-touching implementation lives in `app/server/listing-links/`. Keep this
+ * file free of db/server-only imports.
  *
- * SINGLE SOURCE OF TRUTH: `db/schema.ts` derives its `listing_link_kind`
- * pgEnum from this same tuple (exactly like `claim_attribute` derives from
- * `CLAIM_ATTRIBUTES`), so the enum values stay in lockstep automatically. Keep
- * this file free of any `db`/server-only imports.
+ * `db/schema.ts` derives its `listing_link_kind` pgEnum from this tuple, so
+ * the enum values stay in lockstep automatically.
  *
- * Order is meaningful: it is the order links render on the detail page and the
+ * Order is meaningful: it is the render order on the detail page and the
  * persisted enum order (Postgres sorts an enum column by declaration order).
  * Do not reorder without intent.
  */
@@ -60,10 +56,10 @@ export const LINK_KIND_METADATA: Record<LinkKind, { label: string; hint: string 
 };
 
 /**
- * An http(s)-only link URL. Identical rules to the intake `menuUrl` validator
- * it supersedes (#90): `z.string().url()` alone accepts `javascript:`/`data:`
- * URLs, which — rendered into an anchor `href` — is a stored-XSS / untrusted-
- * navigation vector, so the scheme is restricted via {@link isHttpUrl}.
+ * An http(s)-only link URL. `z.string().url()` alone accepts
+ * `javascript:`/`data:` URLs — rendered into an anchor `href`, a stored-XSS /
+ * untrusted-navigation vector — so the scheme is restricted via
+ * {@link isHttpUrl}.
  */
 const linkUrl = z
   .string()
@@ -79,9 +75,9 @@ export const listingLinkInputSchema = z.object({
 export type ListingLinkInput = z.infer<typeof listingLinkInputSchema>;
 
 /**
- * A set of typed links, one per kind at most (the v1 model: `listing_links`
- * has a UNIQUE(listing_id, kind) constraint, so a duplicate kind could only
- * ever surface as a DB error — reject it at validation instead).
+ * A set of typed links, one per kind at most. `listing_links` has a
+ * UNIQUE(listing_id, kind) constraint, so a duplicate kind could only surface
+ * as a DB error — reject it at validation instead.
  */
 export const listingLinksInputSchema = z
   .array(listingLinkInputSchema)

@@ -2,12 +2,6 @@ import { describe, expect, it } from "vitest";
 import { claimAttribute } from "~/db/schema";
 import { CLAIM_ATTRIBUTES } from "./taxonomy";
 
-/**
- * Tests for the client-safe GF taxonomy constant (#126) — the single source of
- * truth shared by the filter UI / search-param parsing (client) and the
- * `claim_attribute` pgEnum (server/db).
- */
-
 describe("GF taxonomy constant", () => {
   it("declares the FIXED v1 taxonomy in order", () => {
     expect(CLAIM_ATTRIBUTES).toEqual([
@@ -17,8 +11,7 @@ describe("GF taxonomy constant", () => {
       "off_menu_gf_on_request",
       "gf_substitutes",
     ]);
-    // Guard against accidental drift in the taxonomy size. `cross_contamination_protocol`
-    // and `staff_knowledge` were purged before v1 (issue #175).
+    // Guard against accidental drift in the taxonomy size.
     expect(CLAIM_ATTRIBUTES).toHaveLength(5);
   });
 

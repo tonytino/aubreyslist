@@ -7,21 +7,21 @@ import { getCurrentUser } from "~/server/auth/current-user";
 import { getSetting, type IntakeMode } from "~/server/settings";
 
 /**
- * Add-listing route (issue #26, ADR-008). An authenticated, end-to-end "add a
- * restaurant" flow whose intake surface is driven by the **active** intake mode:
- * `places` → Google Places search-and-pick; `manual` → name/address/lat/lng form.
+ * Add-listing route (ADR-008). An authenticated "add a restaurant" flow whose
+ * intake surface is driven by the active intake mode: `places` → Google
+ * Places search-and-pick; `manual` → name/address/lat/lng form.
  *
- * The route loader resolves both the active intake mode and whether the caller
- * is signed in (server-side), so the page renders the correct form — or a
- * sign-in prompt — on first paint with no flash. The write itself is gated again
- * server-side in `createListing` (`requireCurrentUser`), so the loader's auth
- * read is a UX convenience, not the security boundary.
+ * The loader resolves the active intake mode and whether the caller is signed
+ * in (server-side), so the page renders the correct form — or a sign-in
+ * prompt — on first paint with no flash. The write is gated again server-side
+ * in `createListing` (`requireCurrentUser`), so the loader's auth read is a
+ * UX convenience, not the security boundary.
  */
 
 /**
- * Server-only loader data for the add-listing page: the active intake mode and
- * whether someone is signed in. `getSetting` + `getCurrentUser` both touch
- * server-only modules (DB / session), so they run here behind a server function.
+ * Server-only loader data for the add-listing page: the active intake mode
+ * and whether someone is signed in. `getSetting` + `getCurrentUser` touch
+ * server-only modules (DB / session), so they run behind a server function.
  */
 const getAddListingContext = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ intakeMode: IntakeMode; isSignedIn: boolean }> => {
@@ -62,9 +62,10 @@ function AddListing() {
 }
 
 /**
- * Shown to anonymous visitors. Adding a listing is a gated write (ADR-010), so
- * we surface the same "Continue with Google" entry point the header uses — a
- * plain anchor to the OAuth initiation route (a full-page redirect, not an RPC).
+ * Shown to anonymous visitors. Adding a listing is a gated write (ADR-010),
+ * so this surfaces the same "Continue with Google" entry point the header
+ * uses — a plain anchor to the OAuth initiation route (a full-page redirect,
+ * not an RPC).
  */
 function SignInPrompt() {
   return (

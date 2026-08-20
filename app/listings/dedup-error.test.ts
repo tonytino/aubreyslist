@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DuplicateListingError, parseDuplicateListingError } from "./dedup-error";
 
 /**
- * Unit tests for the CLIENT-SAFE duplicate-listing error boundary (issue #141).
- * These mirror the contract previously covered in `app/server/listings/dedup.test.ts`
- * (which now re-imports these from the server module), proving the marker class +
- * parser keep working from the db-free module the intake forms import.
+ * The marker class + parser must keep working from the db-free module the
+ * intake forms import.
  */
 
 describe("DuplicateListingError", () => {

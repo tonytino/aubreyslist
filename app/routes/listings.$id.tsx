@@ -38,30 +38,31 @@ import {
 } from "~/trust/summary";
 
 /**
- * Server-only loader for a listing's claims WITH their aggregates (confirm/
+ * Server-only loader for a listing's claims with their aggregates (confirm/
  * dispute counts + recency) in one batched query — the transparent trust
- * roll-up the detail page renders (#29, ADR-007). Reads are open/anonymous.
+ * roll-up the detail page renders (ADR-007). Reads are open/anonymous.
  */
 const getListingClaims = createServerFn({ method: "GET" })
   .validator(z.object({ id: z.string().min(1) }))
   .handler(({ data: { id } }) => getListingClaimAggregates({ listingId: id }));
 
 /**
- * Server-only read of the admin-tunable staleness window (ADR-007). Read here so
- * the staleness flag on the headline cue + each claim's roll-up reflects the
- * configured `staleness_months` AppSetting rather than a hard-coded default;
- * {@link getSetting} falls back to the in-code default on an unset/corrupt row.
+ * Server-only read of the admin-tunable staleness window (ADR-007), so the
+ * staleness flag on the headline cue + each claim's roll-up reflects the
+ * configured `staleness_months` AppSetting rather than a hard-coded default.
+ * {@link getSetting} falls back to the in-code default on an unset/corrupt
+ * row.
  */
 const getStalenessMonths = createServerFn({ method: "GET" }).handler(() =>
   getSetting("staleness_months")
 );
 
 /**
- * The current viewer's user id, or `null` when anonymous. Drives both the
- * incident submission form gate (UX) and the OWNER-ONLY edit/retract controls on
- * the viewer's own incidents (#32). The controls are UX only — the edit/retract
- * writes are re-gated AND ownership-checked server-side in `editIncident` /
- * `retractIncident`, so hiding a button is never the actual access control.
+ * The current viewer's user id, or `null` when anonymous. Drives the incident
+ * submission form gate and the owner-only edit/retract controls on the
+ * viewer's own incidents. The controls are UX only — the writes are re-gated
+ * and ownership-checked server-side, so hiding a button is never the actual
+ * access control.
  */
 const getViewerId = createServerFn({ method: "GET" }).handler(
   async (): Promise<string | null> => (await getCurrentUser())?.id ?? null
@@ -76,8 +77,8 @@ function incidentsQueryOptions(listingId: string) {
 }
 
 /**
- * Cached typed links for a listing (AUB-202) — invalidated after a signed-in
- * viewer saves or removes a link via the edit-links dialog.
+ * Cached typed links for a listing — invalidated after a signed-in viewer
+ * saves or removes a link via the edit-links dialog.
  */
 function listingLinksQueryOptions(listingId: string) {
   return queryOptions({
@@ -87,8 +88,8 @@ function listingLinksQueryOptions(listingId: string) {
 }
 
 /**
- * Cached claim roll-up for a listing — invalidated after the viewer changes or
- * retracts their own attestation (#32), so the per-claim counts, recency, the
+ * Cached claim roll-up for a listing — invalidated after the viewer changes
+ * or retracts their own attestation, so the per-claim counts, recency, the
  * viewer's own vote, and the headline cue all recompute from fresh evidence.
  */
 function claimsQueryOptions(listingId: string) {
@@ -112,7 +113,7 @@ export const Route = createFileRoute("/listings/$id")({
       // refetchable client-side via TanStack Query after a new report.
       context.queryClient.ensureQueryData(incidentsQueryOptions(id)),
       // Prefetch the typed links so the Links section renders on first paint
-      // and is refetchable client-side after an edit-links save (AUB-202).
+      // and is refetchable client-side after an edit-links save.
       context.queryClient.ensureQueryData(listingLinksQueryOptions(id)),
     ]);
     // A missing listing is a 404, not an error — surface the route's
@@ -120,24 +121,23 @@ export const Route = createFileRoute("/listings/$id")({
     if (!listing) {
       throw notFound();
     }
-    // Only fetch the trust roll-up once we know the listing exists (#29).
-    // Prefetch the claims query too so the roll-up renders on first paint and is
-    // refetchable client-side after the viewer changes/retracts a vote (#32).
+    // Only fetch the trust roll-up once the listing is known to exist.
+    // Prefetch the claims query so the roll-up renders on first paint and is
+    // refetchable client-side after the viewer changes/retracts a vote.
     const [, stalenessMonths] = await Promise.all([
       context.queryClient.ensureQueryData(claimsQueryOptions(id)),
       getStalenessMonths(),
     ]);
-    // Resolve "now" ONCE on the server and pass it down as epoch ms, so the
-    // recency window + relative phrasing use the same instant on SSR and after
-    // hydration — no banner flicker or off-by-one at day/window edges.
+    // Resolve "now" once on the server and pass it down as epoch ms, so the
+    // recency window + relative phrasing use the same instant on SSR and
+    // after hydration — no banner flicker or off-by-one at window edges.
     return { listing, viewerId, stalenessMonths, nowMs: Date.now() };
   },
-  // Per-listing SEO + social unfurl — the high-value share case (a specific
-  // restaurant). Guarded: on a 404 the loader throws `notFound()` and never
-  // returns, so `loaderData` is undefined here — fall back to the root defaults.
-  // Uses ONLY fields the listing actually has (name, address, geo, mapsUrl) — no
-  // invented ratings/prices/phone. The `Restaurant` JSON-LD is honest structured
-  // data serialized via `jsonLdScript` (escapes `<`).
+  // Per-listing SEO + social unfurl — the high-value share case. Guarded: on
+  // a 404 the loader throws `notFound()` and never returns, so `loaderData`
+  // is undefined here — fall back to the root defaults. Uses only fields the
+  // listing actually has — no invented ratings/prices/phone. The `Restaurant`
+  // JSON-LD is honest structured data serialized via `jsonLdScript`.
   head: ({ loaderData }) => {
     const listing = loaderData?.listing;
     if (!listing) {
@@ -202,7 +202,7 @@ function ListingDetail() {
   const recentIncident = findRecentIncident(incidents, now);
 
   // Headline celiac-safe vs gluten-friendly cue, derived from the
-  // `celiac_safe_vs_gluten_friendly` claim's VISIBLE aggregate (#29, ADR-007).
+  // `celiac_safe_vs_gluten_friendly` claim's visible aggregate (ADR-007).
   // No such claim / no attestation evidence → `null`, so SafetySummary keeps
   // its honest "Not yet attested" empty state (never a fabricated rating).
   const headlineClaim = claims.find(
@@ -212,12 +212,12 @@ function ListingDetail() {
     ? deriveHeadlineSafetyState(headlineClaim, now, stalenessMonths)
     : null;
 
-  // At-a-glance metadata mirrored from the browse card, derived ONLY from data
-  // already in hand (the headline claim's aggregate). HONEST: an item is omitted
-  // rather than fabricated when its value isn't available — "Verified …" only when
-  // there is a real last-confirmed timestamp, "N confirmations" only when > 0. A
+  // At-a-glance metadata mirrored from the browse card, derived only from
+  // data already in hand. Honest: an item is omitted rather than fabricated
+  // when its value isn't available — "Verified …" only with a real
+  // last-confirmed timestamp, "N confirmations" only when > 0. A
   // distinct-contributor count is not loaded on this route, so it is omitted
-  // entirely rather than invented.
+  // rather than invented.
   const verifiedRelative = headlineClaim
     ? formatRelativeTime(headlineClaim.lastConfirmedAt, now)
     : null;
@@ -243,13 +243,12 @@ function ListingDetail() {
   const incidentsCount = incidents.length;
 
   const handleTabChange = (value: string) => {
-    // Tab is client-only view state — it changes no server input, so we only
-    // rewrite the `?tab=` param and never touch loaderDeps or reset a page index.
-    // `resetScroll: false` because the evidence panel sits well below the hero (a
-    // control below the fold rewriting a client-only param), and TanStack Router
-    // resets scroll to top on navigation by default — without this, switching
-    // tabs would yank a mobile viewer back up to the hero on every tap (repo-owner
-    // mobile feedback).
+    // Tab is client-only view state — it changes no server input, so only the
+    // `?tab=` param is rewritten; no loaderDeps, no page reset.
+    // `resetScroll: false` because the evidence panel sits well below the
+    // hero and TanStack Router resets scroll to top on navigation by default
+    // — without this, switching tabs yanks a mobile viewer back up to the
+    // hero on every tap.
     navigate({
       search: (prev) => ({ ...prev, tab: value as ListingDetailTab }),
       resetScroll: false,
@@ -261,12 +260,11 @@ function ListingDetail() {
       {/* ============================================================ HERO */}
       <header className="relative overflow-hidden rounded-card border border-border bg-surface shadow-sm">
         {/* Media band: brand-tinted gradient with a render-time Google Place
-            photo layered on top when one resolves (AUB-215, ADR-014 — fetched
-            per view through the server-side proxy, never persisted). Decorative
-            pastel blobs layer over a brand gradient and stay the loading/
-            fallback/error state; a bottom scrim keeps the overlaid white
-            name/address AA-legible over either surface. All Tailwind utilities
-            — no inline styles. */}
+            photo layered on top when one resolves (ADR-014 — fetched per view
+            through the server-side proxy, never persisted). Decorative pastel
+            blobs over a brand gradient stay the loading/fallback/error state;
+            a bottom scrim keeps the overlaid white name/address AA-legible
+            over either surface. All Tailwind utilities — no inline styles. */}
         <div className="relative aspect-[16/9] bg-gradient-to-br from-brand to-brand-strong sm:aspect-[21/9]">
           <div
             aria-hidden="true"
@@ -302,19 +300,20 @@ function ListingDetail() {
 
           {/* Top-right circular icon actions: favorite (wired) + flag. */}
           <div className="absolute right-3 top-3 z-30 flex gap-2">
-            {/* Save/favorite affordance (F7, AUB-126) — the shipped, wired island.
-                Reads `["favorites"]` + `currentUserQuery` itself (both prefetched at
-                the root), so it needs no loader wiring and handles its own anon
-                (dialog) vs signed-in (optimistic toggle) behaviour. Styled with the
-                hero overlay chrome so it matches the sibling flag icon button. */}
+            {/* Save/favorite affordance. Reads `["favorites"]` +
+                `currentUserQuery` itself (both prefetched at the root), so it
+                needs no loader wiring and handles its own anon (dialog) vs
+                signed-in (optimistic toggle) behaviour. Styled with the hero
+                overlay chrome to match the sibling flag icon button. */}
             <FavoriteButton
               listingId={listing.id}
               listingName={listing.name}
               className={HERO_ICON_BUTTON}
             />
-            {/* Flag this listing (#39) as an icon + tooltip. FlagControl keeps its
-                login gate (renders nothing when anonymous) and the server re-gates
-                regardless; the reason form opens in a portaled dialog. */}
+            {/* Flag this listing as an icon + tooltip. FlagControl keeps its
+                login gate (renders nothing when anonymous) and the server
+                re-gates regardless; the reason form opens in a portaled
+                dialog. */}
             <FlagControl
               target="listing"
               listingId={listing.id}
@@ -337,15 +336,12 @@ function ListingDetail() {
           </div>
         </div>
 
-        {/* Solid bar below the media: the ONE safety-badge row for this listing
-            (repo-owner feedback, nits-detail-badges-once — the headline state
-            used to render twice, once here and once in a standalone
-            `SafetyBadges` row below the hero) + the at-a-glance metadata strip
-            mirrored from the browse card. `SafetySummary`'s hero variant now
-            owns the whole row: the headline celiac-safe/gluten-friendly/stale
-            badge (or the honest "Not yet attested" empty state) plus the
-            recent-incident badge, scrolling horizontally on overflow rather
-            than wrapping. */}
+        {/* Solid bar below the media: the one safety-badge row for this
+            listing plus the at-a-glance metadata strip mirrored from the
+            browse card. `SafetySummary`'s hero variant owns the whole row:
+            the headline celiac-safe/gluten-friendly/stale badge (or the
+            honest "Not yet attested" empty state) plus the recent-incident
+            badge, scrolling horizontally on overflow rather than wrapping. */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-card">
           <SafetySummary
             state={safetyState}
@@ -370,11 +366,9 @@ function ListingDetail() {
           ) : null}
         </div>
 
-        {/* Non-headline claim badges relevant to this listing (e.g. "Off-menu
-            GF on request", "Dedicated fryer"): a second row, so every
-            confirmed or bot-suggested attribute — not just the headline
-            celiac-safe/gluten-friendly state — is visible at a glance instead
-            of being buried in the Claims tab below. */}
+        {/* Non-headline claim badges: a second row, so every confirmed or
+            bot-suggested attribute — not just the headline state — is visible
+            at a glance instead of buried in the Claims tab below. */}
         {nonHeadlineClaimBadges.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-card pb-card pt-3">
             {nonHeadlineClaimBadges.map((claim) => (
@@ -388,33 +382,31 @@ function ListingDetail() {
         ) : null}
       </header>
 
-      {/* Recent harm is surfaced first and never buried by older confirmations
-          (ADR-007). It STAYS above the tabs — never hidden behind a tab. */}
+      {/* Recent harm is surfaced first and never buried by older
+          confirmations (ADR-007). It stays above the tabs — never hidden
+          behind a tab. */}
       {recentIncident ? (
         <RecentIncidentBanner occurredOn={recentIncident.occurredOn} nowMs={nowMs} />
       ) : null}
 
-      {/* Embedded map preview (AUB-216; ADR-014 — revises v1's "no embedded
-          map — deep-link only" decision, previously mislabeled here as
-          ADR-009, which is Vercel hosting — now that the Maps Embed API is
-          free and unrestricted-quota). Renders nothing when the public
+      {/* Embedded map preview (ADR-014). Renders nothing when the public
           browser key is unset (no empty block, no layout shift).
-          Deliberately a SIBLING of the "Links" region below, never inside
+          Deliberately a sibling of the "Links" region below, never inside
           it: the edit-listing-links E2E spec asserts link/button roles
           within that region, and the map must not perturb them. The "Open in
-          Google Maps" deep-link inside ListingLinks is KEPT — it is the
-          mobile hand-off to turn-by-turn in the native Maps app; the embed
-          is only a preview. */}
+          Google Maps" deep-link inside ListingLinks stays — it is the mobile
+          hand-off to turn-by-turn in the native Maps app; the embed is only
+          a preview. */}
       <ListingMap name={listing.name} address={listing.address} placeId={listing.placeId} />
 
-      {/* Links (AUB-202): the Google Maps deep-link plus the listing's typed
-          links in LINK_KINDS order, with the legacy menuUrl as the menu
-          fallback and — for signed-in viewers — the wiki-style edit-links
-          dialog. Every href is `isHttpUrl`-guarded at the render sink inside
-          the component (#90). Both the typed links AND the legacy fallback
-          come from the invalidatable links QUERY (not the loader's listing
-          row), so an edit that clears the legacy column refreshes the
-          section without a full route reload. */}
+      {/* Links: the Google Maps deep-link plus the listing's typed links in
+          LINK_KINDS order, with the legacy menuUrl as the menu fallback and —
+          for signed-in viewers — the wiki-style edit-links dialog. Every href
+          is `isHttpUrl`-guarded at the render sink inside the component. Both
+          the typed links and the legacy fallback come from the invalidatable
+          links query (not the loader's listing row), so an edit that clears
+          the legacy column refreshes the section without a full route
+          reload. */}
       <ListingLinks
         listingId={listing.id}
         mapsUrl={listing.mapsUrl}
@@ -423,14 +415,14 @@ function ListingDetail() {
         isSignedIn={isSignedIn}
       />
 
-      {/* Tabbed evidence panel (AUB-131): Community claims + Incident reports in
-          one card, with short "Claims" / "Reports" trigger labels (the count
-          chips + full context make the surface unambiguous even on mobile,
-          where the grid-cols-2 TabsList is cramped for longer text). The
-          active tab is URL-backed (`?tab=`) so it is shareable and survives
+      {/* Tabbed evidence panel: Community claims + Incident reports in one
+          card, with short "Claims" / "Reports" trigger labels (the count
+          chips + context keep the surface unambiguous on mobile, where the
+          grid-cols-2 TabsList is cramped for longer text). The active tab is
+          URL-backed (`?tab=`) so it is shareable and survives
           refresh/back-forward. The shadcn Tabs primitive handles
-          role=tab/tabpanel + arrow-key roving focus. Community claims ALWAYS
-          render the full fixed taxonomy as attestable (#150), with honest empty
+          role=tab/tabpanel + arrow-key roving focus. Community claims always
+          render the full fixed taxonomy as attestable, with honest empty
           states — never fabricated data. */}
       <section aria-label="Community evidence">
         <Card>
@@ -452,9 +444,9 @@ function ListingDetail() {
               </TabsList>
 
               <TabsContent value="claims" className="pt-4">
-                {/* The swipeable attest deck's CTA (AUB-231) — signed-in only;
-                    anonymous viewers keep the existing sign-in prompts below.
-                    Writes go through the same submitVote/removeVote seam as the
+                {/* The swipeable attest deck's CTA — signed-in only;
+                    anonymous viewers keep the sign-in prompts below. Writes
+                    go through the same submitVote/removeVote seam as the
                     inline toggles, so everything on this page refreshes. */}
                 <ClaimDeckSection listingId={listing.id} claims={claims} isSignedIn={isSignedIn} />
                 <p className="mb-3 text-body-sm text-muted-foreground">

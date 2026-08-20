@@ -1,18 +1,13 @@
 /**
- * Geographic distance helpers for the "near me" distance sort (issue #37).
+ * Geographic distance helpers for the "near me" distance sort.
  *
- * CLIENT-SAFE: pure maths + a tiny Zod schema. Imports NO database client and NO
- * server-only code, so both the `/listings` route's geolocation flow (client
- * bundle) and the browse loader/server-fn (server) share ONE definition of what a
- * valid coordinate is and how distance is computed. Keep it free of any
- * `db`/server-only imports.
+ * Client-safe: pure maths + a tiny Zod schema, shared so the route's
+ * geolocation flow and the browse loader/server-fn use one definition of a
+ * valid coordinate and of distance. Keep it free of db/server-only imports.
  *
- * The browse ORDER BY does the ranking haversine in SQL (server-side, against
- * `listings.lat/lng`); this module is the SHARED, testable definition of:
- *   - a validated user coordinate ({@link coordsSchema}, {@link Coords}), and
- *   - the same haversine formula as a pure function ({@link haversineKm}) so the
- *     ordering logic is unit-testable without a database and any UI that wants to
- *     show a "x km away" label has one honest source.
+ * The browse ORDER BY runs the ranking haversine in SQL; {@link haversineKm}
+ * is the same formula as a pure function, so the ordering logic is testable
+ * without a database and any "x km away" label has one honest source.
  */
 
 import { z } from "zod";
@@ -21,14 +16,13 @@ import { z } from "zod";
 export const EARTH_RADIUS_KM = 6371;
 
 /**
- * A user coordinate: a finite latitude/longitude in valid WGS84 ranges. Shared by
- * the route's `?lat=`/`?lng=` params and the browse server-fn validator so an
- * out-of-range or garbage value can never reach the distance ORDER BY.
+ * A user coordinate: a finite latitude/longitude in valid WGS84 ranges.
+ * Shared by the route's `?lat=`/`?lng=` params and the browse server-fn
+ * validator, so an out-of-range or garbage value can never reach the distance
+ * ORDER BY.
  *
- * Both are required together — a half-pair is meaningless for distance — so the
- * loader passes EITHER a complete `{ lat, lng }` or nothing (see the optional
- * `userLat`/`userLng` on the browse input, validated independently but only USED
- * as a pair).
+ * A half-pair is meaningless for distance, so the loader passes either a
+ * complete `{ lat, lng }` or nothing.
  */
 export const coordsSchema = z.object({
   lat: z.number().finite().min(-90).max(90),
@@ -39,18 +33,16 @@ export const coordsSchema = z.object({
 export type Coords = z.infer<typeof coordsSchema>;
 
 /**
- * Denver Union Station — the DEFAULT browse origin for the distance-radius filter
- * (user feedback #7) when the user's geolocation is not available (denied,
- * unavailable, or SSR before the browser grants permission). Anchoring the radius
- * to a stable, well-known downtown landmark keeps the "Within N mi of …" filter
- * meaningful for anonymous, non-located visitors rather than silently showing
- * everything.
+ * Denver Union Station — the default browse origin for the distance-radius
+ * filter when geolocation is unavailable (denied, unsupported, or SSR).
+ * Anchoring to a stable downtown landmark keeps the "Within N mi" filter
+ * meaningful for non-located visitors instead of silently showing everything.
  */
 export const UNION_STATION: Coords = { lat: 39.7539, lng: -104.9999 };
 
 /**
- * The selectable search-radius options, in MILES (user feedback #7). Presented in
- * the {@link DistanceSelector} and validated on the `?radius=` URL param; any
+ * The selectable search-radius options, in miles. Presented in the
+ * {@link DistanceSelector} and validated on the `?radius=` URL param; any
  * value outside this set degrades to {@link DEFAULT_RADIUS_MILES}.
  */
 export const DISTANCE_RADIUS_OPTIONS = [5, 10, 15, 20, 25] as const;
@@ -67,10 +59,10 @@ export function milesToKm(miles: number): number {
 }
 
 /**
- * Coerce a `?radius=` URL-param value to a valid {@link DISTANCE_RADIUS_OPTIONS}
- * option, falling back to {@link DEFAULT_RADIUS_MILES} for anything unrecognized
- * (missing, garbage, or an off-list number). Pure/client-safe so the route's
- * param handling and any server validation share ONE definition of a valid radius.
+ * Coerce a `?radius=` value to a valid {@link DISTANCE_RADIUS_OPTIONS} option,
+ * falling back to {@link DEFAULT_RADIUS_MILES} for anything unrecognized.
+ * Pure/client-safe so route param handling and server validation share one
+ * definition of a valid radius.
  */
 export function parseRadiusMiles(value: unknown): RadiusMiles {
   const n = typeof value === "string" ? Number(value) : value;
@@ -82,10 +74,9 @@ export function parseRadiusMiles(value: unknown): RadiusMiles {
 const toRadians = (degrees: number): number => (degrees * Math.PI) / 180;
 
 /**
- * Great-circle distance in kilometres between two coordinates via the haversine
- * formula. Pure and deterministic — the SQL ORDER BY for the distance sort uses
- * the identical formula server-side, so this is the single explainable definition
- * of "distance" shared by tests and any UI label.
+ * Great-circle distance in kilometres via the haversine formula. Pure and
+ * deterministic; the distance sort's SQL ORDER BY uses the identical formula,
+ * so this is the single explainable definition of "distance".
  *
  * Symmetric and zero at coincident points; uses {@link EARTH_RADIUS_KM}.
  */
