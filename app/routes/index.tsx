@@ -25,6 +25,11 @@ import {
 } from "~/listings/browse-search";
 import { UNION_STATION } from "~/listings/distance";
 import {
+  forgetsNearMe,
+  readNearMePreference,
+  writeNearMePreference,
+} from "~/listings/near-me-preference";
+import {
   applyQuickToggle,
   parseQuick,
   type QuickFilterValue,
@@ -32,7 +37,7 @@ import {
 } from "~/listings/quick";
 import { type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
 import type { ClaimAttribute } from "~/listings/taxonomy";
-import { useGeolocation } from "~/listings/use-geolocation";
+import { geolocationPermission, useGeolocation } from "~/listings/use-geolocation";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
 import { fetchBrowsePhotos } from "~/server/places-photos.fn";
 
@@ -235,6 +240,39 @@ function BrowseListings() {
   );
   const geo = useGeolocation();
 
+  // Restore this device's "Near me" opt-in on load. Gated on an existing
+  // grant: a stored preference never opens a permission prompt, so a visitor
+  // who blocked or never granted location just gets the default order. Runs
+  // once per mount, and only from the default sort with no coords in the URL,
+  // so a link carrying a non-default `?sort=` or coords always wins. The first paint is
+  // the SSR'd alphabetical order; the distance sort lands right after, via a
+  // `replace` so Back leaves the page instead of undoing the restore.
+  const nearMeRestored = useRef(false);
+  useEffect(() => {
+    if (nearMeRestored.current) return;
+    nearMeRestored.current = true;
+    if (sort !== DEFAULT_BROWSE_SORT || coords || !readNearMePreference()) return;
+    void geolocationPermission().then((state) => {
+      if (state !== "granted") return;
+      void geo.request().then((result) => {
+        if (result.status !== "success") {
+          if (forgetsNearMe(result.reason)) writeNearMePreference(false);
+          return;
+        }
+        navigate({
+          replace: true,
+          search: (prev) => ({
+            ...prev,
+            page: 1,
+            sort: "distance",
+            lat: result.coords.lat,
+            lng: result.coords.lng,
+          }),
+        });
+      });
+    });
+  }, [sort, coords, geo, navigate]);
+
   // Post-hydration marker for this route's Suspense boundary (companion to
   // the root `data-hydrated` stamp). React hydrates a server-rendered
   // boundary in its own, lower-priority commit after the shell commit that
@@ -403,11 +441,14 @@ function BrowseListings() {
   /**
    * Change the server-side sort, resetting to page 1. "Near me" is special:
    * it requests geolocation only on opt-in and falls back to the default
-   * order on denial/unavailable — never a surprise prompt, never a crash.
+   * order on denial/unavailable — never a surprise prompt, never a crash. A
+   * granted opt-in is remembered per device (`near-me-preference`) and picked
+   * back up by the restore effect above; any other sort forgets it.
    */
   function changeSort(next: BrowseSort) {
     if (next !== "distance") {
       geo.reset();
+      writeNearMePreference(false);
       navigate({
         search: (prev) => ({ ...prev, page: 1, sort: next, lat: undefined, lng: undefined }),
       });
@@ -415,6 +456,7 @@ function BrowseListings() {
     }
     void geo.request().then((result) => {
       if (result.status === "success") {
+        writeNearMePreference(true);
         navigate({
           search: (prev) => ({
             ...prev,
@@ -425,6 +467,7 @@ function BrowseListings() {
           }),
         });
       } else {
+        if (forgetsNearMe(result.reason)) writeNearMePreference(false);
         navigate({
           search: (prev) => ({
             ...prev,
@@ -488,14 +531,16 @@ function BrowseListings() {
    * `validateSearch` refills `BROWSE_SEARCH_DEFAULTS`, and `stripSearchParams`
    * keeps the URL bare — exactly like a fresh `/` visit. That fresh-visit
    * semantic is why `view` resets too, even though `view` alone never lights
-   * the Reset chip (see the note in browse-search.ts). `geo.reset()` mirrors
-   * `changeSort`'s non-distance branch so a stale "near me" prompt/error
-   * state doesn't linger.
+   * the Reset chip (see the note in browse-search.ts). `geo.reset()` plus
+   * clearing the remembered "Near me" opt-in mirrors `changeSort`'s
+   * non-distance branch, so neither a stale prompt/error state nor a restored
+   * distance sort survives the reset.
    */
   function resetAll() {
     setSearchInput("");
     lastPushedQ.current = "";
     geo.reset();
+    writeNearMePreference(false);
     navigate({ search: () => ({}) });
   }
 

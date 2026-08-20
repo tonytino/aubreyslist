@@ -97,3 +97,80 @@ test.describe("near me — geolocation denied", () => {
     await expect(resultsList.or(emptyState).first()).toBeVisible();
   });
 });
+
+test.describe("near me — remembered opt-in", () => {
+  test.use({ geolocation: DENVER, permissions: ["geolocation"] });
+
+  test("a granted device restores the distance sort on a bare visit", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("near-me-sort", "true");
+    });
+
+    await page.goto("/");
+    await waitForBrowseReady(page);
+
+    // The restore runs off the stored flag plus an existing grant, so a bare
+    // `/` lands on the distance sort with coords, with no interaction.
+    await expect(page).toHaveURL(/sort=distance/);
+    await expect(page).toHaveURL(/lat=39\.7392/);
+    await expect(page.getByLabel("Sort by")).toHaveValue("distance");
+  });
+
+  test("an explicit sort in the URL wins over the remembered opt-in", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("near-me-sort", "true");
+    });
+
+    await page.goto("/?sort=trust");
+    await waitForBrowseReady(page);
+
+    await expect(page).toHaveURL(/sort=trust/);
+    await expect(page).not.toHaveURL(/sort=distance/);
+  });
+
+  test("choosing another sort forgets the opt-in", async ({ page }) => {
+    // Seeded through the page, not `addInitScript`: an init script re-runs on
+    // every navigation and would rewrite the flag this test needs cleared.
+    await page.goto("/");
+    await page.evaluate(() => {
+      localStorage.setItem("near-me-sort", "true");
+    });
+    await page.reload();
+    await waitForBrowseReady(page);
+    await expect(page).toHaveURL(/sort=distance/);
+
+    await page.getByLabel("Sort by").selectOption("trust");
+    await expect(page).toHaveURL(/sort=trust/);
+    expect(await page.evaluate(() => localStorage.getItem("near-me-sort"))).toBeNull();
+
+    await page.goto("/");
+    await waitForBrowseReady(page);
+    await expect(page.getByLabel("Sort by")).toHaveValue("alpha");
+    await expect(page).not.toHaveURL(/sort=distance/);
+  });
+});
+
+test.describe("near me — remembered opt-in without a grant", () => {
+  // No `permissions: ["geolocation"]`: the stored flag alone must never open a
+  // permission prompt or hijack the default order.
+  test("a stored opt-in is ignored until the browser grants location", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("near-me-sort", "true");
+    });
+
+    await page.goto("/");
+    await waitForBrowseReady(page);
+    // Settle on rendered results before the negative assertions, so "no
+    // restore happened" isn't just "the restore hadn't run yet".
+    const resultsList = page.getByRole("list");
+    const emptyState = page.getByRole("heading", {
+      name: /Let's find your safe table|No spots match/,
+    });
+    await expect(resultsList.or(emptyState).first()).toBeVisible();
+
+    await expect(page).not.toHaveURL(/sort=distance/);
+    await expect(page.getByLabel("Sort by")).toHaveValue("alpha");
+    // The flag survives: an ungranted browser is not a denial to forget.
+    expect(await page.evaluate(() => localStorage.getItem("near-me-sort"))).toBe("true");
+  });
+});
