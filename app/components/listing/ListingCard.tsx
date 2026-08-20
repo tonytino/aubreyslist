@@ -266,17 +266,32 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
                   credit line, scaled down for the card's shorter media band: a
                   subtle bottom gradient scrim guarantees the white caption stays
                   legible on a light photo (text-shadow alone can't). Both layers
-                  are decorative (`aria-hidden` scrim; the credit reads normally). */}
+                  are decorative (`aria-hidden` scrim; the credit reads normally).
+                  Softened deliberately (owner: too prominent), one step below
+                  the `text-caption` token (12px) via an arbitrary 11px value.
+                  Text opacity only comes down to /85, not the hero's /80 —
+                  verified against the WORST case (a pure-white photo behind
+                  the scrim): the card's scrim was bumped from/60 to /65 in
+                  lockstep so the combination still clears AA. From-black/65
+                  over white composites to ~rgb(89,89,89) (L ~= 0.101);
+                  white/85 text over that composites to ~rgb(230,230,230)
+                  (L ~= 0.79) — a ~5.6:1 contrast ratio, comfortably above the
+                  4.5:1 AA floor for normal-size text, with the `text-shadow`
+                  below as extra (unmodeled) headroom. (The original /60 scrim
+                  + white/90 pairing left only ~5:1 in this same worst case —
+                  too thin a margin to also fade the text, so the scrim moved
+                  up slightly rather than reducing further.) Weight was
+                  already regular (no bold to step down). */}
               {vm.photoAttributions && vm.photoAttributions.length > 0 ? (
                 <>
                   <div
                     aria-hidden="true"
                     data-testid="food-photo-attribution-scrim"
-                    className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/60 to-transparent"
+                    className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/65 to-transparent"
                   />
                   <p
                     data-testid="food-photo-attribution"
-                    className="absolute bottom-1 right-2 max-w-[80%] truncate text-caption text-white/90 [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]"
+                    className="absolute bottom-1 right-2 max-w-[80%] truncate text-[11px] text-white/85 [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]"
                   >
                     Photo:{" "}
                     {vm.photoAttributions.map((attribution) => attribution.displayName).join(", ")}
