@@ -10,7 +10,7 @@
 //
 // ── Summary fallback chain ───────────────────────────────────────────────────
 //   1. Claude rewrite of the TL;DR/title/body (only if ANTHROPIC_API_KEY is set,
-//      and NEVER fatal — any API failure logs a warning and falls through);
+//      and never fatal — any API failure logs a warning and falls through);
 //   2. the PR's TL;DR section verbatim (CI-enforced by check-tldr-block.mjs, so
 //      it exists for every non-dependabot PR);
 //   3. the PR title (always exists — squash-merge makes it the commit message).
@@ -88,7 +88,7 @@ export function buildSummaryPrompt({ title, tldr, body }) {
 
 /**
  * Ask Claude for the business-audience rewrite. Returns the trimmed summary
- * text, or null on ANY failure (non-200, network throw, empty/odd response) —
+ * text, or null on any failure (non-200, network throw, empty/odd response) —
  * the Slack update must never fail because of the LLM step.
  *
  * @param {{ apiKey: string, title: string, tldr: string | null, body: string, model?: string }} input
@@ -240,7 +240,7 @@ async function main() {
   });
 
   if (!response.ok) {
-    // Log the status ONLY. Never print the webhook URL, and never print the
+    // Log the status only. Never print the webhook URL, and never print the
     // response body — Slack error bodies can echo request details.
     console.error(`::error::Slack webhook POST failed with HTTP ${response.status}.`);
     process.exit(1);

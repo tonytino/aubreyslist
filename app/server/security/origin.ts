@@ -1,20 +1,19 @@
 import type { MiddlewareHandler } from "hono";
 
 /**
- * Origin/Referer same-origin check for state-changing requests (AUB-174).
+ * Origin/Referer same-origin check for state-changing requests.
  *
  * Defense-in-depth on top of the `SameSite=Lax` session cookie: a
- * cross-site-forged POST (classic CSRF) is rejected with `403` BEFORE any route
- * handler / DB work runs. Applied CENTRALLY on both backend surfaces (see
- * `docs/agents/api.md`):
+ * cross-site-forged POST (classic CSRF) is rejected with `403` before any
+ * route handler or DB work runs. Applied centrally on both backend surfaces
+ * (`docs/agents/api.md`):
  *
- * - the Hono `/api/*` surface, via {@link honoOriginCheck} in
- *   `app/server/index.ts`; and
- * - `createServerFn` POSTs, via the global request middleware in `app/start.ts`
- *   (which calls {@link originGuardResponse}).
+ * - the Hono `/api/*` surface, via {@link honoOriginCheck}; and
+ * - `createServerFn` POSTs, via the global request middleware (which calls
+ *   {@link originGuardResponse}).
  *
- * Individual write handlers are intentionally NOT touched — the guarantee lives
- * in one place per surface.
+ * Individual write handlers are intentionally not touched — the guarantee
+ * lives in one place per surface.
  *
  * ## Policy
  *
@@ -23,18 +22,17 @@ import type { MiddlewareHandler } from "hono";
  * 1. Prefer the `Origin` header; compare its authority (host:port) to the
  *    request's own host.
  * 2. Fall back to `Referer` when `Origin` is absent.
- * 3. Reject when neither is present, or when the present one mismatches, or when
+ * 3. Reject when neither is present, when the present one mismatches, or when
  *    `Origin` is the opaque value `"null"`.
  *
- * Comparing against the request's OWN host (rather than a hardcoded allowlist)
- * is what makes this environment-aware for free: it passes on `localhost:3000`
- * in dev and on `*.vercel.app` preview URLs alike, because the browser's
- * `Origin` always reflects the same host it is talking to.
+ * Comparing against the request's own host (not a hardcoded allowlist) makes
+ * this environment-aware for free: it passes on `localhost:3000` and on
+ * `*.vercel.app` preview URLs alike, because the browser's `Origin` always
+ * reflects the host it is talking to.
  *
  * Note: this rejects non-browser API clients that omit both headers (e.g. a
  * future server-to-server webhook). Such callers must be exempted explicitly
- * (e.g. by signature verification) when they are added; today the only `/api`
- * mutations are same-origin browser calls (auth sign-out, preview dev-login).
+ * (e.g. by signature verification) when added.
  */
 
 /** HTTP methods that mutate state and therefore require the origin check. */

@@ -14,36 +14,36 @@ import {
 import { requireCurrentRole } from "~/server/auth/guards";
 
 /**
- * Moderation ACTIONS — the server-only write layer a moderator/admin uses to act
- * on flagged content (issue #41, ADR-010 + domain.md "Roles & Permissions").
+ * Moderation actions — the server-only write layer a moderator/admin uses to
+ * act on flagged content (ADR-010 + domain.md "Roles & Permissions").
  *
- * The design is deliberately the SAFEST option: every action is
+ * Every action is:
  *
- *  - **soft** — content is never hard-deleted; `hide`/`remove` flip the content
- *    row's `moderationStatus` enum (`db/schema.ts`), `restore` flips it back, so
- *    every decision is fully REVERSIBLE and preserves the audit trail;
+ *  - **soft** — content is never hard-deleted; `hide`/`remove` flip the
+ *    content row's `moderationStatus` enum, `restore` flips it back, so every
+ *    decision is fully reversible and preserves the audit trail;
  *  - **audited** — every action appends an immutable `moderation_actions` row
- *    (who/what/which target/which prompting flag/optional note/when), so the
- *    history is complete (a `hide` then a `restore` are two rows, never an
- *    overwrite);
- *  - **atomic** — the audit row, the content-state change (where applicable), and
- *    the prompting flag's status change are written in ONE `db.batch(...)` so a
- *    partial application can never leave the queue and content out of sync.
+ *    (who/what/which target/which prompting flag/optional note/when); a
+ *    `hide` then a `restore` are two rows, never an overwrite;
+ *  - **atomic** — the audit row, the content-state change, and the prompting
+ *    flag's status change are written in one `db.batch(...)` so a partial
+ *    application can never leave the queue and content out of sync.
  *
- * Trust principle (domain.md → Trust Model, "recent harm is never buried"): the
- * PUBLIC read paths exclude non-`visible` content and recompute aggregates from
- * the surviving rows, so moderation can only ever REMOVE moderated-away content
- * from the public surface — it can never bury a real, still-visible incident.
+ * Trust principle (domain.md → Trust Model, "recent harm is never buried"):
+ * the public read paths exclude non-`visible` content and recompute
+ * aggregates from the surviving rows, so moderation can only remove
+ * moderated-away content from the public surface — it can never bury a real,
+ * still-visible incident.
  *
  * Permission boundary: every entry point runs `requireCurrentRole("moderator")`
- * FIRST (admins out-rank moderators and pass; a plain `user` gets 403; an
- * anonymous caller gets 401) BEFORE any DB work — the gate is enforced
- * server-side off the authoritative `users` row, never trusted to the UI.
+ * first (admins out-rank moderators and pass; a plain `user` gets 403; an
+ * anonymous caller gets 401) before any DB work — enforced server-side off
+ * the authoritative `users` row, never trusted to the UI.
  *
- * Server-only: imports the DB client and the auth guards. NEVER import from
+ * Server-only: imports the DB client and the auth guards. Never import from
  * client code — the client-callable `createServerFn` wrappers live in
- * `./actions.fn.ts` (the `*.fn.ts` convention) so the browser bundle never drags
- * in `getDb` (neon/drizzle).
+ * `./actions.fn.ts` (the `*.fn.ts` convention), so the browser bundle never
+ * drags in `getDb` (neon/drizzle).
  */
 
 // ---------------------------------------------------------------------------
@@ -122,17 +122,17 @@ function resolveTargetColumns(input: ModerationActionInput): TargetColumns {
 }
 
 /**
- * Verify the prompting flag actually targets the content being acted on (#157).
+ * Verify the prompting flag actually targets the content being acted on.
  *
- * Without this check a moderator (or a crafted call) could pass a `flagId` whose
- * exclusive-arc target (`listingId`/`claimId`/`incidentId`) differs from the
- * action's resolved target — closing an unrelated flag AND writing an internally
- * inconsistent audit row. We SELECT the flag's target columns and assert they
- * match the action's single target BEFORE any write, so a mismatch (or a missing
- * flag) is rejected and the atomic batch never runs.
+ * Without this check a crafted call could pass a `flagId` whose exclusive-arc
+ * target differs from the action's resolved target — closing an unrelated
+ * flag and writing an internally inconsistent audit row. The flag's target
+ * columns are selected and asserted against the action's single target before
+ * any write, so a mismatch (or a missing flag) is rejected and the atomic
+ * batch never runs.
  *
- * Throws `422 Unprocessable Entity` (an HTTPException, like the auth guards) on
- * mismatch or not-found, with a non-leaky message.
+ * Throws `422 Unprocessable Entity` on mismatch or not-found, with a
+ * non-leaky message.
  */
 async function assertFlagTargetsContent(
   db: ReturnType<typeof getDb>,
@@ -189,9 +189,9 @@ function buildContentStatusUpdate(
 }
 
 /**
- * The shared write path for every action (issue #41).
+ * The shared write path for every action.
  *
- * 1. Gate: `requireCurrentRole("moderator")` (admins pass) BEFORE any DB work.
+ * 1. Gate: `requireCurrentRole("moderator")` (admins pass) before any DB work.
  * 2. Validate: parse the exclusive-arc target + optional note/flagId via Zod.
  * 3. Atomic `db.batch(...)`: append the `moderation_actions` audit row, then (for
  *    hide/remove/restore) flip the target content's `moderationStatus`, then (for
@@ -208,7 +208,7 @@ async function applyModerationAction(
   contentStatus: ModerationStatus | null,
   flagStatus: "resolved" | "dismissed" | null
 ): Promise<void> {
-  // 1. Permission boundary FIRST — before any validation or DB work.
+  // 1. Permission boundary first — before any validation or DB work.
   const actor = await requireCurrentRole("moderator");
 
   // 2. Validate the exclusive-arc target + optional note/flag.
@@ -218,7 +218,7 @@ async function applyModerationAction(
   const target = resolveTargetColumns(input);
 
   // 2b. When a prompting flag is supplied, verify it actually targets the
-  //     content being acted on (#157) BEFORE any write — a mismatch closes an
+  //     content being acted on before any write — a mismatch closes an
   //     unrelated flag and writes an inconsistent audit row, so reject it.
   if (input.flagId) {
     await assertFlagTargetsContent(db, input.flagId, target);
@@ -282,7 +282,7 @@ export async function hideContent(input: ModerationActionInput): Promise<void> {
 
 /**
  * Remove the target — a terminal moderator decision. Content → `removed` (still
- * SOFT — never hard-deleted, so it stays auditable and reversible), the prompting
+ * soft — never hard-deleted, so it stays auditable and reversible), the prompting
  * flag (if supplied) → `resolved`. Audited as `remove`. Reverse with
  * {@link restoreContent}.
  */
@@ -291,9 +291,9 @@ export async function removeContent(input: ModerationActionInput): Promise<void>
 }
 
 /**
- * Restore previously-hidden/removed content back to public visibility. Content →
- * `visible`; the flag is left untouched (a restore is a content decision, not a
- * triage one). Audited as `restore`.
+ * Restore hidden/removed content back to public visibility. Content →
+ * `visible`; the flag is left untouched (a restore is a content decision, not
+ * a triage one). Audited as `restore`.
  */
 export async function restoreContent(input: ModerationActionInput): Promise<void> {
   await applyModerationAction(input, "restore", "visible", null);

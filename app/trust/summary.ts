@@ -11,18 +11,16 @@ import type { ClaimAttribute } from "~/db/schema";
 import type { ClaimAggregate } from "~/server/attestations";
 
 /**
- * Pure trust roll-up derivation (issue #29, ADR-007).
+ * Pure trust roll-up derivation (ADR-007).
  *
- * The transparent trust summary is a *roll-up of visible evidence* — never a
- * secret score. Everything in here is derived purely from a {@link ClaimAggregate}
- * (confirm/dispute counts + `lastConfirmedAt` recency), which is itself derived
- * from attestation rows the user can also see. No hidden weighting, no opaque
+ * The transparent trust summary is a roll-up of visible evidence — never a
+ * secret score. Everything here derives purely from a {@link ClaimAggregate}
+ * (confirm/dispute counts + `lastConfirmedAt` recency), itself derived from
+ * attestation rows the user can also see. No hidden weighting, no opaque
  * formula (docs/agents/domain.md → Trust Model, "the summary must remain
  * explainable").
  *
- * CLIENT-SAFE: this module is pure and imports NO database client, so it can be
- * shared by the listing-detail page and the browse-list cards (#33) alike. Keep
- * it free of any `db`/server-only imports.
+ * Client-safe: keep this module free of any `db`/server-only imports.
  */
 
 // ---------------------------------------------------------------------------
@@ -32,15 +30,13 @@ import type { ClaimAggregate } from "~/server/attestations";
 /**
  * Human-readable label per claim attribute (the GF taxonomy in
  * docs/agents/domain.md). Keyed by the `claim_attribute` enum so the mapping
- * is exhaustive at compile time — add a taxonomy value and TypeScript forces a
- * label here too.
+ * is exhaustive at compile time — a new taxonomy value forces a label here.
  *
- * NOTE: the `celiac_safe_vs_gluten_friendly` enum key is surfaced simply as
- * "Celiac-safe" (issue #175). Every listing is assumed gluten-free-friendly, so
- * the useful community question is just "is it celiac-safe?" — confirm ⇒
- * celiac-safe, dispute ⇒ gluten-friendly only. Renaming the key to `celiac_safe`
- * is a deferred follow-up (it would force an enum type-recreate migration for no
- * user-visible gain); until then the key and label deliberately differ.
+ * The `celiac_safe_vs_gluten_friendly` enum key is surfaced as "Celiac-safe":
+ * every listing is assumed gluten-free-friendly, so the useful community
+ * question is just "is it celiac-safe?" — confirm ⇒ celiac-safe, dispute ⇒
+ * gluten-friendly only. The key and label deliberately differ (renaming the
+ * enum would force a type-recreate migration for no user-visible gain).
  */
 export const CLAIM_ATTRIBUTE_LABELS: Record<ClaimAttribute, string> = {
   celiac_safe_vs_gluten_friendly: "Celiac-safe",
@@ -56,15 +52,9 @@ export function claimAttributeLabel(attribute: ClaimAttribute): string {
 }
 
 /**
- * A distinct lucide glyph per claim attribute — shape reinforces the attribute
- * identity on compact surfaces (e.g. the review-step outcome chip), independent
- * of colour. The headline `celiac_safe_vs_gluten_friendly` icon (ShieldCheck) is
- * live too: `ClaimVoteControls` renders it on the headline claim's confirm badge
- * (the Celiac-safe toggle). The add-listing review chip still keeps its
- * `SafetySignal` for the headline rather than this bare glyph.
- *
- * Exhaustive by the `ClaimAttribute` key so adding a taxonomy value forces an
- * icon here too. All glyphs are verified exports of the installed `lucide-react`.
+ * A distinct lucide glyph per claim attribute — shape reinforces attribute
+ * identity on compact surfaces, independent of colour. Exhaustive by the
+ * `ClaimAttribute` key, so a new taxonomy value forces an icon here too.
  */
 export const CLAIM_ATTRIBUTE_ICONS: Record<ClaimAttribute, LucideIcon> = {
   celiac_safe_vs_gluten_friendly: ShieldCheck,
@@ -75,18 +65,12 @@ export const CLAIM_ATTRIBUTE_ICONS: Record<ClaimAttribute, LucideIcon> = {
 };
 
 /**
- * One-line clarifier for what *confirm* vs *dispute* MEANS on an attribute,
- * shown under its label on the Community-claims surface (listing detail) AND
- * as the helper copy on the matching add-listing attestation step — one
- * source of truth for both surfaces. Keyed by the `claim_attribute` enum so
- * the mapping is exhaustive at compile time — add a taxonomy value and
- * TypeScript forces a description here too. `celiac_safe_vs_gluten_friendly`
- * carries the gloss a bare vote would otherwise leave ambiguous (issue #175);
- * the other four are honest one-line facts. The headline gloss names the two
- * STATES rather than button captions, because the two surfaces label their
- * controls differently: the listing-detail vote toggles ARE the Celiac-safe /
- * Gluten-friendly badges, while the add-listing wizard step keeps literal
- * Confirm/Dispute buttons (with its own "what your answer records" preview).
+ * One-line clarifier for what confirm vs dispute means on an attribute — one
+ * source of truth for the Community-claims surface and the add-listing
+ * attestation step. Keyed by the `claim_attribute` enum so the mapping is
+ * exhaustive at compile time. The headline gloss names the two states rather
+ * than button captions, because the two surfaces label their controls
+ * differently.
  */
 export const CLAIM_ATTRIBUTE_DESCRIPTIONS: Record<ClaimAttribute, string> = {
   celiac_safe_vs_gluten_friendly:
@@ -110,9 +94,8 @@ export function claimAttributeDescription(attribute: ClaimAttribute): string {
 
 /**
  * Format the confirm/dispute distribution as visible counts, e.g.
- * `"8 confirm / 1 dispute"`. Always shows BOTH sides (including zeroes) so the
- * distribution is never misread — "8 confirm" alone hides that there were also
- * disputes. Singular/plural is handled per side.
+ * `"8 confirm / 1 dispute"`. Always shows both sides (including zeroes) so the
+ * distribution is never misread — "8 confirm" alone would hide disputes.
  */
 export function formatVoteCounts(
   aggregate: Pick<ClaimAggregate, "confirmCount" | "disputeCount">
@@ -152,10 +135,10 @@ const MS_PER_YEAR = 365 * MS_PER_DAY;
  * Render a coarse relative-time string for a past instant, e.g. `"3 weeks ago"`,
  * `"just now"`, `"yesterday"`. Used for the "last confirmed …" recency cue.
  *
- * Coarse by design: the trust summary wants "how fresh is this consensus", not
- * second-precision. Future dates (clock skew) clamp to "just now". Returns
- * `null` for a `null` instant (a claim never confirmed) so callers render an
- * honest "not yet confirmed" rather than a fabricated time.
+ * Coarse by design: the trust summary wants "how fresh is this consensus",
+ * not second-precision. Future dates (clock skew) clamp to "just now".
+ * Returns `null` for a `null` instant (a claim never confirmed) so callers
+ * render an honest "not yet confirmed" rather than a fabricated time.
  */
 export function formatRelativeTime(value: Date | null, now: Date = new Date()): string | null {
   if (value === null) {
@@ -212,17 +195,16 @@ export function formatLastConfirmed(lastConfirmedAt: Date | null, now: Date = ne
 export const DEFAULT_STALENESS_MONTHS = 6;
 
 /**
- * The instant marking the staleness boundary: a confirmation AT OR AFTER this
- * instant is "fresh", one strictly BEFORE it is "stale". Single source of truth
- * for the boundary so the SQL sort/filter in `app/server/listings/browse.ts`
- * (`buildOrderBy`) can derive its cutoff the SAME way the displayed glance does
+ * The instant marking the staleness boundary: a confirmation at or after this
+ * instant is "fresh", one strictly before it is "stale". Single source of
+ * truth so the SQL sort/filter in `app/server/listings/browse.ts`
+ * (`buildOrderBy`) derives its cutoff the same way the displayed glance does
  * — no drift between the card and the DB ordering (ADR-007).
  *
- * Boundary rule (chosen so SQL and JS agree at the exact-equality instant): a
- * confirmation EXACTLY `stalenessMonths` old sits on the edge and is classified
- * FRESH (inclusive lower bound). Equivalent to `age > window` ⟺ stale, i.e. a
- * claim is stale only once its age STRICTLY exceeds the window. The SQL builder
- * mirrors this as `lastConfirmedAt >= cutoff` for "fresh".
+ * Boundary rule (so SQL and JS agree at the exact-equality instant): a
+ * confirmation exactly `stalenessMonths` old is classified fresh (inclusive
+ * lower bound); a claim is stale only once its age strictly exceeds the
+ * window. The SQL builder mirrors this as `lastConfirmedAt >= cutoff`.
  */
 export function stalenessCutoff(
   now: Date = new Date(),
@@ -233,13 +215,13 @@ export function stalenessCutoff(
 
 /**
  * Whether a claim's last confirmation is older than the staleness window. A
- * never-confirmed claim is NOT "stale" — it simply has no recency to age out
- * (it shows "not yet confirmed" instead; ADR-007). Window in months, defaulting
+ * never-confirmed claim is not "stale" — it has no recency to age out and
+ * shows "not yet confirmed" instead (ADR-007). Window in months, defaulting
  * to the ADR-007 value; the caller can pass the admin-tuned setting.
  *
- * Derives the boundary from {@link stalenessCutoff} so it stays in lockstep with
- * the SQL `fresh` predicate: stale ⟺ the confirmation is strictly BEFORE the
- * cutoff (a confirmation exactly on the edge counts as fresh).
+ * Derives the boundary from {@link stalenessCutoff} so it stays in lockstep
+ * with the SQL `fresh` predicate: stale ⟺ the confirmation is strictly before
+ * the cutoff (a confirmation exactly on the edge counts as fresh).
  */
 export function isStale(
   lastConfirmedAt: Date | null,
@@ -275,11 +257,12 @@ export interface ClaimTrustSummary {
   /** True when a past confirmation is older than the staleness window. */
   stale: boolean;
   /**
-   * True when this claim was SUGGESTED by the curator bot ("Aubrey's Bot") and no
-   * real user has attested it yet. Drives the "Suggested by Aubrey's Bot" badge.
-   * A suggestion is provenance, not evidence (ADR-007): it is mutually exclusive
-   * with `hasEvidence` in practice — the first real vote clears the suggestion —
-   * so the row shows the badge instead of the empty state, never a fake count.
+   * True when this claim was suggested by the curator bot ("Aubrey's Bot")
+   * and no real user has attested it yet. Drives the "Suggested by Aubrey's
+   * Bot" badge. A suggestion is provenance, not evidence (ADR-007): mutually
+   * exclusive with `hasEvidence` — the first real vote clears the suggestion
+   * — so the row shows the badge instead of the empty state, never a fake
+   * count.
    */
   suggested: boolean;
 }
@@ -305,10 +288,10 @@ export function summarizeClaim(
     recencyLabel: formatLastConfirmed(aggregate.lastConfirmedAt, now),
     hasEvidence: evidence,
     stale: isStale(aggregate.lastConfirmedAt, now, stalenessMonths),
-    // A suggestion only "shows" while there's no real evidence; the first real
-    // vote clears `suggestedBy` server-side, but guard here too so a badge can
-    // never sit beside real counts. `suggested` is optional on the input so
-    // callers with a bare {confirm,dispute,lastConfirmed} Pick stay valid.
+    // A suggestion only shows while there is no real evidence; the first real
+    // vote clears `suggestedBy` server-side, but guard here too so a badge
+    // can never sit beside real counts. `suggested` is optional so callers
+    // with a bare {confirm,dispute,lastConfirmed} Pick stay valid.
     suggested: (aggregate.suggested ?? false) && !evidence,
   };
 }
@@ -318,24 +301,23 @@ export function summarizeClaim(
 // ---------------------------------------------------------------------------
 
 /**
- * Whether a claim has POSITIVE community consensus: there is evidence and
- * confirms STRICTLY outnumber disputes.
+ * Whether a claim has positive community consensus: there is evidence and
+ * confirms strictly outnumber disputes.
  *
- * This is the single, explainable rule for "the community has affirmed this
- * attribute" — the same `confirmCount > disputeCount` reading that
- * {@link deriveHeadlineSafetyState} uses to separate `"celiac-safe"` (confirms
- * lead) from `"gluten-friendly"` (disputes tie or lead). A tie is deliberately
- * NOT positive: contested evidence must never read as affirmed (honest by
- * construction — a celiac could be hurt by an overstated match).
+ * The single, explainable rule for "the community has affirmed this
+ * attribute" — the same `confirmCount > disputeCount` reading
+ * {@link deriveHeadlineSafetyState} uses. A tie is deliberately not positive:
+ * contested evidence must never read as affirmed (a celiac could be hurt by
+ * an overstated match).
  *
- * Recency/staleness is intentionally NOT part of this rule: a stale-but-
- * uncontested claim still represents a real, visible community consensus and the
- * taxonomy filter ("show me places the community says have a dedicated fryer")
- * should surface it. The card's own glance still flags staleness separately.
+ * Recency/staleness is intentionally not part of this rule: a
+ * stale-but-uncontested claim still represents a real, visible community
+ * consensus and the taxonomy filter should surface it. The card's glance
+ * flags staleness separately.
  *
- * Used by the GF taxonomy browse filter (#35): a listing matches an attribute
- * only when its claim for that attribute has positive consensus — never merely
- * because a `claims` row exists.
+ * Used by the GF taxonomy browse filter: a listing matches an attribute only
+ * when its claim has positive consensus — never merely because a `claims` row
+ * exists.
  */
 export function hasPositiveConsensus(
   aggregate: Pick<ClaimAggregate, "confirmCount" | "disputeCount">
@@ -351,25 +333,23 @@ export function hasPositiveConsensus(
  * Derive the headline {@link SafetyState} for the `celiac_safe_vs_gluten_friendly`
  * claim from its aggregate — the single seam the headline `SafetySummary` wires.
  *
- * HONEST BY CONSTRUCTION (a celiac could get hurt by a fabricated rating):
- * - **No evidence** (zero confirms and disputes) → `null`. The headline renders
- *   its existing "Not yet attested" empty state; we never invent a verdict.
+ * Honest by construction (a celiac could get hurt by a fabricated rating):
+ * - **No evidence** (zero confirms and disputes) → `null`. The headline
+ *   renders its "Not yet attested" empty state; never an invented verdict.
  * - **Disputes tie or outnumber confirms** → `"gluten-friendly"`: the safer,
- *   lower claim. This is checked FIRST — a live dispute majority must NEVER be
- *   masked by staleness. `lastConfirmedAt` is only bumped by confirms, so a
- *   claim confirmed long ago then freshly disputed (e.g. 1 confirm / 10 dispute)
- *   would otherwise read as a neutral "may be stale" and bury contested fresh
- *   evidence. We deliberately fall back to the less reassuring state when the
- *   evidence is contested — never overstate safety.
+ *   lower claim. Checked first — a live dispute majority must never be masked
+ *   by staleness. `lastConfirmedAt` is only bumped by confirms, so a claim
+ *   confirmed long ago then freshly disputed would otherwise read as a
+ *   neutral "may be stale" and bury contested fresh evidence. Contested
+ *   evidence falls back to the less reassuring state — never overstate safety.
  * - **Stale** confirmation (older than the window) while confirms lead →
- *   `"stale"`. Recency is weighted (ADR-007): an aged, uncontested consensus is
- *   flagged, not trusted as fresh.
+ *   `"stale"`. Recency is weighted (ADR-007): an aged, uncontested consensus
+ *   is flagged, not trusted as fresh.
  * - **Confirms strictly outnumber disputes** and the confirmation is fresh →
- *   `"celiac-safe"`: the community consensus, from visible counts, is that
- *   cross-contamination is taken seriously.
+ *   `"celiac-safe"`.
  *
- * This is NOT a score: it is a direct reading of the visible confirm/dispute
- * counts and recency, reproducible by any user looking at the same evidence.
+ * Not a score: a direct reading of the visible confirm/dispute counts and
+ * recency, reproducible by any user looking at the same evidence.
  */
 export function deriveHeadlineSafetyState(
   aggregate: Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt">,
@@ -379,9 +359,9 @@ export function deriveHeadlineSafetyState(
   if (!hasEvidence(aggregate)) {
     return null;
   }
-  // Contested-first: a live dispute majority outranks staleness so fresh harm
-  // is never hidden behind an "outdated" chip (the confirm-only recency signal
-  // can be stale even as disputes pile up).
+  // Contested first: a live dispute majority outranks staleness so fresh harm
+  // is never hidden behind an "outdated" chip (the confirm-only recency
+  // signal can be stale even as disputes pile up).
   if (aggregate.confirmCount <= aggregate.disputeCount) {
     return "gluten-friendly";
   }
@@ -393,17 +373,16 @@ export function deriveHeadlineSafetyState(
 }
 
 // ---------------------------------------------------------------------------
-// Safety tier — the displayed headline state as a sortable rank (issue #36)
+// Safety tier — the displayed headline state as a sortable rank
 // ---------------------------------------------------------------------------
 
 /**
- * The browse "Most trusted" sort rank for a celiac aggregate — HIGHER is safer
- * and sorts first. The rank is derived DIRECTLY from {@link deriveHeadlineSafetyState}
- * so it can never drift from the state the card displays (ADR-007: the sort must
- * be reproducible from the visible glance). The server reproduces these exact
- * tiers in SQL (`buildOrderBy` in `app/server/listings/browse.ts`) so DB-ordered
- * results match this ranking; this pure function is the single, testable
- * specification of the contract.
+ * The browse "Most trusted" sort rank for a celiac aggregate — higher is safer
+ * and sorts first. The rank derives directly from {@link deriveHeadlineSafetyState}
+ * so it can never drift from the state the card displays (ADR-007: the sort
+ * must be reproducible from the visible glance). The server reproduces these
+ * exact tiers in SQL (`buildOrderBy` in `app/server/listings/browse.ts`);
+ * this pure function is the single, testable specification of the contract.
  *
  *   4  celiac-safe  — fresh, uncontested confirm-majority (the safest, first)
  *   3  stale        — confirm-majority but past the staleness window

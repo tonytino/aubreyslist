@@ -16,9 +16,9 @@ import {
 import { requireCurrentUser } from "~/server/auth/guards";
 import { enforceWriteLimit } from "~/server/rate-limit";
 
-// Re-exported so server code and the existing places tests keep one import
-// surface; the client-safe definitions (validators + result/prediction types)
-// live in `~/listings/places-input` (#141).
+// Re-exported so server code and the places tests keep one import surface;
+// the client-safe definitions (validators + result/prediction types) live in
+// `~/listings/places-input`.
 export {
   type AutocompleteInput,
   autocompleteInputSchema,
@@ -61,15 +61,12 @@ const DETAILS_URL_BASE = "https://places.googleapis.com/v1/places";
 // Field mask for place details — request only what we persist on a listing,
 // plus `photos`. `id` is the canonical Place ID; the rest map onto `listings`
 // columns. `googleMapsUri` is Google's own share link for the place (what the
-// Maps "Share" button produces) — the most reliable `mapsUrl` we can store. It
-// is billed in the same (Pro) SKU tier as `displayName`, so requesting it does
-// not change the cost of this call. `photos` (AUB-215) is likewise in the Pro
-// SKU — each entry carries `name` (`places/PLACE_ID/photos/RESOURCE`),
-// `widthPx`/`heightPx`, and `authorAttributions[]`. NOTE: photos are Google
-// content and must NEVER be persisted (ADR-014) — `detailsResponseSchema`
-// deliberately does not parse them, so nothing photo-shaped can reach the
-// `listings` insert. The render-time photo fetch lives in
-// `~/server/places-photos` (its own tight, `photos`-only call).
+// Maps "Share" button produces) — the most reliable `mapsUrl` we can store,
+// billed in the same (Pro) SKU tier as `displayName`, so requesting it does
+// not change the cost of this call. `photos` is likewise in the Pro SKU.
+// Photos are Google content and must never be persisted (ADR-014) —
+// `detailsResponseSchema` deliberately does not parse them, so nothing
+// photo-shaped can reach the `listings` insert.
 const DETAILS_FIELD_MASK = "id,displayName,formattedAddress,location,googleMapsUri,photos";
 
 /** App-settings key whose value selects the active intake mode (ADR-008). */
@@ -81,15 +78,14 @@ const INTAKE_MODE_KEY = "intake_mode";
 
 /**
  * Build a Google Maps deep-link for a Place ID using the documented Maps URLs
- * API (`/maps/search/?api=1&query=…&query_place_id=…`). Maps resolves the Place
- * ID directly and falls back to the human-readable `query` (name + address)
- * only if the ID can no longer be found. The URLs API requires `query` to be
+ * API (`/maps/search/?api=1&query=…&query_place_id=…`). Maps resolves the
+ * Place ID directly and falls back to the human-readable `query` (name +
+ * address) when the ID cannot be found. The URLs API requires `query` to be
  * present whenever `query_place_id` is used.
  *
- * Used as the fallback when Place Details doesn't return `googleMapsUri`
- * (Google's own share link, which we prefer). The previous format here —
- * `/maps/place/?q=place_id:…` — was never a documented URL and Google Maps
- * stopped resolving it, which broke every stored listing link.
+ * Fallback for when Place Details doesn't return `googleMapsUri` (Google's own
+ * share link, which is preferred). Only this documented format is safe:
+ * Google Maps does not reliably resolve undocumented URL shapes.
  */
 export function buildMapsUrl(placeId: string, query: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -292,7 +288,7 @@ export async function runPlaceDetails(
   const { id, displayName, formattedAddress, location, googleMapsUri } = parsed.data;
   const name = displayName?.text ?? "";
   // Prefer Google's own share link; the listing-detail page only renders
-  // http(s) URLs (#90), so guard the scheme before trusting the upstream value.
+  // http(s) URLs, so guard the scheme before trusting the upstream value.
   const mapsUrl =
     googleMapsUri?.startsWith("https://") === true
       ? googleMapsUri
@@ -316,18 +312,17 @@ export async function runPlaceDetails(
 
 /**
  * Both wrappers proxy the *paid* Google Places API, so — like every write path
- * (ADR-010, issue #18) — they must reject anonymous callers and meter authed
- * ones BEFORE any upstream call, or an anonymous client could drive unbounded
- * billed usage (cost/quota DoS, issue #86). The only caller is the signed-in
- * add-listing intake form, so gating on auth is product-correct.
+ * (ADR-010) — they must reject anonymous callers and meter authed ones before
+ * any upstream call, or an anonymous client could drive unbounded billed usage
+ * (cost/quota DoS). The only caller is the signed-in add-listing intake form,
+ * so gating on auth is product-correct.
  *
  * Order of operations (mirrors `createListing`):
  * 1. {@link requireCurrentUser} — auth gate (throws 401 if anonymous).
- * 2. {@link enforceWriteLimit} — per-user rate limit (throws 429 over the cap),
- *    applied AFTER the auth gate and BEFORE the upstream Places call so an
- *    abusive burst is capped while anonymous callers still get a 401, not a 429.
- *    We reuse the shared write limiter; a separate tighter bucket is a possible
- *    follow-up, not required here.
+ * 2. {@link enforceWriteLimit} — per-user rate limit (throws 429 over the
+ *    cap), applied after the auth gate and before the upstream Places call so
+ *    an abusive burst is capped while anonymous callers still get a 401, not
+ *    a 429. Reuses the shared write limiter.
  */
 
 /** Autocomplete server function (validated input). See `runAutocomplete`. */

@@ -18,9 +18,9 @@ import {
 } from "./summary";
 
 /**
- * Unit tests for the transparent trust roll-up derivation (#29, ADR-007).
+ * Unit tests for the transparent trust roll-up derivation (ADR-007).
  *
- * The whole point is that every value is a reproducible reading of VISIBLE
+ * The whole point is that every value is a reproducible reading of visible
  * evidence (confirm/dispute counts + recency) — never a hidden score. These
  * tests pin the count formatting, relative-time rendering, staleness, and the
  * celiac-safe vs gluten-friendly headline derivation (including the no-evidence
@@ -41,7 +41,7 @@ describe("claimAttributeLabel", () => {
   it("maps each taxonomy attribute to a human label", () => {
     expect(claimAttributeLabel("dedicated_fryer")).toBe("Dedicated fryer");
     // The `celiac_safe_vs_gluten_friendly` enum key surfaces simply as
-    // "Celiac-safe" (issue #175) — key and label deliberately differ.
+    // "Celiac-safe" — key and label deliberately differ.
     expect(claimAttributeLabel("celiac_safe_vs_gluten_friendly")).toBe("Celiac-safe");
   });
 
@@ -54,7 +54,7 @@ describe("claimAttributeLabel", () => {
 
 describe("claimAttributeDescription", () => {
   it("returns the two-state clarifier for the ambiguous headline attribute (Celiac-safe, #175)", () => {
-    // The gloss names BOTH states (the vote toggles are the badges themselves),
+    // The gloss names both states (the vote toggles are the badges themselves),
     // so a headline vote is never ambiguous on either surface.
     const description = claimAttributeDescription("celiac_safe_vs_gluten_friendly");
     expect(description).toMatch(/celiac-safe/i);
@@ -163,7 +163,7 @@ describe("isStale", () => {
   });
 
   it("classifies the boundary consistently: just-inside / exact-edge / just-outside", () => {
-    // The boundary is INCLUSIVE: a confirmation EXACTLY one window old is FRESH
+    // The boundary is inclusive: a confirmation exactly one window old is fresh
     // (age == window is not yet "older than"), and so is one a hair inside it.
     // Only a confirmation strictly past the edge is stale. The SQL `fresh`
     // predicate mirrors this exact rule (`lastConfirmedAt >= cutoff`).
@@ -305,9 +305,9 @@ describe("deriveHeadlineSafetyState — honest celiac-safe vs gluten-friendly", 
 
   it("treats a confirm-majority with NULL recency as celiac-safe, NOT stale (ADR-007)", () => {
     // `lastConfirmedAt` only moves on confirms, so a confirm-majority claim can
-    // carry a NULL timestamp. A never-confirmed claim is "not yet confirmed", not
+    // carry a null timestamp. A never-confirmed claim is "not yet confirmed", not
     // stale — so the headline is celiac-safe, not "may be stale". The SQL tiering
-    // in `browse.ts` mirrors this (NULL lastConfirmedAt counts as fresh → tier 4).
+    // in `browse.ts` mirrors this (null lastConfirmedAt counts as fresh → tier 4).
     expect(
       deriveHeadlineSafetyState({ confirmCount: 3, disputeCount: 0, lastConfirmedAt: null }, NOW)
     ).toBe("celiac-safe");
@@ -323,7 +323,7 @@ describe("safetyTierRank — the browse 'Most trusted' sort contract (#36)", () 
   // Big confirm count but confirmed 2+ years ago — displayed "may be stale".
   const staleHighNet = { confirmCount: 30, disputeCount: 0, lastConfirmedAt: ago(2 * YEAR) };
   // Lots of votes but disputes outnumber confirms (contested) — the displayed
-  // state is gluten-friendly, NOT celiac-safe, even with a high confirm count.
+  // state is gluten-friendly, not celiac-safe, even with a high confirm count.
   const bigContested = { confirmCount: 18, disputeCount: 20, lastConfirmedAt: ago(1 * MONTH) };
   // No evidence at all.
   const unattested = { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null };
@@ -337,7 +337,7 @@ describe("safetyTierRank — the browse 'Most trusted' sort contract (#36)", () 
   });
 
   it("BLOCKER GUARD: a fresh celiac-safe listing outranks a high-net stale one", () => {
-    // The exact regression: 30/0-but-stale must NOT beat a fresh 3/0.
+    // The exact regression: 30/0-but-stale must not beat a fresh 3/0.
     expect(safetyTierRank(freshSafe, NOW)).toBeGreaterThan(safetyTierRank(staleHighNet, NOW));
   });
 

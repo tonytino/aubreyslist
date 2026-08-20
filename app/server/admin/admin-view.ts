@@ -3,34 +3,25 @@ import { getSetting } from "~/server/settings";
 import type { AdminView } from "./admin-view.fn";
 
 /**
- * Server-only access-gate logic behind the `fetchAdminView` server fn (#38).
+ * Server-only access-gate logic behind the `fetchAdminView` server fn.
  *
- * The admin route is admin-only and must be gated SERVER-SIDE (ADR-010 —
- * "enforce permissions server-side ... not just in the UI"). Rather than throw
- * the raw 401/403 from `requireCurrentRole` (which a route loader can't easily
- * turn into the two different UX outcomes the issue asks for), this resolves the
- * caller and reports a small, typed `access` discriminator so the loader can:
+ * ADR-010: permissions are enforced server-side, not just in the UI. Rather
+ * than throw the raw 401/403 from `requireCurrentRole`, this resolves the
+ * caller and reports a typed `access` discriminator so the loader can:
  *
  * - `anonymous` → redirect to sign-in,
  * - `forbidden` → render the 403 / not-authorised UI,
  * - `moderator` / `admin` → render the shell, with section visibility derived
  *   from the role (admins see everything; moderators see only the queue).
  *
- * The guard decision happens here on the server (reading the authoritative
- * `users` row via {@link getCurrentUser}); the client never decides access for
- * itself. The settings snapshot is read here and only fetched for admins, who
- * are the only role that sees the settings section (and its #24 intake-mode
- * toggle); the toggle's WRITE is gated separately in `set-intake-mode`.
+ * The guard reads the authoritative `users` row via {@link getCurrentUser};
+ * the client never decides access for itself. The settings snapshot is fetched
+ * only for admins — the only role that sees the settings section; the
+ * intake-mode write is gated separately in `set-intake-mode`.
  *
- * This lives in its own module (NOT the route-imported `admin-view.fn.ts`) so
- * its server-only imports (`getCurrentUser`/`getSetting` → `db`) never leak
- * into the client bundle: the `.fn.ts` wrapper references this only from inside
- * its `createServerFn` handler, which the bundler strips client-side. Splitting
- * the pure logic out this way also lets it be unit-tested directly against
- * mocked collaborators, the same seam other server modules expose for testing
- * (e.g. `runCreateListing`).
- *
- * Server-only: imports `db` transitively through current-user/settings.
+ * Lives in its own module (not the route-imported `admin-view.fn.ts`) so its
+ * server-only imports (`getCurrentUser`/`getSetting` → `db`) never leak into
+ * the client bundle. Server-only.
  */
 export async function resolveAdminView(): Promise<AdminView> {
   const user = await getCurrentUser();

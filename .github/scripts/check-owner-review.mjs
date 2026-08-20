@@ -3,22 +3,23 @@
 // Owner-review detector — Layer 2 of the guardrail (ADR-015, docs/agents/governance.md).
 // Called by the `owner-review` job in .github/workflows/pr-conventions.yml.
 //
-// Fails the PR when it touches an owner-gated surface but is NOT labeled
+// Fails the PR when it touches an owner-gated surface but is not labeled
 // `safe:human` — i.e. an agent tried to self-classify a cost/legal/security/
 // trust-safety/data-loss/privacy/disclaimer change as `safe:agent`
 // (auto-mergeable). The gated surface = the paths in owner-review-paths.mjs
-// (mirrored in .github/CODEOWNERS) PLUS content signals paths can't see
+// (mirrored in .github/CODEOWNERS) plus content signals paths can't see
 // (destructive SQL, disclaimer copy, telemetry posture).
 //
-// This is a forcing function + fast feedback, NOT the enforcement: branch
-// protection + CODEOWNERS (Layer 1) is what makes an owned-path PR unmergeable
-// without the owner. There is deliberately NO bypass label (unlike skip-review):
-// the only way past a gated change is the owner's own GitHub review.
+// A forcing function + fast feedback, not the enforcement: branch protection +
+// CODEOWNERS (Layer 1) is what makes an owned-path PR unmergeable without the
+// owner. There is deliberately no bypass label (unlike skip-review): the only
+// way past a gated change is the owner's own GitHub review.
 //
-// The matching logic is exported PURE functions so it is unit-testable without
+// The matching logic is exported pure functions so it is unit-testable without
 // git or the filesystem (mirrors .github/scripts/check-hard-rules.mjs). Tests:
-// tests/unit/check-owner-review.test.ts. The PR labels/diff are read from env in
-// main() — never inline argv — so a hostile branch name / label can't inject.
+// tests/unit/check-owner-review.test.ts. The PR labels/diff are read from env
+// in main() — never inline argv — so a hostile branch name / label can't
+// inject.
 
 import { execFileSync } from "node:child_process";
 import { CONTENT_CHECKS, OWNED_PATHS, OWNER_HANDLE, OWNER_LABEL } from "./owner-review-paths.mjs";
@@ -29,7 +30,7 @@ import { CONTENT_CHECKS, OWNED_PATHS, OWNER_HANDLE, OWNER_LABEL } from "./owner-
  * Implements the subset of gitignore/CODEOWNERS semantics this repo uses:
  *   - trailing `/` → directory prefix (matches everything under it);
  *   - `*` → any run of non-`/`; `?` → one non-`/`;
- *   - all other chars literal (`.`, `$`, … are NOT regex metacharacters here).
+ *   - all other chars literal (`.`, `$`, … are not regex metacharacters here).
  *
  * @param {string} pattern
  * @param {string} file
@@ -55,7 +56,7 @@ export function matchCodeowners(pattern, file) {
   return new RegExp(`^${re}$`).test(f);
 }
 
-/** Is `file` matched by ANY owner-gated path? */
+/** Is `file` matched by any owner-gated path? */
 export function isOwnedPath(file) {
   return OWNED_PATHS.some((p) => matchCodeowners(p, file));
 }
@@ -74,11 +75,11 @@ export function parseUnifiedDiff(diffText) {
   if (typeof diffText !== "string" || diffText === "") return out;
   let aPath = null;
   let file = null;
-  // Track hunk state so a CONTENT line that happens to start with `+++ ` / `--- `
-  // (e.g. `+++ heading` inside an edited markdown/SQL body) is NOT misparsed as a
-  // file header (review finding #5). `--- `/`+++ ` are headers only BEFORE the
-  // first `@@` of a file; once inside a hunk, `+`/`-` lines are content until the
-  // next `diff --git`.
+  // Track hunk state so a content line that happens to start with `+++ ` /
+  // `--- ` (e.g. `+++ heading` inside an edited markdown/SQL body) is not
+  // misparsed as a file header. `--- `/`+++ ` are headers only before the
+  // first `@@` of a file; once inside a hunk, `+`/`-` lines are content until
+  // the next `diff --git`.
   let inHunk = false;
   for (const line of diffText.split(/\r?\n/)) {
     if (line.startsWith("diff --git")) {
@@ -183,8 +184,8 @@ function collectDiff() {
     base = baseRef;
   }
   // `-c core.quotepath=false` so non-ASCII filenames come back verbatim (not
-  // C-quoted like "app/caf\303\251.ts"), which would otherwise defeat the path
-  // and header matching (review finding #4). Diffing from the merge-base is
+  // C-quoted like "app/caf\303\251.ts"), which would otherwise defeat the
+  // path and header matching. Diffing from the merge-base is
   // three-dot-equivalent scoping (only this branch's own changes).
   const changedFiles = splitList(
     execFileSync("git", ["-c", "core.quotepath=false", "diff", "--name-only", `${base}`, "HEAD"], {

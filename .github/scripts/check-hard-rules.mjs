@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-// Encodes the AGENTS.md "Hard Rules" (issue #179) as a deterministic, zero-dep
-// static guard so a violation cannot be merged. The script walks the repo with
-// node:fs, runs each rule's pure matcher over the in-scope files, collects EVERY
-// violation (no fail-fast), prints each as a GitHub `::error::` annotation with
-// `file:line` + a one-line remedy, and exits 1 if any were found (0 if clean).
+// Encodes the AGENTS.md "Hard Rules" as a deterministic, zero-dep static
+// guard so a violation cannot be merged. The script walks the repo with
+// node:fs, runs each rule's pure matcher over the in-scope files, collects
+// every violation (no fail-fast), prints each as a GitHub `::error::`
+// annotation with `file:line` + a one-line remedy, and exits 1 if any were
+// found (0 if clean).
 //
 // The matching logic lives in exported pure functions (content + path -> array
 // of { line, message }) so it is unit-testable without touching the filesystem.
@@ -14,22 +15,23 @@
 // Mirrors the in-repo guard style (.github/scripts/check-changelog-tags.mjs and
 // the "Assert the client bundle contains no db/neon code" ci.yml step).
 //
-// KNOWN LIMITATIONS (deliberate heuristic limits — kept simple on purpose; the
-// authoritative backstops are the #159 client-bundle build guard and Vitest's
+// Known limitations (deliberate heuristic limits — kept simple on purpose;
+// the authoritative backstops are the client-bundle build guard and Vitest's
 // CI `allowOnly=false`, not this fast static pass):
-//   - The matchers are line-text based and do NOT strip comments or string
+//   - The matchers are line-text based and do not strip comments or string
 //     literals (intentionally — stripping is complex and risky). So a
 //     `process.env` token (rule #1) or a `.only(`/`.skip("`/`.todo(` token
-//     (rule #5) that appears inside a comment or a string literal can self-flag.
-//   - As a corollary of the above, rule #5 self-flags literal trigger tokens
-//     that appear as data in a test file (the guard's own test assembles those
-//     tokens at runtime to avoid this).
+//     (rule #5) that appears inside a comment or a string literal can
+//     self-flag.
+//   - As a corollary, rule #5 self-flags literal trigger tokens that appear as
+//     data in a test file (the guard's own test assembles those tokens at
+//     runtime to avoid this).
 //   - Rules #3/#4 scope "client surface" to the fast early-warning subset
-//     `app/components/` + `app/routes/` (minus server seams). The AUTHORITATIVE
-//     backstop for db/neon leaking into the browser is the #159 build-bundle
-//     grep, which asserts the real client output. Raw-fetch detection (rule #4)
-//     only matches when the `/api` URL literal sits on the SAME line as
-//     `fetch(`.
+//     `app/components/` + `app/routes/` (minus server seams). The
+//     authoritative backstop for db/neon leaking into the browser is the
+//     build-bundle grep in ci.yml, which asserts the real client output.
+//     Raw-fetch detection (rule #4) only matches when the `/api` URL literal
+//     sits on the same line as `fetch(`.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
@@ -60,7 +62,7 @@ const isServerSeam = (p) =>
 /**
  * Client-surface files for rules #3 (db imports) and #4 (raw fetch to /api).
  * Conservatively scoped to the code that ships to the browser: components and
- * routes, MINUS the server seams that legitimately reach the database/API
+ * routes, minus the server seams that legitimately reach the database/API
  * (`*.fn.ts`, `*.server.ts`, and `app/routes/api.$.ts`). Test files are
  * excluded — they assert against db/fetch behavior and are not shipped.
  */
@@ -85,7 +87,7 @@ function* lines(content) {
 
 /**
  * Rule #1: No `process.env` outside app/env.ts.
- * Scope: app/**\/*.{ts,tsx}, EXCLUDING app/env.ts and test files. Build tooling
+ * Scope: app/**\/*.{ts,tsx}, excluding app/env.ts and test files. Build tooling
  * (vite.config.ts, scripts/**, .github/**, vitest/playwright config) is out of
  * scope — only app/ runtime code.
  */
@@ -148,18 +150,19 @@ export function checkTsDirective(content, path) {
 
 /**
  * Rule #3: No `db` imports in client-side code.
- * Flags VALUE imports of ~/db, ~/db/..., drizzle-orm, or @neondatabase/serverless
- * in client-surface files. `import type { ... } from "~/db/schema"` is erased at
- * compile time and is explicitly allowed (the repo relies on it — e.g.
- * ListingCard.tsx imports the `Listing` type). Caller must pre-filter to client
- * surface; this matcher does NOT re-derive scope because "client surface"
- * depends on the file tree, but it is a no-op on non-matching content.
+ * Flags value imports of ~/db, ~/db/..., drizzle-orm, or @neondatabase/serverless
+ * in client-surface files. `import type { ... } from "~/db/schema"` is erased
+ * at compile time and is explicitly allowed (the repo relies on it — e.g.
+ * ListingCard.tsx imports the `Listing` type). Caller must pre-filter to
+ * client surface; this matcher does not re-derive scope because "client
+ * surface" depends on the file tree, but it is a no-op on non-matching
+ * content.
  */
 export function checkClientDbImport(content, path) {
   if (!isClientSurface(path)) return [];
   const out = [];
-  // Match a static import whose specifier is a db/orm/neon module. We then
-  // require it to NOT be a type-only import (`import type ...` or
+  // Match a static import whose specifier is a db/orm/neon module. It must
+  // not be a type-only import (`import type ...` or
   // `import { type X }` — the latter still pulls a value binding only if a
   // non-type binding is present, so we treat a whole-line `import type` as safe
   // and flag any value `import ... from "<db>"`).
@@ -209,13 +212,13 @@ export function checkRawApiFetch(content, path) {
  * Rule #5: Test honesty. Flags focused (`.only`) and disabled (`.skip` modifier,
  * `.todo`) tests in test files. Scope: **\/*.test.{ts,tsx} and tests/**.
  *
- * IMPORTANT: the conditional-skip APIs are legitimate and must NOT be flagged:
+ * The conditional-skip APIs are legitimate and must not be flagged:
  *   - `test.skip(!cond, "reason")` — Playwright runtime skip (first arg is an
  *     expression, not a string-literal test name).
  *   - `describe.skipIf(cond)(...)` — Vitest conditional describe (`.skipIf`, not
  *     `.skip`).
- * We therefore flag the `.skip(` MODIFIER form only when its first argument is a
- * string literal (a test name): `it.skip("name", ...)`.
+ * Only the `.skip(` modifier form with a string-literal first argument (a
+ * test name) is flagged: `it.skip("name", ...)`.
  */
 export function checkTestHonesty(content, path) {
   const p = toPosix(path);

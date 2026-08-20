@@ -6,33 +6,31 @@ import { type User, users } from "~/db/schema";
 import { getEnv } from "~/env";
 
 /**
- * Preview-only dev-login primitive (AUB-138), server-only.
+ * Preview-only dev-login primitive, server-only.
  *
  * Google OAuth cannot work on Vercel per-deployment preview URLs: the redirect
- * URI is exact-match (no wildcards) and the callback is derived from the request
- * origin, which changes every push. This module backs a **prod-inert,
- * double-gated** endpoint that mints a session cookie WITHOUT Google, reusing
- * the SAME sealed-cookie primitive the OAuth callback (and the e2e `Seeder`)
- * uses — so a tester can sign in on any preview.
+ * URI is exact-match and the callback derives from the request origin, which
+ * changes every push. This module backs a prod-inert, double-gated endpoint
+ * that mints a session cookie without Google, via the same sealed-cookie
+ * primitive the OAuth callback uses.
  *
  * Two independent gates, both required:
  *   1. {@link isPreviewLoginEnabled} — the runtime is an explicitly-allowed
- *      Vercel env (`preview` or `development`, fail-closed) AND a
- *      `PREVIEW_LOGIN_SECRET` is provisioned. This makes the endpoint 404 in
- *      production (and on any unrecognized/unset `VERCEL_ENV`) even if the
- *      secret ever leaked into Production scope.
+ *      Vercel env (`preview` or `development`, fail-closed) and
+ *      `PREVIEW_LOGIN_SECRET` is provisioned. The endpoint 404s in production
+ *      (and on any unrecognized/unset `VERCEL_ENV`) even if the secret leaks
+ *      into Production scope.
  *   2. {@link verifyPreviewSecret} — a constant-time match of the caller's
  *      secret against `PREVIEW_LOGIN_SECRET`.
  *
- * **It can ONLY ever sign in as a preview-namespaced account.** Preview DBs are
- * Neon branches of production and therefore contain real admins; to make it
- * impossible to impersonate one, {@link resolvePreviewUser} REFUSES any email
- * that resolves to a row whose `google_sub` is not `preview:`-prefixed (a real
- * OAuth account). It only ever creates/reuses `preview:<email>` rows, whose role
- * is the DB default `user`.
+ * It can only ever sign in as a preview-namespaced account. Preview DBs are
+ * Neon branches of production and contain real admins; {@link
+ * resolvePreviewUser} refuses any email whose row's `google_sub` is not
+ * `preview:`-prefixed (a real OAuth account). It only creates/reuses
+ * `preview:<email>` rows, whose role is the DB default `user`.
  *
- * This module imports `db` + `getEnv` and must stay server-only — never import
- * it from a client component (no client-bundle leak, AGENTS.md Hard Rules).
+ * Imports `db` + `getEnv` — must stay server-only, never imported from a
+ * client component (AGENTS.md Hard Rules).
  */
 
 /** Default identity minted for the preview tester when no `?email=` is given. */
@@ -43,22 +41,19 @@ const PREVIEW_SUB_PREFIX = "preview:";
 
 /**
  * Whether the preview dev-login endpoint is active. Gate 1 of the double-gate,
- * **fail-closed**: it enables ONLY when `VERCEL_ENV` is an explicitly allowed
- * value (`preview` or `development`) AND `PREVIEW_LOGIN_SECRET` is provisioned.
- * Any other `VERCEL_ENV` — `production`, unset, or an unrecognized value — keeps
- * the endpoint disabled (404), so it never fails open. Evaluated per-request via
- * `getEnv()` — never at module load.
+ * fail-closed: enabled only when `VERCEL_ENV` is `preview` or `development`
+ * and `PREVIEW_LOGIN_SECRET` is provisioned. Any other `VERCEL_ENV` —
+ * `production`, unset, or unrecognized — keeps the endpoint disabled (404).
+ * Evaluated per-request via `getEnv()`, never at module load.
  *
- * For LOCAL dev-login, set `VERCEL_ENV=development` in `.env`; otherwise use real
- * Google on `http://localhost:3000` (its callback is registered).
+ * For local dev-login, set `VERCEL_ENV=development` in `.env`; otherwise use
+ * real Google on `http://localhost:3000` (its callback is registered).
  */
 export function isPreviewLoginEnabled(): boolean {
-  // `getEnv()` validates the FULL env schema and THROWS if a required var is
-  // missing. This flag is prefetched by the root loader on every page (incl.
-  // anonymous `/about`), and is also non-essential UI — so an unreadable env
-  // must fail CLOSED (disabled) rather than 500 the page. Concretely, the
-  // production build-smoke boots the server with no env at all; without this
-  // guard that first `getEnv()` on the loader path would reject the loader.
+  // `getEnv()` validates the full env schema and throws on a missing required
+  // var. This flag is prefetched by the root loader on every page and is
+  // non-essential UI, so an unreadable env must fail closed (disabled) rather
+  // than 500 the page — the production build-smoke boots with no env at all.
   let env: ReturnType<typeof getEnv>;
   try {
     env = getEnv();
@@ -74,10 +69,9 @@ export function isPreviewLoginEnabled(): boolean {
  * Gate 2 of the double-gate. Returns false when the endpoint is disabled, when
  * the candidate is missing, or on any mismatch.
  *
- * The comparison uses `node:crypto` `timingSafeEqual`, which requires
- * equal-length buffers, so we guard the length first (an unavoidable early-out —
- * length leakage alone does not meaningfully help an attacker against a ≥32-char
- * random secret) and otherwise compare the full byte content in constant time.
+ * `timingSafeEqual` requires equal-length buffers, so length is guarded first.
+ * Length leakage alone does not meaningfully help an attacker against a
+ * ≥32-char random secret.
  */
 export function verifyPreviewSecret(candidate: string | undefined): boolean {
   if (!isPreviewLoginEnabled()) {
@@ -101,19 +95,18 @@ export function verifyPreviewSecret(candidate: string | undefined): boolean {
  * anchors on a synthetic `google_sub` of `preview:<email>` so it can never
  * collide with a real Google subject.
  *
- * **Privilege-escalation defense (critical).** Preview DBs are Neon branches of
- * production, so they contain real admin/OAuth accounts. We look the email up
- * and:
- *   - existing row with a `preview:`-prefixed `google_sub` → reuse it (ours);
- *   - existing row that is NOT `preview:`-prefixed (a real/OAuth account) →
- *     REFUSE with `HTTPException(403)`, minting no cookie and inserting nothing.
- *     This makes `?email=<admin@real>` impossible to abuse into an admin session;
- *   - no row at all (`users.email` is unique, so no preview- or real-row owns it)
- *     → insert the preview user (role omitted → DB default `user`, ADR-010).
+ * Privilege-escalation defense: preview DBs are Neon branches of production,
+ * so they contain real admin/OAuth accounts. Lookup by email, then:
+ *   - existing row with a `preview:`-prefixed `google_sub` → reuse it;
+ *   - existing row not `preview:`-prefixed (a real/OAuth account) → refuse
+ *     with `HTTPException(403)`, minting no cookie and inserting nothing, so
+ *     `?email=<admin@real>` can never become an admin session;
+ *   - no row at all → insert the preview user (role omitted → DB default
+ *     `user`, ADR-010).
  *
- * A minted session can never elevate anyway — role is always re-read from the DB
- * by `getCurrentUser()` — but refusing real rows means dev-login can only ever
- * sign in as a `preview:`-namespaced `user`.
+ * A minted session can never elevate anyway — role is always re-read from the
+ * DB by `getCurrentUser()` — but refusing real rows means dev-login only ever
+ * signs in as a `preview:`-namespaced `user`.
  *
  * @param email Optional override for the tester's email (from `?email=`).
  * @throws {HTTPException} 403 when the email resolves to a non-preview account.

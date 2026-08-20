@@ -6,38 +6,29 @@ import { requireCurrentUser } from "~/server/auth/guards";
 import { enforceWriteLimit } from "~/server/rate-limit";
 
 /**
- * Claim confirm/dispute attestations — the WRITE + aggregate-signal layer
- * (issue #28, ADR-007 trust model).
+ * Claim confirm/dispute attestations — the write + aggregate-signal layer
+ * (ADR-007 trust model).
  *
- * A signed-in user casts exactly **one** vote per claim — `confirm` or
- * `dispute` — and may change or retract it (domain.md, "One vote per user per
- * claim"). That rule is enforced at the DB level by the
- * `attestations_claim_user_unique` constraint on (`claim_id`, `user_id`):
+ * A signed-in user casts exactly one vote per claim — `confirm` or `dispute`
+ * — and may change or retract it (domain.md, "One vote per user per claim").
+ * Enforced at the DB level by `attestations_claim_user_unique` on
+ * (`claim_id`, `user_id`): confirm/dispute upsert via that constraint
+ * (`onConflictDoUpdate`), retract deletes the user's row.
  *
- * - **confirm / dispute** upsert via that constraint
- *   (`onConflictDoUpdate`) so a second vote by the same user UPDATES their
- *   existing row rather than inserting a duplicate; and
- * - **retract** DELETEs the user's row.
- *
- * Aggregate signal (ADR-007: a roll-up of *visible* evidence, never a secret
+ * Aggregate signal (ADR-007: a roll-up of visible evidence, never a secret
  * score): {@link getClaimAggregate} derives per-claim confirm/dispute counts
  * straight from the `attestations` rows and surfaces `claims.lastConfirmedAt`.
- * After every vote write `lastConfirmedAt` is recomputed as the newest
- * surviving `confirm` (null when none remain), so recency-driven staleness
+ * After every vote write, `lastConfirmedAt` is recomputed as the newest
+ * surviving confirm (null when none remain), so recency-driven staleness
  * always reflects visible evidence — a withdrawn confirm (flip to dispute or
- * retract) can never leave recency pinned to it (ADR-007).
- *
- * Scope: this module is the write + aggregate-helper layer only. The
- * transparent trust SUMMARY rendering and listing-detail wiring land in #29,
- * which consumes the typed {@link ClaimAggregate} helper exported here.
+ * retract) can never leave recency pinned to it.
  *
  * Server-only: imports the DB client and the auth guards. Never import from
  * client code. Each public server function is login-gated via
  * {@link requireCurrentUser} (throws 401 for anonymous callers).
  *
- * Rate limiting (issue #18): these writes are user-driven mutations, so each
- * write entry point applies {@link enforceWriteLimit} once — immediately after
- * the {@link requireCurrentUser} auth gate and before any DB work — to cap an
+ * Rate limiting: each write entry point applies {@link enforceWriteLimit}
+ * once — immediately after the auth gate and before any DB work — to cap an
  * abusive burst (throws 429). Reads ({@link getClaimAggregate}) are open and
  * unmetered.
  */
@@ -47,12 +38,11 @@ import { enforceWriteLimit } from "~/server/rate-limit";
 // ---------------------------------------------------------------------------
 
 /**
- * A `confirm` / `dispute` vote, addressed by `(listing, attribute)` rather than
- * a pre-existing `claimId` (#150). The claim row is created lazily on the first
- * vote for an attribute, so a user can begin attesting ANY of the 7 fixed
- * taxonomy attributes even on a listing with no claims yet. Both the attribute
- * (against the curated taxonomy) and the value (against the attestation enum)
- * are validated against the DB enum tuples.
+ * A `confirm` / `dispute` vote, addressed by `(listing, attribute)` rather
+ * than a pre-existing `claimId`. The claim row is created lazily on the first
+ * vote for an attribute, so a user can begin attesting any fixed taxonomy
+ * attribute even on a listing with no claims yet. Attribute and value are
+ * validated against the DB enum tuples.
  */
 export const voteInputSchema = z.object({
   listingId: z.string().min(1, "listingId is required"),
@@ -83,7 +73,7 @@ export type ClaimAggregateInput = z.infer<typeof claimAggregateInputSchema>;
 // ---------------------------------------------------------------------------
 
 /**
- * Per-claim aggregate the trust summary (#29) renders: the confirm/dispute
+ * Per-claim aggregate the trust summary renders: the confirm/dispute
  * distribution plus recency. Every field is derivable from evidence the user
  * can also see — `confirmCount`/`disputeCount` are counts of the visible
  * `attestations` rows; `lastConfirmedAt` is the stored recency signal (null
@@ -95,12 +85,12 @@ export interface ClaimAggregate {
   disputeCount: number;
   lastConfirmedAt: Date | null;
   /**
-   * True when this claim was SUGGESTED by the curator bot ("Aubrey's Bot",
-   * AUB-31) and no real user has attested it yet — i.e. `claims.suggestedBy` is
-   * non-null. A suggestion is NOT community evidence: it never contributes to
-   * `confirmCount`/`disputeCount` (there is no attestation row) and is cleared the
-   * moment a real user votes. Drives the "Suggested by Aubrey's Bot" badge only;
-   * the honest trust roll-up (ADR-007) is unaffected.
+   * True when this claim was suggested by the curator bot ("Aubrey's Bot")
+   * and no real user has attested it yet — i.e. `claims.suggestedBy` is
+   * non-null. A suggestion is not community evidence: it never contributes to
+   * `confirmCount`/`disputeCount` (there is no attestation row) and is
+   * cleared the moment a real user votes. Drives the "Suggested by Aubrey's
+   * Bot" badge only; the honest trust roll-up (ADR-007) is unaffected.
    */
   suggested: boolean;
 }
@@ -112,27 +102,27 @@ export interface ClaimAggregate {
  * (no hidden score is stored or computed); `lastConfirmedAt` is read from the
  * `claims` row. A claim with no attestations yields zero counts.
  *
- * Visibility-aware (#41, ADR-007 "the summary is a roll-up of *visible*
- * evidence"): this is a PUBLIC, addressable read (every `createServerFn` is an
- * RPC mounted via `app/routes/api.$.ts`). A hidden/removed (or non-existent)
- * claim must NOT leak its trust roll-up, so we resolve the claim's
- * `moderationStatus` + recency FIRST and, for any non-`visible` or missing claim,
- * return the ZEROED/empty aggregate (treated as not-found) WITHOUT scanning its
- * attestations — never exposing the counts.
+ * Visibility-aware (ADR-007: the summary is a roll-up of visible evidence):
+ * this is a public, addressable read (every `createServerFn` is an RPC
+ * mounted via `app/routes/api.$.ts`). A hidden/removed (or non-existent)
+ * claim must not leak its trust roll-up, so the claim's `moderationStatus` +
+ * recency are resolved first and any non-`visible` or missing claim returns
+ * the zeroed/empty aggregate without scanning its attestations — the counts
+ * are never exposed.
  *
  * Parent visibility: `moderationStatus` has no parent→child propagation, so a
- * moderator hiding/removing the parent LISTING leaves the claim `visible`. The
- * visibility lookup INNER JOINs `listings` and also reads the parent listing's
- * `moderationStatus`; a non-`visible` parent listing is treated exactly like a
- * non-`visible` claim — the ZEROED aggregate, never the counts.
+ * moderator hiding/removing the parent listing leaves the claim `visible`.
+ * The visibility lookup inner-joins `listings` and also reads the parent
+ * listing's `moderationStatus`; a non-`visible` parent listing is treated
+ * exactly like a non-`visible` claim — the zeroed aggregate, never the counts.
  */
 export async function getClaimAggregate(input: ClaimAggregateInput): Promise<ClaimAggregate> {
   const db = getDb();
 
   // Resolve the claim's visibility + recency first (plus the parent listing's
-  // visibility); bail with a zeroed aggregate for a non-visible/missing claim OR
-  // a non-visible parent listing, so a moderated-away claim's counts (and its
-  // `lastConfirmedAt`) never reach the caller.
+  // visibility); bail with a zeroed aggregate for a non-visible/missing claim
+  // or a non-visible parent listing, so a moderated-away claim's counts (and
+  // its `lastConfirmedAt`) never reach the caller.
   const claimRows = await db
     .select({
       moderationStatus: claims.moderationStatus,
@@ -175,9 +165,8 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
     confirmCount,
     disputeCount,
     lastConfirmedAt: claimRow.lastConfirmedAt ?? null,
-    // A suggestion is provenance, not a vote (ADR-007): surfaced as a flag only.
-    // `Boolean(...)` treats a null/absent FK as "not suggested" (a real user id is
-    // always a non-empty string).
+    // A suggestion is provenance, not a vote (ADR-007): surfaced as a flag
+    // only. `Boolean(...)` treats a null/absent FK as "not suggested".
     suggested: Boolean(claimRow.suggestedBy),
   };
 }
@@ -189,14 +178,13 @@ export async function getClaimAggregate(input: ClaimAggregateInput): Promise<Cla
 /**
  * Recompute a claim's `lastConfirmedAt` from its surviving `confirm` rows.
  *
- * ADR-007 requires recency to be derivable from *visible* evidence: the signal
+ * ADR-007 requires recency to be derivable from visible evidence: the signal
  * must equal the newest still-present confirmation, never a stale value left
- * behind by a withdrawn confirm. We take `MAX(attestations.updatedAt)` over the
- * claim's `confirm` rows (the same `updatedAt` the upsert stamps) — mirroring
- * the grouped-scan style in {@link getClaimAggregate} — and set it to `null`
- * when no confirm rows remain. `claims.updatedAt` is bumped so the row's own
- * recency stays accurate. This is the single place that maintains the signal,
- * so every transition (flip, retract, re-confirm, dispute→confirm) is correct.
+ * behind by a withdrawn confirm. Takes `MAX(attestations.updatedAt)` over the
+ * claim's `confirm` rows (the same `updatedAt` the upsert stamps) and sets
+ * `null` when no confirm rows remain. `claims.updatedAt` is bumped so the
+ * row's own recency stays accurate. The single place that maintains the
+ * signal, so every transition (flip, retract, re-confirm) is correct.
  */
 async function recomputeLastConfirmedAt(
   db: ReturnType<typeof getDb>,
@@ -211,10 +199,11 @@ async function recomputeLastConfirmedAt(
   // `max()` over zero rows yields null — exactly the "no confirms" recency.
   const lastConfirmedAt = rows[0]?.lastConfirmedAt ?? null;
 
-  // A real community attestation supersedes any curator-bot suggestion on this
-  // claim (AUB-31): folded into this SAME update so a vote still issues exactly
-  // one `UPDATE claims` (recency + suggestion-clear together). `clearSuggestion`
-  // is only ever set on the vote path — a retract must not touch provenance.
+  // A real community attestation supersedes any curator-bot suggestion on
+  // this claim: folded into this same update so a vote still issues exactly
+  // one `UPDATE claims` (recency + suggestion-clear together).
+  // `clearSuggestion` is only set on the vote path — a retract must not touch
+  // provenance.
   await db
     .update(claims)
     .set({
@@ -226,20 +215,19 @@ async function recomputeLastConfirmedAt(
 }
 
 /**
- * Resolve the claim id for a `(listingId, attribute)` slot, CREATING the claim
- * row lazily if it does not exist yet (#150).
+ * Resolve the claim id for a `(listingId, attribute)` slot, creating the
+ * claim row lazily if it does not exist yet.
  *
- * The taxonomy is curated and fixed (domain.md): conceptually every listing has
- * all 7 attributes available, but a `claims` row is only materialized once
- * someone first attests an attribute. This keeps the write path the single
- * place that establishes a claim — no backfill, no empty rows for untouched
- * attributes.
+ * The taxonomy is curated and fixed (domain.md): every listing conceptually
+ * has all attributes available, but a `claims` row is only materialized once
+ * someone first attests an attribute. The write path is the single place that
+ * establishes a claim — no backfill, no empty rows for untouched attributes.
  *
- * The insert is `onConflictDoNothing` on `claims_listing_attribute_unique`, so
- * a concurrent first vote on the same slot can never create a duplicate (the
- * unique constraint guarantees one claim per attribute per listing). We then
- * read the id back by `(listingId, attribute)` — which always resolves to the
- * single surviving row whether we inserted it or lost the race. Idempotent.
+ * The insert is `onConflictDoNothing` on `claims_listing_attribute_unique`,
+ * so a concurrent first vote on the same slot can never create a duplicate.
+ * The id is then read back by `(listingId, attribute)`, which resolves to the
+ * single surviving row whether this call inserted it or lost the race.
+ * Idempotent.
  */
 async function resolveClaimId(
   db: ReturnType<typeof getDb>,
@@ -262,28 +250,26 @@ async function resolveClaimId(
 }
 
 /**
- * Cast or change the current user's vote on a listing attribute (#150).
+ * Cast or change the current user's vote on a listing attribute.
  *
  * The vote is addressed by `(listingId, attribute)`. The claim row is created
- * lazily on the first vote for an attribute via {@link resolveClaimId} (an
- * `onConflictDoNothing` upsert on `claims_listing_attribute_unique`), so a user
- * can begin attesting an attribute that has no claim row yet — the entry point
- * the core confirm/dispute loop was missing.
+ * lazily on the first vote via {@link resolveClaimId}, so a user can attest
+ * an attribute that has no claim row yet.
  *
- * Then the attestation upserts against `attestations_claim_user_unique`: a first
- * vote inserts; a later vote by the same user on the same claim UPDATES the
+ * The attestation upserts against `attestations_claim_user_unique`: a first
+ * vote inserts; a later vote by the same user on the same claim updates the
  * existing row's `value` (and `updatedAt`) instead of inserting a duplicate —
- * the "one vote per user per claim, changeable" rule, unchanged.
+ * the "one vote per user per claim, changeable" rule.
  *
  * After the upsert the claim's `lastConfirmedAt` is recomputed from the
  * surviving `confirm` rows (see {@link recomputeLastConfirmedAt}) so the
- * recency signal always reflects visible evidence: a confirm refreshes it, and
- * flipping a confirm to a dispute clears the now-withdrawn confirmation rather
- * than pinning recency to it (ADR-007) — identical to the prior behavior.
+ * recency signal always reflects visible evidence: a confirm refreshes it,
+ * and flipping a confirm to a dispute clears the now-withdrawn confirmation
+ * rather than pinning recency to it (ADR-007).
  *
- * Login-gated: throws 401 for anonymous callers, then rate-limited per user via
- * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst), in that
- * order and BEFORE any DB work — the gate fires exactly once.
+ * Login-gated: throws 401 for anonymous callers, then rate-limited per user
+ * via {@link enforceWriteLimit} (throws 429), in that order and before any DB
+ * work.
  */
 export async function castVote(input: VoteInput): Promise<void> {
   const user = await requireCurrentUser();
@@ -308,31 +294,29 @@ export async function castVote(input: VoteInput): Promise<void> {
     });
 
   // Recency always tracks the surviving confirms — a confirm refreshes it, a
-  // flip to dispute drops the withdrawn confirmation (ADR-007). `clearSuggestion`
-  // also wipes any curator-bot suggestion on this claim (AUB-31), so real evidence
-  // supersedes the "Suggested by Aubrey's Bot" badge — done in the SAME update.
-  // Note: neon-http has no interactive transaction, so these statements are not
-  // atomic; a crash between the attestation upsert and this recompute would leave
-  // recency briefly stale, but it is self-healing — the next vote/retract on the
-  // claim re-settles it from the visible confirms, and the counts are always live.
+  // flip to dispute drops the withdrawn confirmation (ADR-007).
+  // `clearSuggestion` also wipes any curator-bot suggestion on this claim, so
+  // real evidence supersedes the "Suggested by Aubrey's Bot" badge — done in
+  // the same update. Neon-http has no interactive transaction, so these
+  // statements are not atomic; a crash between the upsert and this recompute
+  // leaves recency briefly stale but self-healing — the next vote/retract on
+  // the claim re-settles it from the visible confirms.
   await recomputeLastConfirmedAt(db, claimId, { clearSuggestion: true });
 }
 
 /**
- * Retract the current user's vote on a listing attribute (#150) — deletes their
+ * Retract the current user's vote on a listing attribute — deletes their
  * `attestations` row for the `(listingId, attribute)` slot.
  *
- * A no-op when no claim row exists for the slot (nothing was ever attested, so
- * there is nothing to retract) — we never create a claim on a retract. When a
- * claim exists the delete is scoped to the current user's row, then the claim's
- * `lastConfirmedAt` is recomputed from the surviving `confirm` rows (see
- * {@link recomputeLastConfirmedAt}): retracting the only confirm drops recency
- * to `null`, while retracting one of several leaves it at the newest remaining
- * confirm — recency stays derivable from visible evidence (ADR-007).
+ * A no-op when no claim row exists for the slot; a retract never creates a
+ * claim. When a claim exists the delete is scoped to the current user's row,
+ * then `lastConfirmedAt` is recomputed from the surviving `confirm` rows (see
+ * {@link recomputeLastConfirmedAt}): retracting the only confirm drops
+ * recency to `null`; retracting one of several leaves it at the newest
+ * remaining confirm — recency stays derivable from visible evidence (ADR-007).
  *
- * Login-gated: throws 401 for anonymous callers, then rate-limited per user via
- * {@link enforceWriteLimit} (issue #18; throws 429 on an abusive burst), in that
- * order and BEFORE any DB work.
+ * Login-gated: throws 401 for anonymous callers, then rate-limited per user
+ * via {@link enforceWriteLimit} (throws 429), before any DB work.
  */
 export async function retractVote(input: RetractInput): Promise<void> {
   const user = await requireCurrentUser();
@@ -340,8 +324,8 @@ export async function retractVote(input: RetractInput): Promise<void> {
 
   const db = getDb();
 
-  // Resolve the existing claim WITHOUT creating one — a retract on a never-
-  // attested slot is a no-op (no row to delete, no recency to recompute).
+  // Resolve the existing claim without creating one — a retract on a
+  // never-attested slot is a no-op.
   const existing = await db
     .select({ id: claims.id })
     .from(claims)
@@ -359,7 +343,6 @@ export async function retractVote(input: RetractInput): Promise<void> {
   await recomputeLastConfirmedAt(db, claimId);
 }
 
-// The client-callable `createServerFn` wrappers (submitVote / removeVote /
-// fetchClaimAggregate) live in `./attestations.fn.ts` (the `*.fn.ts`
-// convention), so client code never imports this db-touching module — see the
-// module docstring above.
+// The client-callable `createServerFn` wrappers live in `./attestations.fn.ts`
+// (the `*.fn.ts` convention), so client code never imports this db-touching
+// module.

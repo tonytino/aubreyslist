@@ -1,16 +1,13 @@
 import { isStale } from "~/trust/summary";
 
 /**
- * Pure presentation formatters for the redesigned browse card (AUB-61 Phase 2).
+ * Pure presentation formatters for the browse card.
  *
- * CLIENT-SAFE: pure functions only — no DB client, no server-only imports (just
- * the pure `isStale` staleness boundary from `~/trust/summary`). Safe to import
- * from the
- * browse card / its wrapper in the client bundle. Every function takes `now` (or
- * the raw value) as a parameter so it is deterministic and unit-testable without
- * a clock. Keep it free of any `db`/server-only imports.
+ * Client-safe: keep this module free of `db`/server-only imports (its only
+ * dependency is the pure `isStale` boundary). Every function takes `now` (or
+ * the raw value) as a parameter, so it is deterministic without a clock.
  *
- * These are DISPLAY cues, never a safety verdict — the headline safety state
+ * These are display cues, never a safety verdict — the headline safety state
  * (ADR-007) is the only verdict, derived separately in `~/trust/summary`.
  */
 
@@ -32,13 +29,9 @@ export interface Freshness {
 }
 
 /**
- * Render a COMPACT relative age like `"3d"`, `"5h"`, `"2mo"`, `"just now"` for a
- * past instant. Coarser than `~/trust/summary`'s `formatRelativeTime` (which is
- * verbose, e.g. "3 weeks ago"): the card wants a terse chip, so we bucket to
- * minutes → hours → days → months. Future/near-now clamps to `"just now"`.
- *
- * Pure/deterministic: `now` is injected. Not exported — it is an implementation
- * detail of {@link formatFreshness}; callers get the full labelled cue instead.
+ * Render a compact relative age like `"3d"`, `"5h"`, `"2mo"` for a past
+ * instant, bucketed to minutes → hours → days → months. Future/near-now clamps
+ * to `"just now"`. Implementation detail of {@link formatFreshness}.
  */
 function compactAgo(value: Date, now: Date): string {
   const diffMs = now.getTime() - value.getTime();
@@ -59,8 +52,7 @@ function compactAgo(value: Date, now: Date): string {
 
 /**
  * Compose a cue label like `"Verified 3d ago"` from a verb and a past instant.
- * The near-now bucket reads `"just now"`, so we drop the trailing "ago" there
- * (`"Verified just now"`) rather than the ungrammatical `"Verified just now ago"`.
+ * The near-now bucket drops the trailing "ago" (`"Verified just now"`).
  */
 function labelWith(verb: string, value: Date, now: Date): string {
   const compact = compactAgo(value, now);
@@ -68,33 +60,21 @@ function labelWith(verb: string, value: Date, now: Date): string {
 }
 
 /**
- * Derive the browse card's freshness cue from the celiac claim's recency and the
- * most recent incident. Precedence mirrors the trust model (ADR-007): a recent
- * "got glutened" report is the loudest signal and wins outright, then a
- * within-window confirmation reads as fresh/verified, else the confirmation has
- * aged past the staleness window and reads as stale/updated.
+ * Derive the browse card's freshness cue. Precedence follows the trust model
+ * (ADR-007): a recent "got glutened" report wins outright, then a
+ * within-window confirmation reads as fresh, else stale.
  *
- * - **incident** (`recentIncidentAt` present) → `"Reported {compact} ago"`
- *   (rendered red), phrased from the incident's own recency.
- * - **fresh** (a confirmation within the staleness window, or never-confirmed —
- *   matching `isStale`'s "null is not stale" rule) → `"Verified {compact} ago"`
- *   (green). A never-confirmed claim has no timestamp to phrase, so it returns
- *   `null` (no cue) rather than fabricating one.
- * - **stale** (a confirmation strictly older than the window) → `"Updated
- *   {compact} ago"` (slate).
+ * - **incident** (`recentIncidentAt` present) → `"Reported {compact} ago"`,
+ *   phrased from the incident's own recency.
+ * - **fresh** (confirmation within the staleness window) → `"Verified …"`.
+ * - **stale** (confirmation strictly older than the window) → `"Updated …"`.
  *
  * Returns `null` when there is nothing honest to show (no incident and no
- * confirmation timestamp), so the caller simply omits the cue.
+ * confirmation timestamp); the caller omits the cue rather than fabricating one.
  *
  * The staleness boundary comes from the shared `isStale` (same cutoff the
- * headline safety state + the SQL sort use), so "fresh" here never drifts from
- * the card's safety verdict.
- *
- * @param lastConfirmedAt The celiac claim's last confirmation, or `null`.
- * @param recentIncidentAt The most recent in-window incident's instant, or
- *   `null` when there is none. When present it takes precedence over recency.
- * @param now Reference instant (injected for determinism/tests).
- * @param stalenessMonths The active staleness window in months.
+ * headline safety state and the SQL sort use), so "fresh" here never drifts
+ * from the card's safety verdict.
  */
 export function formatFreshness(
   lastConfirmedAt: Date | null,
@@ -102,13 +82,13 @@ export function formatFreshness(
   now: Date,
   stalenessMonths: number
 ): Freshness | null {
-  // Incident is the loudest cue and wins outright, phrased from its own recency.
+  // An incident wins outright, phrased from its own recency.
   if (recentIncidentAt !== null) {
     return { kind: "incident", label: labelWith("Reported", recentIncidentAt, now) };
   }
 
   if (lastConfirmedAt === null) {
-    // Never confirmed and no incident: nothing honest to phrase → no cue.
+    // Never confirmed and no incident: nothing honest to phrase, so no cue.
     return null;
   }
 
@@ -119,13 +99,10 @@ export function formatFreshness(
 }
 
 /**
- * Format a distance for the card, e.g. `"0.4 mi"`. Accepts kilometres (the unit
- * the browse ORDER BY / `haversineKm` compute in) and converts to miles for the
- * Denver pilot audience. One decimal place; clamps negatives to `0`.
- *
- * PURE: no clock, no I/O — a straight unit conversion of an already-computed
- * distance. Used only when the sort is `distance` and coords are present; the
- * distance value itself is reused from the distance-sort path (never recomputed).
+ * Format a distance for the card, e.g. `"0.4 mi"`. Accepts kilometres (the
+ * unit the browse sort computes in) and converts to miles. One decimal place;
+ * clamps negatives to `0`. Pure — a unit conversion of the already-computed
+ * distance, never a recompute.
  */
 export function formatDistanceLabel(distanceKm: number): string {
   const miles = Math.max(0, distanceKm) / KM_PER_MILE;

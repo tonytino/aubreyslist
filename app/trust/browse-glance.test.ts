@@ -2,11 +2,10 @@ import { describe, expect, it } from "vitest";
 import { deriveListingTrustGlance } from "./browse-glance";
 
 /**
- * Tests for the pure browse-list at-a-glance derivation (#33, extended for the
- * AUB-61 redesign's evidence counts + freshness cue). Verifies it wires the #29
- * headline derivation, the distinct-contributor count, the recent-incident
- * instant, and the freshness cue honestly — especially the "no evidence → Not
- * yet attested / no counts" and recent-incident cases.
+ * Tests for the pure browse-list at-a-glance derivation. Verifies it wires
+ * the headline derivation, the distinct-contributor count, the
+ * recent-incident instant, and the freshness cue honestly — especially the
+ * "no evidence → Not yet attested / no counts" and recent-incident cases.
  */
 
 const NOW = new Date("2026-06-28T00:00:00Z");
@@ -51,7 +50,7 @@ describe("deriveListingTrustGlance", () => {
 
   it("drops the celiac claim's own suggestion once THAT claim has real evidence (vote clears it)", () => {
     // Per-claim honesty: a vote clears `suggested_by` server-side, so a voted
-    // celiac claim's suggestion is no longer live and never badges the card.
+    // celiac claim's suggestion is not live and never badges the card.
     const glance = deriveListingTrustGlance(
       {
         confirmCount: 2,
@@ -105,8 +104,8 @@ describe("deriveListingTrustGlance", () => {
   });
 
   it("KEEPS the bot label when live suggestions coexist with real celiac evidence (owner nit 7)", () => {
-    // The label is PROVENANCE, not gated on "no evidence" any more: a listing
-    // with community celiac evidence can still carry live suggestions on OTHER
+    // The label is provenance, not gated on "no evidence" any more: a listing
+    // with community celiac evidence can still carry live suggestions on other
     // attributes, and where those labels came from stays true. The verdict and
     // counts still derive from evidence only — never from the suggestion.
     const glance = deriveListingTrustGlance(

@@ -41,17 +41,17 @@ const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull(
 export const userRole = pgEnum("user_role", ["admin", "moderator", "user"]);
 
 /**
- * The fixed, curated GF attribute taxonomy (domain.md). NOT user-extensible in
- * v1. Each value maps 1:1 to a taxonomy item; keep this in lockstep with the
- * taxonomy list, the filter UI, and any seed data when it changes.
+ * The fixed, curated GF attribute taxonomy (domain.md). Not user-extensible
+ * in v1. Each value maps 1:1 to a taxonomy item; keep this in lockstep with
+ * the taxonomy list, the filter UI, and any seed data when it changes.
  */
 export const claimAttribute = pgEnum("claim_attribute", CLAIM_ATTRIBUTES);
 
 /**
- * The fixed typed-link taxonomy for a listing (AUB-202): menu, gluten-free
- * menu, website, reservations, online ordering. Derives from the client-safe
+ * The fixed typed-link taxonomy for a listing: menu, gluten-free menu,
+ * website, reservations, online ordering. Derives from the client-safe
  * `LINK_KINDS` tuple (`app/listings/links.ts`) exactly like `claim_attribute`
- * derives from `CLAIM_ATTRIBUTES`, so the DB and the client share ONE ordered
+ * derives from `CLAIM_ATTRIBUTES`, so the DB and the client share one ordered
  * list. Declaration order is render order (an enum column sorts by it).
  */
 export const listingLinkKind = pgEnum("listing_link_kind", LINK_KINDS);
@@ -66,10 +66,10 @@ export const incidentSeverity = pgEnum("incident_severity", ["mild", "moderate",
 export const flagStatus = pgEnum("flag_status", ["open", "reviewing", "resolved", "dismissed"]);
 
 /**
- * Content moderation state (issue #41). Applied per content row
- * (listings/claims/incidents) and default `visible`. Both non-visible states are
- * SOFT — content is never hard-deleted, so every action is fully reversible and
- * fully audited:
+ * Content moderation state. Applied per content row
+ * (listings/claims/incidents) and default `visible`. Both non-visible states
+ * are soft — content is never hard-deleted, so every action is fully
+ * reversible and fully audited:
  *
  * - `visible` — public (the default; the only state public reads surface).
  * - `hidden` — a reversible takedown (a moderator may `restore` it to visible).
@@ -79,8 +79,8 @@ export const flagStatus = pgEnum("flag_status", ["open", "reviewing", "resolved"
 export const moderationStatus = pgEnum("moderation_status", ["visible", "hidden", "removed"]);
 
 /**
- * The moderation actions a moderator/admin can take on flagged content
- * (issue #41) — the audit-trail verbs written to `moderation_actions`:
+ * The moderation actions a moderator/admin can take on flagged content — the
+ * audit-trail verbs written to `moderation_actions`:
  *
  * - `dismiss` — the flag was reviewed and needs no content change (flag →
  *   `dismissed`; content untouched).
@@ -130,7 +130,7 @@ export const listings = pgTable("listings", {
   lng: doublePrecision("lng").notNull(),
   mapsUrl: text("maps_url").notNull(),
   menuUrl: text("menu_url"),
-  // Moderation state (#41). Default `visible`; public reads filter to visible.
+  // Moderation state. Default `visible`; public reads filter to visible.
   moderationStatus: moderationStatus("moderation_status").notNull().default("visible"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -138,16 +138,16 @@ export const listings = pgTable("listings", {
 
 /**
  * Typed links on a listing, one row per (listing, kind) — enforced by the
- * unique constraint (AUB-202). Replaces the single legacy `listings.menu_url`
- * for NEW writes; that column stays for legacy rows (dropping it is deferred)
- * and the detail page falls back to it when no `menu`-kind row exists.
+ * unique constraint. New writes land here; the legacy `listings.menu_url`
+ * column remains for old rows, and the detail page falls back to it when no
+ * `menu`-kind row exists.
  *
- * Wiki-style: ANY signed-in user may save/remove a listing's links (a
+ * Wiki-style: any signed-in user may save/remove a listing's links (a
  * deliberate product decision — no ownership check), moderated like other
  * content. Rows are mutable (the URL can be edited), hence `updatedAt`.
  *
- * `createdBy` is provenance for moderation/abuse investigation only — never an
- * authorization key. `set null` on the user's deletion keeps the link.
+ * `createdBy` is provenance for moderation/abuse investigation only — never
+ * an authorization key. `set null` on the user's deletion keeps the link.
  */
 export const listingLinks = pgTable(
   "listing_links",
@@ -182,17 +182,17 @@ export const claims = pgTable(
       .references(() => listings.id, { onDelete: "cascade" }),
     attribute: claimAttribute("attribute").notNull(),
     lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
-    // Curator-seed provenance (AUB-31): non-null ⇒ this claim was SUGGESTED by a
-    // seed/curator user ("Aubrey's Bot") and is pending community confirmation —
-    // it is NOT community evidence, so it is deliberately kept OUT of the
-    // confirm/dispute counts (there is no attestation row) and surfaced only as a
-    // "Suggested by Aubrey's Bot" badge (ADR-007: the honest counts never treat a
-    // suggestion as a vote). Cleared to NULL the moment a real user attests the
-    // claim (`castVote`), so a bot suggestion never lingers over real evidence.
-    // `set null` on the referenced user's deletion keeps the claim; it simply
-    // loses its suggestion provenance.
+    // Curator-seed provenance: non-null ⇒ this claim was suggested by a
+    // seed/curator user ("Aubrey's Bot") and is pending community
+    // confirmation. Not community evidence: deliberately kept out of the
+    // confirm/dispute counts (there is no attestation row) and surfaced only
+    // as a "Suggested by Aubrey's Bot" badge (ADR-007: the honest counts
+    // never treat a suggestion as a vote). Cleared to null the moment a real
+    // user attests the claim (`castVote`), so a bot suggestion never lingers
+    // over real evidence. `set null` on the referenced user's deletion keeps
+    // the claim; it loses only its suggestion provenance.
     suggestedBy: text("suggested_by").references(() => users.id, { onDelete: "set null" }),
-    // Moderation state (#41). Default `visible`; public reads filter to visible.
+    // Moderation state. Default `visible`; public reads filter to visible.
     moderationStatus: moderationStatus("moderation_status").notNull().default("visible"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -232,7 +232,7 @@ export const attestations = pgTable(
 /**
  * A user's favorite (bookmark) of a listing. A create-or-delete edge: a user
  * favorites a listing (one row) and unfavorites by deleting it — the row is
- * never mutated, so there is NO `updatedAt`. One favorite per user per listing,
+ * never mutated, so there is no `updatedAt`. One favorite per user per listing,
  * enforced by the unique constraint.
  */
 export const favorites = pgTable(
@@ -272,7 +272,7 @@ export const incidents = pgTable(
     occurredOn: date("occurred_on").notNull(),
     severity: incidentSeverity("severity"),
     note: text("note"),
-    // Moderation state (#41). Default `visible`; public reads filter to visible.
+    // Moderation state. Default `visible`; public reads filter to visible.
     moderationStatus: moderationStatus("moderation_status").notNull().default("visible"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -294,13 +294,13 @@ export const appSettings = pgTable("app_settings", {
  * A user report that a listing / claim / incident is inappropriate, spam, or
  * wrong. Feeds the moderation queue.
  *
- * The target is modeled as an EXCLUSIVE ARC: exactly one of `listingId`,
+ * The target is modeled as an exclusive arc: exactly one of `listingId`,
  * `claimId`, `incidentId` is set, enforced by the `flags_one_target` CHECK.
  * Each is a real FK with `onDelete: cascade`, so a flag can never dangle or
  * point at the wrong table, and deleting content auto-removes its flags — no
- * orphan cleanup or app-side referential validation needed. Trade-off: adding a
- * new flaggable entity type later means a migration (new nullable FK column +
- * extend the CHECK), not just an enum value.
+ * orphan cleanup or app-side referential validation needed. Trade-off: a new
+ * flaggable entity type means a migration (new nullable FK column + extended
+ * CHECK), not just an enum value.
  */
 export const flags = pgTable(
   "flags",
@@ -331,24 +331,22 @@ export const flags = pgTable(
 );
 
 /**
- * The append-only AUDIT TRAIL of moderation actions (issue #41): who acted, what
- * they did, on which target, optionally prompted by which flag, with an optional
- * note, and when. One row per action so the history is complete and immutable —
- * a `hide` then a later `restore` are two rows, never an overwrite (the soft,
- * reversible, fully-audited design: content state lives on the content row, the
- * decision history lives here).
+ * The append-only audit trail of moderation actions: who acted, what they
+ * did, on which target, optionally prompted by which flag, with an optional
+ * note, and when. One row per action so the history is complete and immutable
+ * — a `hide` then a later `restore` are two rows, never an overwrite (content
+ * state lives on the content row, the decision history lives here).
  *
- * The target mirrors the `flags` EXCLUSIVE ARC: exactly one of `listingId`,
- * `claimId`, `incidentId` is set, enforced by the `moderation_actions_one_target`
- * CHECK. Each is a real FK with `onDelete: cascade`, so an action can never
- * dangle — though content is soft-moderated rather than deleted, so cascade is a
- * safety net, not the normal path.
+ * The target mirrors the `flags` exclusive arc: exactly one of `listingId`,
+ * `claimId`, `incidentId` is set, enforced by the
+ * `moderation_actions_one_target` CHECK. Each is a real FK with
+ * `onDelete: cascade`, so an action can never dangle — though content is
+ * soft-moderated rather than deleted, so cascade is a safety net, not the
+ * normal path.
  *
- * `flagId` records the flag that prompted the action (the queue acts per-flag),
- * `ON DELETE SET NULL` so an action survives its flag being cleaned up — the
- * audit record outlives the triage item. It is nullable because an action may be
- * taken without a prompting flag (e.g. a `restore`, or a direct moderator
- * decision).
+ * `flagId` records the flag that prompted the action, `ON DELETE SET NULL` so
+ * the audit record outlives the triage item. Nullable because an action may
+ * be taken without a prompting flag (e.g. a `restore`).
  *
  * `actorId` is NOT NULL: every action is attributable to a moderator/admin.
  */
@@ -434,11 +432,11 @@ export const moderationActionTypes = moderationAction.enumValues;
 // ---------------------------------------------------------------------------
 
 export type UserRole = (typeof userRoles)[number];
-// Re-exported from the client-safe links module (single source of truth,
-// AUB-202) so `~/db/schema` type consumers keep one import surface.
+// Re-exported from the client-safe links module (single source of truth) so
+// `~/db/schema` type consumers keep one import surface.
 export type { LinkKind } from "~/listings/links";
-// Re-exported from the client-safe taxonomy module (single source of truth,
-// issue #126) so existing `~/db/schema` type consumers keep working unchanged.
+// Re-exported from the client-safe taxonomy module (single source of truth)
+// so `~/db/schema` type consumers keep one import surface.
 export type { ClaimAttribute } from "~/listings/taxonomy";
 export type AttestationValue = (typeof attestationValues)[number];
 export type IncidentSeverity = (typeof incidentSeverities)[number];

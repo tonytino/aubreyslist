@@ -2,7 +2,7 @@ import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the claim attestations write + aggregate layer (#28).
+ * Tests for the claim attestations write + aggregate layer.
  *
  * The module's only server-only dependencies are the DB client and the auth
  * guard. We model the exact drizzle chains it uses so we can assert behaviour
@@ -26,16 +26,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => {
   const state = {
     groupByRows: [] as Array<{ value: string; n: number }>,
-    // The `.limit()` chain backs two different reads: the lazy-create claim-id
-    // read-back (`{ id }`) in the write path (#150), and the visibility + recency
-    // lookup in `getClaimAggregate` (`{ moderationStatus, lastConfirmedAt }`, #41).
+    // The `.limit()` chain backs two different reads: the lazy-create
+    // claim-id read-back (`{ id }`) in the write path, and the visibility +
+    // recency lookup in `getClaimAggregate`.
     limitRows: [] as Array<
       | { id: string }
       | {
           moderationStatus?: "visible" | "hidden" | "removed";
           listingModerationStatus?: "visible" | "hidden" | "removed";
           lastConfirmedAt: Date | null;
-          // Curator-bot suggestion provenance (AUB-31); absent/null ⇒ not suggested.
+          // Curator-bot suggestion provenance; absent/null ⇒ not suggested.
           suggestedBy?: string | null;
         }
     >,
@@ -47,7 +47,7 @@ const h = vi.hoisted(() => {
     lastDoNothingArgs: undefined as unknown,
     lastUpdateSet: undefined as unknown,
     // Every insert's `.values(...)` payload, in call order: the lazy claim
-    // upsert (#150) lands first, the attestation upsert second.
+    // upsert lands first, the attestation upsert second.
     insertValuesLog: [] as unknown[],
     signedIn: true,
   };
@@ -77,9 +77,9 @@ const h = vi.hoisted(() => {
     state.lastConflictArgs = args;
     return Promise.resolve();
   });
-  // The lazy claim creation (#150) upserts via `onConflictDoNothing` on the
-  // (listing, attribute) unique constraint — a distinct conflict resolution from
-  // the attestation upsert's `onConflictDoUpdate`.
+  // The lazy claim creation upserts via `onConflictDoNothing` on the
+  // (listing, attribute) unique constraint — a distinct conflict resolution
+  // from the attestation upsert's `onConflictDoUpdate`.
   const onConflictDoNothingMock = vi.fn((args: unknown) => {
     state.lastDoNothingArgs = args;
     return Promise.resolve();
@@ -113,9 +113,9 @@ const h = vi.hoisted(() => {
     return Promise.resolve({ id: "user-1" });
   });
 
-  // `enforceWriteLimit` is the per-user write rate limit (#18). We spy on it to
-  // assert each write entry point meters the authenticated user; the limiter's
-  // own window logic has dedicated coverage in `rate-limit/index.test.ts`.
+  // `enforceWriteLimit` is the per-user write rate limit. Spied on to assert
+  // each write entry point meters the authenticated user; the limiter's own
+  // window logic has dedicated coverage in `rate-limit/index.test.ts`.
   const enforceWriteLimitMock = vi.fn((_userId?: string) => Promise.resolve());
 
   return {
@@ -171,7 +171,7 @@ const {
 
 beforeEach(() => {
   state.groupByRows = [];
-  // The lazy-create read-back (#150) resolves the claim id from this `.limit()`
+  // The lazy-create read-back resolves the claim id from this `.limit()`
   // chain; default to a found claim so the write tests exercise the happy path.
   state.limitRows = [{ id: "claim-1" }];
   state.maxRows = [];
@@ -190,7 +190,7 @@ afterEach(() => {
 describe("castVote — lazy claim creation + one vote per user (#150)", () => {
   it("CREATES the claim for a (listing, attribute) with no claim row, then records the vote", async () => {
     // First-ever vote on an attribute: there is no claim row yet, so the write
-    // path must materialize one before recording the attestation (#150). The
+    // path must materialize one before recording the attestation. The
     // read-back resolves the new claim's id.
     state.limitRows = [{ id: "claim-new" }];
 
@@ -296,7 +296,7 @@ describe("castVote — curator-bot suggestion supersession (AUB-31)", () => {
 
   it("retract does NOT touch provenance — only a real vote supersedes a suggestion", async () => {
     // A claim exists so the retract runs its recompute update, but that update
-    // must NOT carry suggestedBy (a retract is not an attestation of the label).
+    // must not carry suggestedBy (a retract is not an attestation of the label).
     state.maxRows = [];
 
     await retractVote({ listingId: "listing-1", attribute: "dedicated_fryer" });
@@ -328,7 +328,7 @@ describe("castVote — lastConfirmedAt maintenance (recomputed from confirms)", 
 
     await castVote({ listingId: "listing-1", attribute: "dedicated_fryer", value: "dispute" });
 
-    // A dispute ALSO recomputes recency — preserved from #28.
+    // A dispute also recomputes recency.
     expect(updateMock).toHaveBeenCalledTimes(1);
     const set = state.lastUpdateSet as { lastConfirmedAt: Date | null; updatedAt: Date };
     expect(set.lastConfirmedAt).toBeNull();
@@ -357,7 +357,7 @@ describe("retractVote — deletes the user's row by (listing, attribute) + recom
 
     expect(deleteMock).toHaveBeenCalledTimes(1);
     expect(deleteWhereMock).toHaveBeenCalledTimes(1);
-    // Never CREATES a claim on retract (it is a delete-only path).
+    // Never creates a claim on retract (it is a delete-only path).
     expect(insertMock).not.toHaveBeenCalled();
   });
 
@@ -508,10 +508,10 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
     expect(requireCurrentUserMock).not.toHaveBeenCalled();
   });
 
-  // --- #41: a hidden/removed claim must NOT leak its trust roll-up ----------
+  // --- A hidden/removed claim must not leak its trust roll-up ---------------
   it("returns the ZEROED aggregate for a HIDDEN claim — never its counts (#41, ADR-007)", async () => {
     // The DB has real attestations, but the claim is hidden. The public read
-    // must NOT expose them: it bails on visibility BEFORE scanning attestations.
+    // must not expose them: it bails on visibility before scanning attestations.
     state.groupByRows = [
       { value: "confirm", n: 9 },
       { value: "dispute", n: 0 },
@@ -560,7 +560,7 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
 
   // --- Parent-listing visibility: no parent→child moderation propagation ------
   it("returns the ZEROED aggregate when the claim is visible but its PARENT LISTING is hidden", async () => {
-    // The claim itself is `visible`, but a moderator hid the parent LISTING.
+    // The claim itself is `visible`, but a moderator hid the parent listing.
     // Without a parent cross-check this addressable per-claim RPC would leak the
     // claim's counts. The visibility lookup INNER JOINs `listings`, and a non-
     // visible parent is treated exactly like a non-visible claim: zeroed, and the
@@ -586,7 +586,7 @@ describe("getClaimAggregate — counts derive from visible evidence", () => {
       lastConfirmedAt: null,
       suggested: false,
     });
-    // The parent-visibility gate short-circuited BEFORE scanning attestations.
+    // The parent-visibility gate short-circuited before scanning attestations.
     expect(h.groupByMock).not.toHaveBeenCalled();
     // The visibility lookup joined `listings` to read the parent's status.
     expect(h.innerJoinMock).toHaveBeenCalledTimes(1);

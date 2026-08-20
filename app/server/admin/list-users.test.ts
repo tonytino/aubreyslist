@@ -3,17 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "~/db/schema";
 
 /**
- * Tests for the admin-only user directory (`listUsers`, #142).
+ * Tests for the admin-only user directory (`listUsers`).
  *
  * `listUsers` is the lookup the role-management UI calls to find an account to
  * promote/demote. It is admin-only data, so the gate is the thing under test:
- * we drive the REAL `requireCurrentRole("admin")` guard through a mocked
- * current-user accessor (so we exercise the actual 401/403 policy, not a stubbed
- * one) and assert the four access branches:
+ * the real `requireCurrentRole("admin")` guard runs through a mocked
+ * current-user accessor (so the actual 401/403 policy is exercised, not a
+ * stub) and the four access branches are asserted:
  *
  *   no user            → 401 (no DB read)
  *   role "user"        → 403 (no DB read)
- *   role "moderator"   → 403 (no DB read — moderators get the queue, NOT the directory)
+ *   role "moderator"   → 403 (no DB read — moderators get the queue, not the directory)
  *   role "admin"       → returns the minimal id/email/name/role rows
  *
  * The DB is mocked (per `docs/agents/testing.md`, minimal mocking) so no live

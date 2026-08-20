@@ -5,50 +5,41 @@ import { type Freshness, formatFreshness } from "~/trust/browse-card-format";
 import { DEFAULT_STALENESS_MONTHS, deriveHeadlineSafetyState } from "~/trust/summary";
 
 /**
- * Pure at-a-glance trust derivation for the browse list (issue #33).
+ * Pure at-a-glance trust derivation for the browse list.
  *
- * CLIENT-SAFE: this module is pure and imports NO database client — only the
- * client-safe pure derivations from `app/trust/summary.ts`, the client-safe
- * taxonomy tuple, and a type-only reference to {@link ClaimAggregate}. It is
- * therefore safe to import from the browse-list cards (the client bundle)
- * alongside `app/trust/summary.ts` and `app/trust/incident-recency.ts`. Keep it
- * free of any `db`/server-only imports.
+ * Client-safe: imports no database client — only pure derivations, the
+ * client-safe taxonomy tuple, and type-only references. Keep it free of any
+ * `db`/server-only imports.
  *
- * The browse card shows the SAME honest signals as the listing-detail page, just
+ * The browse card shows the same honest signals as the listing-detail page,
  * condensed to a single glance:
  *
- * - **Headline safety state** — celiac-safe vs. gluten-friendly (or "may be
- *   stale"), derived from the `celiac_safe_vs_gluten_friendly` claim's VISIBLE
- *   aggregate via {@link deriveHeadlineSafetyState} (#29). `null` when there is
- *   no such claim or no evidence, so the card renders an honest "Not yet
- *   attested" rather than a fabricated verdict (a celiac could be hurt).
- * - **Recent-incident flag** — whether a recent "got glutened" report exists,
- *   computed server-side with #30's `findRecentIncident` recency helper and
- *   threaded in as the incident's instant. Recent harm flags the card regardless
- *   of older confirmations (ADR-007, domain.md → Trust Model).
- * - **Evidence counts** — the celiac claim's confirmations and the number of
- *   distinct contributors (AUB-61 redesign), a plain count of the visible
- *   attestation rows the user can also see.
- * - **Freshness cue** — a compact `{ kind, label }` recency descriptor derived
- *   purely by `formatFreshness` (incident → fresh → stale precedence).
- * - **Bot-suggestion provenance** — which claim attributes still carry a live
- *   curator-bot suggestion (AUB-31/AUB-193, owner nit 7). PROVENANCE, never
- *   evidence (ADR-007): it labels where a card's suggested labels came from and
- *   never influences the safety verdict or the evidence counts.
- * - **Confirmed claim badges** — the NON-headline attributes with positive
- *   community consensus (AUB-226), so the card shows the SAME confirmed claim
- *   badges the listing-detail page does. Real EVIDENCE, deduped against the
- *   suggested set so an attribute is never both confirmed and suggested.
+ * - **Headline safety state** — derived from the celiac claim's visible
+ *   aggregate via {@link deriveHeadlineSafetyState}. `null` when there is no
+ *   claim or no evidence: the card renders an honest "Not yet attested",
+ *   never a fabricated verdict (a celiac could be hurt).
+ * - **Recent-incident flag** — recent harm flags the card regardless of older
+ *   confirmations (ADR-007, domain.md → Trust Model).
+ * - **Evidence counts** — celiac-claim confirmations and distinct
+ *   contributors, a plain count of the visible attestation rows.
+ * - **Freshness cue** — a compact `{ kind, label }` recency descriptor from
+ *   `formatFreshness` (incident → fresh → stale precedence).
+ * - **Bot-suggestion provenance** — which attributes carry a live curator-bot
+ *   suggestion. Provenance, never evidence (ADR-007): it never influences the
+ *   safety verdict or the evidence counts.
+ * - **Confirmed claim badges** — non-headline attributes with positive
+ *   community consensus, deduped against the suggested set so an attribute is
+ *   never both confirmed and suggested.
  *
- * This is a roll-up of visible evidence, never a secret score — the same reading
- * any user gets from the listing-detail page.
+ * A roll-up of visible evidence, never a secret score — the same reading any
+ * user gets from the listing-detail page.
  */
 
 /** Community evidence counts a browse card surfaces beside the safety verdict. */
 export interface ListingEvidence {
   /** Confirmations on the celiac claim (its `confirmCount`). */
   confirmations: number;
-  /** Distinct people who attested (confirmed OR disputed) the celiac claim. */
+  /** Distinct people who attested (confirmed or disputed) the celiac claim. */
   contributors: number;
 }
 
@@ -60,7 +51,7 @@ export interface ListingTrustGlance {
    * card's honest "Not yet attested" empty state — never a fabricated verdict.
    */
   safetyState: SafetyState | null;
-  /** Whether a RECENT "got glutened" incident flags this listing. */
+  /** Whether a recent "got glutened" incident flags this listing. */
   hasRecentIncident: boolean;
   /**
    * Community evidence counts (celiac-claim confirmations + distinct
@@ -73,34 +64,31 @@ export interface ListingTrustGlance {
    */
   freshness: Freshness | null;
   /**
-   * True when this listing carries at least one LIVE (unvoted) curator-bot
-   * suggestion ("Aubrey's Bot", AUB-31/AUB-193) on any visible claim — i.e.
-   * whenever {@link suggestedAttributes} is non-empty. Drives the card's
-   * "Suggested by Aubrey's Bot" label. This is PROVENANCE, not a verdict
-   * (ADR-007): it is shown whenever suggestions are live — including alongside
-   * real community evidence on OTHER claims (owner nit 7) — but it never
-   * influences `safetyState` or `evidence`, which derive from evidence only.
+   * True when this listing carries at least one live (unvoted) curator-bot
+   * suggestion on any visible claim — i.e. whenever
+   * {@link suggestedAttributes} is non-empty. Drives the card's "Suggested by
+   * Aubrey's Bot" label. Provenance, not a verdict (ADR-007): shown whenever
+   * suggestions are live — including alongside real community evidence on
+   * other claims — but it never influences `safetyState` or `evidence`, which
+   * derive from evidence only.
    */
   suggestedByBot: boolean;
   /**
-   * The claim attributes the curator bot suggested that are still LIVE (no real
+   * The claim attributes with a still-live curator-bot suggestion (no real
    * vote yet), deduped and in taxonomy order. Each renders as a bot-provenance
-   * badge on the card — clearly styled as a suggestion, never as a
-   * community-confirmed verdict (ADR-007). Empty when nothing is suggested.
+   * badge — styled as a suggestion, never as a community-confirmed verdict
+   * (ADR-007). Empty when nothing is suggested.
    */
   suggestedAttributes: ClaimAttribute[];
   /**
-   * The NON-headline claim attributes with CONFIRMED positive community
-   * consensus (AUB-226), deduped and in taxonomy order. Each renders as a
-   * NON-suggested {@link import("~/components/listing/ClaimBadge").ClaimBadge} on
-   * the card — real community evidence, so it reads as affirmed (never the
-   * suggested/provenance variant). This is the browse-card parity for the
-   * listing-detail page's `confirmed` badges (`hasPositiveConsensus`): without it
-   * a confirmed non-headline claim (e.g. "Off-menu GF on request") showed on the
-   * detail page but never on the card. The headline `celiac_safe_vs_gluten_friendly`
-   * attribute is excluded (it is the {@link safetyState} verdict, not a badge).
-   * Deduped AGAINST {@link suggestedAttributes} so an attribute is never both
-   * confirmed and suggested at once. Empty when nothing is confirmed.
+   * The non-headline claim attributes with confirmed positive community
+   * consensus (`hasPositiveConsensus`), deduped and in taxonomy order. Each
+   * renders as a non-suggested claim badge — real community evidence, matching
+   * the listing-detail page's `confirmed` badges. The headline
+   * `celiac_safe_vs_gluten_friendly` attribute is excluded (it is the
+   * {@link safetyState} verdict, not a badge). Deduped against
+   * {@link suggestedAttributes} so an attribute is never both confirmed and
+   * suggested at once. Empty when nothing is confirmed.
    */
   confirmedAttributes: ClaimAttribute[];
 }
@@ -112,35 +100,31 @@ function normalizeAttributes(attributes: readonly ClaimAttribute[]): ClaimAttrib
 
 /**
  * Derive a listing's at-a-glance trust from its `celiac_safe_vs_gluten_friendly`
- * aggregate (or `null`/`undefined` when the listing has no such claim), a
- * distinct-contributor count, and the most recent in-window incident's instant.
+ * aggregate, a distinct-contributor count, and the most recent in-window
+ * incident's instant.
  *
- * The aggregate is optional because not every listing has a celiac claim row;
- * passing `null`/`undefined` yields a `null` `safetyState` (the honest empty
- * state) and `null` `evidence`, exactly as a claim with no evidence would.
+ * The aggregate is optional (not every listing has a celiac claim row);
+ * `null`/`undefined` yields a `null` `safetyState` (the honest empty state)
+ * and `null` `evidence`, exactly as a claim with no evidence would.
  *
- * `recentIncidentAt` is the most recent in-window incident's instant (or `null`);
- * `hasRecentIncident` is derived from it so the two can never disagree, and the
- * freshness cue phrases the incident from its own recency.
+ * `hasRecentIncident` is derived from `recentIncidentAt` so the two can never
+ * disagree; the freshness cue phrases the incident from its own recency.
  *
- * `suggestedAttributes` (AUB-193, owner nit 7) is the set of claim attributes —
- * across ALL of the listing's visible claims, not just the headline celiac one —
- * that still carry a live curator-bot suggestion (`suggested_by IS NOT NULL`).
- * It is batched server-side (see `buildBrowseCards`) and threaded in as plain
- * data so this module stays pure and db-free. The headline celiac claim's own
- * `suggested` flag is folded in as a fallback (only while that claim has no
- * votes — the first real vote clears the suggestion) for callers without the
- * batched set. The result feeds `suggestedAttributes`/`suggestedByBot` ONLY:
- * a suggestion is provenance, never evidence, so it can never fabricate or
- * alter the safety verdict — but it IS surfaced even when real evidence exists
- * on other claims, because provenance stays true regardless of evidence.
+ * `suggestedAttributes` is the set of attributes — across all of the listing's
+ * visible claims — that carry a live curator-bot suggestion (`suggested_by IS
+ * NOT NULL`). It is batched server-side and threaded in as plain data so this
+ * module stays pure and db-free. The headline celiac claim's own `suggested`
+ * flag is folded in as a fallback for callers without the batched set, only
+ * while that claim has no votes (the first real vote clears the suggestion).
+ * The result feeds `suggestedAttributes`/`suggestedByBot` only: a suggestion
+ * is provenance, never evidence, so it can never fabricate or alter the
+ * safety verdict — but it is surfaced even when real evidence exists on other
+ * claims, because provenance stays true regardless of evidence.
  *
- * `confirmedAttributes` (AUB-226) is the set of NON-headline attributes with
- * CONFIRMED positive community consensus, batched server-side the SAME way
- * (`buildBrowseCards`) and threaded in as plain data so this module stays pure
- * and db-free. It is deduped AGAINST the suggested set (an attribute is never
- * both confirmed and suggested — they are mutually exclusive by construction:
- * consensus needs ≥ 1 confirm, a live suggestion needs zero votes) so the card
+ * `confirmedAttributes` is the set of non-headline attributes with confirmed
+ * positive community consensus, batched server-side the same way. It is
+ * deduped against the suggested set (mutually exclusive by construction:
+ * consensus needs a confirm, a live suggestion needs zero votes) so the card
  * never double-renders one attribute as both evidence and provenance.
  */
 export function deriveListingTrustGlance(
@@ -163,9 +147,9 @@ export function deriveListingTrustGlance(
     celiacAggregate.confirmCount + celiacAggregate.disputeCount > 0;
 
   // Fallback fold-in of the headline celiac claim's own suggestion flag, for
-  // callers that don't batch the per-attribute set. Gated per-claim on "no votes
-  // on THAT claim" (a vote clears the suggestion server-side, so a voted celiac
-  // claim's suggestion is no longer live) — NOT a gate on the label itself.
+  // callers that don't batch the per-attribute set. Gated per-claim on "no
+  // votes on that claim" (a vote clears the suggestion server-side) — not a
+  // gate on the label itself.
   const celiacSuggested = (celiacAggregate?.suggested ?? false) && !hasEvidence;
   const suggested = normalizeAttributes(
     celiacSuggested
@@ -173,11 +157,11 @@ export function deriveListingTrustGlance(
       : suggestedAttributes
   );
 
-  // Confirmed non-headline attributes (AUB-226), taxonomy-ordered and deduped
-  // AGAINST the suggested set so an attribute never renders as BOTH evidence and
-  // provenance. They are mutually exclusive by construction (consensus needs a
-  // confirm; a live suggestion needs zero votes), but the filter is belt-and-
-  // braces so a transient overlap can never double-badge the card.
+  // Confirmed non-headline attributes, taxonomy-ordered and deduped against
+  // the suggested set so an attribute never renders as both evidence and
+  // provenance. Mutually exclusive by construction (consensus needs a confirm;
+  // a live suggestion needs zero votes), but the filter guards against a
+  // transient overlap double-badging the card.
   const confirmed = normalizeAttributes(confirmedAttributes).filter(
     (attribute) => !suggested.includes(attribute)
   );
@@ -188,19 +172,19 @@ export function deriveListingTrustGlance(
       : null,
     hasRecentIncident: recentIncidentAt !== null,
     // Only surface counts when there is real evidence — a claim row with zero
-    // votes (or no claim at all) shows the honest "Not yet attested" empty state,
-    // never "0 confirmations".
+    // votes (or no claim at all) shows the honest "Not yet attested" empty
+    // state, never "0 confirmations".
     evidence: hasEvidence ? { confirmations: celiacAggregate.confirmCount, contributors } : null,
     freshness: formatFreshness(lastConfirmedAt, recentIncidentAt, now, stalenessMonths),
-    // PROVENANCE, not a verdict (ADR-007 / owner nit 7): the label tracks live
-    // suggestions verbatim — it is NOT gated on "no real evidence", because a
-    // listing with community celiac evidence can still carry live suggestions on
-    // other attributes, and that provenance stays true. The suggestion never
-    // feeds `safetyState`/`evidence`, so it can never overstate safety.
+    // Provenance, not a verdict (ADR-007): the label tracks live suggestions
+    // verbatim — deliberately not gated on "no real evidence", because a
+    // listing with community celiac evidence can still carry live suggestions
+    // on other attributes, and that provenance stays true. The suggestion
+    // never feeds `safetyState`/`evidence`, so it can never overstate safety.
     suggestedByBot: suggested.length > 0,
     suggestedAttributes: suggested,
-    // CONFIRMED non-headline claim badges (AUB-226) — real community evidence,
-    // rendered as the affirmed (non-suggested) ClaimBadge. Detail-page parity.
+    // Confirmed non-headline claim badges — real community evidence, rendered
+    // as the affirmed (non-suggested) ClaimBadge. Detail-page parity.
     confirmedAttributes: confirmed,
   };
 }

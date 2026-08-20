@@ -2,24 +2,15 @@ import { z } from "zod";
 import type { incidentSeverities as DbIncidentSeverities } from "~/db/schema";
 
 /**
- * Pure incident recency + validation helpers (issue #30, ADR-007).
+ * Pure incident recency + validation helpers (ADR-007).
  *
- * CLIENT-SAFE: this module is pure and imports NO runtime value from the DB
- * layer — only `zod` and a *type-only* reference to the schema enum (erased at
- * build). It therefore may be imported from client components, the route's
- * client bundle, and the server module alike, mirroring how #29 keeps
- * `app/trust/summary.ts` pure (type-only schema imports).
- *
- * Importing the runtime `incidentSeverities` tuple from `~/db/schema` would drag
- * `drizzle-orm/pg-core` (and transitively server-only stream code) into the
- * browser bundle and break the client build — so we declare a plain literal
- * mirror here and assert at the type level that it stays in lockstep with the DB
- * enum.
- *
- * The DB-touching reads/writes (and the `createServerFn` entry points the UI
- * calls) live in `app/server/incidents/index.ts`, which imports the constants
- * and schema from here. Never move `getDb` (or a schema value import) into this
- * file.
+ * Client-safe: imports no runtime value from the DB layer — only `zod` and a
+ * type-only reference to the schema enum (erased at build). Importing the
+ * runtime `incidentSeverities` tuple from `~/db/schema` would drag
+ * `drizzle-orm/pg-core` (and server-only stream code) into the browser bundle
+ * and break the client build, so a plain literal mirror is declared here with
+ * a type-level lockstep assertion. Never move `getDb` (or a schema value
+ * import) into this file.
  */
 
 /**
@@ -46,16 +37,15 @@ export type IncidentSeveritiesInSyncWithDb = _AssertSeveritiesMatch;
 // ---------------------------------------------------------------------------
 
 /**
- * How recent a "got glutened" incident must be to raise the prominent warning
- * banner on a listing. Chosen at **90 days**: long enough that a real, fairly
- * recent reaction still warns the next diner, short enough that a months-old
- * one-off doesn't permanently brand a restaurant that may have since fixed its
- * process.
+ * How recent a "got glutened" incident must be to raise the warning banner on
+ * a listing. 90 days: long enough that a recent reaction still warns the next
+ * diner, short enough that a months-old one-off doesn't permanently brand a
+ * restaurant.
  *
- * NOTE: this is the *incident-recency* window. It is deliberately SEPARATE from
- * the 6-month claim-staleness window (an admin-tunable AppSetting handled by
- * issue #31) — the two answer different questions ("is this harm still fresh?"
- * vs. "is this confirmation still current?") and must not be coupled.
+ * This is the incident-recency window, deliberately separate from the
+ * claim-staleness window (an admin-tunable AppSetting) — the two answer
+ * different questions ("is this harm still fresh?" vs. "is this confirmation
+ * still current?") and must not be coupled.
  */
 export const RECENT_INCIDENT_WINDOW_DAYS = 90;
 
@@ -67,11 +57,10 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * Parse a `YYYY-MM-DD` string to its UTC-midnight epoch ms, or `null` if it is
- * not a *real* calendar date. A bare format check is not enough: `2026-02-31`,
- * `2026-13-45`, and `2026-00-00` all match `\d{4}-\d{2}-\d{2}` but are not
- * dates. We round-trip through `Date.UTC` and require the components to survive
- * unchanged, which rejects month/day overflow that JS would otherwise roll
- * forward (e.g. Feb 31 -> Mar 3).
+ * not a real calendar date. A bare format check is not enough (`2026-02-31`
+ * matches the pattern but is not a date): the round-trip through `Date.UTC`
+ * requires the components to survive unchanged, rejecting month/day overflow
+ * that JS would otherwise roll forward (e.g. Feb 31 -> Mar 3).
  */
 export function parseCalendarDay(value: string): number | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -98,33 +87,26 @@ export function parseCalendarDay(value: string): number | null {
  * Normalize whatever the DB driver hands back for a `date` column into the
  * canonical `YYYY-MM-DD` calendar-date string the rest of the app contracts on.
  *
- * WHY THIS EXISTS (a real boundary bug, issue #45): `incidents.occurred_on` is a
- * Postgres `date` declared as Drizzle `date("occurred_on")` (`PgDateString`,
- * which passes the driver value through verbatim — no `mapFromDriverValue`). The
- * Neon HTTP driver applies a `pg-types` parser to the `date` OID that returns a
- * JS **`Date`**, not the `YYYY-MM-DD` text. Every downstream consumer —
- * `parseCalendarDay` (recency + the no-future validator), `formatIncidentDate` /
- * `relativeIncidentDate` (banner + list display) — assumes a clean string, so a
- * raw `Date` silently breaks the recent-incident banner (it never renders) and
- * the list date formatting. Normalizing once at the read boundary keeps the
- * calendar-date contract instead of teaching every consumer to also accept a
- * `Date`/ISO timestamp.
+ * Driver quirk: `incidents.occurred_on` is a Postgres `date` (Drizzle
+ * `PgDateString`, which passes the driver value through verbatim), and the
+ * Neon HTTP driver's `pg-types` parser returns the `date` OID as a JS `Date`,
+ * not the `YYYY-MM-DD` text. Downstream consumers assume a clean string; a
+ * raw `Date` silently breaks the recent-incident banner and date formatting.
+ * Normalizing once at the read boundary keeps the calendar-date contract.
  *
- * TZ-CORRECTNESS (issue #144): `pg-types` builds the `Date` for a bare `date`
- * (OID 1082) at **LOCAL midnight** of the runtime TZ — `new Date(y, m-1, d)` —
- * NOT UTC midnight. So to recover the *stored calendar day* we must read the
- * `Date` back on the **same basis the driver wrote it**: with the LOCAL getters
- * (`getFullYear`/`getMonth`/`getDate`). Reading it with UTC getters is correct
- * only on non-positive UTC offsets (the Americas, incl. the Denver pilot, and
- * the Vercel `TZ=UTC` runtime), but is off-by-one on a positive-offset runtime
- * (e.g. `Asia/Tokyo`: stored `2026-06-28` → local-midnight `Date` → UTC getters
- * → `2026-06-27`). Local getters return the stored day in ANY runtime TZ.
+ * TZ correctness: `pg-types` builds the `Date` for a bare `date` (OID 1082)
+ * at local midnight of the runtime TZ (`new Date(y, m-1, d)`), not UTC
+ * midnight. Recovering the stored calendar day therefore requires the local
+ * getters (`getFullYear`/`getMonth`/`getDate`) — the same basis the driver
+ * wrote it. UTC getters are off-by-one on a positive-offset runtime (e.g.
+ * `Asia/Tokyo`: stored `2026-06-28` reads back as `2026-06-27`); local
+ * getters return the stored day in any runtime TZ.
  *
  * Accepts the already-correct `YYYY-MM-DD` string (returned unchanged) or a
  * `Date` (the driver's local-midnight value) and returns its `YYYY-MM-DD`
- * calendar day. A value that has no resolvable calendar day is returned coerced
- * to a string unchanged (so a genuinely malformed value still surfaces
- * downstream rather than being masked as a fabricated date).
+ * calendar day. A value with no resolvable calendar day is coerced to a string
+ * unchanged, so a malformed value still surfaces downstream rather than being
+ * masked as a fabricated date.
  */
 export function toCalendarDayString(value: string | Date): string {
   // Fast path: already the canonical contract.
@@ -135,10 +117,10 @@ export function toCalendarDayString(value: string | Date): string {
   if (Number.isNaN(date.getTime())) {
     return String(value);
   }
-  // LOCAL getters: the driver built this Date at local midnight (see above), so
-  // reading it on the same (local) basis recovers the stored calendar day in any
-  // runtime TZ. Do NOT switch these to the UTC getters — that reintroduces the
-  // positive-offset off-by-one (#144).
+  // Local getters: the driver built this Date at local midnight (see above),
+  // so reading it on the same basis recovers the stored calendar day in any
+  // runtime TZ. Never switch these to the UTC getters — that reintroduces the
+  // positive-offset off-by-one.
   const year = String(date.getFullYear()).padStart(4, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -156,13 +138,9 @@ export function todayUtcMidnight(now: Date = new Date()): number {
 
 /**
  * The `occurredOn` calendar date shared by the report and edit schemas: a
- * *real* calendar date (rejecting `2026-02-31` et al. before they reach the
- * Postgres `date` column) that is not in the future — a "got glutened" report
- * describes something that has already happened.
- *
- * Declared once so an edit can never sneak a future or impossible date past the
- * report path, and so editing a date to outside the window correctly drops the
- * recent-incident banner (and vice versa).
+ * real calendar date (rejecting `2026-02-31` et al. before they reach the
+ * Postgres `date` column) that is not in the future. Declared once so an edit
+ * can never sneak a future or impossible date past the report path.
  */
 const occurredOnSchema = z
   .string()
@@ -179,14 +157,13 @@ const occurredOnSchema = z
 
 /**
  * The optional free-text note shared by the report and edit schemas. An empty
- * note string is normalised to `undefined` so we never persist a blank.
+ * note string is normalised to `undefined` so a blank is never persisted.
  *
- * `.optional()` OUTERMOST (after the transform): under zod 4 a
- * `.optional().transform(...)` pipe infers `note` as a REQUIRED key of type
+ * `.optional()` sits outermost (after the transform): under zod 4 a
+ * `.optional().transform(...)` pipe infers `note` as a required key of type
  * `string | undefined`, forcing every caller to spell out `note: undefined`.
- * Wrapping the whole pipe keeps the key omittable, with identical runtime
- * semantics: an omitted note short-circuits to `undefined`, an empty/blank note
- * still normalises to `undefined` via the transform.
+ * Wrapping the whole pipe keeps the key omittable with identical runtime
+ * semantics.
  */
 const noteSchema = z
   .string()
@@ -198,10 +175,9 @@ const noteSchema = z
 /**
  * A reported incident. `occurredOn` is required and stored as a calendar date
  * (`YYYY-MM-DD`, matching the `date` column); severity/note are optional.
- *
  * The server function in `app/server/incidents` uses this as its validator, so
- * the {@link occurredOnSchema} no-future rule is enforced server-side (not just
- * in the UI) and a future date can never pin the recent-incident banner forever.
+ * the {@link occurredOnSchema} no-future rule holds server-side and a future
+ * date can never pin the recent-incident banner forever.
  */
 export const reportIncidentInputSchema = z.object({
   listingId: z.string().min(1, "listingId is required"),
@@ -218,11 +194,10 @@ export const listIncidentsInputSchema = z.object({
 export type ListIncidentsInput = z.infer<typeof listIncidentsInputSchema>;
 
 /**
- * Editing an OWN incident (issue #32). Carries the incident `id` and the same
- * editable fields a report accepts — `occurredOn` (re-validated as a real, non-
- * future calendar date), optional `severity`, optional `note`. The actor is the
- * current user; ownership is enforced server-side (the incident's `userId` must
- * match) — this schema does not carry a user id, so a caller can never spoof one.
+ * Editing an own incident. Carries the incident `id` and the same editable
+ * fields a report accepts. The actor is the current user; ownership is
+ * enforced server-side (the incident's `userId` must match) — this schema
+ * carries no user id, so a caller can never spoof one.
  *
  * Shares the exact {@link occurredOnSchema} / {@link noteSchema} rules with
  * {@link reportIncidentInputSchema}, so an edit can never sneak a future or
@@ -236,7 +211,7 @@ export const editIncidentInputSchema = z.object({
 });
 export type EditIncidentInput = z.infer<typeof editIncidentInputSchema>;
 
-/** Retracting (deleting) an OWN incident needs only the incident id. */
+/** Retracting (deleting) an own incident needs only the incident id. */
 export const retractIncidentInputSchema = z.object({
   id: z.string().min(1, "id is required"),
 });
@@ -248,23 +223,18 @@ export type RetractIncidentInput = z.infer<typeof retractIncidentInputSchema>;
 
 /**
  * Whether `occurredOn` falls within the {@link RECENT_INCIDENT_WINDOW_DAYS}
- * window ending at `now`. Pure and side-effect-free so both the listing-detail
- * banner and the browse-list card signal (issue #33, not built yet) can share
- * one definition of "recent".
+ * window ending at `now`. Pure, so the listing-detail banner and the
+ * browse-list card share one definition of "recent".
  *
  * Boundary rule: an incident exactly `RECENT_INCIDENT_WINDOW_DAYS` old still
- * counts as recent (inclusive); strictly older does not. A future-dated incident
- * is NOT recent — the report schema already rejects future dates, but this is
- * defense in depth so a bad row can never pin the banner forever.
+ * counts as recent (inclusive); strictly older does not. A future-dated
+ * incident is not recent — the report schema already rejects future dates,
+ * but this is defense in depth so a bad row can never pin the banner forever.
  *
- * Recency is **UTC-calendar-based**: incidents are stored as dates (no
- * time-of-day), so both `occurredOn` and `now` are floored to their UTC midnight
- * before measuring the gap. This keeps the window a clean "N days", makes the
- * boundary independent of the time of day the check runs, and matches the basis
- * `relativeIncidentDate` uses, so server (SSR) and client agree.
- *
- * @param occurredOn The incident's calendar date (`YYYY-MM-DD`) or a `Date`.
- * @param now The reference instant; defaults to now (injectable for tests).
+ * Recency is UTC-calendar-based: incidents are stored as dates, so both
+ * `occurredOn` and `now` are floored to their UTC midnight before measuring
+ * the gap. The boundary is independent of the time of day the check runs and
+ * matches the basis `relativeIncidentDate` uses, so server and client agree.
  */
 export function isRecentIncident(occurredOn: string | Date, now: Date = new Date()): boolean {
   const occurredDay =

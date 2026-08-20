@@ -5,13 +5,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Unit + HTTP-route coverage for the preview-only dev-login (AUB-138).
+ * Unit + HTTP-route coverage for the preview-only dev-login.
  *
- * We mock `~/env` with a MUTABLE env object (rather than `process.env` +
- * memoized `getEnv`) so each test can flip `VERCEL_ENV` / `PREVIEW_LOGIN_SECRET`
- * deterministically — `getEnv()` reads the live object on every call. `~/db/client`
- * is mocked so `resolvePreviewUser`'s upsert never touches a real database. The
- * session module reads the same mocked env, so the real seal/unseal round-trips.
+ * `~/env` is mocked with a mutable env object (rather than `process.env` +
+ * memoized `getEnv`) so each test can flip `VERCEL_ENV` /
+ * `PREVIEW_LOGIN_SECRET` deterministically — `getEnv()` reads the live object
+ * on every call. `~/db/client` is mocked so `resolvePreviewUser`'s upsert
+ * never touches a real database. The session module reads the same mocked
+ * env, so the real seal/unseal round-trips.
  */
 
 const SESSION_SECRET = "test-session-secret-at-least-32-chars-long-xx";
@@ -417,7 +418,7 @@ describe("renderDevLoginPage", () => {
     expect(html).toContain('<form method="post" action="/api/auth/dev-login">');
     expect(html).toContain('name="secret"');
     expect(html).toContain('type="password"');
-    // The secret is NEVER echoed into the page.
+    // The secret is never echoed into the page.
     expect(html).not.toContain(PREVIEW_SECRET);
   });
 

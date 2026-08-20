@@ -1,31 +1,31 @@
 // Single source of truth for the owner-review guardrail (ADR-015).
 //
-// This module defines WHICH changes require the repo owner's explicit review.
-// It is consumed by two places that MUST agree:
+// This module defines which changes require the repo owner's explicit review.
+// It is consumed by two places that must agree:
 //   1. .github/scripts/check-owner-review.mjs — the CI detector (Layer 2).
 //   2. tests/unit/check-owner-review.test.ts — asserts this list and
 //      `.github/CODEOWNERS` (Layer 1) never drift apart (bidirectional).
 //
 // The design is two-layer (see docs/agents/governance.md):
 //   Layer 1 (the teeth): .github/CODEOWNERS assigns exactly OWNED_PATHS to the
-//     owner; GitHub branch protection ("Require review from Code Owners") makes an
-//     owned-path PR unmergeable until the owner approves. Nothing here can be
-//     bypassed by a collaborator, bot, or agent.
-//   Layer 2 (the tripwire): the CI detector re-derives the same surface from this
-//     module PLUS content signals paths can't see (destructive SQL, the safety
-//     disclaimer, telemetry posture) and FAILS the PR unless it is labeled
-//     `safe:human`. This stops an agent self-labeling a gated change `safe:agent`
-//     (auto-mergeable).
+//     owner; GitHub branch protection ("Require review from Code Owners") makes
+//     an owned-path PR unmergeable until the owner approves. Nothing here can
+//     be bypassed by a collaborator, bot, or agent.
+//   Layer 2 (the tripwire): the CI detector re-derives the same surface from
+//     this module plus content signals paths can't see (destructive SQL, the
+//     safety disclaimer, telemetry posture) and fails the PR unless it is
+//     labeled `safe:human`. This stops an agent self-labeling a gated change
+//     `safe:agent` (auto-mergeable).
 //
-// IMPORTANT — the backstop is asymmetric. Layer 1 (CODEOWNERS) backstops every
-// miss in the PATH categories: a path-owned file cannot merge without the owner
-// regardless of label, so the path checks can be simple. The CONTENT_CHECKS are
-// different — they exist to catch gated changes that land in UNOWNED files (a
-// disclaimer moved to a new component, a new telemetry init), which by
-// definition have NO Layer-1 backstop. They are therefore best-effort
-// heuristics: a content-category change in an unowned file that evades these
-// patterns can still merge as `safe:agent`. Keep the patterns broad and treat
-// this as a known residual limitation (documented in docs/agents/governance.md).
+// The backstop is asymmetric. Layer 1 (CODEOWNERS) backstops every miss in the
+// path categories: a path-owned file cannot merge without the owner regardless
+// of label, so the path checks can be simple. The CONTENT_CHECKS are different
+// — they catch gated changes that land in unowned files (a disclaimer moved to
+// a new component, a new telemetry init), which by definition have no Layer-1
+// backstop. They are therefore best-effort heuristics: a content-category
+// change in an unowned file that evades these patterns can still merge as
+// `safe:agent`. Keep the patterns broad and treat this as a known residual
+// limitation (documented in docs/agents/governance.md).
 //
 // The seven owner-gated categories (ADR-015): cost, legal, security, trust &
 // safety model, destructive/irreversible data changes, data-collection/privacy
@@ -40,7 +40,7 @@
  *   - `*` matches any run of non-`/` characters; `?` matches one non-`/` char;
  *   - other characters (including `.` and `$`) are literal.
  *
- * KEEP THIS IDENTICAL to the path tokens in `.github/CODEOWNERS`. The
+ * Keep this identical to the path tokens in `.github/CODEOWNERS`. The
  * bidirectional drift test fails the build if the two sets ever diverge.
  *
  * @type {string[]}
@@ -83,12 +83,12 @@ export const OWNED_PATHS = [
   // ── Supply chain / legal ──
   // pnpm-workspace.yaml holds the supply-chain posture itself: the
   // `minimumReleaseAge` quarantine, its `minimumReleaseAgeExclude` fast-track
-  // list, `blockExoticSubdeps`, the `allowBuilds` postinstall allowlist, and the
-  // security-floor `overrides`. It previously slipped the net — `/*.config.ts`
-  // matches .ts only — so a PR that ONLY weakened it (deleting the quarantine,
-  // adding a fast-track entry, lowering a floor) tripped neither layer and could
-  // ship `safe:agent`. osv-scanner.toml is gated for the same reason: an entry
-  // there is a decision to accept a known vulnerability.
+  // list, `blockExoticSubdeps`, the `allowBuilds` postinstall allowlist, and
+  // the security-floor `overrides`. `/*.config.ts` matches .ts only, so it is
+  // listed explicitly — a PR that only weakens it (deleting the quarantine,
+  // adding a fast-track entry, lowering a floor) must trip the gate rather
+  // than ship `safe:agent`. osv-scanner.toml is gated for the same reason: an
+  // entry there is a decision to accept a known vulnerability.
   "/package.json",
   "/pnpm-lock.yaml",
   "/pnpm-workspace.yaml",
@@ -119,14 +119,14 @@ export const OWNED_PATHS = [
 
 /**
  * Content signals that require owner review even when the edit lands in a file
- * NOT in OWNED_PATHS. Each is a category with a `test(text)` predicate over a
+ * not in OWNED_PATHS. Each is a category with a `test(text)` predicate over a
  * single changed line and the diff `side` it applies to:
  *   - "add"  → only added (`+`) lines are inspected;
  *   - "both" → added and removed (`+`/`-`) lines are inspected (removing the
  *     disclaimer is as gate-worthy as changing it).
  *
  * `fileScope`, when set, restricts a check to changed lines whose file matches
- * (used to keep the destructive-SQL scan to migration files only).
+ * (keeps the destructive-SQL scan to migration files only).
  */
 export const CONTENT_CHECKS = [
   {
@@ -134,14 +134,15 @@ export const CONTENT_CHECKS = [
     side: "add",
     fileScope: /(^|\/)db\/migrations\//,
     // Data-loss / integrity-loss operations. `SET DATA TYPE` / `ALTER COLUMN
-    // ... TYPE` narrows a column (can truncate/round existing values); dropping a
-    // constraint/NOT NULL/DEFAULT loses an invariant; RENAME + DELETE FROM are
-    // destructive too. NOTE: any migration edit is ALREADY path-gated
+    // ... TYPE` narrows a column (can truncate/round existing values); dropping
+    // a constraint/NOT NULL/DEFAULT loses an invariant; RENAME + DELETE FROM
+    // are destructive too. Any migration edit is already path-gated
     // (/db/migrations/ is an OWNED_PATH), so this list only sharpens the error
     // message — it does not need to be exhaustive to keep data-loss migrations
-    // from shipping `safe:agent`. Destructive SQL executed from NON-migration app
-    // code (e.g. a raw `sql`TRUNCATE …`` in an unowned server module) is out of
-    // scope here (see the residual-limitations note in docs/agents/governance.md).
+    // from shipping `safe:agent`. Destructive SQL executed from non-migration
+    // app code (e.g. a raw `sql`TRUNCATE …`` in an unowned server module) is
+    // out of scope here (see the residual-limitations note in
+    // docs/agents/governance.md).
     patterns: [
       /\bdrop\s+table\b/i,
       /\bdrop\s+column\b/i,
@@ -160,9 +161,9 @@ export const CONTENT_CHECKS = [
     kind: "safety-disclaimer",
     side: "both",
     // The "not medical advice" framing is a legal + safety statement. Any line
-    // touching this framing (in ANY file — the disclaimer may move) is gated so
-    // wording changes get the owner's sign-off. Broadened past the exact phrase so
-    // a reworded variant in a new component still trips (review finding #1/#2).
+    // touching this framing (in any file — the disclaimer may move) is gated so
+    // wording changes get the owner's sign-off. Broadened past the exact phrase
+    // so a reworded variant in a new component still trips.
     patterns: [
       /medical\s+(advice|guidance|opinion)/i,
       /health\s+advice/i,
@@ -176,12 +177,12 @@ export const CONTENT_CHECKS = [
   {
     kind: "telemetry-privacy",
     side: "add",
-    // Data-collection posture: capturing PII in error/telemetry payloads, changing
-    // sampling volume (also a cost lever), or wiring a NEW tracker. Most telemetry
-    // lives in the already-owned instrument.server.mjs; these catch a new init /
-    // identify / tracker import elsewhere (review finding #2). Heuristic and
-    // deliberately broad — it only forces `safe:human`, and a false positive is
-    // cheaper than a silent new tracker capturing PII in an unowned file.
+    // Data-collection posture: capturing PII in error/telemetry payloads,
+    // changing sampling volume (also a cost lever), or wiring a new tracker.
+    // Most telemetry lives in the already-owned instrument.server.mjs; these
+    // catch a new init or tracker wiring elsewhere. Heuristic and deliberately
+    // broad — it only forces `safe:human`, and a false positive is cheaper
+    // than a silent new tracker capturing PII in an unowned file.
     patterns: [
       /senddefaultpii\s*:\s*true/i,
       /\b(traces|profiles)samplerate\s*:/i,

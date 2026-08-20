@@ -2,20 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "~/db/schema";
 
 /**
- * Tests for the admin-panel access gate (`resolveAdminView`, #38).
+ * Tests for the admin-panel access gate (`resolveAdminView`).
  *
  * `resolveAdminView` (in the server-only `admin-view` module) is the logic
  * behind the `fetchAdminView` server fn and the ADR-010 security boundary for
- * `/admin`: the guard decision happens
- * server-side off the authoritative `users` row, and settings
- * are admin-only data. We mock its two server-only collaborators — the
- * current-user accessor and the settings reader — so we can assert all four
- * access branches without cookie/DB plumbing, per `docs/agents/testing.md`
- * (minimal mocking). The branches:
+ * `/admin`: the guard decision happens server-side off the authoritative
+ * `users` row, and settings are admin-only data. Its two server-only
+ * collaborators — the current-user accessor and the settings reader — are
+ * mocked so all four access branches are asserted without cookie/DB plumbing,
+ * per `docs/agents/testing.md` (minimal mocking). The branches:
  *
  *   no user            → { access: "anonymous" }              (getSetting unused)
  *   role "user"        → { access: "forbidden" }              (getSetting unused)
- *   role "moderator"   → granted, settings: null              (getSetting NOT called)
+ *   role "moderator"   → granted, settings: null              (getSetting not called)
  *   role "admin"       → granted, populated settings          (both keys read)
  *
  * The moderator case is the leak guard: settings must never be fetched (let

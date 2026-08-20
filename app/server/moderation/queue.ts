@@ -8,35 +8,34 @@ import { claimAttributeLabel } from "~/trust/summary";
 import type { ModerationQueue, QueueItem } from "./queue.fn";
 
 /**
- * Server-only moderation-queue query behind the `fetchModerationQueue` server fn
- * (issue #40, ADR-010 + domain.md "Roles & Permissions").
+ * Server-only moderation-queue query behind the `fetchModerationQueue` server
+ * fn (ADR-010 + domain.md "Roles & Permissions").
  *
  * Moderators and admins triage flagged content here, so this is an ADR-010
- * security boundary enforced SERVER-SIDE, never trusted to the UI. Like the
- * admin-panel gate it reports a typed `access` discriminator rather than letting
- * the raw 401/403 escape, so the route loader can map the verdict to the right
- * UX:
+ * security boundary enforced server-side, never trusted to the UI. It reports
+ * a typed `access` discriminator rather than letting the raw 401/403 escape,
+ * so the route loader can map the verdict to the right UX:
  *
  * - `anonymous` → redirect to sign-in,
  * - `forbidden` (a plain `user`) → render the not-authorised UI,
  * - `granted` → render the queue.
  *
- * Unlike a plain `requireCurrentRole("moderator")` write guard (which simply
- * throws), the loader needs to distinguish anon-vs-forbidden to render two
- * different surfaces; we still run the SAME guard so the real 401/403 policy
+ * The loader needs to distinguish anon-vs-forbidden to render two different
+ * surfaces, but the same `requireCurrentRole("moderator")` guard still
  * decides access (admins out-rank moderators and pass; plain users get 403;
- * anonymous callers get 401), and only translate those into the discriminator.
+ * anonymous callers get 401) — those results are only translated into the
+ * discriminator.
  *
- * The queue lists OPEN flags only — resolved/dismissed/in-review flags have left
- * the triage surface. Each flag's single target (the exclusive arc: exactly one
- * of listing/claim/incident, enforced by the `flags_one_target` CHECK) is
- * resolved to a human label/snippet via LEFT JOINs, and the reporter's name/
- * email is joined from `users`. Newest first, so the freshest reports surface.
+ * The queue lists open flags only — resolved/dismissed/in-review flags have
+ * left the triage surface. Each flag's single target (the exclusive arc:
+ * exactly one of listing/claim/incident, enforced by the `flags_one_target`
+ * CHECK) is resolved to a human label/snippet via LEFT JOINs, and the
+ * reporter is joined from `users`. Newest first.
  *
- * Server-only: imports the DB client and the auth guards (and `getCurrentUser`
- * transitively). Never import from client code — the client-callable
- * `createServerFn` wrapper lives in `./queue.fn.ts` (the `*.fn.ts` convention),
- * so the browser bundle never drags in `getDb` (neon/drizzle).
+ * Server-only: imports the DB client and the auth guards. Never import from
+ * client code — the client-callable `createServerFn` wrapper lives in
+ * `./queue.fn.ts` (the `*.fn.ts` convention), so the browser bundle never
+ * drags in `getDb` (neon/drizzle).
  */
 
 /**
@@ -69,15 +68,14 @@ export async function resolveModerationQueue(): Promise<ModerationQueue> {
 }
 
 /**
- * Load every OPEN flag with the context a moderator needs to triage it: the
- * target (type + id + a human label/snippet), the reason, the reporter, and the
- * created date. Newest first.
+ * Load every open flag with the context a moderator needs to triage it: the
+ * target (type + id + a human label/snippet), the reason, the reporter, and
+ * the created date. Newest first.
  *
  * One query: filter `flags` to `status = "open"`, INNER JOIN the reporter (a
- * flag always has a `reporterId`), and LEFT JOIN each possible target table (the
- * exclusive arc means exactly one of the three joins matches per row). The
- * target type is derived from which target column is non-null; the label/snippet
- * is composed from the matched row.
+ * flag always has a `reporterId`), and LEFT JOIN each possible target table
+ * (the exclusive arc means exactly one of the three joins matches per row).
+ * The target type derives from which target column is non-null.
  */
 async function listOpenFlags(): Promise<QueueItem[]> {
   const db = getDb();

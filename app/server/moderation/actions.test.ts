@@ -3,20 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "~/db/schema";
 
 /**
- * Tests for the moderation ACTIONS write layer (`dismiss`/`hide`/`remove`/
- * `restore`, #41, ADR-010).
+ * Tests for the moderation actions write layer (`dismiss`/`hide`/`remove`/
+ * `restore`, ADR-010).
  *
  * These are the ADR-010 security boundary for acting on flagged content: the
- * gate is enforced server-side off the authoritative `users` row, never the UI.
- * The bulk of these tests pin down that PERMISSION BOUNDARY — anonymous (401)
- * and plain `user` (403) callers must be rejected BEFORE any DB work, while
- * `moderator` and `admin` pass — by driving the real `requireCurrentRole` guard
- * through a mocked current-user accessor (so the genuine 401/403 policy runs).
+ * gate is enforced server-side off the authoritative `users` row, never the
+ * UI. The bulk of these tests pin down that permission boundary — anonymous
+ * (401) and plain `user` (403) callers must be rejected before any DB work,
+ * while `moderator` and `admin` pass — by driving the real
+ * `requireCurrentRole` guard through a mocked current-user accessor (so the
+ * genuine 401/403 policy runs).
  *
- * The DB is mocked (no live connection): we capture the `db.batch([...])`
- * payload and assert the action writes the audit row, the content-status update,
- * and the prompting-flag status update as ONE atomic batch — and that `dismiss`
- * leaves content untouched while `restore` leaves the flag untouched.
+ * The DB is mocked (no live connection): the `db.batch([...])` payload is
+ * captured to assert the action writes the audit row, the content-status
+ * update, and the prompting-flag status update as one atomic batch — and
+ * that `dismiss` leaves content untouched while `restore` leaves the flag
+ * untouched.
  */
 
 const h = vi.hoisted(() => ({
@@ -26,7 +28,7 @@ const h = vi.hoisted(() => ({
   // Capture the values passed to each builder so we can assert intent.
   insertValuesMock: vi.fn((v: unknown) => ({ __op: "insert", values: v })),
   updateSetMock: vi.fn(),
-  // The flag-target verification SELECT (#157) — resolves to the flag's
+  // The flag-target verification SELECT — resolves to the flag's
   // exclusive-arc target columns (or [] for not-found).
   selectLimitMock: vi.fn<() => Promise<unknown[]>>(),
 }));
@@ -49,7 +51,7 @@ vi.mock("~/db/client", () => ({
         where: (w: unknown) => h.updateSetMock({ table, set: s, where: w }),
       }),
     }),
-    // The flag-target check (#157): select(...).from(...).where(...).limit(1)
+    // The flag-target check: select(...).from(...).where(...).limit(1)
     // resolves to the matched flag's exclusive-arc target columns.
     select: () => ({
       from: () => ({
@@ -87,8 +89,8 @@ beforeEach(() => {
   updateSetMock.mockImplementation((arg: unknown) => ({ __op: "update", ...(arg as object) }));
   batchMock.mockResolvedValue([]);
   // By default the prompting flag (`flag-1`) targets `listing-1` — i.e. it
-  // matches the `listingPayload` target, so the #157 check passes. Mismatch
-  // cases override this per-test.
+  // matches the `listingPayload` target, so the flag-target check passes.
+  // Mismatch cases override this per-test.
   selectLimitMock.mockResolvedValue([{ listingId: "listing-1", claimId: null, incidentId: null }]);
 });
 

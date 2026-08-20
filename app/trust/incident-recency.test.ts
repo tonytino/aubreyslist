@@ -9,7 +9,7 @@ import {
 } from "./incident-recency";
 
 /**
- * Tests for the pure, client-safe incident recency + validation helpers (#30).
+ * Tests for the pure, client-safe incident recency + validation helpers.
  * No DB mocks needed — this module imports no database client.
  */
 
@@ -34,7 +34,7 @@ describe("reportIncidentInputSchema — validation", () => {
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      // An OMITTED note must keep validating (zod 4 regression guard: the
+      // An omitted note must keep validating (zod 4 regression guard: the
       // `.transform(...).optional()` chain must keep the key omittable) and
       // parse to undefined, never a required key the caller must spell out.
       expect(result.data.note).toBeUndefined();
@@ -154,8 +154,8 @@ describe("toCalendarDayString — driver date normalization (issue #45)", () => 
 
   it("converts the driver's local-midnight Date for a `date` column to its YYYY-MM-DD", () => {
     // The Neon HTTP driver (pg-types, OID 1082) builds a `date` as a Date at
-    // LOCAL midnight — `new Date(y, m-1, d)`, month 0-based → June 28. Reading
-    // it back with LOCAL getters recovers the stored calendar day (#144).
+    // local midnight — `new Date(y, m-1, d)`, month 0-based → June 28.
+    // Reading it back with local getters recovers the stored calendar day.
     expect(toCalendarDayString(new Date(2026, 5, 28))).toBe("2026-06-28");
   });
 
@@ -177,9 +177,9 @@ describe("toCalendarDayString — driver date normalization (issue #45)", () => 
 // Reassigning `process.env.TZ` at runtime is only honored by a fresh child
 // process — vitest's default `forks` pool (used by `pnpm test`/preflight) and
 // the real CI. Inside a worker_thread the V8 timezone cache is already warm and
-// does NOT re-read TZ, so this positive-offset block CANNOT exercise its
+// does not re-read TZ, so this positive-offset block cannot exercise its
 // regression there (reproduces with `vitest run --pool=threads`). Stryker's
-// vitest-runner hard-codes the threads pool, so we skip ONLY this TZ block under
+// vitest-runner hard-codes the threads pool, so we skip only this TZ block under
 // worker threads, detected via `!worker_threads.isMainThread`: it is `false` in a
 // forks child (the block runs as normal) and `true` in a threads worker (the
 // block skips). The rest of the suite still runs under Stryker, so
@@ -189,7 +189,7 @@ describe.skipIf(isWorkerThread)(
   "toCalendarDayString — positive-offset TZ regression (issue #144)",
   () => {
     // Force a positive-offset runtime so a UTC-getter regression (which would
-    // yield the day BEFORE the stored one) is caught WITHOUT the DB-gated
+    // yield the day before the stored one) is caught without the DB-gated
     // integration test. Setting `process.env.TZ` is test tooling (the one allowed
     // exception to the no-`process.env` rule); newly constructed Dates pick it up.
     // Default to UTC (the prod/CI invariant) when TZ is unset so we always restore
@@ -210,7 +210,7 @@ describe.skipIf(isWorkerThread)(
       const localMidnight = new Date(2026, 5, 28);
       expect(localMidnight.getUTCDate()).toBe(27);
 
-      // Local getters must still return the STORED day, not the UTC-shifted one.
+      // Local getters must still return the stored day, not the UTC-shifted one.
       expect(toCalendarDayString(localMidnight)).toBe("2026-06-28");
     });
 
