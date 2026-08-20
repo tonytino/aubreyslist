@@ -1,0 +1,1 @@
+- `[manual]` Bumped four vulnerable transitive dependencies flagged by the osv-scanner CI gate: `nanoid` 3.3.18 (GHSA-2v37-7h3g-55p8, 8.2), `brace-expansion` 5.0.9 (override floor raised), `fast-uri` 3.1.5, `js-yaml` 4.3.1. Lockfile + one override line only — no runtime code touched.
