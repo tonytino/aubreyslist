@@ -75,7 +75,7 @@ describe("formatFreshness", () => {
     expect(formatFreshness(ago(10_000), null, NOW, 6)?.label).toBe("Verified just now");
   });
 
-  it("promotes to the coarser unit exactly AT each compact-bucket edge", () => {
+  it("promotes to the coarser unit exactly AT the minute, day, and month compact-bucket edges", () => {
     // Each bucket is a strict `<`, so an age sitting exactly on a boundary reads
     // as the NEXT unit up. Otherwise the chip renders a minute-old confirmation
     // as "just now" (overstating freshness), or "24h"/"30d" where "1d"/"1mo"

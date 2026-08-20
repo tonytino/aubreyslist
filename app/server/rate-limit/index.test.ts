@@ -90,7 +90,7 @@ describe("InMemoryRateLimiter.enforce", () => {
     }
   });
 
-  it("carries a friendly, non-empty message (the 429 body the caller sees)", () => {
+  it("carries a non-empty message (the 429 body the caller sees)", () => {
     // `app.onError` returns the HTTPException verbatim, and its response body IS
     // this message — an empty/missing one would ship a blank 429 to the user.
     const limiter = new InMemoryRateLimiter({ limit: 1, windowMs: 1000 }, () => 0);
@@ -99,7 +99,9 @@ describe("InMemoryRateLimiter.enforce", () => {
       limiter.enforce("u1");
       expect.unreachable("expected a 429");
     } catch (err) {
-      expect((err as HTTPException).message).toContain("too fast");
+      // Assert non-emptiness, not the wording: the phrasing is user-facing copy
+      // (docs/agents/copy.md) and a rewrite must not red-line this unit test.
+      expect((err as HTTPException).message.trim()).not.toBe("");
     }
   });
 

@@ -116,11 +116,11 @@ describe("findDuplicateListing", () => {
     ).toBeNull();
   });
 
-  it("never blocks an entry as a duplicate just because BOTH addresses normalize to empty", () => {
+  it("never blocks an entry as a duplicate just because the candidate address normalizes to empty", () => {
     // Same hazard on the other field: a blank/punctuation-only address must not
     // collapse two same-named branches (a chain) into a false duplicate.
     const existing = listingRow({ id: "punct-address", name: "Corner Cafe", address: "--,. " });
-    expect(findDuplicateListing({ name: "Corner Cafe", address: "  " }, [existing])).toBeNull();
+    expect(findDuplicateListing({ name: "Corner Cafe", address: "--,. " }, [existing])).toBeNull();
   });
 
   it("returns the first match when several exist", () => {
