@@ -92,6 +92,11 @@ export function ClaimDeckSection({
     }
     setAnswers(seededAnswers);
     setVotes(seededVotes);
+    // Every open starts with a clean undo slot (AUB-269): the summary's Done
+    // closes via `onDone` without passing through onOpenChange, so a stale
+    // "Vote recorded · Undo" row from the previous session would otherwise
+    // greet the reopen.
+    setLastWrite(null);
     setOpen(true);
   };
 
@@ -210,24 +215,30 @@ export function ClaimDeckSection({
             {/* Inline mis-swipe recovery (AUB-231 review round 1): the sheet is
                 MODAL, so a toast action would sit outside the focus trap and
                 behind Radix's body pointer-events lock — this row is inside
-                both. It always reflects only the LATEST write. */}
-            {lastWrite !== null ? (
-              <div
-                role="status"
-                className="flex items-center justify-between gap-2 rounded-card border border-border bg-muted/40 py-1.5 pr-1.5 pl-3"
-              >
-                <span className="text-body-sm text-muted-foreground">Vote recorded</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={undoLastWrite}
-                  className="min-h-11"
-                >
-                  Undo
-                </Button>
-              </div>
-            ) : null}
+                both. It always reflects only the LATEST write.
+
+                The slot is ALWAYS rendered at the row's exact height (AUB-269)
+                so the row's first appearance never shifts the deck — and the
+                button row under the user's thumb — mid-flow. The row itself is
+                deliberately NOT a live region: the deck's aria-live announcer
+                already says "Recorded: …", and a second, mount-timed status
+                announcement was duplicate noise at best. */}
+            <div className="min-h-14">
+              {lastWrite !== null ? (
+                <div className="flex min-h-14 items-center justify-between gap-2 rounded-card border border-border bg-muted/40 pr-1.5 pl-3">
+                  <span className="text-body-sm text-muted-foreground">Vote recorded</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={undoLastWrite}
+                    className="min-h-11"
+                  >
+                    Undo
+                  </Button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </SheetContent>
       </Sheet>

@@ -43,4 +43,5 @@ adversarial review before it ships. Cap at **2 review rounds**.
 Each Reviewer must be a **fresh subagent** with an adversarial mandate (try to
 break the work) and must probe correctness, security, repo Hard Rules,
 trust-model invariants (ADR-007/008), test honesty (`pnpm preflight` passes),
-scope creep, and documentation drift.
+scope creep, reuse (search the repo for a component, hook, helper, or server
+module that already does this), and documentation drift.

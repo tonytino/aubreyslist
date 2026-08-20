@@ -88,6 +88,35 @@ jobs:
       - name: Dead-code check
         run: pnpm deadcode
 
+  duplication:
+    name: Duplication
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Copy-paste duplication gate: fails the PR on textual clones across
+      # app/db/scripts/.github/scripts above the token/threshold floor set in
+      # .jscpd.json. This
+      # only catches literal copy-paste (jscpd tokenizes and diffs source, it has
+      # no notion of intent) — the semantic "does an equivalent helper already
+      # exist?" case is NOT covered here; that's what the adversarial review loop
+      # is for. Config + rationale for every ignore live in .jscpd.json and
+      # docs/agents/tooling.md (Duplication check).
+      - name: Duplication check
+        run: pnpm duplication
+
   changelog-validate:
     name: Changelog fragments valid
     runs-on: ubuntu-latest
