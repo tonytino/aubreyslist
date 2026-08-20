@@ -31,6 +31,10 @@ playwright-report/
 app/routeTree.gen.ts
 app.config.timestamp_*
 
+# osv-scanner JSON output, consumed by .github/scripts/check-osv.mjs. Written in
+# CI and by any local reproduction of the gate; never a source artifact.
+osv-results.json
+
 # Claude Code — ignore local/transient state (worktrees, local settings, plans),
 # but DO version-control the shareable agent tooling so every clone/session gets it.
 .claude/*

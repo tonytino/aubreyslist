@@ -46,14 +46,37 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # Dependency vulnerabilities — osv-scanner. Scans pnpm-lock.yaml against the
-  # OSV database and HARD-FAILS on any known vulnerability (osv-scanner exits
-  # non-zero when vulns are found; that propagates out of the Docker action and
-  # fails the job). We pin the *sub-action* (…/osv-scanner-action) rather than
-  # the reusable workflow so this stays a normal job in this workflow with
-  # least-privilege `contents: read` — the reusable workflow additionally wants
+  # Dependency vulnerabilities — osv-scanner, gated through a COOLDOWN-AWARE
+  # wrapper (.github/scripts/check-osv.mjs).
+  #
+  # A bare osv-scanner run fails the moment an advisory is published. That
+  # contradicts `minimumReleaseAge: 10080` in pnpm-workspace.yaml, which forbids
+  # pnpm from installing any version younger than 7 days — so for up to a week
+  # CI would demand a fix the package manager is configured to refuse, on every
+  # PR, with no escape but a hand bypass. The wrapper reconciles the two: a
+  # finding whose fix is still quarantined is a deferred `::warning::` carrying
+  # its unblock date; once the quarantine lapses it becomes a hard failure on
+  # its own. Advisories with NO available fix, and anything CVSS Critical, fail
+  # immediately. Full rationale in the script's header.
+  #
+  # `continue-on-error` on the scan step is load-bearing: osv-scanner exits
+  # non-zero when it finds anything, which would kill the job before the wrapper
+  # could classify the findings. GitHub does not expose a step's numeric exit
+  # code, so the wrapper cannot tell "vulns found" (exit 1) from "scanner broke"
+  # (exit 128) that way — it infers a broken scan from a missing or unparseable
+  # results file and fails closed.
+  #
+  # We pin the *sub-action* (…/osv-scanner-action) rather than the reusable
+  # workflow so this stays a normal job in this workflow with least-privilege
+  # `contents: read` — the reusable workflow additionally wants
   # `security-events: write` to upload SARIF, which we don't need for a plain
-  # pass/fail gate. `-L pnpm-lock.yaml` targets the lockfile explicitly.
+  # pass/fail gate. `--lockfile=pnpm-lock.yaml` targets the lockfile explicitly;
+  # `--config` points at the repo-root waiver file (auto-discovery resolves
+  # relative to the SCANNED file's directory and does not propagate, so being
+  # explicit is the safe form).
+  #
+  # The wrapper reads npm publish timestamps from registry.npmjs.org, so this
+  # job needs egress to the registry in addition to `contents: read`.
   # ---------------------------------------------------------------------------
   osv-scanner:
     name: Dependency vulns (osv-scanner)
@@ -64,10 +87,25 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+      # Node only — check-osv.mjs is zero-dependency, so there is deliberately
+      # no pnpm setup or `pnpm install` here (the gate must be able to run even
+      # when dependency installation is what's broken).
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - id: scan
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
         with:
           scan-args: |-
             --lockfile=pnpm-lock.yaml
+            --config=osv-scanner.toml
+            --format=json
+            --output=osv-results.json
+
+      - name: Gate findings against the release-age quarantine
+        run: node .github/scripts/check-osv.mjs osv-results.json
 
   # ---------------------------------------------------------------------------
   # License allowlist — zero-dep. Runs `pnpm licenses list --json`, parses it,
