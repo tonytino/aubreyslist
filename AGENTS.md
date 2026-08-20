@@ -59,8 +59,8 @@ When you face a fork-in-the-road decision — choosing between technologies, pat
 
 Every session in this repo **orchestrates by default** — read
 `docs/agents/orchestration.md` before any multi-step work. Dispatch worker
-subagents at deliberately chosen model tiers, and run the adversarial review
-loop on **all** worker output before shipping it. `safe:agent` PRs self-merge
+subagents at deliberately chosen model tiers, and run the specialist review
+panel on **all** worker output before shipping it. `safe:agent` PRs self-merge
 once CI is green; `safe:human` PRs stop at green for a human to review and
 merge (see the Hard Rules and `docs/agents/governance.md`). Tiny tasks —
 answering questions, typo-class doc fixes — may be handled directly, but any

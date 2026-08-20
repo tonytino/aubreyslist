@@ -9,8 +9,8 @@ keep it in `useState`.
 | ------------------------------------------------------- | ------------------------------------------------ |
 | Filters, sort, page, free-text search, selected tab, a distance/radius, a "quick" preset | Toasts (`sonner`), loading shimmers, transient hover/focus, an open/closed menu or sheet, the map's selected pin |
 
-This is a **Hard Rule** (see `AGENTS.md`), enforced by the **"URL-state
-hygiene" dimension** of the adversarial review loop
+This is a **Hard Rule** (see `AGENTS.md`), enforced by the **conventions**
+lens (URL-state hygiene) of the specialist review panel
 (`docs/agents/orchestration.md`) — not a static CI check, since the property is
 not statically decidable.
 

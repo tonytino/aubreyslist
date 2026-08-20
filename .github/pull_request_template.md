@@ -50,10 +50,23 @@ it, and the `owner-review` CI job will fail it if it's labeled `safe:agent`. -->
 <!-- Optional: anything the reviewer should know — tradeoffs, open questions, areas of risk. -->
 
 ## Adversarial review
-<!-- Paste the fresh Reviewer's `overall: SHIP` verdict (or the "Unresolved review
-items (escalated after 2-round cap)" block) from the loop in docs/agents/orchestration.md,
-then apply the `review:adversarial-passed` label. For a trivial or human-only change,
-apply the `skip-review` label instead and leave this empty. -->
+<!-- Paste the specialist panel record from docs/agents/orchestration.md — one line per
+lens (`n/a` for lenses that did not route) plus overall:
+
+correctness: SHIP
+security: SHIP
+conventions: SHIP
+architecture: SHIP
+design: n/a
+accessibility: n/a
+copy: n/a
+performance: n/a
+data: n/a
+overall: SHIP
+
+— or the "Unresolved review items (escalated after review cap)" block, then apply the
+`review:adversarial-passed` label. For a trivial or human-only change, apply the
+`skip-review` label instead and leave this empty. -->
 
 - [ ] Prose terseness: comments, docs, and this PR body follow docs/agents/writing.md
 

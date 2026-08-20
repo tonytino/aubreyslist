@@ -112,15 +112,20 @@ jobs:
 
   adversarial-review:
     name: Adversarial review gate
-    # Enforces the 2-round adversarial review loop in docs/agents/orchestration.md.
-    # This re-evaluates on `labeled`/`unlabeled` (author added the gate label) and
-    # `edited` (author pasted the verdict into the body) thanks to the triggers above.
+    # Enforces the specialist review panel in docs/agents/orchestration.md: 9
+    # lenses (4 always-on — correctness, security, conventions, architecture —
+    # plus 5 routed by changed-file globs), each capped at 2 reviews. This
+    # re-evaluates on `labeled`/`unlabeled` (author added the gate label) and
+    # `edited` (author pasted the record into the body) thanks to the triggers above.
     #
     # `skip-review` bypasses the gate (trivial / human-only change). Otherwise BOTH
     # must hold: the `review:adversarial-passed` label is present AND the PR body
-    # contains a well-formed review record (validated by check-review-block.mjs).
+    # contains a well-formed panel record (validated by check-review-block.mjs):
+    # a SHIP token for each always-on lens plus `overall: SHIP` inside the
+    # `## Adversarial review` section, or an escalation marker — "Unresolved
+    # review items (escalated after review cap)" or the legacy "2-round cap" text.
     #
-    # Dependabot is exempt: the 2-round adversarial review loop is a worker/
+    # Dependabot is exempt: the specialist review panel is a worker/
     # reviewer-subagent workflow step in docs/agents/orchestration.md that a bot
     # has no way to run, and it has no author who could apply `skip-review`
     # either — the gate would stay red on every Dependabot PR until a human
@@ -149,7 +154,7 @@ jobs:
           HAS_REVIEWED: ${{ contains(format(',{0},', join(github.event.pull_request.labels.*.name, ',')), ',review:adversarial-passed,') }}
         run: |
           if [ "$HAS_REVIEWED" != "true" ]; then
-            echo "::error::Missing the \`review:adversarial-passed\` label. Run the 2-round adversarial review loop, then apply the label — or apply \`skip-review\` for a trivial/human-only change (see docs/agents/orchestration.md)."
+            echo "::error::Missing the \`review:adversarial-passed\` label. Run the specialist review panel, then apply the label — or apply \`skip-review\` for a trivial/human-only change (see docs/agents/orchestration.md)."
             exit 1
           fi
           echo "✓ review:adversarial-passed label present"
