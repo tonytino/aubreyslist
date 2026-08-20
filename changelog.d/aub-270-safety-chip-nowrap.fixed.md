@@ -1,0 +1,1 @@
+- `[manual]` Safety badges ("Celiac-safe", "Gluten-friendly", "Recent incident") no longer wrap onto two lines when a card's badge row runs out of room.

@@ -69,7 +69,8 @@ interface SafetySignalProps extends Omit<React.ComponentProps<"span">, "children
   variant?: "solid" | "soft";
   /**
    * Override the default label text (e.g. "Verified celiac-safe"). Keep it
-   * short — a long interpolated label wraps the pill on mobile.
+   * short — the chip never wraps, so a long interpolated label overflows its
+   * row on mobile instead.
    */
   label?: string;
 }
@@ -102,8 +103,15 @@ export function SafetySignal({
       // {@link BADGE_FAMILY_SIZE} keeps this chip the same size as `ClaimBadge`;
       // only the fill differs. The icon is sized by that constant's
       // `[&>svg]:size-4`, not a per-glyph class.
+      //
+      // `shrink-0 whitespace-nowrap` matches `ClaimChip`'s box: every chip in the
+      // badge family is a one-line pill. Without it this chip is the only family
+      // member that squeezes and wraps its label when a flex row runs out of room
+      // — which is exactly what a horizontally scrolling badge row (the browse
+      // card, the detail hero) hands it. Overflow belongs to the row's scroller,
+      // never to the chip's own height.
       className={cn(
-        "inline-flex items-center",
+        "inline-flex shrink-0 items-center whitespace-nowrap",
         BADGE_FAMILY_SIZE,
         variant === "solid" ? config.solid : config.soft,
         className

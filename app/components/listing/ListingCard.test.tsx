@@ -524,6 +524,7 @@ describe("RestaurantCard", () => {
       confirmedAttributes: ["dedicated_fryer", "dedicated_gf_menu"],
       suggestedAttributes: ["off_menu_gf_on_request", "gf_substitutes"],
       suggestedByBot: true,
+      hasRecentIncident: true,
     });
     await screen.findByTestId("card-claim-row");
 
@@ -537,13 +538,19 @@ describe("RestaurantCard", () => {
     expect(claimRow.className).toContain("[&::-webkit-scrollbar]:hidden");
 
     // Every chip in the row keeps its own width (never squeezed to fit), which is
-    // what makes the row overflow instead of compressing its labels.
-    for (const badge of [
+    // what makes the row overflow instead of compressing its labels. The verdict
+    // and incident chips are included on purpose: they are the ones a shrinking
+    // row wrapped onto two lines, which is the height variance this row exists to
+    // remove.
+    const chips = [
       ...screen.getAllByTestId("claim-badge"),
       ...screen.getAllByTestId("suggested-attribute"),
-    ]) {
-      expect(badge.className).toContain("shrink-0");
-      expect(badge.className).toContain("whitespace-nowrap");
+      ...claimRow.querySelectorAll<HTMLElement>("[data-safety-state]"),
+    ];
+    expect(chips.length).toBe(6);
+    for (const chip of chips) {
+      expect(chip.className).toContain("shrink-0");
+      expect(chip.className).toContain("whitespace-nowrap");
     }
   });
 
