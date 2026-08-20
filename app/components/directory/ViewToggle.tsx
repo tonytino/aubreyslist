@@ -5,23 +5,20 @@ import type { DirectoryView } from "~/listings/browse-search";
 export type { DirectoryView };
 
 /**
- * List/Map segmented control (AUB-61, Phase 2b).
+ * List/Map segmented control.
  *
- * ACCESSIBLE: a `role="group"` of `<button>`s carrying `aria-pressed`, so the
- * active view is announced (state never rests on the pill fill alone). Selecting
- * a segment swaps the content view instantly (no shimmer).
+ * Accessible: a `role="group"` of `<button>`s carrying `aria-pressed`, so the
+ * active view is announced (state never rests on the pill fill alone).
+ * Selecting a segment swaps the content view instantly (no shimmer).
  *
- * AUB-164 / OWNER OVERRIDE: the Map segment is gated behind `mapEnabled`
- * (defaults to `false` — fail-closed). It was originally hidden while the map
- * view was a bare CSS placeholder; the repo owner then explicitly asked for the
- * Map segment to come back on the public directory, so the directory route
- * (`app/routes/index.tsx`) passes `mapEnabled` and the selected view round-trips
- * through `?view=`. As of AUB-111 the map view renders a REAL Google map when
- * the public `VITE_GOOGLE_MAPS_BROWSER_KEY` is provisioned, and the stylized
+ * The Map segment is gated behind `mapEnabled` (defaults to `false` —
+ * fail-closed). The directory route (`app/routes/index.tsx`) passes
+ * `mapEnabled` and the selected view round-trips through `?view=`. The map
+ * view renders a real Google map when the public
+ * `VITE_GOOGLE_MAPS_BROWSER_KEY` is provisioned, and the stylized
  * CSS-placeholder fallback otherwise (see `DirectoryMap.tsx`). `mapEnabled`
- * itself stays available (defaulting to hidden) for any other consumer that
- * isn't ready to show a map. Do NOT delete this component or the Map segment
- * below.
+ * stays available (defaulting to hidden) for any consumer that isn't ready to
+ * show a map. Do not delete this component or the Map segment below.
  */
 export function ViewToggle({
   view,
@@ -30,7 +27,7 @@ export function ViewToggle({
 }: {
   view: DirectoryView;
   onChange: (next: DirectoryView) => void;
-  /** Show the Map segment. Defaults to `false`; see the AUB-164 note above. */
+  /** Show the Map segment. Defaults to `false` (fail-closed; see above). */
   mapEnabled?: boolean;
 }) {
   return (

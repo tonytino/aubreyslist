@@ -32,7 +32,7 @@ describe("SafetySignal", () => {
       const svg = container.querySelector("svg");
       expect(svg).not.toBeNull();
       expect(svg).toHaveAttribute("aria-hidden", "true");
-      // ...AND the text label present alongside it.
+      // ...and the text label present alongside it.
       const root = container.firstChild as HTMLElement;
       expect(within(root).getByText(EXPECTED_LABELS[state])).toBeInTheDocument();
       expect(root).toHaveAttribute("data-safety-state", state);
@@ -54,9 +54,8 @@ describe("SafetySignal", () => {
 
   it("renders the brand wheat-strike glyph (masked cutout) for gluten-friendly", () => {
     const { container } = render(<SafetySignal state="gluten-friendly" />);
-    // The gluten-friendly icon is now the brand ear-of-wheat with a diagonal
-    // strike CUTOUT — a <mask> holding a strike <line>, with the wheat grouped
-    // under it — not the old plain lucide Leaf. The icon stays decorative.
+    // The glyph is a masked cutout: a <mask> holding a strike <line>, with the
+    // wheat grouped under it. The icon stays decorative.
     const svg = container.querySelector("svg");
     expect(svg).toHaveAttribute("aria-hidden", "true");
     expect(container.querySelector("mask line")).not.toBeNull();
@@ -67,8 +66,8 @@ describe("SafetySignal", () => {
 
   it("keeps a DISTINCT icon per state (no shared glyph across the four states)", () => {
     // Only gluten-friendly uses the masked wheat cutout; the other three are
-    // plain lucide glyphs with no mask — so the four icons stay distinguishable
-    // (which also holds up in greyscale, where colour drops out).
+    // plain lucide glyphs with no mask, so the four icons stay distinguishable
+    // even in greyscale.
     for (const state of SAFETY_STATES) {
       const { container } = render(<SafetySignal state={state} />);
       const hasMask = container.querySelector("g[mask]") !== null;
@@ -93,10 +92,9 @@ describe("SAFETY_TOOLTIP (centralized explainer copy)", () => {
   });
 
   it("wraps a SafetySignal as a Tooltip trigger with the content associated", () => {
-    // The exact wiring used at the About / style-guide / admin call sites: the
-    // chip is the trigger (asChild), the centralized copy is the content. Force
-    // it open so the portaled content is asserted as reachable AND associated
-    // with the trigger via aria-describedby.
+    // The chip is the trigger (asChild), the centralized copy is the content.
+    // Force it open so the portaled content is asserted as reachable and
+    // associated with the trigger via aria-describedby.
     render(
       <Tooltip defaultOpen>
         <TooltipTrigger asChild>

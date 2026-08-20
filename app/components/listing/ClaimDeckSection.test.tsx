@@ -6,10 +6,10 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ListingClaimAggregate } from "~/server/attestations/listing-summary";
 
 /**
- * ClaimDeckSection tests (AUB-231, listing-detail host): CTA auth gating, the
- * sheet-hosted deck pre-seeded from the viewer's votes, IMMEDIATE writes with
- * claims roll-up invalidation, skip-leaves-vote-untouched, and the mis-swipe
- * Undo (restore the previous vote, or retract when there was none).
+ * ClaimDeckSection tests: CTA auth gating, the sheet-hosted deck pre-seeded from
+ * the viewer's votes, immediate writes with claims roll-up invalidation,
+ * skip-leaves-vote-untouched, and the mis-swipe Undo (restore the previous vote,
+ * or retract when there was none).
  */
 const submitVoteMock = vi.fn((_args: unknown) => Promise.resolve());
 const removeVoteMock = vi.fn((_args: unknown) => Promise.resolve());
@@ -112,7 +112,7 @@ describe("ClaimDeckSection", () => {
       },
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: claimsQueryKey("listing-1") });
-    // The mis-swipe escape hatch is an INLINE row inside the (modal) sheet —
+    // The mis-swipe escape hatch is an inline row inside the modal sheet —
     // a real, reachable control, not a toast action outside the focus trap.
     expect(await screen.findByText("Vote recorded")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
@@ -157,7 +157,7 @@ describe("ClaimDeckSection", () => {
     await screen.findByRole("heading", { name: "Celiac-safe" });
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
-    // The REAL DOM path: click the inline Undo control rendered INSIDE the
+    // The real DOM path: click the inline Undo control rendered inside the
     // modal sheet (a toast action would sit outside its focus trap).
     fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
 
@@ -224,7 +224,7 @@ describe("ClaimDeckSection", () => {
     await screen.findByRole("heading", { name: "Dedicated fryer" });
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
-    // Exactly ONE undo affordance exists, targeting only the LATEST write.
+    // Exactly one undo affordance exists, targeting only the latest write.
     const undoButtons = await screen.findAllByRole("button", { name: "Undo" });
     expect(undoButtons).toHaveLength(1);
     const undoButton = undoButtons[0];

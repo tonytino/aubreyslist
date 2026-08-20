@@ -15,35 +15,35 @@ import {
 import { type DirectoryMapEntry, MapPinButton, RecenterFab } from "~/components/directory/map-ui";
 
 /**
- * The REAL directory map (AUB-111): Google Maps via `@vis.gl/react-google-maps`
- * (Google's endorsed React library), rendered only when the PUBLIC,
+ * The real directory map: Google Maps via `@vis.gl/react-google-maps`
+ * (Google's endorsed React library), rendered only when the public,
  * referrer-restricted `VITE_GOOGLE_MAPS_BROWSER_KEY` is provisioned — the
  * key-absent fallback lives in `DirectoryMap.tsx`.
  *
  * - **Pins** are `<AdvancedMarker>`s at each listing's true lat/lng, rendering
- *   the SAME `MapPinButton` as the placeholder (colour + distinct icon shape +
+ *   the same `MapPinButton` as the placeholder (colour + distinct icon shape +
  *   accessible "name, safety state" label; keyboard-focusable real `<button>`;
- *   selected ring + `aria-pressed`) — the safety-signal contract is shared, not
- *   duplicated. The selected pin gets a higher marker `zIndex`.
+ *   selected ring + `aria-pressed`) — the safety-signal contract is shared,
+ *   not duplicated. The selected pin gets a higher marker `zIndex`.
  * - **Camera**: initial view fits the bounds of the current result pins
  *   (`defaultBounds` + padding so pins clear the opaque carousel band); when
- *   the filtered set changes the camera re-fits ONLY if the visitor hasn't
+ *   the filtered set changes the camera re-fits only if the visitor hasn't
  *   moved it themselves (drag / non-programmatic zoom sets a "user moved"
  *   flag). The recenter FAB re-fits on demand and clears that flag.
  * - **Reduced motion**: every programmatic fit checks
  *   `prefers-reduced-motion`; when reduced, the camera jumps via the
  *   never-animated `map.moveCamera` (camera computed by the pure
  *   `cameraForBounds`) instead of `fitBounds`, which may animate.
- * - **Z-ORDER SAFETY INVARIANT** (see `map-ui.tsx`): everything here renders
- *   BELOW the opaque `z-10` carousel band that `DirectoryMap` stacks after it.
- *   We do NOT rely on Google's internal `z-index: 0` on `.gm-style`: the map
+ * - **Z-order safety invariant** (see `map-ui.tsx`): everything here renders
+ *   below the opaque `z-10` carousel band that `DirectoryMap` stacks after it.
+ *   Never rely on Google's internal `z-index: 0` on `.gm-style`: the map
  *   container carries an explicit `z-0` clamp, which pins the positioned
- *   container at z-index 0 and gives it its OWN stacking context — so no
- *   marker or Google-internal element (whatever z-index Google's DOM assigns
- *   inside) can ever stack above the carousel, regardless of Maps internals.
+ *   container at z-index 0 and gives it its own stacking context — so no
+ *   marker or Google-internal element can ever stack above the carousel,
+ *   regardless of Maps internals.
  *
  * `mapId` is Google's documented `DEMO_MAP_ID` sentinel: Advanced Markers
- * REQUIRE a map ID, and the demo ID enables them (vector map, default styling)
+ * require a map ID, and the demo ID enables them (vector map, default styling)
  * with no console errors and no cloud-console setup. Swapping in a real
  * cloud-styled map ID later is a one-constant change.
  */
@@ -92,7 +92,7 @@ function fitMapToBounds(
 /**
  * The app's class-based dark mode (`.dark` on `<html>`, see
  * docs/agents/styling.md) → the Maps `colorScheme`. SSR/first paint renders
- * LIGHT and reconciles after mount (same SSR-safe pattern as ThemeToggle);
+ * light and reconciles after mount (same SSR-safe pattern as ThemeToggle);
  * a MutationObserver follows later toggles. Changing `colorScheme` recreates
  * the map instance — acceptable for a rare, explicit theme flip.
  */
@@ -136,8 +136,8 @@ export function DirectoryMapLive({
       <GoogleMap
         mapId={DIRECTORY_MAP_ID}
         // `z-0` is the explicit stacking clamp for the safety invariant (see
-        // the module comment): the positioned container gets z-index 0 AND its
-        // own stacking context, so NOTHING inside the Google map subtree —
+        // the module comment): the positioned container gets z-index 0 and its
+        // own stacking context, so nothing inside the Google map subtree —
         // whatever internal z-index Google's DOM uses — can ever stack above
         // the sibling z-10 carousel band. Do not remove it.
         className="absolute inset-0 z-0"
@@ -178,7 +178,7 @@ export function DirectoryMapLive({
             anchorPoint={AdvancedMarkerAnchorPoint.CENTER}
             zIndex={vm.id === selectedId ? 2 : 1}
           >
-            {/* The SAME accessible pin as the fallback path: real <button>,
+            {/* The same accessible pin as the fallback path: real <button>,
                 colour + icon shape + "name, safety state" label, selected
                 ring. Clicking selects (existing selectedId flow). */}
             <MapPinButton vm={vm} selected={vm.id === selectedId} onSelect={onSelect} />

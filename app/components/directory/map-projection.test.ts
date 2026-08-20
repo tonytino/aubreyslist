@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { DENVER_BBOX, projectToMap } from "./map-projection";
 
 /**
- * Tests for the lat/lng → map-percentage projection (AUB-61, Phase 2b). Pins are
- * placed from REAL coordinates via a fixed metro-Denver bounding box, so the
- * projection must be monotonic (east → higher left%, north → lower top%), clamped
- * to [0,100], and safe for garbage input (never off-screen / NaN).
+ * Tests for the lat/lng → map-percentage projection. Pins are placed from real
+ * coordinates via a fixed metro-Denver bounding box, so the projection must be
+ * monotonic (east → higher left%, north → lower top%), clamped to [0,100], and
+ * safe for garbage input (never off-screen / NaN).
  */
 
 describe("projectToMap", () => {

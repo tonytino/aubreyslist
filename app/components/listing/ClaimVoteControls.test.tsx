@@ -4,13 +4,11 @@ import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the per-claim badge toggle controls (#32 — a user casting,
- * CHANGING, or RETRACTING their OWN attestation; owner feedback: the two
- * buttons are toggles and present as the claim's badge). The attestation
- * server functions are mocked; we assert the gate, the toggle semantics
- * (press again = retract, press the other side = switch), the badge
- * presentation per attribute, and that the claim roll-up query is invalidated
- * so aggregates recompute.
+ * Tests for the per-claim badge toggle controls — a user casting, changing, or
+ * retracting their own attestation. The attestation server functions are mocked;
+ * asserted: the gate, the toggle semantics (press again = retract, press the other
+ * side = switch), the badge presentation per attribute, and that the claim roll-up
+ * query is invalidated so aggregates recompute.
  */
 const submitVoteMock = vi.fn((_args: unknown) => Promise.resolve());
 const removeVoteMock = vi.fn((_args: unknown) => Promise.resolve());
@@ -63,7 +61,7 @@ describe("ClaimVoteControls", () => {
     );
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
-    // The confirm affordance IS the attribute's badge, not a generic "Confirm".
+    // The confirm affordance is the attribute's badge, not a generic "Confirm".
     fireEvent.click(screen.getByRole("button", { name: "Dedicated fryer" }));
 
     await waitFor(() => {

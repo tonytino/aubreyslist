@@ -4,21 +4,19 @@ import { removeVote, submitVote } from "~/server/attestations/attestations.fn";
 import { claimsQueryKey } from "./CommunityClaims";
 
 /**
- * The ONE client seam for casting/retracting the viewer's own attestation on a
- * listing (AUB-231 — extracted from `ClaimVoteControls` so the ClaimCardDeck's
- * listing-detail host reuses the exact same mutation semantics instead of
- * duplicating them).
+ * The one client seam for casting/retracting the viewer's own attestation on a
+ * listing, shared by the inline vote controls and the claim-deck host so the
+ * mutation semantics can never diverge.
  *
- * Both mutations' `onSuccess` RETURN the {@link claimsQueryKey} invalidation
- * promise, so `isPending` holds until the roll-up refetch settles — a caller
- * that branches on `viewerVote` (the toggle) can't act on a stale vote, and
- * the counts, recency, viewer-vote highlights, and the hero's headline badge
- * all recompute from fresh, visible evidence (ADR-007).
+ * Both mutations' `onSuccess` return the {@link claimsQueryKey} invalidation
+ * promise, so `isPending` holds until the roll-up refetch settles — a caller that
+ * branches on `viewerVote` can't act on a stale vote, and every derived surface
+ * recomputes from fresh, visible evidence (ADR-007).
  *
- * UI concerns (toasts, undo affordances) stay with the caller via
- * mutate-level callbacks — `vote.mutate(vars, { onSuccess, onError })` — which
- * run in addition to (and, for `onSuccess`, after) the invalidation here.
- * All writes are re-gated + scoped to the current user's own row server-side.
+ * UI concerns (toasts, undo affordances) stay with the caller via mutate-level
+ * callbacks — `vote.mutate(vars, { onSuccess, onError })` — which run in addition
+ * to (and, for `onSuccess`, after) the invalidation here. All writes are re-gated
+ * and scoped to the current user's own row server-side.
  */
 export function useClaimVoteMutations(listingId: string) {
   const queryClient = useQueryClient();

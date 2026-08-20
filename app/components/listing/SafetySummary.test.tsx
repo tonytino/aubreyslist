@@ -42,8 +42,8 @@ describe("SafetySummary", () => {
 
   it("keeps the accessible region + heading and the verdict in the hero variant", () => {
     render(<SafetySummary state="celiac-safe" variant="hero" />);
-    // The accessible "Gluten-free safety" region name is stable across the
-    // redesign — the heading is visually hidden in the hero, not removed.
+    // The accessible "Gluten-free safety" region name is stable across variants —
+    // the heading is visually hidden in the hero, not removed.
     expect(screen.getByRole("region", { name: /gluten-free safety/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /gluten-free safety/i })).toBeInTheDocument();
     // The headline cue still renders with its colour + icon + label.
@@ -56,13 +56,11 @@ describe("SafetySummary", () => {
     expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
   });
 
-  // --- Combined hero badge row (repo-owner feedback, nits-detail-badges-once)
+  // --- Combined hero badge row
   //
-  // The hero variant now owns the WHOLE safety-badge row for the listing detail
-  // page — previously a standalone `SafetyBadges` row duplicated the headline
-  // state below the hero. These cases migrate that component's behavioural
-  // coverage (mutual exclusivity, the incident badge, the accessible group, and
-  // keyboard-reachable tooltips) onto `SafetySummary`'s hero presentation.
+  // The hero variant owns the whole safety-badge row for the listing detail page.
+  // These cases cover mutual exclusivity, the incident badge, the accessible
+  // group, and keyboard-reachable tooltips.
 
   it("does not render the incident badge outside the hero variant", () => {
     render(<SafetySummary state="celiac-safe" hasRecentIncident={true} />);
@@ -130,8 +128,7 @@ describe("SafetySummary", () => {
   it("keeps the default-variant headline chip bare — no tooltip trigger button", () => {
     render(<SafetySummary state="celiac-safe" />);
     // Only the hero row wraps badges in tooltip triggers; the default variant
-    // stays the plain self-positioned chip it was before the hero absorbed the
-    // badge row (round-2 review finding B).
+    // stays the plain self-positioned chip.
     expect(screen.getByText(safetyLabel("celiac-safe")).closest("button")).toBeNull();
   });
 
@@ -144,8 +141,7 @@ describe("SafetySummary", () => {
   it("exposes the hero badge row to assistive tech as a labelled group, distinct from the section name", () => {
     render(<SafetySummary state="celiac-safe" variant="hero" hasRecentIncident={true} />);
     // An aria-label on a role-less (generic) div would be ignored by most AT, so
-    // the row is a <fieldset> (implicit role=group) named by an sr-only
-    // <legend> — the same pattern as ViewToggle / the retired SafetyBadges.
+    // the row is a <fieldset> (implicit role=group) named by an sr-only <legend>.
     expect(screen.getByRole("group", { name: "Safety status" })).toBeInTheDocument();
   });
 

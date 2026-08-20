@@ -6,12 +6,12 @@ import { DirectoryMapLive } from "./DirectoryMapLive";
 import type { DirectoryMapEntry } from "./map-ui";
 
 /**
- * Tests for the REAL map path (AUB-111). Real Google tiles can't render in
- * jsdom/CI, so `@vis.gl/react-google-maps` is mocked at the module seam: the
- * mock renders markers' children (our accessible pin buttons) and exposes a
- * fake `google.maps.Map` with spied camera methods — letting us assert the
- * things that matter (a11y contract on pins, selection wiring, bounds fitting,
- * the user-moved heuristic, reduced-motion camera writes) without a browser.
+ * Tests for the real map path. Real Google tiles can't render in jsdom/CI, so
+ * `@vis.gl/react-google-maps` is mocked at the module seam: the mock renders
+ * markers' children (the accessible pin buttons) and exposes a fake
+ * `google.maps.Map` with spied camera methods — asserting what matters (a11y
+ * contract on pins, selection wiring, bounds fitting, the user-moved
+ * heuristic, reduced-motion camera writes) without a browser.
  */
 
 const mapMock = vi.hoisted(() => ({
@@ -102,7 +102,7 @@ describe("DirectoryMapLive — markers", () => {
   it("renders one AdvancedMarker pin per entry with the accessible name + safety state", () => {
     renderLive();
     expect(screen.getAllByTestId("advanced-marker")).toHaveLength(2);
-    // The SAME pin contract as the placeholder: a real, focusable <button>
+    // The same pin contract as the placeholder: a real, focusable <button>
     // named "restaurant, safety state" (never colour alone).
     expect(screen.getByRole("button", { name: "Root & Rye, Celiac-safe" })).toBeInTheDocument();
     expect(
@@ -125,8 +125,8 @@ describe("DirectoryMapLive — markers", () => {
 
   it("clamps the map container at z-0 so the map subtree can never stack above the z-10 carousel", () => {
     renderLive();
-    // The explicit clamp for the carousel-above-pins safety invariant — we do
-    // not rely on Google's internal `z-index: 0` on `.gm-style`.
+    // The explicit clamp for the carousel-above-pins safety invariant — never
+    // rely on Google's internal `z-index: 0` on `.gm-style`.
     expect(screen.getByTestId("google-map").className).toContain("z-0");
   });
 
@@ -158,7 +158,7 @@ describe("DirectoryMapLive — camera fitting", () => {
     rerender(
       <DirectoryMapLive apiKey="test-key" entries={fewer} selectedId="a" onSelect={onSelect} />
     );
-    // Filter change must NOT snatch the camera back.
+    // Filter change must not snatch the camera back.
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
 
     // Recenter hands the camera back to the app…
@@ -189,7 +189,7 @@ describe("DirectoryMapLive — camera fitting", () => {
     );
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(2);
 
-    // After the camera settles (idle), a zoom is the USER's — no more refits.
+    // After the camera settles (idle), a zoom is the user's — no more refits.
     fireEvent.click(screen.getByTestId("simulate-idle"));
     fireEvent.click(screen.getByTestId("simulate-zoom-changed"));
     rerender(

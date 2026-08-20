@@ -14,26 +14,26 @@ import type { AdminSettingsView } from "~/server/admin/admin-view.fn";
  * Component tests for the admin-panel shell.
  *
  * Concerns covered here:
- * - SECTION VISIBILITY (#38): an admin sees all three sections; a moderator sees
- *   only the moderation queue (and so NEVER the admin-only settings/toggle OR the
- *   role-management section).
- * - The #24 intake-mode TOGGLE: an admin gets an accessible, labelled control set
- *   to the current value, and switching it calls `setIntakeMode` with the right
- *   payload.
- * - The #142 ROLE-MANAGEMENT section: an admin sees the user directory (from the
- *   mocked `listUsers`), can grant/revoke the moderator role via the mocked
- *   `setUserRole` (asserting the right payload), and a server error — including
- *   the last-admin 409 — surfaces as an inline alert. Admin accounts expose no
+ * - Section visibility: an admin sees all three sections; a moderator sees
+ *   only the moderation queue — never the admin-only settings/toggle or the
+ *   role-management section.
+ * - The intake-mode toggle: an admin gets an accessible, labelled control set
+ *   to the current value, and switching it calls `setIntakeMode` with the
+ *   right payload.
+ * - Role management: an admin sees the user directory (mocked `listUsers`),
+ *   can grant/revoke the moderator role via the mocked `setUserRole`
+ *   (asserting the right payload), and a server error — including the
+ *   last-admin 409 — surfaces as an inline alert. Admin accounts expose no
  *   role control.
  *
- * All server fns are mocked, so we assert UI WIRING only — the real permission
- * gates live in `set-intake-mode.test.ts`, `set-role.test.ts`, and
+ * All server fns are mocked, so these assert UI wiring only — the real
+ * permission gates live in `set-intake-mode.test.ts`, `set-role.test.ts`, and
  * `list-users.test.ts`. The intake-mode control calls `useRouter().invalidate()`
  * on success, so the panel mounts inside an in-memory router.
  *
- * The moderation-queue section (#40) fetches via TanStack Query; AdminPanel's own
- * concern is not the queue's data path, so we stub the queue with a marker — its
- * data fetching is covered by `queue.test.ts` / `ModerationQueue.test.tsx`.
+ * The moderation-queue section fetches via TanStack Query; AdminPanel's own
+ * concern is not the queue's data path, so the queue is stubbed with a marker —
+ * its data fetching is covered by `queue.test.ts` / `ModerationQueue.test.tsx`.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -201,7 +201,7 @@ describe("AdminPanel — role management (#142)", () => {
     ]);
     renderInApp(<AdminPanel viewerRole="admin" settings={settings()} />);
 
-    // Each account's name + current role (as TEXT, not colour) appear.
+    // Each account's name + current role (as text, not colour) appear.
     expect(await screen.findByText("Ada Admin")).toBeInTheDocument();
     expect(screen.getByText("Mo Mod")).toBeInTheDocument();
     expect(screen.getByText("Sam User")).toBeInTheDocument();
@@ -226,7 +226,7 @@ describe("AdminPanel — role management (#142)", () => {
     ]);
     renderInApp(<AdminPanel viewerRole="admin" settings={settings()} />);
 
-    // The role control now opens a confirmation dialog; the mutation must NOT
+    // The role control opens a confirmation dialog; the mutation must not
     // fire until the admin explicitly confirms inside it (the dialog gates the
     // click — it is not the authorization; the server fn still re-gates).
     fireEvent.click(await screen.findByLabelText(/set role for sam user/i));

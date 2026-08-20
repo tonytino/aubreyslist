@@ -11,20 +11,20 @@ import { DeckProgress } from "./DeckProgress";
 import { DeckSummary } from "./DeckSummary";
 
 /**
- * ClaimCardDeck (AUB-231) — the ONE swipeable attestation flow, hosted by BOTH
- * the add-listing wizard (deferred answers, completion hands off to the
- * wizard's ReviewStep) and the listing-detail Claims tab (immediate writes,
+ * ClaimCardDeck — the one swipeable attestation flow, hosted by both the
+ * add-listing wizard (deferred answers, completion hands off to the wizard's
+ * ReviewStep) and the listing-detail Claims tab (immediate writes,
  * deck-internal summary). One card per {@link CLAIM_ATTRIBUTES} attribute, in
  * taxonomy order.
  *
- * PRESENTATIONAL + HOST-AGNOSTIC: the deck renders cards and reports answers
+ * Presentational and host-agnostic: the deck renders cards and reports answers
  * via `onAnswer`; it never writes to the server and never owns the answer map
  * (the host does — the deck is a controlled component).
  *
- * Interaction contract (spec §6):
+ * Interaction contract:
  *   - Swipe right = Confirm, left = Dispute; the fixed bottom button row
  *     (Dispute / "Not sure" / Confirm — real `<button>`s, ≥44px targets) is the
- *     equal-footing path and triggers the SAME card exits.
+ *     equal-footing path and triggers the same card exits.
  *   - Skip ("Not sure") is first-class and guilt-free — it exits with a
  *     distinct neutral downward fade, never a sideways verdict exit.
  *   - Back replays the previous card onto the stack; on the first card it
@@ -34,9 +34,9 @@ import { DeckSummary } from "./DeckSummary";
  *   - `prefers-reduced-motion` swaps all swipes/tilts/springs for fades and
  *     disables drag entirely (the button row is always present).
  *
- * SINGLE-CARD (Edit) MODE: when `initialAttribute` is set — or a summary row's
+ * Single-card (Edit) mode: when `initialAttribute` is set — or a summary row's
  * Edit is pressed — the deck shows just that card and resolves (back to the
- * summary, or `onComplete`) after ONE answer, instead of marching the user
+ * summary, or `onComplete`) after one answer, instead of marching the user
  * back through cards they already answered.
  */
 
@@ -57,9 +57,9 @@ const HEADLINE = "celiac_safe_vs_gluten_friendly" as const;
 export interface ClaimCardDeckProps {
   /** The host-owned answer map (controls seeding + the progress dots). */
   answers: DeckAnswerMap;
-  /** Called for EVERY resolution — confirm, dispute, and skip alike. */
+  /** Called for every resolution — confirm, dispute, and skip alike. */
   onAnswer: (attribute: ClaimAttribute, answer: DeckAnswer) => void;
-  /** Back pressed on the FIRST card. Omit to hide Back there (detail host). */
+  /** Back pressed on the first card. Omit to hide Back there (detail host). */
   onBack?: (() => void) | undefined;
   /** The last card resolved and there is no deck-internal summary to show. */
   onComplete?: (() => void) | undefined;
@@ -184,8 +184,8 @@ export function ClaimCardDeck({
   const showBack = single || index > 0 || onBack !== undefined;
 
   return (
-    // Width-capped ~28rem and centered from `sm:` up (spec §9) so the cards
-    // keep a thumbable aspect inside wider host columns.
+    // Width-capped ~28rem and centered from `sm:` up so the cards keep a
+    // thumbable aspect inside wider host columns.
     <section
       aria-label="Attest what you know"
       className="mx-auto flex w-full flex-col gap-4 sm:max-w-md"
@@ -219,7 +219,7 @@ export function ClaimCardDeck({
       </p>
 
       {/* The equal-footing accessibility path: always-visible native buttons
-          (≥44px targets) that trigger the SAME exits as the swipes. */}
+          (≥44px targets) that trigger the same exits as the swipes. */}
       <div className="flex items-stretch gap-2">
         <AnswerButton
           label="Dispute"

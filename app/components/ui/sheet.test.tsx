@@ -39,7 +39,7 @@ describe("Sheet", () => {
   });
 
   it("unmounts its content when closed (not force-mounted)", async () => {
-    // Regression guard for the browse filter: the Sheet must NOT force-mount, so
+    // Regression guard for the browse filter: the Sheet must not force-mount, so
     // a closed mobile Sheet adds nothing to the DOM. That mutual exclusivity is
     // what keeps exactly one "Dedicated fryer"/"Celiac-safe" checkbox present at
     // the desktop viewport, which the browse e2e selectors depend on.

@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import { ViewToggle } from "./ViewToggle";
 
 /**
- * Tests for the List/Map segmented control (AUB-61, Phase 2b). Accessible buttons
- * with `aria-pressed`; selecting a segment requests the new view.
+ * Tests for the List/Map segmented control. Accessible buttons with
+ * `aria-pressed`; selecting a segment requests the new view.
  *
- * AUB-164: the Map segment is gated behind `mapEnabled` (defaults to `false`),
- * so most of these tests pass `mapEnabled` explicitly to exercise the Map
- * segment's own behavior; the default-hidden case is asserted separately below.
+ * The Map segment is gated behind `mapEnabled` (defaults to `false`), so most
+ * of these tests pass `mapEnabled` explicitly to exercise the Map segment's
+ * own behavior; the default-hidden case is asserted separately below.
  */
 
 describe("ViewToggle", () => {

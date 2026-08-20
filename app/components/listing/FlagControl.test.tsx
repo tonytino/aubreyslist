@@ -4,10 +4,9 @@ import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the login-gated content-flag control (#39). The `submitFlag` server
- * function is mocked; we assert the anonymous gate (renders nothing), the
- * reason-input flow, the exclusive-arc target payload per surface, and the
- * success confirmation.
+ * Tests for the login-gated content-flag control. The `submitFlag` server function
+ * is mocked; asserted: the anonymous gate (renders nothing), the reason-input flow,
+ * the exclusive-arc target payload per surface, and the success confirmation.
  */
 const submitFlagMock = vi.fn((_args: unknown) => Promise.resolve());
 vi.mock("~/server/flags/flags.fn", () => ({

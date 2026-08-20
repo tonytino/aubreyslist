@@ -14,18 +14,18 @@ import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { DirectoryList } from "./DirectoryList";
 
-// Each card now embeds the FavoriteButton island (F6, AUB-125), which imports the
-// db-touching `favorites.fn` seam; mock it out (as FavoriteButton.test.tsx does).
+// Each card embeds the FavoriteButton island, which imports the db-touching
+// `favorites.fn` seam; mock it out (as FavoriteButton.test.tsx does).
 vi.mock("~/server/favorites/favorites.fn", () => ({
   favoriteListing: vi.fn(() => Promise.resolve()),
   unfavoriteListing: vi.fn(() => Promise.resolve()),
 }));
 
 /**
- * Tests for the List view (AUB-61). Covers that every view-model renders as a
- * card in the responsive grid. The cards use TanStack Router's `Link`, so we
- * mount a minimal in-memory router whose tree includes `/listings/$id` (mirrors
- * ListingCard.test.tsx).
+ * Tests for the List view. Covers that every view-model renders as a card in
+ * the responsive grid. The cards use TanStack Router's `Link`, so they mount
+ * inside a minimal in-memory router whose tree includes `/listings/$id`
+ * (mirrors ListingCard.test.tsx).
  */
 
 const vms: RestaurantCardVM[] = [
@@ -93,7 +93,7 @@ describe("DirectoryList", () => {
   it("lays the cards out in a responsive multi-column grid", async () => {
     renderInRouter(<DirectoryList cards={vms} />);
     // Wait for the router-linked cards to mount, then assert the grid widens on
-    // larger breakpoints so the full-width shell (user feedback #1) fills up.
+    // larger breakpoints so the full-width shell fills up.
     await screen.findByRole("heading", { name: "Acme Gluten-Free" });
     const list = screen.getByRole("list");
     expect(list).toHaveClass("md:grid-cols-2", "xl:grid-cols-3", "2xl:grid-cols-4");

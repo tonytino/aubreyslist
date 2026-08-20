@@ -15,7 +15,7 @@ interface UserMenuProps {
   /** The signed-in user, or `null` when logged out. */
   user: SessionUser | null;
   /**
-   * Whether this deployment's preview-only dev-login is active. When `true` AND
+   * Whether this deployment's preview-only dev-login is active. When `true` and
    * logged out, a "Dev sign-in" link is shown beside "Log in" so a tester can
    * sign in on a Vercel preview (where Google OAuth can't complete). Resolves
    * `false` in production, so the affordance never renders there.
@@ -26,10 +26,10 @@ interface UserMenuProps {
 // ---------------------------------------------------------------------------
 // Shared account rows
 //
-// These render helpers are the SINGLE SOURCE OF TRUTH for the signed-in and
-// signed-out account rows, reused by BOTH the desktop avatar dropdown (below)
-// and the mobile combined `SiteMenu`, so the two surfaces can never drift. Each
-// renders `DropdownMenuItem`s and expects to sit inside a `DropdownMenuContent`.
+// These render helpers are the single source of the signed-in and signed-out
+// account rows, reused by both the desktop avatar dropdown (below) and the
+// mobile combined `SiteMenu`, so the two surfaces cannot drift. Each renders
+// `DropdownMenuItem`s and expects to sit inside a `DropdownMenuContent`.
 // Touch sizing (>= 44px rows on coarse pointers) is inherited from the
 // `DropdownMenuItem` primitive — don't re-add it per row.
 // ---------------------------------------------------------------------------
@@ -47,15 +47,15 @@ export function AccountIdentityLabel({ user }: { user: SessionUser }) {
 /**
  * Signed-in account actions: Favorites (viewer-scoped) and, for moderator+ only,
  * a role-appropriate Admin/Moderation link. Navigation only — the routes
- * re-guard server-side. Sign out is intentionally NOT here so callers can place
+ * re-guard server-side. Sign out is intentionally not here so callers can place
  * their own separator before it.
  */
 export function AccountActionItems({ user }: { user: SessionUser }) {
   return (
     <>
-      {/* The viewer's saved spots (AUB-127 / F9) — signed-in only, since
-          favorites are viewer-scoped. Navigation only; the page re-derives the
-          viewer from the session server-side. */}
+      {/* The viewer's saved spots — signed-in only, since favorites are
+          viewer-scoped. Navigation only; the page re-derives the viewer from
+          the session server-side. */}
       <DropdownMenuItem asChild>
         <Link to="/favorites">
           <Heart aria-hidden className="h-4 w-4" />
@@ -83,7 +83,7 @@ export function AccountActionItems({ user }: { user: SessionUser }) {
 /**
  * Sign-out row. A form POST is the right mechanism for a state-changing,
  * full-page action (clears the session server-side then redirects home) — not
- * an RPC. The submit BUTTON itself is the menu item (the form wraps it), so the
+ * an RPC. The submit button itself is the menu item (the form wraps it), so the
  * item's entire padded hit area submits — no dead padding.
  */
 export function SignOutItem() {
@@ -100,7 +100,7 @@ export function SignOutItem() {
 }
 
 /**
- * Signed-out auth rows as MENU ITEMS (for the mobile combined menu): the
+ * Signed-out auth rows as menu items (for the mobile combined menu): the
  * preview-only Dev sign-in (rendered only when `previewLoginEnabled`) plus the
  * always-present Google "Log in". Both are plain anchors — full-page OAuth /
  * dev-login server routes, not RPC data fetches. The desktop `UserMenu` renders

@@ -4,10 +4,10 @@ import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the FavoriteButton island (AUB-123 / F5). The favorite/unfavorite
- * server functions and the toast are mocked; we assert the anonymous gate opens
- * the dialog and performs NO write, the signed-in optimistic toggle (cache flips
- * immediately on and off), the error rollback (+ toast), and the a11y attributes.
+ * Tests for the FavoriteButton island. The favorite/unfavorite server functions
+ * and the toast are mocked; asserted: the anonymous gate opens the dialog with no
+ * write, the signed-in optimistic toggle (cache flips immediately on and off), the
+ * error rollback (+ toast), and the a11y attributes.
  */
 const favoriteListingMock = vi.fn((_args: unknown) => Promise.resolve());
 const unfavoriteListingMock = vi.fn((_args: unknown) => Promise.resolve());
@@ -74,7 +74,7 @@ describe("FavoriteButton", () => {
     );
     expect(decodeURIComponent(signInLink.getAttribute("href") ?? "")).toContain("save=listing-1");
 
-    // ...and crucially NO favorite/unfavorite write was attempted.
+    // ...and crucially no favorite/unfavorite write was attempted.
     expect(favoriteListingMock).not.toHaveBeenCalled();
     expect(unfavoriteListingMock).not.toHaveBeenCalled();
   });

@@ -18,14 +18,14 @@ interface AdminSectionProps {
 }
 
 /**
- * Clearly-labelled section slot for the admin panel shell (issue #38).
+ * Clearly-labelled section slot for the admin panel shell.
  *
  * Built on the shared `Card` primitive so the admin shell reads consistently
- * with the rest of the app (home, listings) and is correct in light AND dark
- * mode via the semantic `bg-card` / `text-card-foreground` tokens. A `<section>`
- * landmark wraps the card and is labelled (via `aria-labelledby`) by the card's
- * `<h2>`, so the shell stays navigable by landmark/heading. Future features
- * render their real UI into the `children` slot without changing this frame.
+ * with the rest of the app and is correct in both themes via the semantic
+ * `bg-card` / `text-card-foreground` tokens. A `<section>` landmark wraps the
+ * card and is labelled (via `aria-labelledby`) by the card's `<h2>`, so the
+ * shell stays navigable by landmark/heading. Sections render their real UI
+ * into the `children` slot without changing this frame.
  */
 export function AdminSection({ title, description, badge, children }: AdminSectionProps) {
   const headingId = `${slugify(title)}-heading`;

@@ -16,20 +16,21 @@ import { ModerationQueue } from "./ModerationQueue";
 import { moderationQueueQueryKey } from "./moderation-queue-query";
 
 /**
- * Component tests for the moderation-queue surface (#40, ACTIONS #41).
+ * Component tests for the moderation-queue surface.
  *
- * The queue reads its data from TanStack Query via `useSuspenseQuery`, so we
- * seed the cache directly (no network) and assert the rendered triage context:
- * the target chip (icon SHAPE + TEXT label, never colour alone), the reason, the
- * reporter, the date, and the real Dismiss / Hide / Remove action controls
- * (#41). It also renders TanStack Router `Link`s for targets with a listing, so
- * we mount inside a tiny in-memory router whose tree includes `/listings/$id`.
+ * The queue reads its data from TanStack Query via `useSuspenseQuery`, so the
+ * cache is seeded directly (no network) and the rendered triage context is
+ * asserted: the target chip (icon shape + text label, never colour alone), the
+ * reason, the reporter, the date, and the Dismiss / Hide / Remove action
+ * controls. It also renders TanStack Router `Link`s for targets with a
+ * listing, so it mounts inside an in-memory router whose tree includes
+ * `/listings/$id`.
  *
- * The action server functions are mocked so we assert the UI wires the right
- * payload (exclusive-arc target + prompting flag id) and invalidates the queue on
- * success — the real server gate/validation is covered in `actions.test.ts`. The
- * ACCESS gate itself is covered server-side in `queue.test.ts`; here the cache
- * always holds a granted verdict (what a moderator/admin would receive).
+ * The action server functions are mocked, asserting the UI wires the right
+ * payload (exclusive-arc target + prompting flag id) and invalidates the queue
+ * on success — the real server gate/validation is covered in `actions.test.ts`.
+ * The access gate is covered server-side in `queue.test.ts`; here the cache
+ * always holds a granted verdict.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -173,7 +174,7 @@ describe("ModerationQueue", () => {
       ],
     });
 
-    // The chip's own TEXT label carries the meaning; the tooltip is supplementary
+    // The chip's own text label carries the meaning; the tooltip is supplementary
     // and reachable on keyboard focus (the Badge trigger is `tabIndex=0`). The
     // target label ("Some Cafe") differs from the type label so "Listing" is the
     // chip alone.
@@ -208,7 +209,7 @@ describe("ModerationQueue", () => {
       ],
     });
 
-    // Hide is gated behind a confirmation dialog: opening it must NOT yet fire
+    // Hide is gated behind a confirmation dialog: opening it must not yet fire
     // the mutation (the dialog gates the click; the server fn still re-gates).
     fireEvent.click(await screen.findByRole("button", { name: /Hide/i }));
     expect(mocks.hideContentAction).not.toHaveBeenCalled();

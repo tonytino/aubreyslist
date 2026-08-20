@@ -6,14 +6,11 @@ import { BADGE_FAMILY_SIZE } from "~/components/badge-size";
 import { cn } from "~/lib/utils";
 
 /**
- * The box + layout every chip in the claim badge family shares, BEFORE size and
- * tint. Deliberately colour/background-free: the leading glyph, the label span,
- * `border` (width only — the colour is a caller concern), the inline-flex layout
- * and `[&>svg]` handling are the truly shared invariants. Callers layer their own
- * fill/tint/interactive utilities on top via `className`, so this string never
- * conflicts with them under either `cn()` (static path) or Radix `Slot`'s
- * className concatenation (the `asChild` path). NOTE: no `overflow-hidden` here —
- * the interactive vote toggle paints a `focus-visible` ring OUTSIDE its box, and
+ * The box + layout every chip in the claim badge family shares, before size and
+ * tint. Deliberately colour/background-free: callers layer their own fill/tint/
+ * interactive utilities via `className`, so this string never conflicts with them
+ * under `cn()` or Radix `Slot`'s className concatenation. No `overflow-hidden`
+ * here — the vote toggle paints a `focus-visible` ring outside its box, and
  * clipping it would break that focus affordance.
  */
 const CLAIM_CHIP_BOX =
@@ -26,16 +23,14 @@ export interface ClaimChipProps extends Omit<React.ComponentProps<"span">, "chil
   iconProps?: React.ComponentProps<LucideIcon>;
   /** The always-present visible text label — so meaning never rests on colour alone. */
   label: ReactNode;
-  /** Trailing content rendered AFTER the label (e.g. the "AI" provenance marker). */
+  /** Trailing content rendered after the label (e.g. the "AI" provenance marker). */
   trailing?: ReactNode;
   /**
-   * Render THROUGH the single child element (e.g. a `<button>`) via Radix `Slot`
-   * instead of the default `<span>`, so the interactive vote toggle IS this exact
-   * chip — same icon + label + family size/shape — with the child supplying ONLY
-   * its interactive concerns (`aria-pressed`, `disabled`, `onClick`, the pressed
-   * fill, the focus-visible ring). `Slot` merges this chip's className + the
-   * icon/label content onto that child; `Slottable` marks which child becomes the
-   * rendered element while the icon/label render as its content.
+   * Render through the single child element (e.g. a `<button>`) via Radix `Slot`
+   * instead of the default `<span>`, so the interactive vote toggle is this exact
+   * chip — same icon + label + family size/shape — with the child supplying only
+   * its interactive concerns. `Slot` merges the chip's className + content onto
+   * that child; `Slottable` marks which child becomes the rendered element.
    */
   asChild?: boolean;
   /** The element to render as when {@link asChild} is set (a single React element). */
@@ -43,10 +38,9 @@ export interface ClaimChipProps extends Omit<React.ComponentProps<"span">, "chil
 }
 
 /**
- * The ONE per-claim chip primitive (AUB-227 V2): a leading taxonomy/state glyph +
- * a visible text label at the shared {@link BADGE_FAMILY_SIZE}. Every claim-family
- * chip composes it so they are LITERALLY the same component, not implementations
- * kept in visual sync:
+ * The one per-claim chip primitive: a leading taxonomy/state glyph + a visible text
+ * label at the shared {@link BADGE_FAMILY_SIZE}. Every claim-family chip composes it
+ * so they are the same component, not implementations kept in visual sync:
  *
  *   - the static {@link import("./ClaimBadge").ClaimBadge} (per-claim display chip),
  *   - the add-listing review {@link import("~/components/add-listing/ReviewStep").FactOutcomeChip},
@@ -54,10 +48,10 @@ export interface ClaimChipProps extends Omit<React.ComponentProps<"span">, "chil
  *     `VoteBadgeButton`), via `asChild` onto a real native `<button>`.
  *
  * The chip owns only the shared visual (box, family size/shape, `aria-hidden`
- * glyph, label span). Fills/tints and — for the vote toggle — every interactive
- * concern stay with the caller, so the toggle adds its semantics WITHOUT the chip
- * having to know it is interactive. The `claim-chip-parity.test.tsx` guard keeps
- * the static surfaces from drifting on icon/label/size.
+ * glyph, label span). Fills/tints and interactive concerns stay with the caller, so
+ * the toggle adds its semantics without the chip knowing it is interactive. The
+ * `claim-chip-parity.test.tsx` guard keeps the static surfaces from drifting on
+ * icon/label/size.
  */
 export function ClaimChip({
   icon: Icon,

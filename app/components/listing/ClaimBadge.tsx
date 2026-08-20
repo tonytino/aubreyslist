@@ -9,32 +9,21 @@ export interface ClaimBadgeProps {
   /** Which taxonomy attribute this badge represents (drives its icon + label). */
   attribute: ClaimAttribute;
   /**
-   * True when this attribute is a LIVE curator-bot suggestion rather than a
-   * community-confirmed claim (ADR-007: provenance, never a verdict — callers
-   * should only pass `true` while there is no real evidence yet, matching
-   * {@link import("~/trust/summary").summarizeClaim}'s `suggested` guard).
+   * True when this attribute is a live curator-bot suggestion rather than a
+   * community-confirmed claim (ADR-007: provenance, never a verdict). Callers pass
+   * `true` only while there is no real evidence yet, matching
+   * {@link import("~/trust/summary").summarizeClaim}'s `suggested` guard.
    *
-   * The suggested variant KEEPS the attribute's OWN glyph
-   * (`CLAIM_ATTRIBUTE_ICONS[attribute]`, e.g. Flame / BookOpen / ConciergeBell /
-   * Replace) — it is no longer swapped for a generic `Sparkles` icon (AUB-225).
-   * The vibrant purple gradient ring plus the always-visible "AI" marker (set in
-   * the badge's own text size, AUB-225 owner nit), now rendered AFTER the label
-   * (`[attribute icon] [label] [AI marker]`), are
-   * enough to signal "AI-suggested" without hiding which attribute it is. The
-   * "AI" marker is a real, always-painted text label alongside the icon, never
-   * resting on colour/shape alone or on a hover/focus-only tooltip. That matters
-   * because Radix's Tooltip primitive never opens on touch (verified:
-   * `onPointerMove`/`onFocus`/`onClick` all ignore or actively close a
-   * touch-originated interaction), so a tooltip-only cue would be silently
-   * unreachable for touch users — exactly the "suggestion misread as a confirmed
-   * verdict" harm ADR-007 exists to prevent. The "AI" marker is itself the (only)
-   * tooltip trigger, carrying the fuller "not yet confirmed by the community"
-   * gloss for anyone who does hover/focus it — but its accessible name is just
-   * "AI", never the attribute's own label, so it can never share an accessible
-   * name+role with a same-label real control elsewhere on the page (e.g. the
-   * browse filter's "Dedicated fryer" toggle — Playwright's `getByRole` name
-   * matching is substring-based, so keeping the trigger's name label-free is what
-   * actually prevents the collision, not a text prefix/suffix).
+   * The suggested variant keeps the attribute's own glyph; the gradient ring plus
+   * the always-visible "AI" marker after the label signal "AI-suggested" without
+   * hiding which attribute it is. The "AI" marker must stay real, always-painted
+   * text: Radix's Tooltip never opens on touch, so a tooltip-only cue would be
+   * silently unreachable for touch users — exactly the "suggestion misread as a
+   * confirmed verdict" harm ADR-007 prevents. The marker is itself the only tooltip
+   * trigger, but its accessible name is just "AI", never the attribute's label, so
+   * it can never share an accessible name+role with a same-label real control
+   * elsewhere (Playwright's `getByRole` name matching is substring-based; keeping
+   * the trigger's name label-free is what prevents the collision).
    */
   suggested?: boolean;
   className?: string;
@@ -42,22 +31,19 @@ export interface ClaimBadgeProps {
 
 /**
  * The single, shared per-claim badge — icon + label, taxonomy-driven — for any
- * surface that shows "which claims apply to this listing" (browse cards, the
- * listing-detail hero). Exported so every such surface renders the SAME badge
- * instead of hand-assembling its own icon+label(+tooltip) chip, which is how
- * attributes like `off_menu_gf_on_request` ended up missing from some surfaces
- * while present on others.
+ * surface that shows "which claims apply to this listing". Every surface renders
+ * this same badge instead of hand-assembling its own icon+label chip, so no
+ * attribute can be present on one surface and missing from another.
  *
- * Sizing/shape comes from the shared {@link ClaimChip} primitive (AUB-224/227),
- * so this chip is the EXACT same component — and thus the exact same size — as the
- * add-listing `FactOutcomeChip` and the interactive vote toggle; the ONLY thing
- * that sets the headline `SafetySignal` apart is its solid colour fill. The claim
- * badges keep their soft/outline treatment at the identical size.
+ * Sizing/shape comes from the shared {@link ClaimChip} primitive, so this chip is
+ * the exact same component — and size — as the add-listing `FactOutcomeChip` and
+ * the interactive vote toggle; only the headline `SafetySignal`'s solid fill sets
+ * it apart.
  */
 export function ClaimBadge({ attribute, suggested = false, className }: ClaimBadgeProps) {
   const label = CLAIM_ATTRIBUTE_LABELS[attribute];
-  // The suggested variant keeps the attribute's OWN icon (AUB-225) — the gradient
-  // ring + "AI" marker carry the provenance, so the glyph stays informative.
+  // The suggested variant keeps the attribute's own icon — the gradient ring +
+  // "AI" marker carry the provenance, so the glyph stays informative.
   const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
 
   const badge = (
@@ -72,11 +58,11 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
       )}
       trailing={
         suggested ? (
-          // The "AI" marker is REAL, always-painted text (never hover/focus-gated —
-          // the touch-accessible path) AND the tooltip's only trigger, rendered
-          // AFTER the label (AUB-225). Its accessible name is deliberately just
-          // "AI", not the attribute label, so it never collides with a same-label
-          // real control elsewhere (see the `suggested` prop doc above).
+          // The "AI" marker is real, always-painted text (never hover/focus-gated —
+          // the touch-accessible path) and the tooltip's only trigger. Its
+          // accessible name is deliberately just "AI", not the attribute label, so
+          // it never collides with a same-label real control elsewhere (see the
+          // `suggested` prop doc).
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -99,7 +85,7 @@ export function ClaimBadge({ attribute, suggested = false, className }: ClaimBad
     return badge;
   }
 
-  // The gradient provenance ring is the ONE shared `SuggestedRing` primitive,
+  // The gradient provenance ring is the one shared `SuggestedRing` primitive,
   // identical to the one behind the `ClaimTrustSummaryRow` provenance chip.
   return <SuggestedRing>{badge}</SuggestedRing>;
 }

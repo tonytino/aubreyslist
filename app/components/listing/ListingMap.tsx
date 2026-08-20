@@ -10,48 +10,34 @@ interface ListingMapProps {
 }
 
 /**
- * Embedded per-restaurant map on the listing detail page (AUB-216, ADR-014).
+ * Embedded per-restaurant map on the listing detail page (ADR-014).
  *
- * Uses the Google Maps **Embed API** — a plain `<iframe>`, free and
- * unrestricted-quota, unlike the Maps JavaScript API the directory map uses
- * (AUB-111, `DirectoryMapLive.tsx`). No JS SDK, no client-side billing
- * exposure, nothing to load beyond the iframe itself. Per ADR-014
- * (docs/decisions/014-google-maps-platform-usage.md), this deliberately
- * revises v1's "no embedded map — deep-link only" decision (which older
- * comments mislabeled as ADR-009 — that ADR is Vercel hosting) now that the
- * Embed API's free tier removes the cost/quota risk behind the original rule.
- * The "Open in Google Maps" deep-link in `ListingLinks` stays — it is the
- * mobile hand-off to turn-by-turn in the native Maps app; this is a preview.
+ * Uses the Google Maps Embed API — a plain `<iframe>`, free and unrestricted-quota,
+ * unlike the Maps JavaScript API the directory map uses. No JS SDK, no client-side
+ * billing exposure. The "Open in Google Maps" deep-link in `ListingLinks` stays — it
+ * is the mobile hand-off to turn-by-turn in the native Maps app; this is a preview.
  *
- * Reuses the SAME public, referrer-restricted `VITE_GOOGLE_MAPS_BROWSER_KEY`
- * as the directory map (`~/lib/public-env`; ADR-014 §3 API-restricts it to
- * Maps JavaScript + Maps Embed). Absent/blank key → renders `null` — no empty
- * block, no layout shift, current (no-map) behaviour preserved, exactly like
- * `DirectoryMap`'s key-absent fallback — so local dev, CI, and E2E stay
- * deterministic without a key.
+ * Reuses the same public, referrer-restricted `VITE_GOOGLE_MAPS_BROWSER_KEY` as the
+ * directory map (ADR-014 §3 API-restricts it to Maps JavaScript + Maps Embed).
+ * Absent/blank key → renders `null` — no empty block, no layout shift — so local
+ * dev, CI, and E2E stay deterministic without a key.
  *
- * Rendered as its own labelled `<section>` — a SIBLING of the "Links" region
- * on the detail page, never inside it: the edit-listing-links E2E spec
- * asserts link/button roles within that region and the map must not perturb
- * them.
+ * Rendered as its own labelled `<section>` — a sibling of the "Links" region, never
+ * inside it: the edit-listing-links E2E spec asserts roles within that region and
+ * the map must not perturb them.
  *
- * Query targeting:
- * - **Places listings** (`placeId` set) — `q=place_id:<placeId>`, the
- *   authoritative Places identifier, so the pin is exact regardless of name
- *   collisions.
- * - **Manual listings** (`placeId: null`, ADR-008) — `q=<name>, <address>`,
- *   the best available free-text query.
+ * Query targeting: Places listings (`placeId` set) use `q=place_id:<placeId>`, the
+ * authoritative identifier, so the pin is exact regardless of name collisions.
+ * Manual listings (`placeId: null`, ADR-008) use `q=<name>, <address>`.
  *
  * `sandbox` is deliberately omitted: the Embed API needs script execution and
- * same-origin capabilities to boot Google's map UI, so a sandbox strict
- * enough to matter breaks it and `allow-scripts allow-same-origin` neuters
- * the sandbox anyway — the CSP `frame-src https://www.google.com` grant
- * (app/server/security/headers.ts) is the actual containment: no other
- * origin can ever be framed.
+ * same-origin capabilities, so a sandbox strict enough to matter breaks it and
+ * `allow-scripts allow-same-origin` neuters it anyway — the CSP
+ * `frame-src https://www.google.com` grant (app/server/security/headers.ts) is the
+ * actual containment.
  *
- * Dark mode: the Embed API has no dark-styling option, so the iframe always
- * renders Google's light map tiles even when the app is in dark mode. A
- * documented limitation of the free embed, not a bug.
+ * Dark mode: the Embed API has no dark-styling option, so the iframe always renders
+ * Google's light tiles. A documented limitation of the free embed, not a bug.
  */
 export function ListingMap({ name, address, placeId }: ListingMapProps) {
   const apiKey = googleMapsBrowserKey();

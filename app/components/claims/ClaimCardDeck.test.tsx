@@ -11,9 +11,9 @@ import {
 } from "./ClaimCardDeck";
 
 /**
- * ClaimCardDeck tests (AUB-231). The deck is presentational — no server module
- * is imported, so nothing is mocked. The BUTTON path is exercised throughout
- * (it is the spec's equal-footing accessibility path and triggers the same
+ * ClaimCardDeck tests. The deck is presentational — no server module is
+ * imported, so nothing is mocked. The button path is exercised throughout
+ * (it is the equal-footing accessibility path and triggers the same
  * resolutions as the swipes; drag gestures aren't reproducible in jsdom).
  *
  * `MotionGlobalConfig.skipAnimations` makes every motion animation complete
@@ -240,12 +240,12 @@ describe("ClaimCardDeck", () => {
     const summary = await screen.findByRole("region", { name: "Your answers" });
     expect(summary).toBeInTheDocument();
 
-    // Headline confirm → the REAL SafetySignal chip (colour + icon + label).
+    // Headline confirm → the real SafetySignal chip (colour + icon + label).
     expect(container.querySelector('[data-safety-state="celiac-safe"]')).not.toBeNull();
     // Fact outcomes → the shared FactOutcomeChip (neutral, never safety colours).
     expect(screen.getByTestId("fact-disputed")).toHaveTextContent("Disputed");
     expect(screen.getByTestId("fact-confirmed")).toHaveTextContent("Confirmed");
-    // Skip AND untouched → the honest dashed pill.
+    // Skip and untouched → the honest dashed pill.
     expect(screen.getAllByText("Not yet attested")).toHaveLength(2);
 
     // Per-row Edit jumps back to that card, in single-card mode.
@@ -303,8 +303,8 @@ describe("ClaimCardDeck", () => {
   it("uses the branded WheatStrike (never a leaf) on the headline dispute affordances", () => {
     render(<Host />);
     const dispute = screen.getByRole("button", { name: "Dispute" });
-    // WheatStrike is a bespoke glyph (no lucide- class); assert it is NOT a
-    // generic lucide leaf and IS present as an svg.
+    // WheatStrike is a bespoke glyph (no lucide- class); assert it is not a
+    // generic lucide leaf and is present as an svg.
     const svg = dispute.querySelector("svg");
     expect(svg).not.toBeNull();
     expect(svg?.getAttribute("class") ?? "").not.toContain("lucide-leaf");

@@ -6,9 +6,9 @@ import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { DirectoryMap, type DirectoryMapEntry } from "./DirectoryMap";
 
-// Each carousel entry now carries a FavoriteButton island (F6, AUB-125), which
-// imports the `favorites.fn` server seam (transitively db-touching). As in
-// FavoriteButton.test.tsx we mock it out — these tests only assert the heart
+// Each carousel entry carries a FavoriteButton island, which imports the
+// `favorites.fn` server seam (transitively db-touching). As in
+// FavoriteButton.test.tsx, mock it out — these tests only assert the heart
 // renders as a sibling overlay, not its write behaviour.
 vi.mock("~/server/favorites/favorites.fn", () => ({
   favoriteListing: vi.fn(() => Promise.resolve()),
@@ -16,16 +16,16 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
 }));
 
 /**
- * Tests for the Map view's KEY-ABSENT path (AUB-61 Phase 2b, kept as the
- * fallback by AUB-111). Safety-relevant behaviour: every pin/mini-card carries
- * an accessible name that includes the restaurant AND its safety state (never
- * colour alone); pin and carousel selection stay in sync; and the carousel is
- * stacked ABOVE the pins with an opaque band so a pin can never bleed over a
- * different restaurant's card. The real-map path is covered (against a mocked
- * Maps module) in `DirectoryMapLive.test.tsx`.
+ * Tests for the Map view's key-absent fallback path. Safety-relevant
+ * behaviour: every pin/mini-card carries an accessible name that includes the
+ * restaurant and its safety state (never colour alone); pin and carousel
+ * selection stay in sync; and the carousel is stacked above the pins with an
+ * opaque band so a pin can never bleed over a different restaurant's card. The
+ * real-map path is covered (against a mocked Maps module) in
+ * `DirectoryMapLive.test.tsx`.
  */
 
-// Pin the browser key to ABSENT for this whole file so the fallback renders
+// Pin the browser key to absent for this whole file so the fallback renders
 // deterministically even on a machine whose .env provisions a real key
 // (Vitest loads .env like any Vite build).
 beforeAll(() => {
@@ -134,7 +134,7 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
   it("keeps a mini-card's safety chip inside that same card (no cross-card bleed in the DOM)", () => {
     renderMap();
     const carousel = screen.getByTestId("map-carousel");
-    // Root & Rye's carousel button contains ONLY its own celiac-safe chip, never
+    // Root & Rye's carousel button contains only its own celiac-safe chip, never
     // another restaurant's incident signal.
     const rootCard = within(carousel).getByRole("button", { name: "Root & Rye, Celiac-safe" });
     expect(within(rootCard).getByText("Celiac-safe")).toBeInTheDocument();

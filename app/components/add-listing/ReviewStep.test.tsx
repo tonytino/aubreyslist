@@ -52,7 +52,7 @@ describe("ReviewStep", () => {
     });
     expect(screen.getByText("Confirmed")).toBeInTheDocument();
     // No safety chip anywhere — the headline is untouched and the fact chip must
-    // NOT borrow the celiac-safe / gluten-friendly safety colours.
+    // not borrow the celiac-safe / gluten-friendly safety colours.
     expect(container.querySelector("[data-safety-state]")).toBeNull();
   });
 

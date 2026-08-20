@@ -3,29 +3,28 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 
 /**
- * Visible pagination for the browse list (AUB-200).
+ * Visible pagination for the browse list.
  *
- * Renders at the END of the List-view results (after the cards), replacing the
- * pager that used to hide inside the retired "Filter listings" sheet. The server
- * already paginates honestly (`getBrowseListings` constrains the count query with
- * the same WHERE as the page query), so "Page N of M" is derived straight from the
+ * Renders at the end of the List-view results (after the cards). The server
+ * paginates honestly (`getBrowseListings` constrains the count query with the
+ * same WHERE as the page query), so "Page N of M" is derived straight from the
  * response's `total`/`pageSize` — never a fabricated count.
  *
- * URL-DRIVEN: Previous/Next are real `<Link>`s writing `?page=` with the
- * functional search updater, so every other param (filters, sort, radius, quick,
- * saved) is carried forward, the paged view is shareable/back-forward-correct,
- * and `stripSearchParams` drops `page=1` from the URL at rest. Changing any
- * filter resets `page: 1` at the route (unchanged convention).
+ * URL-driven: Previous/Next are real `<Link>`s writing `?page=` with the
+ * functional search updater, so every other param (filters, sort, radius,
+ * quick, saved) is carried forward, the paged view is
+ * shareable/back-forward-correct, and `stripSearchParams` drops `page=1` from
+ * the URL at rest. Changing any filter resets `page: 1` at the route.
  *
- * HONEST DISABLED STATES: at a boundary (page 1 / last page) the control renders
- * as a real `<button disabled>` — not focusable, announced as disabled — never a
- * dead link or a colour-only cue. The whole nav is hidden when there is only one
- * page (nothing to paginate).
+ * Honest disabled states: at a boundary (page 1 / last page) the control
+ * renders as a real `<button disabled>` — not focusable, announced as
+ * disabled — never a dead link or a colour-only cue. The whole nav is hidden
+ * when there is only one page.
  *
- * LIST-VIEW ONLY (deliberate): the Map view renders the SAME server page as pins
- * plus its own bottom mini-card carousel over a viewport-filling canvas — a pager
- * band below it would sit off-screen and fight the carousel. Paging the map is a
- * separate design question; the list is where "page N of M" reading order exists.
+ * List-view only (deliberate): the Map view renders the same server page as
+ * pins plus its own bottom mini-card carousel over a viewport-filling canvas —
+ * a pager band below it would sit off-screen and fight the carousel. The list
+ * is where "page N of M" reading order exists.
  */
 export function DirectoryPager({
   page,

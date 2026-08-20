@@ -67,7 +67,7 @@ describe("DropdownMenu", () => {
     // jsdom can't evaluate `(pointer: coarse)` media queries, so assert the
     // Tailwind `pointer-coarse:` utilities are present as a regression guard:
     // >= 44px item hit height (min-h-11), larger text, and panel padding are
-    // what make both header menus usable on mobile (owner feedback).
+    // what make both header menus usable on mobile.
     render(
       <DropdownMenu>
         <DropdownMenuTrigger>Menu</DropdownMenuTrigger>

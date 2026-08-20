@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { DirectoryEmpty, DirectoryNoResults } from "./DirectoryStates";
 
 /**
- * Tests for the directory content states (AUB-61, Phase 2b). Each state renders
- * its bundle copy; the empty CTA applies the celiac quick filter and the
- * no-results CTA clears everything.
+ * Tests for the directory content states. Each state renders its bundle copy;
+ * the empty CTA applies the celiac quick filter and the no-results CTA clears
+ * everything.
  */
 
 describe("DirectoryEmpty", () => {

@@ -37,20 +37,16 @@ interface AdminPanelProps {
 }
 
 /**
- * The admin-panel shell body (issue #38).
+ * The admin-panel shell body.
  *
  * Renders exactly the sections {@link visibleSections} grants the viewer's role
  * — admins get role management, app settings, and the moderation queue; a
- * moderator gets only the moderation queue. App settings (#24) lets an admin
- * toggle the active listing-intake mode; role management (#142) lists accounts
- * and lets an admin grant/revoke the moderator role; the moderation queue (#40,
- * #41) renders its real UI.
+ * moderator gets only the moderation queue.
  *
  * The intake-mode toggle and the role controls are convenience UI only: the
  * `setIntakeMode` / `setUserRole` server fns re-gate to admin (ADR-010) and
- * validate server-side, so the sections being admin-only here (via
- * {@link visibleSections}) is never the access control — a moderator never
- * reaches them, and even if they did the server would 403.
+ * validate server-side. {@link visibleSections} is never the access control —
+ * even if a moderator reached an admin section, the server would 403.
  */
 export function AdminPanel({ viewerRole, settings }: AdminPanelProps) {
   const sections = visibleSections(viewerRole);
@@ -92,11 +88,11 @@ function SectionFor({ id, settings }: { id: AdminSectionId; settings: AdminSetti
 /**
  * Selectable listing-intake modes (ADR-008). Kept as a small client-safe list
  * here — the runtime `INTAKE_MODES` registry lives in the server-only settings
- * module (it imports `db`), so importing its VALUE would pull `db` into the
- * client bundle. The authoritative allow-list is still the registry: the
- * `setIntakeMode` server fn validates the submitted mode against `INTAKE_MODES`,
- * so this UI list can never widen the boundary. `satisfies` keeps each `value`
- * in lock-step with the `IntakeMode` union, so a drift fails to compile.
+ * module (it imports `db`), so importing its value would pull `db` into the
+ * client bundle. The registry stays authoritative: `setIntakeMode` validates
+ * the submitted mode against `INTAKE_MODES`, so this UI list can never widen
+ * the boundary. `satisfies` keeps each `value` in the `IntakeMode` union, so a
+ * drift fails to compile.
  */
 const INTAKE_MODE_OPTIONS = [
   { value: "places", label: "Places (Google autocomplete)" },
@@ -104,9 +100,9 @@ const INTAKE_MODE_OPTIONS = [
 ] as const satisfies readonly { value: IntakeMode; label: string }[];
 
 /**
- * App-settings section. Lets an admin TOGGLE the active intake mode (#24,
- * ADR-008) and shows the staleness window read-only. `settings` is `null` for
- * moderators, who never reach this section — but we render an honest empty state
+ * App-settings section. Lets an admin toggle the active intake mode (ADR-008)
+ * and shows the staleness window read-only. `settings` is `null` for
+ * moderators, who never reach this section — render an honest empty state
  * rather than fabricate values, just in case.
  */
 function SettingsSection({ settings }: { settings: AdminSettingsView | null }) {
@@ -128,15 +124,14 @@ function SettingsSection({ settings }: { settings: AdminSettingsView | null }) {
 }
 
 /**
- * Admin-only control to flip the active listing-intake mode (#24, ADR-008).
+ * Admin-only control to flip the active listing-intake mode (ADR-008).
  *
- * A labelled `<select>` (accessible — the meaning is in the label + option text,
- * never colour) wired to the `setIntakeMode` server fn through a TanStack Query
- * `useMutation`. On success it invalidates the admin route loader
- * (`router.invalidate()`) so the displayed value refetches from the
- * authoritative `intake_mode` setting and the whole shell stays consistent, and
- * confirms the change with a toast; a failure toasts too, alongside the
- * existing inline error text below the select.
+ * A labelled `<select>` (meaning is in the label + option text, never colour)
+ * wired to the `setIntakeMode` server fn through a `useMutation`. On success it
+ * invalidates the admin route loader (`router.invalidate()`) so the displayed
+ * value refetches from the authoritative `intake_mode` setting, and confirms
+ * with a toast; a failure toasts too, alongside the inline error text below
+ * the select.
  */
 function IntakeModeControl({ current }: { current: string }) {
   const router = useRouter();
@@ -204,23 +199,20 @@ const ROLE_TOOLTIP: Record<Role, string> = {
 };
 
 /**
- * Admin-only role-management section (#142).
+ * Admin-only role-management section.
  *
- * Lists every account (via the admin-only `listUsers` server fn, read through
- * TanStack Query) with its current role, and — for non-admin accounts — a
- * control to grant or revoke the `moderator` role through the existing
- * `setUserRole` server fn (`useMutation`). On success the directory query is
- * invalidated so the row's displayed role refetches from the authoritative
- * `users` table.
+ * Lists every account (admin-only `listUsers` server fn via TanStack Query)
+ * with its current role and — for non-admin accounts — a control to grant or
+ * revoke `moderator` through `setUserRole`. On success the directory query is
+ * invalidated so the row refetches from the authoritative `users` table.
  *
- * This UI is convenience only: `listUsers` and `setUserRole` both re-run
- * `requireCurrentRole("admin")` server-side (ADR-010), so a moderator never
- * reaching this section is not the access control — the server is.
+ * Convenience UI only: `listUsers` and `setUserRole` both re-run
+ * `requireCurrentRole("admin")` server-side (ADR-010) — the server is the
+ * access control, not this section's visibility.
  *
- * Admins themselves expose NO role control: this fn cannot mint admins, and the
- * one demotion the server forbids — stripping the last admin — surfaces as an
- * inline 409 alert ("Cannot demote the last remaining admin.") rather than
- * crashing.
+ * Admins expose no role control: the UI cannot mint admins, and the one
+ * demotion the server forbids — stripping the last admin — surfaces as an
+ * inline 409 alert rather than crashing.
  */
 function RoleManagement() {
   const usersQuery = useQuery(adminUsersQueryOptions());
@@ -257,9 +249,9 @@ function RoleManagement() {
 }
 
 /**
- * One directory row: the account's name/email, its current role (shown as a
- * TEXT `Badge`, never colour alone), and — for non-admin accounts — a
- * grant/revoke control gated behind a confirmation dialog.
+ * One directory row: the account's name/email, its current role (a text
+ * `Badge`, never colour alone), and — for non-admin accounts — a grant/revoke
+ * control gated behind a confirmation dialog.
  */
 function RoleRow({ account }: { account: AdminUserSummary }) {
   const queryClient = useQueryClient();
@@ -287,7 +279,7 @@ function RoleRow({ account }: { account: AdminUserSummary }) {
           <span className="text-body font-semibold text-foreground">{account.name}</span>
           <span className="text-caption text-muted-foreground">{account.email}</span>
         </div>
-        {/* The role Badge is the tooltip TRIGGER: its text label already conveys
+        {/* The role Badge is the tooltip trigger: its text label already conveys
             the role; the tooltip adds a supplementary explanation of what that
             role can do. `tabIndex={0}` makes it reachable on keyboard focus. */}
         <Tooltip>
@@ -338,7 +330,7 @@ function RoleRow({ account }: { account: AdminUserSummary }) {
  *
  * Role changes are sensitive (granting moderator powers, or stripping them), so
  * the actual `setUserRole` mutation only fires after the admin explicitly
- * confirms in a `Dialog` that names what will happen. The dialog GATES the click
+ * confirms in a `Dialog` that names what will happen. The dialog gates the click
  * — it is not the authorization: `setUserRole` re-runs `requireCurrentRole`
  * server-side regardless (ADR-010). Revoking (demoting to `user`) uses the
  * `destructive` confirm variant; granting moderator uses the default variant.

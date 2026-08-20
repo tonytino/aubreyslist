@@ -9,7 +9,7 @@ interface NavItem {
 
 /**
  * Primary navigation. Each item targets its real, existing route so the active
- * state is accurate. Single-sourced here because BOTH the desktop inline nav
+ * state is accurate. Single-sourced here because both the desktop inline nav
  * (`SiteHeader`, `sm:`+) and the mobile combined menu's Navigate group
  * (`SiteMenu`, below `sm`) render this same list — keeping them from drifting.
  *

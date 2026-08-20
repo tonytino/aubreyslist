@@ -22,26 +22,25 @@ import {
   type RestaurantCardVM,
 } from "./ListingCard";
 
-// The card now embeds the FavoriteButton island (F6, AUB-125), which imports the
-// `favorites.fn` server seam. That seam transitively pulls in the db-touching
-// implementation, so — exactly as FavoriteButton.test.tsx does — we mock it out;
-// these tests only assert the heart RENDERS in the card, not its write behaviour.
+// The card embeds the FavoriteButton island, which imports the `favorites.fn`
+// server seam. That seam transitively pulls in the db-touching implementation, so
+// it is mocked out (as in FavoriteButton.test.tsx); these tests only assert the
+// heart renders in the card, not its write behaviour.
 vi.mock("~/server/favorites/favorites.fn", () => ({
   favoriteListing: vi.fn(() => Promise.resolve()),
   unfavoriteListing: vi.fn(() => Promise.resolve()),
 }));
 
 /**
- * Tests for the browse-list card (#33, AUB-61 redesign). Covers the trust-glance
- * render across states — celiac-safe, gluten-friendly, the honest "Not yet
- * attested" empty state, the recent-incident flag — plus the redesign's new
- * surface: the attributed (non-safety) Google rating pill, evidence counts, and
- * the photo placeholder vs `<img>`. The accessible signals (colour + icon + TEXT
- * label) are asserted via their visible text, never colour.
+ * Tests for the browse-list card. Covers the trust-glance render across states —
+ * celiac-safe, gluten-friendly, the honest "Not yet attested" empty state, the
+ * recent-incident flag — plus the attributed (non-safety) Google rating pill,
+ * evidence counts, and the photo placeholder vs `<img>`. The accessible signals
+ * (colour + icon + text label) are asserted via their visible text, never colour.
  *
- * The card uses TanStack Router's `Link`, so it must render inside a router. We
- * mount a tiny in-memory router whose tree includes the `/listings/$id` target so
- * `Link` can resolve its href without the full app route tree.
+ * The card uses TanStack Router's `Link`, so it must render inside a router: a
+ * tiny in-memory router whose tree includes the `/listings/$id` target lets `Link`
+ * resolve its href without the full app route tree.
  */
 
 const baseVm: RestaurantCardVM = {
@@ -127,11 +126,10 @@ describe("RestaurantCard", () => {
 
   it("renders the FavoriteButton as a sibling of the link, not nested in the anchor", async () => {
     renderCard();
-    // The dead heart is now the wired FavoriteButton island (F6, AUB-125); its
-    // accessible name is derived from the listing name ("Save <name>"). The
-    // stretched-link pattern keeps a valid DOM: the <button> must NOT be a
-    // descendant of the <a> (a button inside an anchor is invalid HTML + an a11y
-    // defect). Both remain independently present.
+    // The FavoriteButton's accessible name derives from the listing name
+    // ("Save <name>"). The stretched-link pattern keeps a valid DOM: the <button>
+    // must not be a descendant of the <a> (a button inside an anchor is invalid
+    // HTML + an a11y defect). Both are independently present.
     const link = await screen.findByRole("link");
     const saveButton = screen.getByRole("button", { name: "Save Acme Gluten-Free" });
     expect(saveButton).toBeInTheDocument();
@@ -163,7 +161,7 @@ describe("RestaurantCard", () => {
     });
     const label = await screen.findByTestId("bot-provenance");
     expect(label).toHaveTextContent("Suggested by Aubrey's Bot");
-    // The label lives in the meta row (the freshness slot), NOT the safety row —
+    // The label lives in the meta row (the freshness slot), not the safety row —
     // bot-suggested cards read uniformly with verified ones.
     expect(screen.getByTestId("card-meta-row")).toContainElement(label);
     // The suggestion replaces the bare empty state — never a fabricated verdict.
@@ -325,10 +323,10 @@ describe("RestaurantCard", () => {
   it("renders an ATTRIBUTED Google rating pill only when googleRating is present", async () => {
     renderCard({ googleRating: { value: 4.8, count: 128 } });
     const pill = await screen.findByTestId("google-rating");
-    // The value is shown AND explicitly attributed to Google...
+    // The value is shown and explicitly attributed to Google...
     expect(pill).toHaveTextContent("4.8");
     expect(pill).toHaveTextContent("Google");
-    // ...and it is NOT presented as a safety verdict (ADR-007): no safety label,
+    // ...and it is not presented as a safety verdict (ADR-007): no safety label,
     // and it carries no SafetySignal state marker.
     expect(pill).not.toHaveTextContent(/celiac|safe|gluten/i);
     expect(pill).not.toHaveAttribute("data-safety-state");
@@ -353,14 +351,13 @@ describe("RestaurantCard", () => {
     const pill = await screen.findByTestId("save-count");
     // The count renders...
     expect(pill).toHaveTextContent("12");
-    // ...but the owner dropped the visible "saves" word — the pill is heart
-    // glyph + number only...
+    // ...with no visible "saves" word — the pill is heart glyph + number only...
     expect(pill).not.toHaveTextContent("saves");
     expect(screen.queryByText("saves")).not.toBeInTheDocument();
     // ...with the meaning carried by an explicit accessible name instead
     // (styling.md/ADR-007: never the tooltip or colour alone).
     expect(pill).toHaveAccessibleName("12 saves");
-    // And it is NOT presented as a safety verdict (ADR-007): no safety label,
+    // And it is not presented as a safety verdict (ADR-007): no safety label,
     // no SafetySignal state marker.
     expect(pill).not.toHaveTextContent(/celiac|safe|gluten/i);
     expect(pill).not.toHaveAttribute("data-safety-state");
@@ -386,7 +383,7 @@ describe("RestaurantCard", () => {
     const save = screen.getByTestId("save-count");
     const google = screen.getByTestId("google-rating");
     // Nesting a focusable/interactive element inside an <a> is invalid HTML + an
-    // a11y defect, so the pills must be SIBLINGS of the link, not descendants.
+    // a11y defect, so the pills must be siblings of the link, not descendants.
     expect(link).not.toContainElement(save);
     expect(link).not.toContainElement(google);
     // They are honest, natively-focusable, non-submitting <button> triggers (not a
@@ -399,10 +396,9 @@ describe("RestaurantCard", () => {
   });
 
   it("keeps BOTH pills IN-FLOW in the title row so they reflow and never overlap the name", async () => {
-    // The both-pills path with a long name is the regression the review flagged:
-    // an absolute overlay would let the name slide UNDER the pills at 375px. With
-    // the pills in-flow in the SAME flex row as the name, flexbox reflows them
-    // side-by-side — structurally impossible to overlap, and no magic offsets.
+    // An absolute overlay would let a long name slide under the pills at 375px.
+    // With the pills in-flow in the same flex row as the name, flexbox reflows
+    // them side-by-side — structurally impossible to overlap, no magic offsets.
     renderCard({
       name: "The Extraordinarily Long Gluten-Free Bakery And Coffee House Name",
       saveCount: 8,
@@ -412,11 +408,11 @@ describe("RestaurantCard", () => {
     const save = screen.getByTestId("save-count");
     const google = screen.getByTestId("google-rating");
     const titleRow = heading.parentElement as HTMLElement;
-    // Name + both pills share ONE in-flow row container, never an absolute layer.
+    // Name + both pills share one in-flow row container, never an absolute layer.
     expect(titleRow).toContainElement(heading);
     expect(titleRow).toContainElement(save);
     expect(titleRow).toContainElement(google);
-    // ...and the pills stay OUT of the anchor even in the both-pills case.
+    // ...and the pills stay out of the anchor even in the both-pills case.
     const link = screen.getByRole("link");
     expect(link).not.toContainElement(save);
     expect(link).not.toContainElement(google);
@@ -432,8 +428,8 @@ describe("RestaurantCard", () => {
 
   it("keeps the card ONE link with an accessible name after moving the body out", async () => {
     renderCard({ saveCount: 8, googleRating: { value: 4.8, count: 128 } });
-    // Exactly one anchor, still pointing at the detail page. The <h3> is no longer
-    // inside the anchor, so the link takes its accessible name from `aria-label`.
+    // Exactly one anchor, pointing at the detail page. The <h3> is not inside the
+    // anchor, so the link takes its accessible name from `aria-label`.
     const links = await screen.findAllByRole("link");
     expect(links).toHaveLength(1);
     const link = links[0] as HTMLElement;
@@ -446,7 +442,7 @@ describe("RestaurantCard", () => {
     const pill = await screen.findByTestId("google-rating");
     // Resting state: the supplementary copy is portaled shut...
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    // ...the visible "Google" attribution is ALWAYS present (meaning never rests
+    // ...the visible "Google" attribution is always present (meaning never rests
     // on the tooltip alone)...
     expect(pill).toHaveTextContent("Google");
     // ...and focusing the pill (keyboard path) reveals the ADR-007 attribution.
@@ -479,7 +475,7 @@ describe("RestaurantCard", () => {
     expect(metaRow).toBeInTheDocument();
     const placeholder = screen.getByTestId("card-meta-placeholder");
     expect(metaRow).toContainElement(placeholder);
-    // Hidden from paint AND the accessibility tree, but still occupying layout —
+    // Hidden from paint and the accessibility tree, but still occupying layout —
     // `invisible` (visibility: hidden) keeps the box, unlike `hidden`.
     expect(placeholder).toHaveClass("invisible");
     expect(placeholder).toHaveAttribute("aria-hidden", "true");
@@ -523,7 +519,7 @@ describe("RestaurantCard", () => {
   it("stretches to fill its grid cell so cards equalize within a row (AUB-194)", async () => {
     renderCard();
     const link = await screen.findByRole("link");
-    // The card shell (the link's parent) is a full-height flex column; the BODY
+    // The card shell (the link's parent) is a full-height flex column; the body
     // (the link's sibling, not the media-only link itself) stretches with
     // flex-1, so the mt-auto meta row pins to the bottom.
     const shell = link.parentElement as HTMLElement;
@@ -573,7 +569,7 @@ describe("RestaurantCard", () => {
 
     const credit = await screen.findByTestId("food-photo-attribution");
     expect(credit).toHaveTextContent("Photo: A Diner, B Baker");
-    // Attribution sits INSIDE the stretched-link media tile — an <a> there would
+    // Attribution sits inside the stretched-link media tile — an <a> there would
     // nest inside the card's own <a>, so it must render as plain text, not a link.
     expect(screen.queryByRole("link", { name: "A Diner" })).not.toBeInTheDocument();
     // AA contrast on light photos: a decorative bottom gradient scrim backs the

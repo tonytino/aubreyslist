@@ -29,7 +29,7 @@ describe("ClaimTrustSummaryRow", () => {
         now={NOW}
       />
     );
-    // Honest empty state (AUB-131): an explicit "Not yet attested" lead + the
+    // Honest empty state: an explicit "Not yet attested" lead + the
     // "no confirmations or disputes yet" gloss — never a fabricated verdict.
     expect(screen.getByText("Not yet attested")).toBeInTheDocument();
     expect(screen.getByText(/no confirmations or disputes yet/)).toBeInTheDocument();
@@ -51,11 +51,10 @@ describe("ClaimTrustSummaryRow", () => {
     expect(screen.queryByText("No confirmations or disputes yet")).not.toBeInTheDocument();
     // A suggestion is not evidence: no fabricated count.
     expect(screen.queryByText(/confirm \//)).not.toBeInTheDocument();
-    // AUB-227: it now renders through the SHARED suggested-chip treatment — the
-    // `Badge` shell at the shared family size, wrapped in the ONE `SuggestedRing`
-    // gradient primitive (not a hand-rolled gradient/chip). Assert the shell +
-    // the surviving family-size token so a regression back to bespoke markup, or
-    // a size drift away from the badge family, fails here.
+    // Renders through the shared suggested-chip treatment — the `Badge` shell at
+    // the shared family size, wrapped in the one `SuggestedRing` primitive. Assert
+    // the shell + the family-size token so a regression to bespoke markup, or a
+    // size drift away from the badge family, fails here.
     const chip = screen.getByTestId("suggested-provenance");
     expect(chip).toHaveTextContent("Suggested by Aubrey's Bot");
     expect(chip.getAttribute("class")).toContain("rounded-chip");

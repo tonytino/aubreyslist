@@ -169,9 +169,9 @@ describe("SiteMenu — theme row", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(localStorage.getItem("theme")).toBe("dark");
 
-    // The menu STAYS OPEN (onSelect preventDefault) so the user can keep
+    // The menu stays open (onSelect preventDefault) so the user can keep
     // browsing after toggling — a normal item would close it. Both the rest of
-    // the menu and the now-flipped theme row remain in the document.
+    // the menu and the flipped theme row remain in the document.
     expect(screen.getByRole("menuitem", { name: "Log in" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Switch to light theme" })).toBeInTheDocument();
   });

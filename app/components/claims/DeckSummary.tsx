@@ -7,15 +7,15 @@ import { claimAttributeLabel } from "~/trust/summary";
 import type { DeckAnswerMap } from "./ClaimCardDeck";
 
 /**
- * The deck's end-state summary (AUB-231, spec §6 "End state") — used by the
- * listing-detail host only (the add-listing wizard hands off to its existing
- * ReviewStep instead, so there is never a double summary).
+ * The deck's end-state summary — used by the listing-detail host only (the
+ * add-listing wizard hands off to its own ReviewStep instead, so there is
+ * never a double summary).
  *
- * Each row renders through the SAME {@link ReviewOutcome} the wizard's review
+ * Each row renders through the same {@link ReviewOutcome} the wizard's review
  * step uses — headline confirm/dispute → `SafetySignal` chip, fact
  * confirm/dispute → `FactOutcomeChip`, skip/untouched → the dashed "Not yet
  * attested" pill — so the two summaries are one implementation and cannot
- * drift (AUB-227). Per-row Edit jumps back to that card; Done closes.
+ * drift. Per-row Edit jumps back to that card; Done closes.
  */
 export function DeckSummary({
   answers,

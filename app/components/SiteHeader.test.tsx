@@ -19,12 +19,11 @@ import { SiteHeader } from "./SiteHeader";
  * resolves synchronously and the real server fn is never called. The header
  * renders TanStack Router `<Link>`s, so its link targets must exist in the tree.
  *
- * NOTE: jsdom has no real media queries, so BOTH the mobile combined menu and the
- * desktop inline nav / right cluster render into the DOM (the `sm:` visibility is
- * a CSS class jsdom doesn't evaluate). We therefore assert STRUCTURE and CLASSES,
- * not computed layout: the mobile combined-menu trigger by its `Open menu` label,
- * and the desktop inline nav by its directly-reachable `link` roles (the menu's
- * copies are `menuitem`s, so the roles disambiguate the two layouts).
+ * jsdom has no real media queries, so both the mobile combined menu and the
+ * desktop inline nav render into the DOM (`sm:` visibility is a CSS class jsdom
+ * doesn't evaluate). Assert structure and classes, not computed layout: the
+ * combined-menu trigger by its `Open menu` label, the desktop inline nav by its
+ * `link` roles (the menu's copies are `menuitem`s, so roles disambiguate).
  *
  * Radix DropdownMenu needs the same jsdom stubs as dropdown-menu.test.tsx.
  */

@@ -23,28 +23,27 @@ import { ProgressStepper } from "./ProgressStepper";
 import { ReviewStep } from "./ReviewStep";
 
 /**
- * The add-a-listing claim wizard (AUB-132, ADR-008; deck rework AUB-231). A
- * 3-stage flow that COLLECTS a place + the community's own confirm/dispute/skip
- * answers for the five GF taxonomy attributes into local state, and defers ALL
- * server writes to a single final Submit:
+ * The add-a-listing claim wizard (ADR-008). A 3-stage flow that collects a
+ * place + the user's confirm/dispute/skip answers for the five GF taxonomy
+ * attributes into local state, and defers all server writes to a single final
+ * Submit:
  *
  *   0   find the place (Places search or manual entry) — collect, don't create
- *   1   attest — ONE swipeable {@link ClaimCardDeck} stage covering all five
+ *   1   attest — one swipeable {@link ClaimCardDeck} stage covering all five
  *       {@link CLAIM_ATTRIBUTES} (the deck keeps its own "n of 5" indicator)
  *   2   review & submit
  *
- * Deferring the create (rather than writing on a single-page form's own submit)
- * lets the user attest as they go and commit once. On Submit
- * we create the listing, then fire a `submitVote` for every attribute the user
- * actually answered — **skip / untouched writes NOTHING**, so a celiac reading the
+ * Deferring the create lets the user attest as they go and commit once. Submit
+ * creates the listing, then fires a `submitVote` for every attribute the user
+ * actually answered — skip / untouched writes nothing, so a celiac reading the
  * listing later sees an honest "Not yet attested" gap rather than a fabricated
  * verdict. The create still succeeds when all five are skipped.
  *
- * The deck is a CONTROLLED component writing into the wizard's local
- * {@link AnswerMap}; completing it hands off straight to the existing
- * ReviewStep (the deck-internal summary stays off here — no double summary). A
- * ReviewStep row's Edit re-enters the deck AT that card in single-card mode,
- * as does the review screen's Back (at the last card).
+ * The deck is a controlled component writing into the wizard's local
+ * {@link AnswerMap}; completing it hands off straight to ReviewStep (the
+ * deck-internal summary stays off here — no double summary). A ReviewStep
+ * row's Edit re-enters the deck at that card in single-card mode, as does the
+ * review screen's Back (at the last card).
  *
  * All wizard state is ephemeral `useState` (a multi-step form, not shareable/
  * restorable view state) driven by explicit handlers — no `useEffect`-for-data.
@@ -92,9 +91,9 @@ function placeName(place: WizardPlace): string {
 }
 
 /**
- * Build the create-write input from the collected place + typed links
- * (AUB-202). Blank link fields are dropped here — only kinds the user actually
- * filled reach the schema, which requires each URL to be valid http(s).
+ * Build the create-write input from the collected place + typed links. Blank
+ * link fields are dropped here — only kinds the user actually filled reach the
+ * schema, which requires each URL to be valid http(s).
  */
 function toCreateInput(place: WizardPlace, links: LinkFieldValues): CreateListingInput {
   const filled = LINK_KINDS.flatMap((kind: LinkKind) => {
@@ -120,7 +119,7 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
   const [place, setPlace] = useState<WizardPlace | null>(null);
   const [links, setLinks] = useState<LinkFieldValues>(emptyLinkFieldValues());
   const [answers, setAnswers] = useState<AnswerMap>(emptyDeckAnswers());
-  // When set, the deck opens AT this card in single-card Edit mode (a
+  // When set, the deck opens at this card in single-card Edit mode (a
   // ReviewStep row's Edit, or the review screen's Back → the last card).
   const [editAttribute, setEditAttribute] = useState<ClaimAttribute | null>(null);
   const [submitted, setSubmitted] = useState<{ listingId: string; created: boolean } | null>(null);
@@ -132,7 +131,7 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
       }
       const result = await submitCreateListing({ data: toCreateInput(place, links) });
       const listingId = result.listing.id;
-      // Record ONLY the answers the user actually made. Skip / untouched writes
+      // Record only the answers the user actually made. Skip / untouched writes
       // nothing — the listing keeps an honest "Not yet attested" gap.
       for (const attribute of CLAIM_ATTRIBUTES) {
         const value = answers[attribute];
@@ -179,7 +178,7 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
   }
 
   // Every entry into the deck stage decides its mode explicitly: `null` runs
-  // the full 5-card flow; an attribute opens that ONE card (Edit re-entry).
+  // the full 5-card flow; an attribute opens that one card (Edit re-entry).
   const enterDeck = (edit: ClaimAttribute | null) => {
     setEditAttribute(edit);
     setStep(ATTEST_STEP);
@@ -240,9 +239,10 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
 }
 
 /**
- * Terminal success screen (no stepper). Honest about the gaps: when any attribute
- * was left un-attested it says so, tied to the "attest it later" affordance. We
- * never auto-redirect — the user chooses to view the listing or add another.
+ * Terminal success screen (no stepper). Honest about the gaps: when any
+ * attribute was left un-attested it says so, tied to the "attest it later"
+ * affordance. Never auto-redirects — the user chooses to view the listing or
+ * add another.
  */
 function SuccessScreen({
   listingId,
@@ -258,7 +258,7 @@ function SuccessScreen({
   onReset: () => void;
 }) {
   // A places pick can dedup to a listing that already exists (created === false).
-  // Be honest about that rather than claiming we "added" it — the attestations
+  // Be honest about that rather than claiming it was "added" — the attestations
   // the user made are still recorded against the existing listing.
   const attestedCount = CLAIM_ATTRIBUTES.length - unattestedCount;
   return (
@@ -303,11 +303,11 @@ function SuccessScreen({
 }
 
 /**
- * Renders the submit error. A blocked-duplicate error (issue #25) is special-
- * cased: {@link parseDuplicateListingError}
- * recovers the existing listing's id from the message marker (custom error fields
- * don't survive the server-fn RPC boundary), so we render a link to the listing
- * that already exists rather than just stating that it does.
+ * Renders the submit error. A blocked-duplicate error is special-cased:
+ * {@link parseDuplicateListingError} recovers the existing listing's id from
+ * the message marker (custom error fields don't survive the server-fn RPC
+ * boundary), so the error links to the listing that already exists rather than
+ * just stating that it does.
  */
 function SubmitError({ error }: { error: unknown }) {
   const duplicate = parseDuplicateListingError(error);

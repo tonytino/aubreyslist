@@ -11,12 +11,12 @@ import {
 import { SwipeStamp } from "./SwipeStamp";
 
 /**
- * One swipeable claim card (AUB-231). Presentational: the deck owns which card
- * is showing and what an answer does; this card owns the drag gesture, the tilt,
+ * One swipeable claim card. Presentational: the deck owns which card is
+ * showing and what an answer does; this card owns the drag gesture, the tilt,
  * the stamps, and the shared card anatomy (icon well + label + description +
  * headline-only safety preview).
  *
- * Gesture rules (spec §6):
+ * Gesture rules:
  *   - Drag right = Confirm, left = Dispute; rotation is proportional to drag
  *     (~±12° max) and the matching stamp's opacity tracks drag distance.
  *   - Release past the threshold calls `onSwipe`; under it, the card springs
@@ -26,7 +26,7 @@ import { SwipeStamp } from "./SwipeStamp";
  *   - `prefers-reduced-motion`: no drag at all; the deck's fixed button row is
  *     the (always-present) path, and card transitions are plain fades.
  *
- * The card is NOT focusable and traps nothing: the equal-footing interactive
+ * The card is not focusable and traps nothing: the equal-footing interactive
  * path is the deck's real `<button>` row below the stack.
  */
 
@@ -72,7 +72,7 @@ function cardVariants(reducedMotion: boolean) {
       if (direction === "dispute") {
         return { x: -EXIT_X, rotate: -MAX_TILT_DEG, opacity: 0, transition: { duration: 0.3 } };
       }
-      // Skip / back: a neutral downward fade — deliberately NOT a sideways
+      // Skip / back: a neutral downward fade — deliberately not a sideways
       // "verdict" exit.
       return { y: 96, opacity: 0, transition: { duration: 0.25 } };
     },
@@ -92,7 +92,7 @@ export function ClaimCard({
   reducedMotion: boolean;
   onSwipe: (answer: "confirm" | "dispute") => void;
   /**
-   * Variant payload forwarded to the motion element: the deck passes the ENTER
+   * Variant payload forwarded to the motion element: the deck passes the enter
    * direction ("forward" | "back"); while exiting, `AnimatePresence` clones
    * this card with its own `custom` (the chosen answer), which selects the
    * exit choreography in {@link cardVariants}.
@@ -172,10 +172,9 @@ export function ClaimCard({
 /**
  * The static card anatomy, shared by the interactive top card and the
  * decorative peek card behind it: brand-soft icon well, display-face label,
- * shared taxonomy description, optional host caption, and — on the HEADLINE
+ * shared taxonomy description, optional host caption, and — on the headline
  * card only — the "What your answer records" SafetySignal preview (confirm →
- * Celiac-safe, dispute → Gluten-friendly), exactly the block the old
- * ClaimAttestStep rendered. Fact cards get NO safety signal.
+ * Celiac-safe, dispute → Gluten-friendly). Fact cards get no safety signal.
  */
 export function ClaimCardBody({
   attribute,
@@ -215,7 +214,7 @@ export function ClaimCardBody({
 
 /**
  * The next card "peeking" from behind the top card so the deck reads as a
- * stack (spec §6): scaled down, offset, faded, and fully decorative
+ * stack: scaled down, offset, faded, and fully decorative
  * (`aria-hidden`, no pointer events) — it re-renders as the real top card the
  * moment it reaches the front.
  */

@@ -1,19 +1,17 @@
 import type { Role } from "~/server/auth/guards";
 
 /**
- * Section-level gating for the admin panel shell (issue #38).
+ * Section-level gating for the admin panel shell.
  *
- * The route itself is admin-only and guarded server-side (see
- * `app/server/admin/admin-view.fn.ts`), but ADR-010 / domain.md grant
- * **moderators** visibility of the moderation queue. So *within* the shell we
- * gate individual sections by role rather than gating the whole page at a
- * single privilege level: an admin sees every section; a moderator sees only
- * the moderation-queue section.
+ * The route is guarded server-side (`app/server/admin/admin-view.fn.ts`), but
+ * ADR-010 / domain.md grant moderators visibility of the moderation queue. So
+ * within the shell, sections are gated individually by role: an admin sees
+ * every section; a moderator sees only the moderation queue.
  *
- * This module is the single source of truth for "which sections does role X
- * see", kept pure (no DB, no request) so it is trivially unit-testable. The
- * route loader decides page-level access (anon / forbidden / allowed); this
- * decides section-level visibility once access is granted.
+ * Single source of "which sections does role X see", kept pure (no DB, no
+ * request) so it is trivially unit-testable. The route loader decides
+ * page-level access; this decides section-level visibility once access is
+ * granted.
  */
 
 /** Stable identifier for each admin-panel section. */
@@ -31,8 +29,8 @@ const SECTION_MIN_ROLE: Record<AdminSectionId, Exclude<Role, "user">> = {
 };
 
 /**
- * Display order of the sections in the shell. Settings first (the only one with
- * live data today), then role management, then the moderation queue.
+ * Display order of the sections in the shell: settings, then role management,
+ * then the moderation queue.
  */
 export const ADMIN_SECTION_ORDER: readonly AdminSectionId[] = [
   "settings",

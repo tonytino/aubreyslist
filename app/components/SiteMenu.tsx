@@ -37,11 +37,11 @@ function MenuSectionLabel({ children }: { children: string }) {
 
 /**
  * Theme-toggle row (mobile only). Folds the standalone `ThemeToggle` into the
- * combined menu as a real row (owner decision 3). `onSelect` preventDefault
- * keeps the menu OPEN so the user can flip the theme and keep browsing the menu
- * — a normal item would close it. Shares `useThemeToggle` with the standalone
- * button, so the icon + label copy match exactly. Meaning is carried by the
- * glyph shape (Moon/Sun) AND the text label, never colour alone.
+ * combined menu as a real row. `onSelect` preventDefault keeps the menu open so
+ * the user can flip the theme and keep browsing — a normal item would close it.
+ * Shares `useThemeToggle` with the standalone button, so the icon + label copy
+ * match exactly. Meaning is carried by the glyph shape (Moon/Sun) and the text
+ * label, never colour alone.
  */
 function ThemeMenuRow() {
   const { label, Icon, toggle } = useThemeToggle();
@@ -59,7 +59,7 @@ function ThemeMenuRow() {
 }
 
 /**
- * Mobile (below `sm`) combined header menu — ONE right-anchored dropdown that
+ * Mobile (below `sm`) combined header menu — one right-anchored dropdown that
  * consolidates the primary nav and the account controls the desktop layout
  * splits apart. At `sm:`+ the header renders inline nav + a standalone theme
  * toggle + the avatar `UserMenu` instead, so this component is CSS-hidden there.

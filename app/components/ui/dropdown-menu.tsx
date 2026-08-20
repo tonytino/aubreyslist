@@ -5,7 +5,7 @@ import type * as React from "react";
 import { cn } from "~/lib/utils";
 
 /**
- * shadcn dropdown-menu primitives with TOUCH ERGONOMICS baked in: on coarse
+ * shadcn dropdown-menu primitives with touch ergonomics baked in: on coarse
  * pointers (`pointer-coarse:` = touch devices) every interactive row gets a
  * >= 44px hit height (`min-h-11`), larger padding/text, and a wider icon-label
  * gap, while fine-pointer (mouse/trackpad) menus keep the compact desktop

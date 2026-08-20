@@ -18,23 +18,22 @@ describe("ClaimBadge", () => {
     render(<ClaimBadge attribute="off_menu_gf_on_request" suggested />);
     const badge = screen.getByTestId("suggested-attribute");
     expect(badge).toHaveTextContent("Off-menu GF on request");
-    // The suggested variant keeps the attribute's OWN glyph (AUB-225) — it is no
-    // longer swapped for a generic Sparkles icon. lucide stamps the glyph name
-    // onto the svg's class (`lucide-concierge-bell` for off_menu_gf_on_request's
-    // ConciergeBell), so assert THAT specific icon and, explicitly, NOT Sparkles.
+    // The suggested variant keeps the attribute's own glyph, never a generic
+    // Sparkles icon. lucide stamps the glyph name onto the svg's class
+    // (`lucide-concierge-bell` for ConciergeBell), so assert that specific icon
+    // and, explicitly, not Sparkles.
     const iconClass = badge.querySelector("svg")?.getAttribute("class") ?? "";
     expect(iconClass).toContain("lucide-concierge-bell");
     expect(iconClass).not.toContain("lucide-sparkles");
-    // The "AI" tag is REAL, always-painted text — not hover/focus-gated — so
-    // it renders even without any interaction (the touch-accessible path).
+    // The "AI" tag is real, always-painted text — not hover/focus-gated — so it
+    // renders even without any interaction (the touch-accessible path).
     const aiTrigger = screen.getByRole("button", { name: "AI" });
     expect(aiTrigger).toBeInTheDocument();
-    // Render order is `[attribute icon] [label] [AI marker]` (AUB-225): the "AI"
-    // marker now comes AFTER the label, not before it.
+    // Render order is `[attribute icon] [label] [AI marker]`.
     expect(badge.textContent).toMatch(/Off-menu GF on request.*AI/s);
     expect(badge.textContent?.trimStart().startsWith("AI")).toBe(false);
-    // The tooltip is a SUPPLEMENTARY channel on top of that, reachable via the
-    // "AI" button's own focus, carrying the fuller "not yet confirmed" gloss.
+    // The tooltip is a supplementary channel, reachable via the "AI" button's own
+    // focus, carrying the fuller "not yet confirmed" gloss.
     fireEvent.focus(aiTrigger);
     const tip = await screen.findByRole("tooltip");
     expect(tip).toHaveTextContent(/not yet confirmed by the community/i);

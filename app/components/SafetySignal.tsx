@@ -8,14 +8,14 @@ import { WheatStrike } from "./icons/WheatStrike";
  * The four safety/trust states surfaced across the app. See
  * docs/agents/domain.md (GF taxonomy + trust model):
  *   - celiac-safe      — takes cross-contamination seriously (headline trust)
- *   - gluten-friendly  — GF-ish options only; deliberately NOT "safe"
+ *   - gluten-friendly  — GF-ish options only; deliberately not "safe"
  *   - stale            — claim not confirmed within the staleness window
  *   - incident         — a recent "got glutened" report flags the listing
  */
 export type SafetyState = "celiac-safe" | "gluten-friendly" | "stale" | "incident";
 
 interface SafetyStateConfig {
-  /** Always-visible text label. Safety meaning is NEVER colour-only. */
+  /** Always-visible text label. Safety meaning is never colour-only. */
   label: string;
   /** Tailwind utilities for the strong (solid) variant. */
   solid: string;
@@ -26,7 +26,7 @@ interface SafetyStateConfig {
 }
 
 /**
- * Each state is differentiated three independent ways — colour, icon SHAPE, and
+ * Each state is differentiated three independent ways — colour, icon shape, and
  * text label — so the signal survives colour-blindness, greyscale, and pastel
  * de-saturation. The foreground tokens meet WCAG AA against both white and the
  * matching `-soft` fill.
@@ -43,9 +43,8 @@ const STATES: Record<SafetyState, SafetyStateConfig> = {
     label: "Gluten-friendly",
     solid: "bg-gluten-friendly text-gluten-friendly-foreground border border-transparent",
     soft: "bg-gluten-friendly-soft text-gluten-friendly border border-gluten-friendly/30",
-    // brand ear-of-wheat with a diagonal strike ("gluten struck out") — reads as
-    // "GF-ish options, deliberately NOT celiac-safe", and stays distinct from the
-    // other three glyphs in greyscale.
+    // Ear-of-wheat with a diagonal strike ("gluten struck out"). Distinct from
+    // the other three glyphs even in greyscale.
     icon: WheatStrike,
   },
   stale: {
@@ -70,8 +69,7 @@ interface SafetySignalProps extends Omit<React.ComponentProps<"span">, "children
   variant?: "solid" | "soft";
   /**
    * Override the default label text (e.g. "Verified celiac-safe"). Keep it
-   * short — a long interpolated label wraps the pill on mobile (the old
-   * "Recent incident · N days ago" banner pill did exactly that).
+   * short — a long interpolated label wraps the pill on mobile.
    */
   label?: string;
 }
@@ -79,16 +77,13 @@ interface SafetySignalProps extends Omit<React.ComponentProps<"span">, "children
 /**
  * Reusable, accessible safety-signal chip.
  *
- * CONTRACT (do not regress): every render pairs COLOUR + ICON + TEXT LABEL.
- * The icon is decorative (`aria-hidden`) and the meaning lives in the visible
- * label, so screen readers announce the words and sighted users with colour
- * vision deficiency still get an icon shape + text. Never render this signal
- * with colour alone.
+ * Invariant: every render pairs colour + icon + text label. The icon is
+ * decorative (`aria-hidden`); the meaning lives in the visible label. Never
+ * render this signal with colour alone.
  *
- * Forwards any extra span props (and `ref`) to the root `<span>`, so a call site
- * can wrap it in a shadcn `Tooltip` via `<TooltipTrigger asChild>` and pass the
- * centralized {@link SAFETY_TOOLTIP} copy — the tooltip stays SUPPLEMENTARY; the
- * colour + icon + label already carry the meaning.
+ * Forwards extra span props (and `ref`) to the root `<span>`, so a call site
+ * can wrap it in a shadcn `Tooltip` via `<TooltipTrigger asChild>` with the
+ * {@link SAFETY_TOOLTIP} copy — the tooltip stays supplementary.
  */
 export function SafetySignal({
   state,
@@ -104,10 +99,9 @@ export function SafetySignal({
   return (
     <span
       data-safety-state={state}
-      // Sizing/shape comes from the shared {@link BADGE_FAMILY_SIZE} (AUB-224) so
-      // this headline chip is the EXACT same size as the per-claim `ClaimBadge`;
-      // only the SOLID colour fill (or the soft pastel) sets it apart. The icon
-      // is sized by that constant's `[&>svg]:size-4`, not a per-glyph class.
+      // {@link BADGE_FAMILY_SIZE} keeps this chip the same size as `ClaimBadge`;
+      // only the fill differs. The icon is sized by that constant's
+      // `[&>svg]:size-4`, not a per-glyph class.
       className={cn(
         "inline-flex items-center",
         BADGE_FAMILY_SIZE,
@@ -123,14 +117,11 @@ export function SafetySignal({
 }
 
 /**
- * Canonical per-state explainer copy — the SINGLE source of the wording, lifted
- * from the About page's trust legend (docs/product/overview.md,
- * docs/agents/domain.md). Call sites that wrap a safety chip/badge in a shadcn
- * `Tooltip` pass the matching entry, so the supplementary explanation reads the
- * same everywhere (the About legend, the style guide, and any status chip).
- *
- * The tooltip is ALWAYS supplementary: every {@link SafetySignal} already pairs
- * colour + icon + a visible text label, so meaning never rests on the tooltip.
+ * Canonical per-state explainer copy — the single source of this wording
+ * (docs/product/overview.md, docs/agents/domain.md). Call sites that wrap a
+ * safety chip in a `Tooltip` pass the matching entry so the explanation reads
+ * the same everywhere. The tooltip is always supplementary: meaning never
+ * rests on it.
  */
 export const SAFETY_TOOLTIP: Record<SafetyState, string> = {
   "celiac-safe":

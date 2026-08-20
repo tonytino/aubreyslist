@@ -110,7 +110,7 @@ describe("UserMenu", () => {
     renderMenu(user);
     await openMenu(user);
 
-    // The submit BUTTON itself is the menu item (the form wraps it), so the
+    // The submit button itself is the menu item (the form wraps it), so the
     // item's entire padded hit area triggers the POST — no dead padding.
     const signOut = screen.getByRole("menuitem", { name: "Sign out" });
     expect(signOut.tagName).toBe("BUTTON");

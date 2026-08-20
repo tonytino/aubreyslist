@@ -3,17 +3,15 @@ import { render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the embedded per-restaurant map (AUB-216, ADR-014). Each test
- * pins `VITE_GOOGLE_MAPS_BROWSER_KEY` explicitly via `vi.stubEnv` (same
- * pattern as `DirectoryMap.test.tsx`) so results are deterministic regardless
- * of whether the machine running the suite has a real key in `.env`.
+ * Tests for the embedded per-restaurant map (ADR-014). Each test pins
+ * `VITE_GOOGLE_MAPS_BROWSER_KEY` explicitly via `vi.stubEnv` so results are
+ * deterministic regardless of whether the machine has a real key in `.env`.
  *
- * The composition suite mirrors the detail route's structure — `ListingMap`
- * as a SIBLING above the `ListingLinks` "Links" region — and is the spec's
- * regression guard: the "Open in Google Maps" deep-link (the mobile hand-off,
- * kept per ADR-014) must render alongside the map AND without it, and the
- * iframe must never land inside the "Links" region (whose link/button roles
- * the edit-listing-links E2E spec asserts).
+ * The composition suite mirrors the detail route's structure — `ListingMap` as a
+ * sibling above the `ListingLinks` "Links" region: the "Open in Google Maps"
+ * deep-link (the mobile hand-off, ADR-014) must render alongside the map and
+ * without it, and the iframe must never land inside the "Links" region (whose
+ * link/button roles the edit-listing-links E2E spec asserts).
  */
 
 // ListingLinks pulls in the listing-links server-fn seam (transitively
@@ -77,7 +75,7 @@ describe("ListingMap", () => {
 
 /**
  * Render the map + links exactly as the detail route composes them: the map
- * as a sibling section ABOVE the "Links" region (see listings.$id.tsx).
+ * as a sibling section above the "Links" region (see listings.$id.tsx).
  */
 function renderDetailComposition() {
   const queryClient = new QueryClient({
@@ -102,13 +100,13 @@ describe("ListingMap + ListingLinks composition (detail-route regression)", () =
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_KEY", "test-key");
     renderDetailComposition();
 
-    // Both surfaces render: the embed preview AND the deep-link hand-off.
+    // Both surfaces render: the embed preview and the deep-link hand-off.
     const iframe = screen.getByTitle("Map of Root & Rye");
     const deepLink = screen.getByRole("link", { name: "Open in Google Maps" });
     expect(iframe).toBeInTheDocument();
     expect(deepLink).toHaveAttribute("href", "https://maps.google.com/?cid=42");
 
-    // The iframe stays OUTSIDE the "Links" region — a sibling, never a child —
+    // The iframe stays outside the "Links" region — a sibling, never a child —
     // so the region's role contents the E2E spec asserts are unchanged.
     const linksRegion = screen.getByRole("region", { name: "Links" });
     expect(within(linksRegion).queryByTitle("Map of Root & Rye")).not.toBeInTheDocument();
