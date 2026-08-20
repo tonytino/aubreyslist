@@ -3,6 +3,12 @@ import { Link } from "@tanstack/react-router";
 import { CircleCheck } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
+import {
+  ClaimCardDeck,
+  type DeckAnswer,
+  type DeckAnswerMap,
+  emptyDeckAnswers,
+} from "~/components/claims/ClaimCardDeck";
 import { Button } from "~/components/ui/button";
 import type { CreateListingInput } from "~/listings/create-input";
 import { parseDuplicateListingError } from "~/listings/dedup-error";
@@ -11,21 +17,21 @@ import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
 import { submitVote } from "~/server/attestations/attestations.fn";
 import { submitCreateListing } from "~/server/listings/create.fn";
 import type { IntakeMode } from "~/server/settings";
-import { ClaimAttestStep } from "./ClaimAttestStep";
 import { FindPlaceStep } from "./FindPlaceStep";
 import { emptyLinkFieldValues, type LinkFieldValues } from "./ListingLinksFields";
 import { ProgressStepper } from "./ProgressStepper";
 import { ReviewStep } from "./ReviewStep";
 
 /**
- * The add-a-listing claim wizard (AUB-132, ADR-008). A 7-step flow that COLLECTS
- * a place + the community's own confirm/dispute/skip answers for the five GF
- * taxonomy attributes into local state, and defers ALL server writes to a single
- * final Submit:
+ * The add-a-listing claim wizard (AUB-132, ADR-008; deck rework AUB-231). A
+ * 3-stage flow that COLLECTS a place + the community's own confirm/dispute/skip
+ * answers for the five GF taxonomy attributes into local state, and defers ALL
+ * server writes to a single final Submit:
  *
- *   0        find the place (Places search or manual entry) — collect, don't create
- *   1‑5      one step per {@link CLAIM_ATTRIBUTES} attribute — confirm / dispute / skip
- *   6        review & submit
+ *   0   find the place (Places search or manual entry) — collect, don't create
+ *   1   attest — ONE swipeable {@link ClaimCardDeck} stage covering all five
+ *       {@link CLAIM_ATTRIBUTES} (the deck keeps its own "n of 5" indicator)
+ *   2   review & submit
  *
  * Deferring the create (rather than writing on a single-page form's own submit)
  * lets the user attest as they go and commit once. On Submit
@@ -34,13 +40,23 @@ import { ReviewStep } from "./ReviewStep";
  * listing later sees an honest "Not yet attested" gap rather than a fabricated
  * verdict. The create still succeeds when all five are skipped.
  *
+ * The deck is a CONTROLLED component writing into the wizard's local
+ * {@link AnswerMap}; completing it hands off straight to the existing
+ * ReviewStep (the deck-internal summary stays off here — no double summary). A
+ * ReviewStep row's Edit re-enters the deck AT that card in single-card mode,
+ * as does the review screen's Back (at the last card).
+ *
  * All wizard state is ephemeral `useState` (a multi-step form, not shareable/
  * restorable view state) driven by explicit handlers — no `useEffect`-for-data.
  * The create+votes orchestration runs through a single TanStack Query mutation.
  */
 
-/** A user's answer for one attribute. `skip` records nothing (first-class). */
-export type Answer = "confirm" | "dispute" | "skip";
+/**
+ * A user's answer for one attribute. `skip` records nothing (first-class).
+ * Aliased from the deck so the wizard, ReviewStep, and ProgressStepper all
+ * speak the deck's answer vocabulary — one type shared by both hosts.
+ */
+export type Answer = DeckAnswer;
 
 /**
  * The collected place, discriminated by intake mode. `places` carries only the
@@ -52,13 +68,13 @@ export type WizardPlace =
   | { mode: "manual"; name: string; address: string; lat: number; lng: number };
 
 /** Map of every attribute → the user's answer (seeded `undefined` = untouched). */
-export type AnswerMap = Record<ClaimAttribute, Answer | undefined>;
+export type AnswerMap = DeckAnswerMap;
 
-const REVIEW_STEP = 6;
+const ATTEST_STEP = 1;
+const REVIEW_STEP = 2;
 
-const EMPTY_ANSWERS: AnswerMap = Object.fromEntries(
-  CLAIM_ATTRIBUTES.map((attribute) => [attribute, undefined])
-) as AnswerMap;
+/** The last card — where the review screen's Back re-enters the deck. */
+const LAST_ATTRIBUTE = CLAIM_ATTRIBUTES[CLAIM_ATTRIBUTES.length - 1];
 
 /** How many attributes the user left un-attested (skip or untouched). */
 function countUnattested(answers: AnswerMap): number {
@@ -103,7 +119,10 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
   const [step, setStep] = useState(0);
   const [place, setPlace] = useState<WizardPlace | null>(null);
   const [links, setLinks] = useState<LinkFieldValues>(emptyLinkFieldValues());
-  const [answers, setAnswers] = useState<AnswerMap>(EMPTY_ANSWERS);
+  const [answers, setAnswers] = useState<AnswerMap>(emptyDeckAnswers());
+  // When set, the deck opens AT this card in single-card Edit mode (a
+  // ReviewStep row's Edit, or the review screen's Back → the last card).
+  const [editAttribute, setEditAttribute] = useState<ClaimAttribute | null>(null);
   const [submitted, setSubmitted] = useState<{ listingId: string; created: boolean } | null>(null);
 
   const submit = useMutation({
@@ -150,7 +169,8 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
           setStep(0);
           setPlace(null);
           setLinks(emptyLinkFieldValues());
-          setAnswers(EMPTY_ANSWERS);
+          setAnswers(emptyDeckAnswers());
+          setEditAttribute(null);
           setSubmitted(null);
           submit.reset();
         }}
@@ -158,15 +178,12 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
     );
   }
 
-  const answer = (attribute: ClaimAttribute, value: Answer) => {
-    setAnswers((prev) => ({ ...prev, [attribute]: value }));
-    setStep((current) => Math.min(REVIEW_STEP, current + 1));
+  // Every entry into the deck stage decides its mode explicitly: `null` runs
+  // the full 5-card flow; an attribute opens that ONE card (Edit re-entry).
+  const enterDeck = (edit: ClaimAttribute | null) => {
+    setEditAttribute(edit);
+    setStep(ATTEST_STEP);
   };
-  const back = () => setStep((current) => Math.max(0, current - 1));
-
-  // The attribute for the current step, or `undefined` on the find/review steps.
-  const currentAttribute =
-    step >= 1 && step <= CLAIM_ATTRIBUTES.length ? CLAIM_ATTRIBUTES[step - 1] : undefined;
 
   let body: ReactNode;
   if (step === 0 || place === null) {
@@ -178,16 +195,20 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
         onLinkChange={(kind, value) => setLinks((prev) => ({ ...prev, [kind]: value }))}
         onSelect={setPlace}
         onClear={() => setPlace(null)}
-        onContinue={() => setStep(1)}
+        onContinue={() => enterDeck(null)}
       />
     );
-  } else if (currentAttribute !== undefined) {
+  } else if (step === ATTEST_STEP) {
     body = (
-      <ClaimAttestStep
-        attribute={currentAttribute}
-        value={answers[currentAttribute]}
-        onAnswer={(value) => answer(currentAttribute, value)}
-        onBack={back}
+      <ClaimCardDeck
+        // Remount when the Edit target changes so the deck re-seeds its card
+        // position (its per-flow position state is internal by design).
+        key={editAttribute ?? "full-deck"}
+        answers={answers}
+        onAnswer={(attribute, value) => setAnswers((prev) => ({ ...prev, [attribute]: value }))}
+        onBack={() => setStep(0)}
+        onComplete={() => setStep(REVIEW_STEP)}
+        initialAttribute={editAttribute ?? undefined}
       />
     );
   } else {
@@ -196,8 +217,8 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
         place={place}
         answers={answers}
         onEditPlace={() => setStep(0)}
-        onEditAttribute={(attribute) => setStep(CLAIM_ATTRIBUTES.indexOf(attribute) + 1)}
-        onBack={back}
+        onEditAttribute={(attribute) => enterDeck(attribute)}
+        onBack={() => enterDeck(LAST_ATTRIBUTE ?? null)}
         onSubmit={() => submit.mutate()}
         submitting={submit.isPending}
         error={submit.isError ? <SubmitError error={submit.error} /> : undefined}
@@ -211,7 +232,7 @@ export function AddListingWizard({ intakeMode }: { intakeMode: IntakeMode }) {
         step={step}
         hasPlace={place !== null}
         answers={answers}
-        onNavigate={setStep}
+        onNavigate={(next) => (next === ATTEST_STEP ? enterDeck(null) : setStep(next))}
       />
       {body}
     </div>

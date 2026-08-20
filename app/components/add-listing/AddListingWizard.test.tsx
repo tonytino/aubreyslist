@@ -7,17 +7,22 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { MotionGlobalConfig } from "motion/react";
 import type { ReactElement } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * AddListingWizard end-to-end tests. The create + vote server functions are
- * mocked. The load-bearing assertions:
+ * AddListingWizard end-to-end tests (deck rework AUB-231: the five attest
+ * steps are now ONE ClaimCardDeck stage whose fixed Dispute / "Not sure" /
+ * Confirm button row is exercised here). The create + vote server functions
+ * are mocked. The load-bearing assertions:
  *
  *   - Submit creates the listing exactly ONCE.
  *   - `submitVote` fires ONLY for confirm/dispute answers — never for skip or
  *     untouched attributes (the "skip writes nothing" non-negotiable).
  *   - An all-skipped flow still creates the listing and fires ZERO votes.
+ *   - A ReviewStep row's Edit re-enters the deck AT that card and one answer
+ *     returns straight to review (single-card Edit mode).
  */
 const createListingMock = vi.fn((_args: unknown) => Promise.resolve({} as never));
 const submitVoteMock = vi.fn((_args: unknown) => Promise.resolve({} as never));
@@ -34,6 +39,12 @@ vi.mock("~/server/places.fn", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { AddListingWizard } from "./AddListingWizard";
+
+// Complete motion animations instantly so the deck's AnimatePresence card
+// exits resolve synchronously under jsdom.
+beforeAll(() => {
+  MotionGlobalConfig.skipAnimations = true;
+});
 
 /** Mount the wizard inside an in-memory router (the success screen renders `<Link>`). */
 function renderInApp(ui: ReactElement) {
@@ -62,7 +73,7 @@ function renderInApp(ui: ReactElement) {
   );
 }
 
-/** Fill the manual finder and advance past the selected-place card to step 1. */
+/** Fill the manual finder and advance past the selected-place card into the deck. */
 async function pickPlaceManually() {
   fireEvent.change(await screen.findByLabelText("Restaurant name"), {
     target: { value: "Two Hands" },
@@ -72,6 +83,13 @@ async function pickPlaceManually() {
   fireEvent.change(screen.getByLabelText("Longitude"), { target: { value: "-104.9903" } });
   fireEvent.click(screen.getByRole("button", { name: /Use this place/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
+}
+
+/** Click one deck answer button per card, in order (the deck advances itself). */
+async function answerDeck(sequence: readonly ("Confirm" | "Dispute" | "Not sure")[]) {
+  for (const name of sequence) {
+    fireEvent.click(await screen.findByRole("button", { name }));
+  }
 }
 
 afterEach(() => {
@@ -88,12 +106,9 @@ describe("AddListingWizard", () => {
 
     await pickPlaceManually();
 
-    // Step 1 headline → confirm; 2 → skip; 3 → dispute; 4 → skip; 5 → confirm.
-    fireEvent.click(await screen.findByRole("button", { name: /Confirm/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Dispute/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /Confirm/ }));
+    // One deck stage: headline → confirm; fryer → skip; GF menu → dispute;
+    // off-menu → skip; substitutes → confirm.
+    await answerDeck(["Confirm", "Not sure", "Dispute", "Not sure", "Confirm"]);
 
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
 
@@ -137,9 +152,7 @@ describe("AddListingWizard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    for (let index = 0; index < 5; index += 1) {
-      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
-    }
+    await answerDeck(["Not sure", "Not sure", "Not sure", "Not sure", "Not sure"]);
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
     await screen.findByText("Listing added, thanks!");
 
@@ -168,9 +181,7 @@ describe("AddListingWizard", () => {
 
     await pickPlaceManually();
 
-    for (let index = 0; index < 5; index += 1) {
-      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
-    }
+    await answerDeck(["Not sure", "Not sure", "Not sure", "Not sure", "Not sure"]);
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
 
     await screen.findByText("Listing added, thanks!");
@@ -179,6 +190,36 @@ describe("AddListingWizard", () => {
     expect(submitVoteMock).not.toHaveBeenCalled();
     // Honest about the gap: all five stayed un-attested.
     expect(screen.getByText(/5 of 5 attributes stayed/)).toBeInTheDocument();
+  });
+
+  it("re-enters the deck at ONE card from a ReviewStep row Edit, then returns to review", async () => {
+    createListingMock.mockResolvedValueOnce({
+      listing: { id: "l6" },
+      created: true,
+    } as never);
+    renderInApp(<AddListingWizard intakeMode="manual" />);
+
+    await pickPlaceManually();
+    await answerDeck(["Not sure", "Not sure", "Not sure", "Not sure", "Not sure"]);
+    await screen.findByRole("button", { name: "Submit listing" });
+
+    // Edit the third attribute: the deck reopens AT that card…
+    fireEvent.click(screen.getByRole("button", { name: "Edit Dedicated GF menu" }));
+    await screen.findByRole("heading", { name: "Dedicated GF menu" });
+    expect(screen.getByText("Card 3 of 5")).toBeInTheDocument();
+
+    // …and a single answer returns straight to review with the new outcome.
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await screen.findByRole("button", { name: "Submit listing" });
+    expect(screen.getByTestId("fact-confirmed")).toBeInTheDocument();
+
+    // The edited answer is what gets written on submit.
+    fireEvent.click(screen.getByRole("button", { name: "Submit listing" }));
+    await screen.findByText("Listing added, thanks!");
+    expect(submitVoteMock).toHaveBeenCalledTimes(1);
+    expect(submitVoteMock).toHaveBeenCalledWith({
+      data: { listingId: "l6", attribute: "dedicated_gf_menu", value: "confirm" },
+    });
   });
 
   it("recovers a blocked manual duplicate with an inline existing-listing link", async () => {
@@ -190,9 +231,7 @@ describe("AddListingWizard", () => {
     renderInApp(<AddListingWizard intakeMode="manual" />);
 
     await pickPlaceManually();
-    for (let index = 0; index < 5; index += 1) {
-      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
-    }
+    await answerDeck(["Not sure", "Not sure", "Not sure", "Not sure", "Not sure"]);
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
 
     const alert = await screen.findByRole("alert");
@@ -211,9 +250,7 @@ describe("AddListingWizard", () => {
     renderInApp(<AddListingWizard intakeMode="manual" />);
 
     await pickPlaceManually();
-    for (let index = 0; index < 5; index += 1) {
-      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
-    }
+    await answerDeck(["Not sure", "Not sure", "Not sure", "Not sure", "Not sure"]);
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
     await screen.findByText("Listing added, thanks!");
 
@@ -234,10 +271,7 @@ describe("AddListingWizard", () => {
     await pickPlaceManually();
 
     // Confirm the headline attribute, skip the rest, then submit.
-    fireEvent.click(await screen.findByRole("button", { name: /Confirm/ }));
-    for (let index = 0; index < 4; index += 1) {
-      fireEvent.click(await screen.findByRole("button", { name: /Skip \(not sure\)/ }));
-    }
+    await answerDeck(["Confirm", "Not sure", "Not sure", "Not sure", "Not sure"]);
     fireEvent.click(await screen.findByRole("button", { name: "Submit listing" }));
 
     // No fabricated "added" — honest that it already existed, attestations kept.

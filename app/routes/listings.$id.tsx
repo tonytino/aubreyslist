@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { CircleCheck, MapPin, Users } from "lucide-react";
 import { z } from "zod";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
+import { ClaimDeckSection } from "~/components/listing/ClaimDeckSection";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
@@ -451,6 +452,11 @@ function ListingDetail() {
               </TabsList>
 
               <TabsContent value="claims" className="pt-4">
+                {/* The swipeable attest deck's CTA (AUB-231) — signed-in only;
+                    anonymous viewers keep the existing sign-in prompts below.
+                    Writes go through the same submitVote/removeVote seam as the
+                    inline toggles, so everything on this page refreshes. */}
+                <ClaimDeckSection listingId={listing.id} claims={claims} isSignedIn={isSignedIn} />
                 <p className="mb-3 text-body-sm text-muted-foreground">
                   What the community has confirmed or disputed. Each summary is a roll-up of the
                   visible attestations below it, never a hidden score. Sign in to confirm or dispute

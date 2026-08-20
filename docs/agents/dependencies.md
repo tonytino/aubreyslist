@@ -50,7 +50,7 @@ not a to-do** — just let it age out and take the bump when it goes red.
 
 - *A Critical, or something you need before the quarantine lapses* — fast-track
   that one version with a `minimumReleaseAgeExclude` entry in
-  `pnpm-workspace.yaml`. Follow the shape of the existing entry: name the exact
+  `pnpm-workspace.yaml`. Follow the shape that file's comment describes: name the exact
   `package@version`, the CVE, the publish and window-clear dates, who approved
   it, and a Linear issue tracking its **removal**. This is deliberately
   high-friction — it is the exact hole the quarantine exists to close.

@@ -1,0 +1,1 @@
+- `[manual]` The "Refresh seed data" workflow now delivers its regenerated seed listings as a labeled, review-ready pull request instead of pushing to `main` directly (which branch protection now rejects). No-change runs still skip silently.

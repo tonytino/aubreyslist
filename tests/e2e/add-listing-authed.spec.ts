@@ -7,13 +7,15 @@ import { waitForHydration } from "./helpers";
  * Add a listing as a signed-in user (issue #45, wizard rework AUB-132).
  *
  * The existing `add-listing.spec.ts` covers the ANONYMOUS gate (sign-in prompt).
- * This spec covers the authenticated happy path end-to-end through the 7-step
- * claim wizard: with intake forced to `manual` (the deterministic, Places-key-
- * free mode — default is `places`, ADR-008) and a sealed session cookie, find
- * the place manually, add typed links (menu + website, AUB-202), skip every
- * claim (skip writes nothing; the create still succeeds), submit, then follow
- * the success screen's "View your listing" and assert it lands on the new
- * listing's detail page showing the entered name and the typed link buttons.
+ * This spec covers the authenticated happy path end-to-end through the 3-stage
+ * claim wizard (find place → ClaimCardDeck → review, AUB-231): with intake
+ * forced to `manual` (the deterministic, Places-key-free mode — default is
+ * `places`, ADR-008) and a sealed session cookie, find the place manually, add
+ * typed links (menu + website, AUB-202), skip every claim card via the deck's
+ * "Not sure" button (skip writes nothing; the create still succeeds), submit,
+ * then follow the success screen's "View your listing" and assert it lands on
+ * the new listing's detail page showing the entered name and the typed link
+ * buttons.
  *
  * Manual intake is the simplest deterministic mode — `places` would require the
  * Google Places provider. Self-skips without the CI E2E DB / session secret.
@@ -75,10 +77,13 @@ test.describe("add a listing (authenticated, manual intake)", () => {
     await page.getByLabel("Website", { exact: true }).fill("https://new-spot.example");
     await page.getByRole("button", { name: "Continue" }).click();
 
-    // Steps 1–5 — skip every attribute. Skip writes nothing (first-class), and
-    // the create must still succeed with all five left "Not yet attested".
+    // The deck stage — skip every card via the fixed "Not sure" button (the
+    // deck's equal-footing button path; AUB-231). Skip writes nothing
+    // (first-class), and the create must still succeed with all five left
+    // "Not yet attested". The button row persists across cards; the deck
+    // advances itself after each answer.
     for (let index = 0; index < 5; index += 1) {
-      await page.getByRole("button", { name: /Skip \(not sure\)/ }).click();
+      await page.getByRole("button", { name: "Not sure" }).click();
     }
 
     // Review → submit. We never auto-redirect: the wizard ends on a success

@@ -133,8 +133,17 @@ export function ReviewStep({
   );
 }
 
-/** The per-row outcome chip/text, differentiated by attribute + answer. */
-function ReviewOutcome({
+/**
+ * The per-row outcome chip/text, differentiated by attribute + answer:
+ * headline confirm/dispute → SafetySignal; fact confirm/dispute →
+ * {@link FactOutcomeChip}; skip/untouched → the dashed "Not yet attested" pill.
+ *
+ * EXPORTED so the ClaimCardDeck's end-state summary
+ * (`app/components/claims/DeckSummary.tsx`, AUB-231) renders the EXACT same
+ * outcome chips as this review step — one implementation, not a look-alike
+ * (the AUB-227 one-chip-source rule).
+ */
+export function ReviewOutcome({
   attribute,
   answer,
 }: {

@@ -102,7 +102,7 @@ jobs:
             --lockfile=pnpm-lock.yaml
             --config=osv-scanner.toml
             --format=json
-            --output=osv-results.json
+            --output-file=osv-results.json
 
       - name: Gate findings against the release-age quarantine
         run: node .github/scripts/check-osv.mjs osv-results.json
