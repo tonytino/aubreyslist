@@ -4,9 +4,9 @@ import { listingLinks, listings } from "~/db/schema";
 import { type BackfillListingLinksResult, backfillListingLinks } from "./backfill-listing-links";
 
 /**
- * Tests for the listing-links backfill core (AUB-202). Like the maps-URL
- * backfill tests, the core is API-free with an injected DB (per
- * `docs/agents/testing.md`), so we model the exact drizzle chains it uses —
+ * Tests for the listing-links backfill core. The core is API-free with an
+ * injected DB (per `docs/agents/testing.md`), so we model the exact drizzle
+ * chains it uses —
  * select().from().where() and insert().values().onConflictDoNothing().returning()
  * — with a small fake and assert behaviour without a live DB or network.
  */
@@ -140,7 +140,7 @@ describe("backfillListingLinks", () => {
 
     expect(result).toEqual({ inserted: 0, alreadyLinked: 0, skippedNotHttp: 1 });
     expect(inserts).toHaveLength(0);
-    // A skipped row is left FULLY untouched — its legacy value stays for a
+    // A skipped row is left fully untouched — its legacy value stays for a
     // human to look at, it just never renders (the sink guard suppresses it).
     expect(updates).toHaveLength(0);
     expect(logs.join("\n")).toContain("not http(s)");

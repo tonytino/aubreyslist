@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
 /**
- * Pure, filesystem-touching helpers backing the AUB-186 guard scan in
+ * Pure, filesystem-touching helpers backing the guard scan in
  * `server-fn-post-guards.test.ts`. Split into a non-`.test.` module so Biome's
  * `noExportsInTest` rule (test files shouldn't export things for others to
  * import) doesn't apply — this module is exported-from-and-imported-by
@@ -22,7 +22,7 @@ const CREATE_SERVER_FN_CALL_SITE_RE = /\bcreateServerFn\s*\(/g;
  * by `createServerFnCallCount` and `callsAuthGuard` below, so a doc comment
  * that happens to mention `createServerFn(...)` or `requireCurrentUser(...)`
  * in prose (e.g. explaining the convention) isn't miscounted as a real call
- * site — a comment-only guard mention must NOT satisfy the guard scan.
+ * site — a comment-only guard mention must not satisfy the guard scan.
  * Doesn't handle `//`/`/*` appearing inside a string literal, which is an
  * acceptable heuristic gap here — this repo's `*.fn.ts` files don't do that,
  * and `serverFnExports` itself is unaffected either way (it only matches
@@ -68,16 +68,15 @@ export interface ServerFnExport {
  * Every `export const NAME = createServerFn(...)` call in `source`, with its
  * HTTP method extracted from the options object.
  *
- * Deliberately does NOT anchor the whole options object to a single-property
+ * Deliberately does not anchor the whole options object to a single-property
  * `{ method: "POST" }` shape: it locates `createServerFn(`, then does a
  * balanced-brace scan to grab the full options object text (whatever else it
  * contains, however it's wrapped across lines, trailing comma or not), and
- * regexes `method:\s*["']...["']` out of THAT slice. This is what lets it
+ * regexes `method:\s*["']...["']` out of that slice. This is what lets it
  * recognize e.g. `createServerFn({ method: "POST", strict: false })` or a
  * Biome-formatted multi-line block with a trailing comma — shapes a
- * `createServerFn\(\s*\{\s*method:...\s*\}\s*\)`-anchored regex would silently
- * miss (and, worse, miss SILENTLY: no describe block, no failure, no
- * exception needed — see AUB-186 review history).
+ * `createServerFn\(\s*\{\s*method:...\s*\}\s*\)`-anchored regex would miss,
+ * and miss silently: no describe block, no failure, no exception.
  *
  * If the options argument isn't an object literal, or no `method:` property
  * is found inside it, `method` is `null` rather than the export being
@@ -156,7 +155,7 @@ export function localImportSpecifiers(source: string): string[] {
  * this repo's `tsconfig.json` path alias for `./app`.
  *
  * `repoRoot` is passed in (rather than computed here) so the resolver works
- * against BOTH the real repo (for the `~/` alias) and an isolated temp
+ * against both the real repo (for the `~/` alias) and an isolated temp
  * directory in tests (which has no `app/` of its own but only ever uses
  * relative `./...` specifiers).
  */
@@ -178,7 +177,7 @@ export function resolveLocalSpecifier(
  * (one hop — see the module doc in `server-fn-post-guards.test.ts`).
  */
 export function callsAuthGuard(fileAbs: string, source: string, repoRoot: string): boolean {
-  // Strip comments FIRST: a doc comment merely mentioning `requireCurrentUser(...)`
+  // Strip comments first: a doc comment merely mentioning `requireCurrentUser(...)`
   // must not satisfy the scan — only a real (non-commented) call counts.
   const code = stripComments(source);
   if (GUARD_CALL_RE.test(code)) return true;

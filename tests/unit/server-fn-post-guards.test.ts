@@ -12,18 +12,18 @@ import {
 } from "./server-fn-post-guards.helpers";
 
 /**
- * AUB-186 — static-analysis guard test: every POST `createServerFn` server
+ * Static-analysis guard test: every POST `createServerFn` server
  * function under `app/server/**` must call an auth guard from
  * `app/server/auth/guards.ts` (`requireCurrentUser` / `requireCurrentRole`, or
  * their synchronous counterparts `requireUser` / `requireRole`) — the
  * open-read / gated-write rule documented in that module's header (ADR-010).
  *
- * This is a heuristic TEXT scan, mirroring the established pattern in
+ * This is a heuristic text scan, mirroring the established pattern in
  * `.github/scripts/check-hard-rules.mjs` / `tests/unit/hard-rules-guard.test.ts`
  * — it does not execute or type-check the source, and it does not strip out
  * comments/string literals. Two things make a plain "grep the file" too naive
  * for this repo's actual convention, so the scan (in
- * `server-fn-post-guards.helpers.ts`) resolves ONE hop of local imports:
+ * `server-fn-post-guards.helpers.ts`) resolves one hop of local imports:
  *
  *   1. Several `*.fn.ts` files call the guard directly inside the handler
  *      (`app/server/listings/create.fn.ts`, `app/server/places.fn.ts`), via a
@@ -31,17 +31,17 @@ import {
  *      transitive deps stay out of the client bundle.
  *   2. Most others delegate the entire write to a sibling implementation
  *      module (`./index`, `./actions`, `./set-role`, `./set-intake-mode`,
- *      ...) — same bundle-hygiene reason — and THAT module calls the guard.
+ *      ...) — same bundle-hygiene reason — and that module calls the guard.
  *      (See `app/server/admin/set-role.fn.ts` -> `./set-role.ts`,
  *      `app/server/moderation/actions.fn.ts` -> `./actions.ts`, etc.)
  *
- * Resolving one hop of `./...`/`~/...` imports covers every server fn in this
- * repo as of AUB-186. A handler that needs a SECOND hop to reach its guard
- * call would need this scan extended — more likely, that is itself a sign the
- * seam should be flattened one level.
+ * Resolving one hop of `./...`/`~/...` imports covers every server fn in
+ * this repo. A handler that needs a second hop to reach its guard call would
+ * need this scan extended — more likely, that is itself a sign the seam
+ * should be flattened one level.
  *
  * ---- Exceptions -----------------------------------------------------------
- * A POST server fn that is intentionally NOT guarded (e.g. a public write
+ * A POST server fn that is intentionally not guarded (e.g. a public write
  * with its own bespoke protection, such as rate-limiting alone) must be added
  * to `EXCEPTIONS` below with a real, reviewable reason — an empty reason
  * fails the "every exception is documented" test, so a silent/undocumented
@@ -254,8 +254,8 @@ export const writeThing = createServerFn({ method: "POST" }).handler(async () =>
   return doWrite();
 });
 `;
-      // This is the case the AUB-186 suite above exists to catch: an unguarded
-      // POST server fn must be detected as such, not silently pass.
+      // The case the guard suite above exists to catch: an unguarded POST
+      // server fn must be detected as such, not silently pass.
       expect(callsAuthGuard(join(dir, "thing.fn.ts"), fnSource, ROOT)).toBe(false);
     });
 

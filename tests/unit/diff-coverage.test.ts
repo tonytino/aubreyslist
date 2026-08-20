@@ -217,8 +217,8 @@ describe("isExcluded", () => {
 });
 
 describe("computeDiffCoverage — DB-only exclusion (DB-free vs full mode)", () => {
-  // An UNCOVERED changed line in a DB-only file (app/server/**) plus an
-  // UNCOVERED changed line in a pure module (app/trust/**).
+  // An uncovered changed line in a DB-only file (app/server/**) plus an
+  // uncovered changed line in a pure module (app/trust/**).
   const cov = parseCoverage({
     ...covEntry("/repo/app/server/listings/browse.ts", [["0", 1, 1, 0]]), // uncovered
     ...covEntry("/repo/app/trust/summary.ts", [["0", 1, 1, 0]]), // uncovered

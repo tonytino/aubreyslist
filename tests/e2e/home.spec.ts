@@ -3,18 +3,17 @@ import { expect, test } from "@playwright/test";
 import { waitForHydration } from "./helpers";
 
 // Exercise the mobile layout: below `sm` (640px) the header collapses the nav +
-// account controls into ONE right-anchored combined menu. 375px is the minimum
+// account controls into one right-anchored combined menu. 375px is the minimum
 // supported width (docs/agents/styling.md).
 test.use({ viewport: { width: 375, height: 812 } });
 
 test("home page renders the app shell header, brand, and combined menu", async ({ page }) => {
-  // `/` IS the Denver directory now (AUB-116) — the standalone marketing landing
-  // was retired. We still assert the app-shell chrome here; the directory content
-  // itself is covered by browse.spec.ts.
+  // `/` is the Denver directory. This test asserts the app-shell chrome; the
+  // directory content itself is covered by browse.spec.ts.
   await page.goto("/");
 
-  // The header app shell renders with the brand wordmark (#91), reachable via
-  // the home link by its accessible name.
+  // The header app shell renders with the brand wordmark, reachable via the
+  // home link by its accessible name.
   const header = page.getByRole("banner");
   await expect(header).toBeVisible();
   const homeLink = header.getByRole("link", { name: "Aubrey's List home" });
@@ -30,9 +29,9 @@ test("home page renders the app shell header, brand, and combined menu", async (
   const menuTrigger = nav.getByRole("button", { name: "Open menu" });
   await expect(menuTrigger).toBeVisible();
 
-  // The sign-in entry point is now INSIDE the combined menu (Account section)
-  // for an anonymous visitor — open the menu, then assert it (Google is the sole
-  // provider — ADR-006).
+  // The sign-in entry point sits inside the combined menu (Account section)
+  // for an anonymous visitor — open the menu, then assert it (Google is the
+  // sole provider — ADR-006).
   await waitForHydration(page);
   await menuTrigger.click();
   await expect(page.getByRole("menuitem", { name: "Log in" })).toBeVisible();

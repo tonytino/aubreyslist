@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-// The preview-DB resolver is plain ESM CI glue (AUB-139); import its testable core.
+// The preview-DB resolver is plain ESM CI glue; import its testable core.
 // @ts-expect-error — .mjs script, no type declarations
 import * as previewDb from "../../.github/scripts/resolve-preview-db-url.mjs";
 
@@ -15,7 +15,7 @@ const silentLog = { warn: () => {}, log: () => {}, error: () => {} };
 
 /**
  * A canned Neon API `fetch` keyed on the request path. Returns the body of the
- * FIRST route (in insertion order) whose prefix matches the path; unmatched → 404.
+ * first route (in insertion order) whose prefix matches the path; unmatched → 404.
  * Callers order routes most-specific-first so a longer path wins over `/projects`.
  */
 function mockFetch(routes: Record<string, unknown>) {
@@ -206,7 +206,7 @@ describe("main (side-effect ordering + skip)", () => {
     );
     const urlIdx = events.findIndex((e) => e[0] === "out" && e[1] === "url");
     expect(maskIdx).toBeGreaterThanOrEqual(0);
-    // The mask MUST be emitted before the url output (else the migrate step leaks it).
+    // The mask must be emitted before the url output (else the migrate step leaks it).
     expect(urlIdx).toBeGreaterThan(maskIdx);
     expect(events).toContainEqual(["out", "url", "postgresql://u:p@host/db"]);
     expect(events).toContainEqual(["out", "found", "true"]);

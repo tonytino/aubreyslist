@@ -1,58 +1,45 @@
 /**
- * Post-migrate verification guard: `pnpm db:verify` (AUB-195).
+ * Post-migrate verification guard: `pnpm db:verify`.
  *
- * WHY THIS EXISTS: drizzle's migrator (both `drizzle-kit migrate` and the
- * programmatic `migrate()` — they share the same core) applies ONLY the journal
- * entries whose `when` timestamp is STRICTLY GREATER than the LAST applied row's
- * `created_at` in the bookkeeping table (`drizzle.__drizzle_migrations`). So if
- * a migration is ever renumbered/re-timestamped after a long-lived database
- * (the persistent CI Neon branch, a preview branch, prod) has applied a LATER
- * timestamp, the migrator PERMANENTLY SKIPS it — and still reports success.
- * That is exactly how `0003_amazing_meteorite` (the favorites table) was
- * silently skipped on a preview branch while `pnpm db:migrate` exited 0 and the
- * deployed preview then failed with `relation "favorites" does not exist`.
+ * Drizzle's migrator applies only journal entries whose `when` is strictly
+ * greater than the last applied row's `created_at` in
+ * `drizzle.__drizzle_migrations`. A migration renumbered or re-timestamped
+ * after a long-lived database applied a later timestamp is skipped forever,
+ * while `db:migrate` still exits 0. This guard catches that.
  *
- * THE CHECK: every entry in `db/migrations/meta/_journal.json` must have a
- * matching row in the database's applied-migrations history. Matching is first
- * by the SAME hash the migrator records — sha256 (hex) over the RAW bytes of
- * the migration's `.sql` file (see `readMigrationFiles` in
- * `node_modules/drizzle-orm/migrator.js`; no normalization is applied) — and,
- * failing that, by the recorded journal timestamp (`created_at` stores the
- * journal `when`, not a wall clock):
- *  - Hash match → applied, OK.
- *  - No hash match but an UNCLAIMED applied row exists AT THE ENTRY'S `when` →
- *    DRIFTED: the migrator ran SOME content in that journal slot, but not the
- *    current file's. The bookkeeping table stores only (hash, created_at) — no
- *    tags — so benign drift (a documented hand-edit landing after a DB applied
- *    a draft, e.g. `0002_old_tigra`) is STRUCTURALLY INDISTINGUISHABLE from
- *    harmful drift (a migration renumbered AND content-edited while keeping its
- *    timestamp, whose new SQL never ran). Therefore drift is tolerated ONLY for
- *    tags a human has verified and listed in {@link KNOWN_DRIFTED_TAGS}; any
- *    OTHER drifted tag FAILS the run until it is either fixed with a fresh
- *    migration or explicitly allowlisted.
- *  - Neither → MISSING: the silent-skip hazard → exit 1, naming each tag.
- * Applied rows are CLAIMED 1:1 (first by hash, then one row per drifted entry's
- * `when`), so a single row can never simultaneously back a drifted entry and
- * hide a truly-missing one, and duplicate-timestamp rows aren't swept together.
- * EXTRA applied rows (e.g. an old migration that was later renamed away but had
- * already been applied) are reported as info, never a failure — history a DB
- * has is allowed to be a superset of the current journal.
+ * The check: every entry in `db/migrations/meta/_journal.json` must match an
+ * applied row. Matching is first by the hash the migrator records — sha256
+ * (hex) over the raw bytes of the `.sql` file, no normalization (see
+ * `readMigrationFiles` in `node_modules/drizzle-orm/migrator.js`) — else by
+ * the recorded journal timestamp (`created_at` stores the journal `when`, not
+ * a wall clock):
+ *  - Hash match → applied, ok.
+ *  - No hash match, but an unclaimed applied row at the entry's `when` →
+ *    drifted: some content ran in that journal slot, not the current file's.
+ *    The bookkeeping table stores only (hash, created_at) — no tags — so
+ *    benign drift is structurally indistinguishable from a renumbered and
+ *    content-edited migration whose new SQL never ran. Drift passes only for
+ *    tags in {@link KNOWN_DRIFTED_TAGS}; any other drifted tag fails until it
+ *    is fixed with a fresh migration or explicitly allowlisted.
+ *  - Neither → missing: the silent-skip hazard → exit 1, naming each tag.
+ * Applied rows are claimed 1:1 (first by hash, then one row per drifted
+ * entry's `when`), so a single row can never back a drifted entry and hide a
+ * truly-missing one, and duplicate-timestamp rows aren't swept together.
+ * Extra applied rows are info only, never a failure — a database's history may
+ * be a superset of the current journal.
  *
- * Design (mirrors `scripts/seed.ts` / `scripts/seed-admin.ts`):
- *  - The testable core is {@link verifyMigrations}: it takes the journal entries
- *    (tag + when + precomputed hash) and an injected SQL EXECUTOR, so unit tests
- *    run against a fake with no live database.
+ * Structure:
+ *  - {@link verifyMigrations} is the testable core: journal entries plus an
+ *    injected SQL executor, so unit tests run against a fake database.
  *  - {@link readJournalMigrations} is the thin fs seam that loads the journal
  *    and hashes each migration file exactly as drizzle does.
- *  - The CLI shell ({@link runCli}) wires the real `getDb()` (so `DATABASE_URL`
- *    is only ever read through the validated `getEnv()` accessor), prints a
- *    report, and sets the exit code: `0` all applied, `1` divergence/failure.
+ *  - {@link runCli} wires the real `getDb()` (so `DATABASE_URL` is only read
+ *    through `getEnv()`), prints a report, and sets the exit code: `0` all
+ *    applied, `1` divergence or failure.
  *
- * Runs via `node --experimental-strip-types` + the dependency-free alias loader
- * (`scripts/register-aliases.mjs`) — no new dependency. Wired into CI right
- * after every `pnpm db:migrate` (ci.yml, migrate.yml, migrate-preview.yml,
- * seed-prod.yml). See docs/agents/database.md → "Never renumber an applied
- * migration".
+ * Runs via `node --experimental-strip-types` plus the dependency-free alias
+ * loader (`scripts/register-aliases.mjs`). See docs/agents/database.md →
+ * "Never renumber an applied migration".
  */
 
 import { createHash } from "node:crypto";
@@ -64,24 +51,22 @@ import { z } from "zod";
 import { getDb } from "~/db/client";
 
 /**
- * Where drizzle keeps its applied-migrations bookkeeping. These are the
- * migrator's DEFAULTS (this repo's `drizzle.config.ts` does not override them):
- * `drizzle.__drizzle_migrations (id serial, hash text, created_at bigint)` —
- * verified against `node_modules/drizzle-orm/neon-http/migrator.js`.
+ * Where drizzle keeps its applied-migrations bookkeeping — the migrator's
+ * defaults (`drizzle.config.ts` does not override them):
+ * `drizzle.__drizzle_migrations (id serial, hash text, created_at bigint)`,
+ * per `node_modules/drizzle-orm/neon-http/migrator.js`.
  */
 export const MIGRATIONS_TABLE_QUALIFIED = "drizzle.__drizzle_migrations";
 
 /**
- * Tags whose applied-hash drift has been HUMAN-VERIFIED as benign, so the check
- * reports them as a warning instead of failing. Add a tag here ONLY after
- * confirming why the long-lived DBs' recorded hash differs from the committed
- * file AND that the difference cannot leave any DB's schema stale.
+ * Tags whose applied-hash drift a human has verified as benign; the check
+ * warns instead of failing. Add a tag only after confirming why the recorded
+ * hash differs from the committed file and that the difference cannot leave
+ * any database's schema stale.
  *
  * - `0002_old_tigra`: the persistent CI Neon branch applied a draft of this
- *   migration before its documented hand-edit (the prepended data-purge DELETE
- *   — see the header comment in `db/migrations/0002_old_tigra.sql`). The edit
- *   changed no DDL, so every DB's schema is identical whether or not the
- *   DELETE ran; the recorded draft hash simply predates the final file.
+ *   file (see the header comment in `db/migrations/0002_old_tigra.sql`). The
+ *   difference is a data-purge delete, no DDL, so every schema is identical.
  */
 export const KNOWN_DRIFTED_TAGS: ReadonlySet<string> = new Set(["0002_old_tigra"]);
 
@@ -121,27 +106,27 @@ export interface VerifyMigrationsResult {
   ok: boolean;
   /** False when the bookkeeping table doesn't exist (migrate never ran here). */
   bookkeepingTableExists: boolean;
-  /** Journal entries with NO matching applied row — the silent-skip hazard. */
+  /** Journal entries with no matching applied row — the silent-skip hazard. */
   missing: JournalMigration[];
   /**
-   * ALLOWLISTED entries whose hash matches no applied row but whose `when`
-   * claimed an applied row's recorded timestamp: human-verified benign drift
-   * (the DB ran a since-edited version of the file). A WARNING, not a failure.
+   * Allowlisted entries whose hash matches no applied row but whose `when`
+   * claimed an applied row's recorded timestamp: human-verified benign drift.
+   * A warning, not a failure.
    */
   drifted: JournalMigration[];
   /**
-   * Drift-shaped entries NOT in the allowlist. Indistinguishable from a
-   * renumbered-and-edited migration whose new SQL never ran, so these FAIL the
-   * run until a human either ships a fresh migration or allowlists the tag.
+   * Drift-shaped entries not in the allowlist. Indistinguishable from a
+   * renumbered-and-edited migration whose new SQL never ran, so these fail the
+   * run until a human ships a fresh migration or allowlists the tag.
    */
   unexpectedDrift: JournalMigration[];
-  /** Applied rows matching no current journal entry — INFO only, never a failure. */
+  /** Applied rows matching no current journal entry — info only, never a failure. */
   extraApplied: AppliedMigrationRow[];
   /** Total applied rows found in the bookkeeping table. */
   appliedCount: number;
 }
 
-/** The hash drizzle's migrator records: sha256 (hex) over the RAW file content. */
+/** The hash drizzle's migrator records: sha256 (hex) over the raw file content. */
 export function hashMigrationSql(sqlFileContent: string): string {
   return createHash("sha256").update(sqlFileContent).digest("hex");
 }
@@ -151,12 +136,11 @@ const journalSchema = z.object({
 });
 
 /**
- * Load `meta/_journal.json` from a migrations folder and pair every entry with
- * the sha256 hash of its `.sql` file — EXACTLY the tuple drizzle's
- * `readMigrationFiles` computes, so hash-matching against the bookkeeping table
- * is apples-to-apples. Throws (→ exit 1 in the CLI) when the journal or a
- * referenced migration file is missing/malformed: a broken journal is itself a
- * failure, never something to verify "around".
+ * Load `meta/_journal.json` and pair every entry with the sha256 hash of its
+ * `.sql` file — the exact tuple drizzle's `readMigrationFiles` computes, so
+ * hash-matching against the bookkeeping table is apples-to-apples. Throws
+ * (→ exit 1 in the CLI) on a missing or malformed journal or migration file:
+ * a broken journal is itself a failure, never something to verify "around".
  */
 export function readJournalMigrations(migrationsFolder: string): JournalMigration[] {
   const journalRaw = readFileSync(join(migrationsFolder, "meta", "_journal.json"), "utf8");
@@ -172,16 +156,16 @@ export function readJournalMigrations(migrationsFolder: string): JournalMigratio
  * Core check, dependency-injected: compare the journal against the database's
  * applied-migrations history.
  *
- * - Every journal entry must match an applied row BY HASH; failing that, it may
- *   CLAIM one still-unclaimed applied row at its exact `when` — allowlisted tags
- *   become `drifted` (warn), all others `unexpectedDrift` (fail). An entry with
- *   neither goes to `missing` (fail): a genuinely skipped migration (the
- *   favorites incident) leaves no row at its `when` at all.
- * - Rows are claimed 1:1 (hash matches first, then one row per drift claim), so
- *   a single row can't back two entries and duplicate-timestamp rows aren't
- *   swept together. Unclaimed rows go to `extraApplied` (info only) — a
- *   long-lived DB legitimately carries history for since-renamed tags.
- * - A missing bookkeeping table means NOTHING was ever applied here: every
+ * - Every journal entry must match an applied row by hash; failing that, it
+ *   may claim one still-unclaimed applied row at its exact `when` —
+ *   allowlisted tags become `drifted` (warn), all others `unexpectedDrift`
+ *   (fail). An entry with neither goes to `missing` (fail): a genuinely
+ *   skipped migration leaves no row at its `when` at all.
+ * - Rows are claimed 1:1 (hash matches first, then one row per drift claim),
+ *   so a single row can't back two entries and duplicate-timestamp rows
+ *   aren't swept together. Unclaimed rows go to `extraApplied` (info only) —
+ *   a long-lived database legitimately carries extra history.
+ * - A missing bookkeeping table means nothing was ever applied here: every
  *   journal entry is missing (unless the journal is empty too).
  */
 export async function verifyMigrations(
@@ -219,7 +203,7 @@ export async function verifyMigrations(
   }));
 
   // Claim applied rows 1:1. Pass 1: hash matches (a row backs at most one
-  // journal entry). Pass 2: each still-unmatched entry may claim ONE unclaimed
+  // journal entry). Pass 2: each still-unmatched entry may claim one unclaimed
   // row at its exact `when` — drift. Whatever remains unclaimed is extra.
   const unclaimed = applied.map((row) => ({ row, claimed: false }));
   const journalHashes = new Set(journal.map((entry) => entry.hash));
@@ -245,7 +229,7 @@ export async function verifyMigrations(
       continue;
     }
     byWhen.claimed = true;
-    // SOME content ran at this slot, but not the current file's. Only a
+    // Some content ran at this slot, but not the current file's. Only a
     // human-verified allowlisted tag is benign; anything else could be a
     // renumbered-and-edited migration whose new SQL never ran.
     (allowedDriftTags.has(entry.tag) ? drifted : unexpectedDrift).push(entry);
@@ -313,17 +297,16 @@ export async function runCli(
     }
 
     if (result.extraApplied.length > 0) {
-      // Info only: a long-lived DB may carry applied history for tags that were
-      // later renamed out of the journal. That is tolerated — never a failure.
+      // Info only: a long-lived database may carry applied history for tags
+      // absent from the current journal. Tolerated — never a failure.
       log.log(
         `info: ${result.extraApplied.length} applied migration(s) not in the current journal (renamed/renumbered history) — tolerated.`
       );
     }
 
     if (result.drifted.length > 0) {
-      // Warning only for ALLOWLISTED tags: the migrator ran a (since-edited)
-      // version of this journal slot and a human has verified the difference is
-      // benign — see KNOWN_DRIFTED_TAGS for the per-tag justification.
+      // Warning only for allowlisted tags: a human has verified the hash
+      // difference is benign — see KNOWN_DRIFTED_TAGS for per-tag rationale.
       log.log(
         `warn: ${result.drifted.length} journal migration(s) were applied with a DIFFERENT content hash (allowlisted, human-verified benign drift) — tolerated:`
       );

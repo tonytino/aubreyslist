@@ -6,37 +6,38 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "~/db/schema";
 
 /**
- * ════════════════════════════════════════════════════════════════════════════
- * CANONICAL TRUST-MODEL INVARIANT SUITE — DB-enforced half (issues #178/#185)
- * ════════════════════════════════════════════════════════════════════════════
+ * Canonical trust-model invariant suite — the DB-enforced half. Do not weaken.
  *
- * DO NOT WEAKEN. The DB-backed companion to `app/trust/trust-model.invariant.test.ts`
- * (ADR-007) and `app/server/listings/intake-dedup.invariant.test.ts` (ADR-008).
- * Some trust guarantees are enforced by the DATABASE, not just app logic, and
- * must be pinned against a real Postgres so a migration that declared but failed
- * to apply a constraint can't ship green:
+ * The DB-backed companion to `app/trust/trust-model.invariant.test.ts`
+ * (ADR-007) and `app/server/listings/intake-dedup.invariant.test.ts`
+ * (ADR-008). Some trust guarantees are enforced by the database, not just app
+ * logic, and must be pinned against a real Postgres so a migration that
+ * declared but failed to apply a constraint can't ship green:
  *
- *   - INVARIANT 3 — one attestation per user per claim (ADR-007: "One vote per
- *     user per claim … Enforce server-side", domain.md). The server upsert path
- *     relies on the `attestations_claim_user_unique` UNIQUE(claim_id, user_id)
- *     constraint to make a second vote UPDATE the existing row, never stack a
- *     duplicate. Here we prove the DB rejects a raw duplicate INSERT.
- *   - INVARIANT 5 — Place ID is the dedup key (ADR-008). `UNIQUE(place_id)` makes
- *     two intakes for the same Place ID resolve to ONE listing at the DB level,
- *     while manual entries (place_id NULL) coexist (Postgres treats NULLs as
- *     distinct) and are deduped in app logic instead.
+ *   - Invariant 3 — one attestation per user per claim (ADR-007: "One vote per
+ *     user per claim … Enforce server-side", domain.md). The server upsert
+ *     path relies on the `attestations_claim_user_unique`
+ *     UNIQUE(claim_id, user_id) constraint to make a second vote update the
+ *     existing row, never stack a duplicate. Here we prove the DB rejects a
+ *     raw duplicate insert.
+ *   - Invariant 5 — Place ID is the dedup key (ADR-008). `UNIQUE(place_id)`
+ *     makes two intakes for the same Place ID resolve to one listing at the DB
+ *     level, while manual entries (place_id NULL) coexist (Postgres treats
+ *     NULLs as distinct) and are deduped in app logic instead.
  *
- * These overlap intentionally with `tests/integration/schema-constraints.test.ts`
- * (issue #92): that file pins the constraints as schema integrity; THIS file
- * frames the same two as the canonical, named TRUST invariants so the guarantee
- * is discoverable from the trust-invariant suite and can't be quietly dropped.
+ * These overlap intentionally with
+ * `tests/integration/schema-constraints.test.ts`: that file pins the
+ * constraints as schema integrity; this file frames the same two as the
+ * canonical, named trust invariants so the guarantee is discoverable from the
+ * trust-invariant suite and can't be quietly dropped.
  *
- * GATING — must never break CI without a database. Runs ONLY when
+ * Gating — must never break CI without a database. Runs only when
  * `TEST_DATABASE_URL` is set (a Neon HTTP URL); otherwise `describe.skipIf`
- * reports SKIPPED, never failed, so `pnpm preflight` / the offline `Unit tests`
- * step stay green. Point it at the throwaway CI Neon branch to activate.
+ * reports skipped, never failed, so `pnpm preflight` / the offline `Unit
+ * tests` step stay green. Point it at the throwaway CI Neon branch to
+ * activate.
  *
- * IDEMPOTENCY — the CI Neon branch is PERSISTENT (state accrues across runs).
+ * Idempotency — the CI Neon branch is persistent (state accrues across runs).
  * Every fixture uses a unique per-run token and `afterAll` deletes everything
  * created (deleting a listing cascades to its claims/attestations/incidents).
  */
@@ -123,9 +124,7 @@ describe.skipIf(!hasDb)("trust-model invariants (real Postgres)", () => {
     return claim!.id;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // INVARIANT 3 — one attestation per user per claim (no ballot-stuffing).
-  // ─────────────────────────────────────────────────────────────────────────
+  // Invariant 3 — one attestation per user per claim (no ballot-stuffing).
 
   it("INVARIANT 3 — rejects a SECOND attestation for the same (claim, user) — UNIQUE(claim_id, user_id)", async () => {
     const listingId = await makeListing();
@@ -134,9 +133,10 @@ describe.skipIf(!hasDb)("trust-model invariants (real Postgres)", () => {
     // First vote inserts fine.
     await db.insert(schema.attestations).values({ claimId, userId, value: "confirm" });
 
-    // A raw second INSERT by the SAME user on the SAME claim must be rejected by
-    // the DB — the constraint the server upsert (onConflictDoUpdate) relies on so
-    // a re-vote UPDATES rather than stacks. A flip to "dispute" is still a dup.
+    // A raw second insert by the same user on the same claim must be rejected
+    // by the DB — the constraint the server upsert (onConflictDoUpdate) relies
+    // on so a re-vote updates rather than stacks. A flip to "dispute" is still
+    // a dup.
     await expect(
       db.insert(schema.attestations).values({ claimId, userId, value: "dispute" })
     ).rejects.toThrow();
@@ -154,9 +154,7 @@ describe.skipIf(!hasDb)("trust-model invariants (real Postgres)", () => {
     ).resolves.toBeDefined();
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // INVARIANT 5 — Place ID is the dedup key (same place → one listing).
-  // ─────────────────────────────────────────────────────────────────────────
+  // Invariant 5 — Place ID is the dedup key (same place → one listing).
 
   it("INVARIANT 5 — rejects a duplicate place_id but lets manual (NULL) entries coexist — UNIQUE(place_id)", async () => {
     const placeId = `${run}-place`;

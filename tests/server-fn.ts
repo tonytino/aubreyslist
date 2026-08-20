@@ -3,18 +3,18 @@ import { runWithStartContext } from "@tanstack/start-storage-context";
 /**
  * Invoke a TanStack Start server function in a unit test.
  *
- * Since the vinxi→Vite-plugin migration (TanStack Start 1.120+, issue #198),
- * calling a `createServerFn(...)` value directly runs the framework's middleware
- * pipeline, which reads the per-request "Start context" out of an
- * `AsyncLocalStorage`. Outside the server runtime that store is empty, so a bare
- * call throws `No Start context found in AsyncLocalStorage`. In production the
- * request handler populates it; in tests we supply a minimal context here.
+ * Calling a `createServerFn(...)` value directly runs the framework's
+ * middleware pipeline, which reads the per-request "Start context" out of an
+ * `AsyncLocalStorage`. Outside the server runtime that store is empty, so a
+ * bare call throws `No Start context found in AsyncLocalStorage`. In
+ * production the request handler populates it; in tests we supply a minimal
+ * context here.
  *
- * This does NOT stub or weaken anything the function does — validation, the
- * auth/rate-limit guards, and the handler body all run exactly as in production.
- * It only provides the ambient request context the pipeline now expects. The
- * `request` is a placeholder POST (server fns default to POST); tests that assert
- * on the request can pass their own via `request`.
+ * This does not stub or weaken anything the function does — validation, the
+ * auth/rate-limit guards, and the handler body all run exactly as in
+ * production. It only provides the ambient request context the pipeline
+ * expects. The `request` is a placeholder POST (server fns default to POST);
+ * tests that assert on the request can pass their own via `request`.
  *
  * Usage: `await callServerFn(() => myServerFn({ data: { ... } }))`.
  */

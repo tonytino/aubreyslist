@@ -3,10 +3,10 @@ import { type ResolvedPlace, refreshSeedData, runCli } from "./refresh-seed-data
 import type { SeedSource } from "./seed-sources";
 
 /**
- * Tests for the seed-data refresh core (AUB-31). The core takes its sources + a
- * Places resolver as injected deps, so we exercise it with a mocked resolver — no
- * live network — and assert it bakes resolved sources into `SeededListing`s and
- * records the ones the resolver can't place.
+ * Tests for the seed-data refresh core. The core takes its sources and a
+ * Places resolver as injected deps, so we exercise it with a mocked resolver —
+ * no live network — and assert it bakes resolved sources into `SeededListing`s
+ * and records the ones the resolver can't place.
  */
 
 const place = (over: Partial<ResolvedPlace> = {}): ResolvedPlace => ({
@@ -90,9 +90,9 @@ describe("refreshSeedData", () => {
 
 describe("runCli", () => {
   it("refuses to overwrite the bake (exit 1, no write) when every source fails to resolve", async () => {
-    // A resolver that returns null for everything simulates a bad/expired/quota'd
-    // key: the guard must fail loudly BEFORE writeFileSync, so a green refresh can
-    // never wipe the committed seed data to `[]`.
+    // A resolver that returns null for everything simulates a bad or quota'd
+    // key: the guard must fail loudly before writeFileSync, so a green refresh
+    // can never wipe the committed seed data to `[]`.
     const resolvePlace = vi.fn(async () => null);
     const error = vi.fn();
 

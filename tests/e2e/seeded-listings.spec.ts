@@ -5,42 +5,38 @@ import { E2E_DB_READY, Seeder } from "./fixtures";
 import { waitForBrowseSearchApplied, waitForHydration } from "./helpers";
 
 /**
- * Standing coverage for SEEDED listings (AUB-196) — the curated Denver set the
- * curator bot suggests labels for (AUB-31). Two regressions shipped against
- * seeded data without any E2E catching them:
+ * Standing coverage for seeded listings — the curated Denver set the curator
+ * bot suggests labels for. Two guarantees under test:
  *
- *  1. Directory cards for seeded listings WITHOUT a celiac suggestion lost their
- *     "Suggested by Aubrey's Bot" cue (AUB-193) — only celiac-suggested cards
- *     showed it. (The cue has since moved into the card's meta row as the
- *     `bot-provenance` label, joined by per-attribute "Suggested:" badges —
- *     owner nits 7+8 — but the guarantee under test is unchanged: EVERY card
- *     with live bot suggestions surfaces its provenance.)
- *  2. Seeded listings' detail pages 500'd on a preview DB that had silently
- *     skipped a migration (AUB-195).
+ *  1. Every directory card with live bot suggestions surfaces its provenance
+ *     (the meta-row `bot-provenance` label), whether or not the card carries a
+ *     celiac suggestion.
+ *  2. Seeded listings' detail pages render — never a 500 from a database
+ *     missing a silently skipped migration.
  *
- * This spec seeds the test database with the REAL baked seed data via the same
+ * This spec seeds the test database with the real baked seed data via the same
  * injectable core the CLI runs (`seedListings`, idempotent: Place-ID dedup +
  * claims `onConflictDoNothing`, so re-running against the persistent CI branch
- * is safe), then asserts both surfaces against DETERMINISTICALLY chosen targets
- * derived from `SEED_LISTINGS` — never hardcoded restaurant names, because the
- * baked set gets re-curated.
+ * is safe), then asserts both surfaces against deterministically chosen
+ * targets derived from `SEED_LISTINGS` — never hardcoded restaurant names,
+ * because the baked set gets re-curated.
  *
- * SEED PERSISTENCE: seeded rows are deliberately NOT cleaned up — the seed is
+ * Seed persistence: seeded rows are deliberately not cleaned up — the seed is
  * the standing, idempotent dataset every environment carries (and deleting it
  * mid-run could race sibling specs). Other specs are already written to be
  * pagination/state-proof on the persistent CI branch (see favorites.spec.ts).
  *
- * GATING: self-skips (never fails) without the CI E2E DATABASE_URL +
+ * Gating: self-skips (never fails) without the CI E2E DATABASE_URL +
  * SESSION_SECRET, like every DB-touching spec (fixtures.ts). No arbitrary
  * sleeps — web-first assertions + the shared hydration helpers only.
  */
 
-/** The first seeded entry WITHOUT a celiac suggestion — the case that shipped broken. */
+/** The first seeded entry without a celiac suggestion. */
 const nonCeliacTarget: SeededListing | undefined = SEED_LISTINGS.find(
   (entry) => !entry.suggestedAttributes.includes("celiac_safe_vs_gluten_friendly")
 );
 
-/** The first seeded entry WITH a celiac suggestion — the case that always worked. */
+/** The first seeded entry with a celiac suggestion. */
 const celiacTarget: SeededListing | undefined = SEED_LISTINGS.find((entry) =>
   entry.suggestedAttributes.includes("celiac_safe_vs_gluten_friendly")
 );
@@ -48,7 +44,7 @@ const celiacTarget: SeededListing | undefined = SEED_LISTINGS.find((entry) =>
 test.describe("seeded listings — badge + detail page (AUB-196)", () => {
   // Declarative, group-level skips — evaluated once at collection time, so
   // they apply to every test in this file (unlike calling `test.skip(...)`
-  // inside `beforeAll` itself, which only reliably marks the FIRST test that
+  // inside `beforeAll` itself, which only reliably marks the first test that
   // triggers the hook as skipped: beforeAll runs once per worker, and a
   // `TestSkipError` thrown from inside it does not retroactively skip the
   // other tests sharing that hook run).
@@ -90,10 +86,10 @@ test.describe("seeded listings — badge + detail page (AUB-196)", () => {
       .first();
     await expect(card).toBeVisible();
 
-    // The exact case that shipped broken: no celiac suggestion → the card must
-    // STILL surface the bot provenance, never a bare "Not yet attested". Target
-    // the meta-row label by testid: the phrase alone need not be unique within
-    // a card, so a bare getByText could trip Playwright's strict mode.
+    // No celiac suggestion → the card must still surface the bot provenance,
+    // never a bare "Not yet attested". Target the meta-row label by testid:
+    // the phrase alone need not be unique within a card, so a bare getByText
+    // could trip Playwright's strict mode.
     await expect(card.getByTestId("bot-provenance")).toBeVisible();
     await expect(card.getByText("Not yet attested")).toHaveCount(0);
   });

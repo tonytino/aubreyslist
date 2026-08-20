@@ -132,7 +132,7 @@ describe("rule #4 — no raw fetch to Hono /api routes from the frontend", () =>
 
 describe("rule #5 — test honesty", () => {
   // Build the trigger source at runtime from fragments so this very file does
-  // NOT contain a literal focused/skipped/todo modifier call (e.g. the dotted
+  // not contain a literal focused/skipped/todo modifier call (e.g. the dotted
   // only/skip/todo forms) — otherwise the hard-rules guard would flag its own
   // test fixtures as real focused/skipped tests (a self-referential false
   // positive). The `mk` helper assembles the exact string the matcher sees.

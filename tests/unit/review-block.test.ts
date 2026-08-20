@@ -34,7 +34,7 @@ describe("validateReviewBlock", () => {
 
   it("passes on the VERBATIM orchestration.md escalation `##` heading after the section", () => {
     // orchestration.md documents the escalation block as its own h2 heading. It
-    // is pasted as a SIBLING of `## Adversarial review`, so the section boundary
+    // is pasted as a sibling of `## Adversarial review`, so the section boundary
     // cuts it off — but the marker is matched body-wide and must still validate.
     const body = [
       "## Adversarial review",

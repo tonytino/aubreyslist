@@ -87,7 +87,7 @@ describe("parseCooldownConfig", () => {
     expect(cfg.exclude).toEqual([]);
   });
 
-  // A missing key must NOT silently default: 0 would make this a plain hard-fail
+  // A missing key must not silently default: 0 would make this a plain hard-fail
   // gate again, Infinity would defer every advisory forever.
   it("throws when minimumReleaseAge is absent rather than guessing", () => {
     expect(() => parseCooldownConfig("blockExoticSubdeps: true\n")).toThrow(/minimumReleaseAge/);
@@ -263,7 +263,7 @@ describe("classifyFinding — the decision table", () => {
 });
 
 describe("extractFindings", () => {
-  // Two OSV records that are aliases of ONE issue must yield ONE finding.
+  // Two OSV records that are aliases of one issue must yield one finding.
   const scan = {
     results: [
       {
