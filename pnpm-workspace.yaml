@@ -17,11 +17,13 @@
 #   explicitly so the posture survives a future default change.)
 minimumReleaseAge: 10080
 #
-# minimumReleaseAgeExclude: TEMPORARY fast-track for the CVE-2026-69207
-#   security bump; hono@4.12.34 published 2026-08-03 clears the window
-#   2026-08-10; owner-approved 2026-08-04; removal tracked in AUB-255.
-minimumReleaseAgeExclude:
-  - hono@4.12.34
+# minimumReleaseAgeExclude: currently EMPTY, and that is the healthy state.
+#   Entries here are per-version fast-tracks past the quarantine above, so each
+#   one is a hole in the supply-chain posture. Add one only for an urgent CVE
+#   whose fix cannot wait out the window, name the exact `package@version`, and
+#   track its removal — see docs/agents/dependencies.md.
+#   (The hono@4.12.34 / CVE-2026-69207 fast-track lived here from 2026-08-04
+#   until its window cleared on 2026-08-10; removed under AUB-255.)
 blockExoticSubdeps: true
 
 # Dependency version pins. Moved here from the package.json `pnpm.overrides`
