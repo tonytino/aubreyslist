@@ -1,29 +1,27 @@
 /**
- * Places CAPTURE for the Denver seed: `pnpm db:seed:refresh` (AUB-31).
+ * Places capture for the Denver seed: `pnpm db:seed:refresh`.
  *
- * This is the ONLY script that talks to the Google Places API. It reads the
- * human-curated `SEED_SOURCES` (`scripts/seed-sources.ts`), resolves each `query`
- * to a REAL Google Place ID + coordinates (+ rating + `googleMapsUri` share
- * link) via Places Text Search
- * (biased to Union Station, hard-capped at a 25-mile radius), and BAKES the
- * fully-resolved entries to `scripts/seed-listings.generated.json`. That committed
- * file is what the API-free `pnpm db:seed` (`scripts/seed.ts`) inserts — so seeding
- * (including in production/CI) never calls Places.
+ * The only script that talks to the Google Places API. It reads the
+ * human-curated `SEED_SOURCES` (`scripts/seed-sources.ts`), resolves each
+ * `query` to a real Google Place ID, coordinates, rating, and `googleMapsUri`
+ * share link via Places Text Search (biased to Union Station, hard-capped at a
+ * 25-mile radius), and bakes the resolved entries to
+ * `scripts/seed-listings.generated.json`. That committed file is what the
+ * API-free `pnpm db:seed` inserts — seeding never calls Places.
  *
- * Run this ONCE (and re-run whenever you curate `seed-sources.ts`, or add a new
- * captured field here), then commit the regenerated JSON.
+ * Re-run whenever `seed-sources.ts` changes or a new field is captured here,
+ * then commit the regenerated JSON.
  *
- * Design (mirrors `scripts/seed-admin.ts` / `scripts/seed.ts`):
- * - The testable core is {@link refreshSeedData}, which takes its sources + a
- *   Places resolver as INJECTED dependencies so unit tests need no live network.
- * - The CLI shell ({@link runCli}) wires the real Text Search resolver, reads
+ * Structure:
+ * - {@link refreshSeedData} is the testable core: sources and a Places
+ *   resolver are injected, so unit tests need no live network.
+ * - {@link runCli} wires the real Text Search resolver, reads
  *   `GOOGLE_PLACES_API_KEY` through the validated `getPlacesApiKey()` accessor
- *   (never raw `process.env`, per AGENTS.md Hard Rules — and NOT the full
- *   `getEnv()`, so the refresh doesn't require `DATABASE_URL` it never uses), and
- *   writes the baked JSON.
+ *   (never raw `process.env`; not the full `getEnv()`, so the refresh doesn't
+ *   require a `DATABASE_URL` it never uses), and writes the baked JSON.
  *
- * Runs via `node --experimental-strip-types` + the dependency-free alias loader
- * (`scripts/register-aliases.mjs`) — no `tsx`/`ts-node` dependency.
+ * Runs via `node --experimental-strip-types` plus the dependency-free alias
+ * loader (`scripts/register-aliases.mjs`).
  */
 
 import { writeFileSync } from "node:fs";
@@ -64,7 +62,7 @@ export interface RefreshSeedDataResult {
   skipped: Array<{ query: string; reason: string }>;
 }
 
-/** The 25-mile fan-out radius from Union Station (AUB-31 scope). */
+/** The 25-mile fan-out radius from Union Station. */
 const MAX_RADIUS_MILES = 25;
 
 /**
@@ -136,7 +134,7 @@ const searchTextResponseSchema = z.object({
 
 /**
  * Build the real Places Text Search resolver. Biases results toward Union Station
- * (so "Marco's" resolves to the Denver one) and REJECTS anything beyond the
+ * (so "Marco's" resolves to the Denver one) and rejects anything beyond the
  * 25-mile fan-out radius, returning `null` (skip + log) for any miss rather than
  * guessing. Deliberately un-gated by intake mode — this is an admin batch, not the
  * user intake flow, so it must not be blocked by an admin `manual` toggle.
@@ -223,7 +221,7 @@ export async function runCli(
     const resolvePlace =
       deps?.resolvePlace ??
       (() => {
-        // Validate ONLY the Places key — the refresh never opens a DB connection,
+        // Validate only the Places key — the refresh never opens a DB connection,
         // so it must not require DATABASE_URL (which the full getEnv() would).
         const apiKey = getPlacesApiKey();
         return makePlacesResolver(apiKey, (m) => log.log(m));
@@ -236,11 +234,9 @@ export async function runCli(
       log: deps?.log ?? ((m) => log.log(m)),
     });
 
-    // Guard against a wholesale failure silently wiping the committed bake: if we
-    // had sources but resolved NOTHING (e.g. a bad/expired/quota'd API key makes
-    // every Places call fail — the resolver returns null, not throws), do NOT
-    // overwrite `seed-listings.generated.json` with `[]`. Fail loudly instead so a
-    // green "refresh" can never blow away good data.
+    // Sources present but nothing resolved (e.g. a bad or quota'd API key makes
+    // every call return null, not throw) must not overwrite the committed bake
+    // with `[]`. Fail loudly so a green "refresh" can never blow away good data.
     if (sources.length > 0 && result.listings.length === 0) {
       throw new Error(
         `Refresh resolved 0 of ${sources.length} sources — refusing to overwrite the baked seed data with an empty set. Check GOOGLE_PLACES_API_KEY (auth/quota) and re-run.`

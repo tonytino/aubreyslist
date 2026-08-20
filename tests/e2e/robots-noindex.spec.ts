@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * Robots and noindex verification (AUB-160, AUB-163).
+ * Robots and noindex verification.
  *
- * AUB-160: robots.txt exists with proper crawl directives.
- * AUB-163: Internal routes (/style-guide, /admin, /favorites) have noindex,nofollow meta.
+ * robots.txt must exist with proper crawl directives; internal routes
+ * (/style-guide, /admin, /favorites) must carry noindex,nofollow meta.
  */
 
 test("robots.txt exists and includes sitemap reference", async ({ page }) => {

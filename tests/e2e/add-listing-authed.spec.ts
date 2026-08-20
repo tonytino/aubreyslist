@@ -4,25 +4,24 @@ import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
 import { waitForHydration } from "./helpers";
 
 /**
- * Add a listing as a signed-in user (issue #45, wizard rework AUB-132).
+ * Add a listing as a signed-in user.
  *
- * The existing `add-listing.spec.ts` covers the ANONYMOUS gate (sign-in prompt).
- * This spec covers the authenticated happy path end-to-end through the 3-stage
- * claim wizard (find place → ClaimCardDeck → review, AUB-231): with intake
- * forced to `manual` (the deterministic, Places-key-free mode — default is
- * `places`, ADR-008) and a sealed session cookie, find the place manually, add
- * typed links (menu + website, AUB-202), skip every claim card via the deck's
- * "Not sure" button (skip writes nothing; the create still succeeds), submit,
- * then follow the success screen's "View your listing" and assert it lands on
- * the new listing's detail page showing the entered name and the typed link
- * buttons.
+ * `add-listing.spec.ts` covers the anonymous gate (sign-in prompt). This spec
+ * covers the authenticated happy path end-to-end through the 3-stage claim
+ * wizard (find place → ClaimCardDeck → review): with intake forced to `manual`
+ * (the deterministic, Places-key-free mode — default is `places`, ADR-008) and
+ * a sealed session cookie, find the place manually, add typed links (menu +
+ * website), skip every claim card via the deck's "Not sure" button (skip
+ * writes nothing; the create still succeeds), submit, then follow the success
+ * screen's "View your listing" and assert it lands on the new listing's detail
+ * page showing the entered name and the typed link buttons.
  *
  * Manual intake is the simplest deterministic mode — `places` would require the
  * Google Places provider. Self-skips without the CI E2E DB / session secret.
  */
 test.describe("add a listing (authenticated, manual intake)", () => {
   let seeder: Seeder;
-  // The listing the APP inserts (not the seeder), cleaned up by name afterwards.
+  // The listing the app inserts (not the seeder), cleaned up by name afterwards.
   let createdName: string | null;
 
   test.beforeEach(async ({ context, baseURL }) => {
@@ -52,7 +51,7 @@ test.describe("add a listing (authenticated, manual intake)", () => {
     // Hydration must finish before interacting: the manual finder's onChange
     // handlers and the `disabled` gate on "Use this place" aren't wired until the
     // client bundle runs (see waitForHydration). We additionally gate on the
-    // button being ENABLED below — proof every field's onChange registered —
+    // button being enabled below — proof every field's onChange registered —
     // before clicking, so we never fire a no-op click into a not-yet-interactive
     // form and never rely on a retry.
     await waitForHydration(page);
@@ -69,19 +68,19 @@ test.describe("add a listing (authenticated, manual intake)", () => {
     await expect(useThisPlace).toBeEnabled();
     await useThisPlace.click();
 
-    // Selected-place confirmation card: add two typed links (AUB-202) — the
-    // other three kinds stay blank and must not be submitted — then Continue
-    // into the claim steps. Labels are exact: "Menu" must not match
-    // "Gluten-free menu".
+    // Selected-place confirmation card: add two typed links — the other three
+    // kinds stay blank and must not be submitted — then Continue into the
+    // claim steps. Labels are exact: "Menu" must not match "Gluten-free
+    // menu".
     await page.getByLabel("Menu", { exact: true }).fill("https://new-spot.example/menu");
     await page.getByLabel("Website", { exact: true }).fill("https://new-spot.example");
     await page.getByRole("button", { name: "Continue" }).click();
 
     // The deck stage — skip every card via the fixed "Not sure" button (the
-    // deck's equal-footing button path; AUB-231). Skip writes nothing
-    // (first-class), and the create must still succeed with all five left
-    // "Not yet attested". The button row persists across cards; the deck
-    // advances itself after each answer.
+    // deck's equal-footing button path). Skip writes nothing (first-class),
+    // and the create must still succeed with all five left "Not yet
+    // attested". The button row persists across cards; the deck advances
+    // itself after each answer.
     for (let index = 0; index < 5; index += 1) {
       await page.getByRole("button", { name: "Not sure" }).click();
     }
@@ -94,14 +93,14 @@ test.describe("add a listing (authenticated, manual intake)", () => {
 
     // Lands on the listing-detail page for the new row (a real id, not back on
     // /listings/new), and the detail page shows what we entered — the unique name
-    // proves it routed to OUR newly-created listing.
+    // proves it routed to our newly-created listing.
     await expect(page).not.toHaveURL(/\/listings\/new$/);
     await expect(page).toHaveURL(/\/listings\/[^/]+$/);
     await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
     await expect(page.getByText("42 Gluten-Free Ave, Denver, CO")).toBeVisible();
 
     // The typed links captured at intake render as buttons in the Links
-    // section, in LINK_KINDS order (AUB-202); the blank kinds render nothing.
+    // section, in LINK_KINDS order; the blank kinds render nothing.
     const linksSection = page.getByRole("region", { name: "Links" });
     const menuLink = linksSection.getByRole("link", { name: "Menu", exact: true });
     await expect(menuLink).toBeVisible();

@@ -4,12 +4,12 @@ import { type SeedListingsResult, seedListings } from "./seed";
 import { CURATOR_BOT, type SeededListing } from "./seed-data";
 
 /**
- * Tests for the listings seeder core (AUB-31). The core is API-free: it takes its
- * DB as an injected dep (per `docs/agents/testing.md`) and already-resolved BAKED
- * `SeededListing[]` data as an argument, so we model the exact drizzle chains it
- * uses — insert().values().onConflictDoNothing([.returning()]) and
- * select().from().where().limit() — with a small fake, and assert behaviour without
- * a live DB or network.
+ * Tests for the listings seeder core. The core is API-free: it takes its DB as
+ * an injected dep (per `docs/agents/testing.md`) and already-resolved baked
+ * `SeededListing[]` data as an argument. A small fake models the exact drizzle
+ * chains it uses — insert().values().onConflictDoNothing([.returning()]) and
+ * select().from().where().limit() — so behaviour is asserted without a live DB
+ * or network.
  */
 
 type Rows = { id: string }[];
@@ -22,7 +22,7 @@ interface FakeState {
   listingSelect: Rows[];
   /** `.returning()` result for every `insert(claims)`. */
   claimReturning: Rows;
-  /** `.returning()` result for every `insert(listingLinks)` (AUB-220). */
+  /** `.returning()` result for every `insert(listingLinks)`. */
   linkReturning: Rows;
 }
 
@@ -61,7 +61,7 @@ function makeFakeDb(overrides: Partial<FakeState> = {}) {
               if (table === listingLinks) {
                 return thenableWithReturning(() => state.linkReturning);
               }
-              // users: awaited WITHOUT `.returning()` — a plain resolved thenable.
+              // users: awaited without `.returning()` — a plain resolved thenable.
               return thenableWithReturning(() => []);
             },
           };
@@ -140,8 +140,8 @@ describe("seedListings", () => {
       mapsUrl:
         "https://www.google.com/maps/search/?api=1&query=Moore%20Cafe%20and%20Bakery%20123%20Main%20St%2C%20Denver%2C%20CO&query_place_id=place-1",
     });
-    // The legacy menu_url column is NEVER written post-AUB-202 (AUB-220): the
-    // key must be absent from the insert values entirely, not just null.
+    // Nothing writes the legacy menu_url column: the key must be absent from
+    // the insert values entirely, not just null.
     expect(Object.keys(listingInsert?.values as object)).not.toContain("menuUrl");
   });
 
@@ -225,9 +225,9 @@ describe("seedListings — typed menu links (AUB-220)", () => {
   });
 
   it("does NOT seed a menu link onto an existing (dedup-hit) listing — a user-removed link must never resurrect", async () => {
-    // The (listing, kind) slot may be EMPTY because a user deleted their menu
+    // The (listing, kind) slot may be empty because a user deleted their menu
     // link; onConflictDoNothing cannot guard an absent row, so the seed skips
-    // existing listings entirely (mirrors the retired backfill's semantics).
+    // existing listings entirely.
     const { db, inserts } = makeFakeDb({
       listingReturning: [[]],
       listingSelect: [[{ id: "existing-1" }]],

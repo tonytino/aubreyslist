@@ -3,22 +3,21 @@ import { expect, test } from "@playwright/test";
 import { waitForBrowseReady } from "./helpers";
 
 /**
- * Smoke test for the browse/directory route (#33, AUB-61 redesign). Open to
- * anonymous visitors. The test DB content is not assumed (it may be empty or
- * seeded), so we assert the directory chrome renders and EITHER listing cards OR
- * one of the honest empty/no-results states — never a fabricated count.
+ * Smoke test for the browse/directory route. Open to anonymous visitors. The
+ * test DB content is not assumed (it may be empty or seeded), so we assert the
+ * directory chrome renders and either listing cards or one of the honest
+ * empty/no-results states — never a fabricated count.
  *
- * AUB-198 retired the "Filter listings" bottom sheet: the server-side taxonomy
- * filter renders as toggle chips and the sort as a labelled select chip, all
- * directly in the filter chip row — so the sort/filter tests interact with the
- * row itself (no sheet to open).
+ * The server-side taxonomy filter renders as toggle chips and the sort as a
+ * labelled select chip, all directly in the filter chip row — so the
+ * sort/filter tests interact with the row itself (no sheet to open).
  */
 test("browse directory renders for anonymous visitors", async ({ page }) => {
-  // The directory is the home page now (AUB-116).
+  // The directory is the home page.
   await page.goto("/");
 
-  // The search now leads the filter chip row as a collapsed chip (user feedback
-  // #5); its presence proves the directory chrome rendered.
+  // The search leads the filter chip row as a collapsed chip; its presence
+  // proves the directory chrome rendered.
   await expect(page.getByRole("button", { name: "Search restaurants" })).toBeVisible();
 
   // Either there are cards (a result list) or an honest empty/no-results heading.
@@ -30,10 +29,10 @@ test("browse directory renders for anonymous visitors", async ({ page }) => {
 });
 
 test("/listings redirects to the directory at /", async ({ page }) => {
-  // The old directory URL now permanently redirects to `/` (AUB-116). The
-  // beforeLoad redirect forwards the validated search, but `stripSearchParams` on
-  // the target route drops every param equal to its default, so a bare `/listings`
-  // lands on a clean `/`. Tolerate either a bare `/` or a trailing query string.
+  // `/listings` permanently redirects to `/`. The beforeLoad redirect forwards
+  // the validated search, but `stripSearchParams` on the target route drops
+  // every param equal to its default, so a bare `/listings` lands on a clean
+  // `/`. Tolerate either a bare `/` or a trailing query string.
   await page.goto("/listings");
   await expect(page).toHaveURL(/^[^?]*\/(\?|$)/);
   await expect(page).not.toHaveURL(/\/listings/);
@@ -51,10 +50,10 @@ test("/listings redirect preserves search params", async ({ page }) => {
 });
 
 /**
- * Prebuilt quick filter (AUB-135). A quick chip is now a URL-driven, server-side
- * filter, so applying it writes `?quick=` and it survives a full reload / shared
- * link — the bug this fixes was that the chip lived in local state and vanished on
- * rerender. DB-agnostic: we assert the URL + the chip's pressed state, not results.
+ * Prebuilt quick filter. A quick chip is a URL-driven, server-side filter:
+ * applying it writes `?quick=` and it survives a full reload / shared link — a
+ * chip held only in local state would vanish on rerender. DB-agnostic: we
+ * assert the URL + the chip's pressed state, not results.
  */
 test("a quick chip persists in the URL and across a reload", async ({ page }) => {
   await page.goto("/");
@@ -81,20 +80,19 @@ test("a quick chip persists in the URL and across a reload", async ({ page }) =>
 });
 
 /**
- * List/Map view toggle (owner override of AUB-164 — the Map segment is back on
- * the public directory; the map itself stays a placeholder pending AUB-111).
- * `view` is CLIENT-ONLY URL state (never in `loaderDeps`), but it's still a
- * validated search param per the Hard Rule, so it must persist across a reload
- * exactly like the quick-filter chip above, and the default ("list") must be
- * stripped from the URL at rest.
+ * List/Map view toggle (the map itself is a placeholder). `view` is
+ * client-only URL state (never in `loaderDeps`), but it's still a validated
+ * search param per the Hard Rule, so it must persist across a reload exactly
+ * like the quick-filter chip above, and the default ("list") must be stripped
+ * from the URL at rest.
  */
 test("the list/map view toggle persists in the URL and across a reload", async ({ page }) => {
   await page.goto("/");
   await waitForBrowseReady(page);
 
-  // Scope to the toggle's own group (named by its sr-only <legend>) AND use
-  // exact names. Playwright's `name` is a case-insensitive SUBSTRING match by
-  // default, so a bare `name: "Map"` would ALSO match the map view's "Recenter
+  // Scope to the toggle's own group (named by its sr-only <legend>) and use
+  // exact names. Playwright's `name` is a case-insensitive substring match by
+  // default, so a bare `name: "Map"` would also match the map view's "Recenter
   // map" button (DirectoryMap.tsx) once pins render, and `name: "List"` would
   // match the "Add listing" FAB — both strict-mode violations.
   const toggle = page.getByRole("group", { name: "Choose list or map view" });
@@ -122,11 +120,11 @@ test("the list/map view toggle persists in the URL and across a reload", async (
 });
 
 /**
- * Sort control (#36, chip row since AUB-198). The labelled `<select>` chip sits
- * directly in the filter row; choosing a sort drives the URL (`?sort=`) so the
- * view stays linkable, mirroring the `?page=`/`?attrs=` pattern. We assert the
- * accessible labeled control and the URL wiring; the page-reset on sort change is
- * covered by unit tests.
+ * Sort control. The labelled `<select>` chip sits directly in the filter row;
+ * choosing a sort drives the URL (`?sort=`) so the view stays linkable,
+ * mirroring the `?page=`/`?attrs=` pattern. We assert the accessible labeled
+ * control and the URL wiring; the page-reset on sort change is covered by unit
+ * tests.
  */
 test("browse sort control is labeled and drives the URL", async ({ page }) => {
   await page.goto("/");
@@ -141,7 +139,7 @@ test("browse sort control is labeled and drives the URL", async ({ page }) => {
   await sort.selectOption("recency");
   await expect(page).toHaveURL(/sort=recency/);
 
-  // Back to the default returns the list to alphabetical order AND strips `sort`
+  // Back to the default returns the list to alphabetical order and strips `sort`
   // from the URL entirely (stripSearchParams drops any param equal to its default),
   // so the bar reads as a clean `/` rather than carrying redundant `?sort=alpha`.
   await sort.selectOption("alpha");
@@ -149,17 +147,17 @@ test("browse sort control is labeled and drives the URL", async ({ page }) => {
 });
 
 /**
- * Taxonomy filter (#35) and sort (#36) compose: applying a filter and then a
- * sort keeps BOTH params in the URL (they are orthogonal). Guards the merge of
- * the two parallel features. Both controls live directly in the chip row now
- * (AUB-198) — the taxonomy filter as toggle chips, the sort as a select chip.
+ * Taxonomy filter and sort compose: applying a filter and then a sort keeps
+ * both params in the URL (they are orthogonal). Both controls live directly in
+ * the chip row — the taxonomy filter as toggle chips, the sort as a select
+ * chip.
  */
 test("filter and sort compose in the URL", async ({ page }) => {
   await page.goto("/");
   await waitForBrowseReady(page);
 
-  // Toggle a taxonomy chip (the server-side consensus filter from #35). The chip
-  // is URL-controlled (`aria-pressed` derives from `?attrs=`), so the click fires
+  // Toggle a taxonomy chip (the server-side consensus filter). The chip is
+  // URL-controlled (`aria-pressed` derives from `?attrs=`), so the click fires
   // a navigation that re-renders it pressed.
   const fryerChip = page.getByRole("button", { name: "Dedicated fryer" });
   await expect(fryerChip).toBeVisible();

@@ -4,23 +4,22 @@ import { fileURLToPath } from "node:url";
 import type { ClaimAttribute } from "~/db/schema";
 
 /**
- * Baked Denver seed DATA accessor (AUB-31).
+ * Baked Denver seed data accessor.
  *
- * {@link SEED_LISTINGS} is GENERATED, not hand-written: `pnpm db:seed:refresh`
- * (`scripts/refresh-seed-data.ts`) resolves the human-curated `SEED_SOURCES`
- * (`scripts/seed-sources.ts`) against the Google Places API ONCE and writes the
- * fully-resolved entries to `scripts/seed-listings.generated.json`, which is
- * committed. This module just parses that committed JSON so the API-free
- * `pnpm db:seed` (`scripts/seed.ts`) can insert it directly — no Places call at
- * seed time.
+ * {@link SEED_LISTINGS} is generated, not hand-written: `pnpm db:seed:refresh`
+ * resolves the human-curated `SEED_SOURCES` against the Google Places API and
+ * writes the resolved entries to the committed
+ * `scripts/seed-listings.generated.json`. This module parses that JSON so the
+ * API-free `pnpm db:seed` can insert it directly — no Places call at seed
+ * time.
  *
- * DO NOT hand-edit `seed-listings.generated.json`. To change the seed set, edit
- * `seed-sources.ts` (and, for a new captured field, `refresh-seed-data.ts`), then
- * re-run `pnpm db:seed:refresh` to re-bake.
+ * Never hand-edit `seed-listings.generated.json`. To change the seed set,
+ * edit `seed-sources.ts` (and, for a new captured field,
+ * `refresh-seed-data.ts`), then re-run `pnpm db:seed:refresh` to re-bake.
  */
 
-// Re-export the curator-bot identity so existing importers keep working — it now
-// lives with the human-curated sources.
+// The curator-bot identity lives with the human-curated sources; re-exported
+// here for importers of this module.
 export { CURATOR_BOT } from "./seed-sources";
 
 /** One fully-resolved (baked) seed listing, ready to insert with no API call. */
@@ -37,7 +36,7 @@ export interface SeededListing {
   lng: number;
   /** The GF-attribute labels the curator bot suggests (≥1). */
   suggestedAttributes: ClaimAttribute[];
-  /** Optional official menu / GF-info page, seeded as a `menu`-kind `listing_links` row (AUB-220). */
+  /** Optional official menu / GF-info page, seeded as a `menu`-kind `listing_links` row. */
   menuUrl?: string | null;
   /** Captured Google star rating at refresh time (informational). */
   googleRating?: number | null;

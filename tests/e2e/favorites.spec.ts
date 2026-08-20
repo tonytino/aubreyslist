@@ -6,33 +6,34 @@ import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
 import { waitForBrowseReady, waitForHydration } from "./helpers";
 
 /**
- * Favorites — the feature end-to-end (issue AUB-130 / F12).
+ * Favorites — the feature end-to-end.
  *
- * Exercises the whole save loop through the REAL UI + server writes: the browse
- * card's heart ({@link FavoriteButton}) toggles a listing into the signed-in
- * viewer's favorites, the saved listing surfaces on `/favorites` AND behind the
- * directory's server-side "Saved" filter (`?saved=1`, the {@link FilterChips}
- * chip), unfavoriting drops it from both, and an ANONYMOUS heart click opens the
- * sign-in dialog WITHOUT persisting any favorite.
+ * Exercises the whole save loop through the real UI + server writes: the
+ * browse card's heart ({@link FavoriteButton}) toggles a listing into the
+ * signed-in viewer's favorites, the saved listing surfaces on `/favorites` and
+ * behind the directory's server-side "Saved" filter (`?saved=1`, the
+ * {@link FilterChips} chip), unfavoriting drops it from both, and an anonymous
+ * heart click opens the sign-in dialog without persisting any favorite.
  *
- * AUTH: the signed-in portions reuse the repo's sealed-cookie sign-in — a seeded
- * `users` row + a cookie minted with the app's own `sealSessionPayload` (see
- * fixtures.ts), the exact primitive the OAuth callback writes — so no real Google
- * round-trip is needed.
+ * Auth: the signed-in portions reuse the repo's sealed-cookie sign-in — a
+ * seeded `users` row + a cookie minted with the app's own `sealSessionPayload`
+ * (see fixtures.ts), the exact primitive the OAuth callback writes — so no
+ * real Google round-trip is needed.
  *
- * PAGINATION: the default browse order is alphabetical, page size 20. The seeded
- * listings carry a leading-digit name prefix (`0000-`/`0001-`) so they sort to the
- * FRONT of page 1 and are never paginated off by other runs' rows on the
- * persistent CI Neon branch. The `/favorites` + `?saved=1` views are already
- * scoped to the viewer's own favorites (a single listing here → one page), so the
- * saved-set assertions are pagination-independent; the negative assertions are
- * scoped to the unsaved listing's unique name.
+ * Pagination: the default browse order is alphabetical, page size 20. The
+ * seeded listings carry a leading-digit name prefix (`0000-`/`0001-`) so they
+ * sort to the front of page 1 and are never paginated off by other runs' rows
+ * on the persistent CI Neon branch. The `/favorites` + `?saved=1` views are
+ * already scoped to the viewer's own favorites (a single listing here → one
+ * page), so the saved-set assertions are pagination-independent; the negative
+ * assertions are scoped to the unsaved listing's unique name.
  *
- * GATING + CLEANUP: every row is keyed on a unique per-run token, and the
- * {@link Seeder} tears down the listings (cascading to the app-written `favorites`
- * rows) and users it created. Both writing the cookie and seeding need the CI E2E
- * DATABASE_URL + SESSION_SECRET, so the spec self-skips when they are absent
- * (mirrors add-listing-authed / attest-claim). CI applies migrations first.
+ * Gating + cleanup: every row is keyed on a unique per-run token, and the
+ * {@link Seeder} tears down the listings (cascading to the app-written
+ * `favorites` rows) and users it created. Both writing the cookie and seeding
+ * need the CI E2E DATABASE_URL + SESSION_SECRET, so the spec self-skips when
+ * they are absent (mirrors add-listing-authed / attest-claim). CI applies
+ * migrations first.
  */
 test.describe("favorites — signed-in toggle, /favorites, saved filter", () => {
   let seeder: Seeder;
@@ -53,7 +54,7 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
 
     // A second, never-favorited listing — also pinned to page 1 so it appears in
     // the normal directory, proving the "Saved" filter is doing real work when it
-    // is EXCLUDED from the saved view (scoped to its unique name, pagination-proof).
+    // is excluded from the saved view (scoped to its unique name, pagination-proof).
     const unsavedToken = uniqueToken("unsaved");
     const unsaved = await seeder.createListing(unsavedToken, {
       name: `0001-${unsavedToken} Diner`,
@@ -82,7 +83,7 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
     // (1) Favorite from the card. The heart starts unsaved (aria-pressed=false);
     // clicking it flips the accessible label ("Save …" → "Saved, remove …") and
     // aria-pressed to true. We wait for it to re-enable (the write is disabled
-    // while pending) so the server write has SETTLED before we navigate.
+    // while pending) so the server write has settled before we navigate.
     const saveBtn = page.getByRole("button", { name: `Save ${savedName}` });
     await expect(saveBtn).toHaveAttribute("aria-pressed", "false");
     await saveBtn.click();
@@ -93,7 +94,7 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
     await expect(savedBtn).toBeEnabled();
 
     // The unsaved listing is a real, visible result in the normal directory —
-    // so its later ABSENCE from the saved view is meaningful, not just missing data.
+    // so its later absence from the saved view is meaningful, not just missing data.
     await expect(page.getByRole("link", { name: unsavedName })).toBeVisible();
 
     // (3) The "Saved" filter (server-side `?saved=1`). Click the sign-in-gated
@@ -103,8 +104,8 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
     // a hand-typed `?saved=1` also works (the schema coerces both) — accept either.
     await expect(page).toHaveURL(/[?&]saved=(?:1|true)\b/);
 
-    // The saved view contains EXACTLY the favorited listing (its card links to the
-    // detail page) and EXCLUDES the unsaved one (scoped to its unique name).
+    // The saved view contains exactly the favorited listing (its card links to the
+    // detail page) and excludes the unsaved one (scoped to its unique name).
     const savedCard = page.getByRole("link", { name: savedName });
     await expect(savedCard).toHaveAttribute("href", `/listings/${savedId}`);
     await expect(page.getByRole("heading", { name: unsavedName, level: 3 })).toHaveCount(0);
@@ -119,7 +120,7 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
     await expect(page.getByRole("heading", { name: unsavedName, level: 3 })).toHaveCount(0);
 
     // (4) Unfavorite from the /favorites card — the label flips back to "Save …"
-    // and aria-pressed to false. Wait for it to re-enable so the delete SETTLED.
+    // and aria-pressed to false. Wait for it to re-enable so the delete settled.
     const removeBtn = page.getByRole("button", { name: `Saved, remove ${savedName}` });
     await removeBtn.click();
     const reSaveBtn = page.getByRole("button", { name: `Save ${savedName}` });
@@ -127,22 +128,22 @@ test.describe("favorites — signed-in toggle, /favorites, saved filter", () => 
     await expect(reSaveBtn).toHaveAttribute("aria-pressed", "false");
     await expect(reSaveBtn).toBeEnabled();
 
-    // …and it DROPS from /favorites (the loader re-reads favorites on reload) —
-    // it was the only favorite, so the "nothing saved" empty state now shows.
+    // …and it drops from /favorites (the loader re-reads favorites on reload) —
+    // it was the only favorite, so the "nothing saved" empty state shows.
     await page.reload();
     await expect(page.getByRole("link", { name: savedName })).toHaveCount(0);
     await expect(page.getByText("No saved spots yet")).toBeVisible();
 
-    // …and it DROPS from the Saved filter too (server-side re-query).
+    // …and it drops from the Saved filter too (server-side re-query).
     await page.goto("/?saved=1");
     await expect(page.getByRole("heading", { name: savedName, level: 3 })).toHaveCount(0);
   });
 });
 
 /**
- * Anonymous heart click — the sign-in gate (F5). An unauthenticated viewer's
- * click opens the Radix sign-in dialog and attempts NO write: the favorite is
- * never persisted (asserted BOTH via a reload showing the heart still unsaved AND
+ * Anonymous heart click — the sign-in gate. An unauthenticated viewer's click
+ * opens the Radix sign-in dialog and attempts no write: the favorite is never
+ * persisted (asserted both via a reload showing the heart still unsaved and
  * directly against the DB — zero `favorites` rows for the listing).
  */
 test.describe("favorites — anonymous heart opens sign-in dialog, no write", () => {
@@ -174,7 +175,7 @@ test.describe("favorites — anonymous heart opens sign-in dialog, no write", ()
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("Sign in to save spots")).toBeVisible();
 
-    // …and NO favorite was written. Directly assert zero `favorites` rows for the
+    // …and no favorite was written. Directly assert zero `favorites` rows for the
     // listing — the anonymous click never reached the server (gated in the UI).
     const rows = await seeder.db
       .select()

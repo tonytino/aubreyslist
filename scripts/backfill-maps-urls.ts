@@ -1,28 +1,26 @@
 /**
- * Maps-URL backfill: `pnpm db:backfill:maps-urls` — API-FREE, idempotent.
+ * Maps-URL backfill: `pnpm db:backfill:maps-urls`. API-free, idempotent.
  *
- * Listings created before the Maps-link fix stored `mapsUrl` in the legacy
- * `https://www.google.com/maps/place/?q=place_id:…` format, which was never a
- * documented Google Maps URL and which Maps stopped resolving — so the
- * "Open in Google Maps" link on every affected listing dead-ends. This script
- * rewrites exactly those rows to the documented Maps URLs API format
+ * Some listings store `mapsUrl` in the legacy
+ * `https://www.google.com/maps/place/?q=place_id:…` format, which is not a
+ * documented Google Maps URL and which Maps does not resolve — the "Open in
+ * Google Maps" link on every affected listing dead-ends. This script rewrites
+ * exactly those rows to the documented Maps URLs API format
  * (`/maps/search/?api=1&query=<name address>&query_place_id=<place id>`),
  * built entirely from columns already on the row — no Places API call, no key.
  *
- * Design (mirrors `scripts/seed.ts`):
- * - The testable core is {@link backfillMapsUrls}, which takes its DB as an
- *   INJECTED dependency, so unit tests need no live DB or network.
- * - The CLI shell ({@link runCli}) wires the real `getDb()`, prints a summary,
- *   and sets the exit code.
+ * Structure:
+ * - {@link backfillMapsUrls} is the testable core with an injected DB, so
+ *   unit tests need no live database or network.
+ * - {@link runCli} wires the real `getDb()`, prints a summary, and sets the
+ *   exit code.
  *
- * IDEMPOTENT: only rows still carrying the legacy prefix match; a rewritten row
- * never matches again. Re-run freely. Rows without a Place ID are reported and
- * left untouched (they should not exist — manual entries were always written in
- * the search format — but silently rewriting them would guess at data).
+ * Idempotent: only rows still carrying the legacy prefix match; a rewritten
+ * row never matches again. Re-run freely. Rows without a Place ID are reported
+ * and left untouched — silently rewriting them would guess at data.
  *
- * Runs via `node --experimental-strip-types` + the dependency-free alias loader
- * (`scripts/register-aliases.mjs`) — no `tsx`/`ts-node` dependency, same as
- * `db:seed`.
+ * Runs via `node --experimental-strip-types` plus the dependency-free alias
+ * loader (`scripts/register-aliases.mjs`).
  */
 
 import { eq, like } from "drizzle-orm";
@@ -33,7 +31,7 @@ import { errorMessage, runWhenInvokedDirectly } from "./cli";
 /** The real Drizzle client type, injected so tests can pass a structural mock. */
 type BackfillDb = ReturnType<typeof getDb>;
 
-/** The legacy, no-longer-resolvable link prefix this backfill exists to purge. */
+/** The legacy, unresolvable link prefix this backfill exists to purge. */
 export const LEGACY_MAPS_URL_PREFIX = "https://www.google.com/maps/place/?q=place_id:";
 
 /**

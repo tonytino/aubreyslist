@@ -10,17 +10,17 @@ import { waitForHydration } from "./helpers";
  * The account menu's "Sign out" control is a real form POST (UserMenu: a
  * `<form method="post" action="/api/auth/sign-out">` wrapping the submit
  * button), which clears the sealed session cookie server-side and redirects
- * home (`app/server/routes/auth.ts`). This spec drives that through the REAL UI:
+ * home (`app/server/routes/auth.ts`). This spec drives that through the real UI:
  * sign in with the repo's sealed-cookie fixture, open the avatar account menu,
  * click "Sign out", and assert the visitor is logged out — the header's anonymous
  * "Log in" affordance returns, the account menu is gone, and the session cookie
  * is cleared from the browser context.
  *
- * AUTH: reuses the sealed-cookie sign-in (a seeded `users` row + a cookie minted
+ * Auth: reuses the sealed-cookie sign-in (a seeded `users` row + a cookie minted
  * with the app's own `sealSessionPayload`, the exact primitive the OAuth callback
  * writes — see fixtures.ts), so no real Google round-trip is needed.
  *
- * GATING + CLEANUP: the seeded user is keyed on a unique per-run token and torn
+ * Gating + cleanup: the seeded user is keyed on a unique per-run token and torn
  * down in afterEach. Both minting the cookie and seeding need the CI E2E
  * DATABASE_URL + SESSION_SECRET, so the spec self-skips when they are absent
  * (mirrors sign-in / favorites). CI applies migrations first.

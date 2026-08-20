@@ -6,27 +6,27 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as schema from "~/db/schema";
 
 /**
- * DB-level schema-constraint integration tests (issue #92).
+ * DB-level schema-constraint integration tests.
  *
- * The unit suite (`tests/unit/db.test.ts`) only asserts Drizzle `getTableConfig`
- * METADATA — it never touches a real database, so a migration that *declared*
- * but failed to *apply* a constraint would still pass. This suite exercises the
- * runtime integrity guarantees against a real Postgres: it applies the
- * migrations and then asserts the invariants actually fire.
+ * The unit suite (`tests/unit/db.test.ts`) only asserts Drizzle
+ * `getTableConfig` metadata — it never touches a real database, so a migration
+ * that declared but failed to apply a constraint would still pass. This suite
+ * exercises the runtime integrity guarantees against a real Postgres: it
+ * applies the migrations and then asserts the invariants actually fire.
  *
- * GATING — must never break CI without a database:
- * This suite runs ONLY when `TEST_DATABASE_URL` is set to a Postgres connection
- * string (a Neon HTTP URL). With no database configured (the default for
- * `pnpm preflight` and the `Unit tests` CI step), `describe.skipIf` reports the
- * suite as SKIPPED — never failed — so the suite stays green offline. Point
- * `TEST_DATABASE_URL` at the throwaway CI Neon branch (the same one behind the
+ * Gating — must never break CI without a database: this suite runs only when
+ * `TEST_DATABASE_URL` is set to a Postgres connection string (a Neon HTTP
+ * URL). With no database configured (the default for `pnpm preflight` and the
+ * `Unit tests` CI step), `describe.skipIf` reports the suite as skipped —
+ * never failed — so the suite stays green offline. Point `TEST_DATABASE_URL`
+ * at the throwaway CI Neon branch (the same one behind the
  * `CI_E2E_DATABASE_URL` secret) to activate it.
  *
- * IDEMPOTENCY — the CI Neon branch is PERSISTENT (state accrues across runs, see
- * docs/agents/testing.md). Every fixture uses a unique per-run token so repeated
- * or concurrent runs never collide on a unique constraint, and `afterAll`
- * deletes everything this suite created (deleting the listing cascades to its
- * children).
+ * Idempotency — the CI Neon branch is persistent (state accrues across runs,
+ * see docs/agents/testing.md). Every fixture uses a unique per-run token so
+ * repeated or concurrent runs never collide on a unique constraint, and
+ * `afterAll` deletes everything this suite created (deleting the listing
+ * cascades to its children).
  */
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -49,9 +49,9 @@ describe.skipIf(!hasDb)("schema constraints (real Postgres)", () => {
     const client = neon(TEST_DATABASE_URL!);
     db = drizzle(client, { schema });
 
-    // Apply migrations so the suite asserts against the migration output (issue
-    // #92), not an ad-hoc schema. `migrate` is idempotent via Drizzle's journal
-    // table, so it is safe to run against the already-migrated CI branch.
+    // Apply migrations so the suite asserts against the migration output, not
+    // an ad-hoc schema. `migrate` is idempotent via Drizzle's journal table,
+    // so it is safe to run against the already-migrated CI branch.
     await migrate(db, { migrationsFolder: "db/migrations" });
 
     // One shared user (the reporter / attester) for the whole suite.

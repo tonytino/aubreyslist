@@ -8,35 +8,36 @@ import { SESSION_COOKIE_NAME, sealSessionPayload } from "~/server/auth/session";
 import type { IntakeMode } from "~/server/settings";
 
 /**
- * Authenticated + DB-seeded E2E fixtures (issue #45).
+ * Authenticated + DB-seeded E2E fixtures.
  *
- * The repo ships NO `sessions` table — a session is a sealed, server-signed
+ * The repo ships no `sessions` table — a session is a sealed, server-signed
  * cookie (ADR-006, `app/server/auth/session.ts`). So an E2E spec can establish
- * an authenticated session WITHOUT driving the real Google OAuth round-trip
- * (off-site, env-dependent) by reusing the SAME primitive the OAuth callback
+ * an authenticated session without driving the real Google OAuth round-trip
+ * (off-site, env-dependent) by reusing the same primitive the OAuth callback
  * uses: seed a `users` row, mint a cookie with the repo's own
- * {@link sealSessionPayload}, and hand it to the browser context. The dev server
- * then unseals + re-reads the live row via `getCurrentUser` exactly as in
- * production. This is the existing mechanism, not a new bypass endpoint — the
- * cookie carries only a user id and the authoritative row (incl. role) is always
- * re-read server-side.
+ * {@link sealSessionPayload}, and hand it to the browser context. The dev
+ * server then unseals and re-reads the live row via `getCurrentUser` exactly
+ * as in production. Not a bypass endpoint — the cookie carries only a user id
+ * and the authoritative row (incl. role) is always re-read server-side.
  *
- * GATING (must never break a DB-less run): both writing the cookie AND seeding
+ * Gating (must never break a DB-less run): both writing the cookie and seeding
  * need `DATABASE_URL` + `SESSION_SECRET`. With either absent — the default for
- * `pnpm preflight`/`pnpm build` and a CI run lacking `CI_E2E_DATABASE_URL` — the
- * specs that consume these fixtures `test.skip(...)` rather than fail (mirrors
- * the integration suite's `describe.skipIf`, see docs/agents/testing.md).
+ * `pnpm preflight`/`pnpm build` and a CI run lacking `CI_E2E_DATABASE_URL` —
+ * the specs that consume these fixtures `test.skip(...)` rather than fail
+ * (mirrors the integration suite's `describe.skipIf`, see
+ * docs/agents/testing.md).
  *
- * IDEMPOTENCY: the CI Neon branch is PERSISTENT (state accrues across runs, see
- * docs/agents/testing.md). Every fixture is keyed on a unique per-run token so
- * repeated/concurrent runs never collide on a unique constraint
- * (`users.email`/`users.google_sub`, `listings.place_id`, …), and {@link Seeder}
- * tracks every top-level row it creates so {@link Seeder.cleanup} removes them
- * all (deleting a listing cascades to its claims/incidents/attestations).
+ * Idempotency: the CI Neon branch is persistent (state accrues across runs,
+ * see docs/agents/testing.md). Every fixture is keyed on a unique per-run
+ * token so repeated/concurrent runs never collide on a unique constraint
+ * (`users.email`/`users.google_sub`, `listings.place_id`, …), and
+ * {@link Seeder} tracks every top-level row it creates so
+ * {@link Seeder.cleanup} removes them all (deleting a listing cascades to its
+ * claims/incidents/attestations).
  *
- * ENV ACCESS: reading `process.env` here is the sanctioned test-config exception
- * (AGENTS.md Hard Rules; `playwright.config.ts` already reads `process.env.CI`).
- * App code still goes through `app/env.ts` — these are test-only knobs.
+ * Env access: reading `process.env` here is the sanctioned test-config
+ * exception (AGENTS.md Hard Rules; `playwright.config.ts` already reads
+ * `process.env.CI`). App code still goes through `app/env.ts`.
  */
 
 /** The CI E2E database connection string, if configured. */
@@ -126,11 +127,11 @@ export class Seeder {
 
   /**
    * Read a listing's current legacy `menu_url` column (`null` once cleared or
-   * when the row is absent). Specs use this as a DB-SIDE BARRIER after a
+   * when the row is absent). Specs use this as a DB-side barrier after a
    * links-dialog save: the client-side refresh can be lost to a mid-save
-   * document reload (AUB-223), so post-save UI assertions must first poll the
-   * database — the server contract — until the write has landed, then assert
-   * against a fresh `page.reload()`.
+   * document reload, so post-save UI assertions must first poll the database —
+   * the server contract — until the write has landed, then assert against a
+   * fresh `page.reload()`.
    */
   async getListingMenuUrl(listingId: string): Promise<string | null> {
     const listing = await this.db.query.listings.findFirst({
@@ -225,8 +226,8 @@ export class Seeder {
 
   /**
    * Delete every listing whose name equals `name` (cascading to its children).
-   * Used to clean up a listing the APP — not the seeder — inserted, e.g. one
-   * created through the add-listing form, so the persistent CI branch stays tidy.
+   * Cleans up a listing the app — not the seeder — inserted, e.g. one created
+   * through the add-listing form, so the persistent CI branch stays tidy.
    */
   async deleteListingsByName(name: string): Promise<void> {
     await this.db.delete(schema.listings).where(sql`${schema.listings.name} = ${name}`);

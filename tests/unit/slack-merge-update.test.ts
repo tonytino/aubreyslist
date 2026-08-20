@@ -108,7 +108,7 @@ describe("escapeSlackText", () => {
   });
 
   it("does not double-escape ampersands in existing entities", () => {
-    // `&` is replaced first, so `&lt;` in the INPUT becomes `&amp;lt;` — the
+    // `&` is replaced first, so `&lt;` in the input becomes `&amp;lt;` — the
     // literal text the user wrote, correctly escaped exactly once.
     expect(escapeSlackText("&lt;")).toBe("&amp;lt;");
   });

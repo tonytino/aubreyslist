@@ -6,21 +6,21 @@ import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
 import { waitForHydration } from "./helpers";
 
 /**
- * Attest a claim — the lazy-create entry point (issues #45, #150).
+ * Attest a claim — the lazy-create entry point.
  *
- * Seed ONLY a listing — NO claim row (the whole point of #150 is that claims
- * are created lazily on the first vote; pre-seeding one would bypass the path
- * under test). The "Community claims" surface now ALWAYS renders the full fixed
- * taxonomy as attestable, so a signed-in user can begin attesting an attribute
- * that has no claim row yet. We sign in, CONFIRM the headline
- * `celiac_safe_vs_gluten_friendly` attribute — a real `submitVote` write that
- * CREATES the claim then records the attestation (ADR-007) — and assert the
- * transparent trust summary updates: the per-claim roll-up shows
- * "1 confirm / 0 dispute", the Celiac-safe badge toggle reflects the viewer's
- * own vote (`aria-pressed`), and the headline summary flips from the honest
- * "Not yet attested" empty state to "Celiac-safe" (fresh confirm-majority →
- * `deriveHeadlineSafetyState`). It also persists a `claims` row that was never
- * pre-seeded — proving the lazy create.
+ * Seed only a listing — no claim row (claims are created lazily on the first
+ * vote; pre-seeding one would bypass the path under test). The "Community
+ * claims" surface always renders the full fixed taxonomy as attestable, so a
+ * signed-in user can begin attesting an attribute that has no claim row yet.
+ * We sign in, confirm the headline `celiac_safe_vs_gluten_friendly` attribute
+ * — a real `submitVote` write that creates the claim then records the
+ * attestation (ADR-007) — and assert the transparent trust summary updates:
+ * the per-claim roll-up shows "1 confirm / 0 dispute", the Celiac-safe badge
+ * toggle reflects the viewer's own vote (`aria-pressed`), and the headline
+ * summary flips from the honest "Not yet attested" empty state to
+ * "Celiac-safe" (fresh confirm-majority → `deriveHeadlineSafetyState`). It
+ * also persists a `claims` row that was never pre-seeded — proving the lazy
+ * create.
  *
  * Self-skips without the CI E2E DB / session secret (see fixtures.ts).
  */
@@ -32,7 +32,7 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
     test.skip(!E2E_DB_READY, "needs CI E2E DATABASE_URL + SESSION_SECRET");
     seeder = new Seeder();
 
-    // A bare listing with NO claims — every taxonomy attribute starts un-attested
+    // A bare listing with no claims — every taxonomy attribute starts un-attested
     // (the headline reads "Not yet attested"). The claim is created lazily below.
     const listing = await seeder.createListing(uniqueToken("attest"));
     listingId = listing.id;
@@ -53,24 +53,23 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
     await waitForHydration(page);
 
     // Before voting: the full taxonomy renders (no "Coming soon" dead-end) and
-    // the headline cue is the honest empty state. The claims now live in the
-    // default-open "Claims" tab panel (AUB-131 tabbed evidence panel). The
-    // tabpanel's accessible name derives from its trigger's FULL text — the
-    // "Claims" label plus the count chip (e.g. "Claims 0") — which the
-    // unanchored /Claims/ regex matches.
+    // the headline cue is the honest empty state. The claims live in the
+    // default-open "Claims" tab panel. The tabpanel's accessible name derives
+    // from its trigger's full text — the "Claims" label plus the count chip
+    // (e.g. "Claims 0") — which the unanchored /Claims/ regex matches.
     const claimsSection = page.getByRole("tabpanel", { name: /Claims/ });
-    // The headline row's title is "Celiac-safe" (issue #175). The confirm
-    // control now carries the SAME accessible name (it renders as the
-    // Celiac-safe badge), so anchor the title assertion to the row-title
-    // paragraph — a bare getByText would match both and trip strict mode.
+    // The headline row's title is "Celiac-safe". The confirm control carries
+    // the same accessible name (it renders as the Celiac-safe badge), so
+    // anchor the title assertion to the row-title paragraph — a bare getByText
+    // would match both and trip strict mode.
     await expect(claimsSection.locator("p", { hasText: /^Celiac-safe$/ })).toBeVisible();
     const safety = page.getByRole("region", { name: "Gluten-free safety" });
     await expect(safety.getByText("Not yet attested")).toBeVisible();
 
-    // Confirm the headline attribute via its badge toggle — the confirm control
-    // IS the Celiac-safe badge (there is no generic "Confirm" button). It is
-    // rendered for a signed-in viewer even though NO claim row exists yet — the
-    // write creates it.
+    // Confirm the headline attribute via its badge toggle — the confirm
+    // control is the Celiac-safe badge (there is no generic "Confirm" button).
+    // It is rendered for a signed-in viewer even though no claim row exists
+    // yet — the write creates it.
     const confirm = claimsSection.getByRole("button", { name: "Celiac-safe" });
     await expect(confirm).toBeVisible();
     await confirm.click();

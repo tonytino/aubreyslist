@@ -4,36 +4,36 @@ import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
 import { waitForBrowseReady } from "./helpers";
 
 /**
- * Browse + filter, with REAL seeded results (issue #45).
+ * Browse + filter, with real seeded results.
  *
- * The existing `browse.spec.ts` asserts the filter/sort URL WIRING but never
- * that a filter narrows the list to matching listings — it can't, since it
- * assumes no seeded data. This spec seeds a listing that the community has
- * affirmed for BOTH `celiac_safe_vs_gluten_friendly` and `dedicated_fryer`,
- * applies the visible "Celiac-safe + Dedicated fryer" combination from the chip
- * row, and asserts the URL carries both params AND the seeded listing is in the
- * results. A second listing affirmed ONLY for celiac-safe is seeded so the
+ * `browse.spec.ts` asserts the filter/sort URL wiring but never that a filter
+ * narrows the list to matching listings — it can't, since it assumes no seeded
+ * data. This spec seeds a listing the community has affirmed for both
+ * `celiac_safe_vs_gluten_friendly` and `dedicated_fryer`, applies the visible
+ * "Celiac-safe + Dedicated fryer" combination from the chip row, and asserts
+ * the URL carries both params and the seeded listing is in the results. A
+ * second listing affirmed only for celiac-safe is seeded so the
  * dedicated-fryer constraint is doing real work (it must be excluded).
  *
- * CHIP ROW (AUB-198): the Filters sheet is retired. "Celiac-safe" is the quick
- * chip (`?quick=celiac` — the headline taxonomy attribute is deliberately not
- * duplicated as a taxonomy chip; the quick chip is the stricter reading, also
- * requiring a FRESH consensus, which the just-seeded confirms satisfy).
- * "Dedicated fryer" is a taxonomy toggle chip (`?attrs=dedicated_fryer`,
- * positive-consensus filter — see `app/server/listings/filter.ts`). The two
- * AND-compose server-side, exactly like the old sheet's checkbox pair.
+ * Chip row: "Celiac-safe" is the quick chip (`?quick=celiac` — the headline
+ * taxonomy attribute is deliberately not duplicated as a taxonomy chip; the
+ * quick chip is the stricter reading, also requiring a fresh consensus, which
+ * the just-seeded confirms satisfy). "Dedicated fryer" is a taxonomy toggle
+ * chip (`?attrs=dedicated_fryer`, positive-consensus filter — see
+ * `app/server/listings/filter.ts`). The two AND-compose server-side.
  *
- * PAGINATION-PROOF (the persistent CI Neon branch accrues data across runs): the
- * default browse order is alphabetical with a page size of 20, so a both-attribute
- * listing with a random name could be pushed past page 1 by other runs' data and
- * silently fail this assertion. We therefore (a) name the seeded match with a
- * leading-digit prefix so it sorts to the FRONT of page 1 under the alpha default
- * across the default Postgres collation, and (b) assert membership via its
- * listing-detail card LINK (the `/listings/<id>` href) and CLICK through to its
- * detail page — proving it is a real, navigable result rather than just text on a
- * page. The negative assertion stays scoped to the celiac-only listing's unique
- * name. Reads are anonymous, but seeding needs the DB; the spec self-skips when
- * the CI E2E database / session secret are absent (see fixtures.ts).
+ * Pagination-proof (the persistent CI Neon branch accrues data across runs):
+ * the default browse order is alphabetical with a page size of 20, so a
+ * both-attribute listing with a random name could be pushed past page 1 by
+ * other runs' data and silently fail this assertion. So (a) the seeded match
+ * gets a leading-digit name that sorts to the front of page 1 under the alpha
+ * default across the default Postgres collation, and (b) membership is
+ * asserted via its listing-detail card link (the `/listings/<id>` href) plus a
+ * click through to its detail page — proving it is a real, navigable result
+ * rather than just text on a page. The negative assertion stays scoped to the
+ * celiac-only listing's unique name. Reads are anonymous, but seeding needs
+ * the DB; the spec self-skips when the CI E2E database / session secret are
+ * absent (see fixtures.ts).
  */
 test.describe("browse + GF taxonomy filter (seeded results)", () => {
   let seeder: Seeder;
@@ -45,7 +45,7 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     test.skip(!E2E_DB_READY, "needs CI E2E DATABASE_URL + SESSION_SECRET");
     seeder = new Seeder();
 
-    // Listing A: celiac-safe AND dedicated-fryer, both with a confirm majority.
+    // Listing A: celiac-safe and dedicated-fryer, both with a confirm majority.
     // Leading-digit name sorts to the front of page 1 (alpha default) so it is
     // never paginated off by other runs' rows on the persistent branch.
     const bothToken = uniqueToken("both");
@@ -57,7 +57,7 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     await seeder.attest(celiacClaim.id, "confirm", uniqueToken("v"));
     await seeder.attest(fryerClaim.id, "confirm", uniqueToken("v"));
 
-    // Listing B: celiac-safe ONLY — must be filtered OUT by the fryer constraint.
+    // Listing B: celiac-safe only — must be filtered out by the fryer constraint.
     const celiacOnly = await seeder.createListing(uniqueToken("celiaconly"));
     celiacOnlyName = celiacOnly.name;
     const onlyCeliacClaim = await seeder.createClaim(
@@ -73,8 +73,8 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
 
   test("celiac-safe + dedicated fryer filter narrows to the matching listing", async ({ page }) => {
     await page.goto("/");
-    // Both filters are toggle chips directly in the row (AUB-198); wait for
-    // hydration so their click handlers are wired before toggling.
+    // Both filters are toggle chips directly in the row; wait for hydration so
+    // their click handlers are wired before toggling.
     await waitForBrowseReady(page);
 
     // The quick "Celiac-safe" chip — the single visible celiac-safe control
@@ -92,7 +92,7 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     // scoped to its unique name, robust regardless of pagination.
     await expect(page.getByRole("heading", { name: celiacOnlyName, level: 3 })).toHaveCount(0);
 
-    // The both-attribute listing IS a result: its card links to its detail page.
+    // The both-attribute listing is a result: its card links to its detail page.
     // The leading-digit name pins it to page 1, so the link is in the DOM. Assert
     // the link by its detail href, then click through to confirm it is a real,
     // navigable filtered result (URL-based, not just on-page text).
@@ -104,13 +104,13 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
   });
 
   /**
-   * Server-side search covers ALL listings, not just the loaded page. We seed a
-   * listing whose name sorts to the very END of the alphabetical default order
-   * (a `zzzz-` prefix), so on any populated branch it is paginated OFF page 1.
-   * Searching its unique token from the directory (URL `?q=`) must still surface
-   * it — proving the redesign routes free-text search through the server and can
-   * find a match that isn't on the first page (an honesty requirement: a page-
-   * scoped client filter would have hidden it).
+   * Server-side search covers all listings, not just the loaded page. We seed
+   * a listing whose name sorts to the very end of the alphabetical default
+   * order (a `zzzz-` prefix), so on any populated branch it is paginated off
+   * page 1. Searching its unique token from the directory (URL `?q=`) must
+   * still surface it — proving free-text search runs through the server and
+   * can find a match that isn't on the first page (an honesty requirement: a
+   * page-scoped client filter would hide it).
    */
   test("server-side search finds a listing that isn't on page 1", async ({ page }) => {
     const lateToken = uniqueToken("zsearch");
@@ -121,20 +121,18 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     // otherwise the debounced `?q=` navigate races the not-yet-wired input onChange
     // (and the in-flight canonicalizing navigate clobbers it), leaving `q=` empty.
     await waitForBrowseReady(page);
-    // Search is now the FIRST chip in the filter row (user feedback #5): click the
-    // collapsed "Search restaurants" chip to expand its input, then type the unique
-    // token. The route debounces it into the URL `?q=`, running the server ILIKE
-    // over name + address.
+    // Search is the first chip in the filter row: click the collapsed "Search
+    // restaurants" chip to expand its input, then type the unique token. The
+    // route debounces it into the URL `?q=`, running the server ILIKE over
+    // name + address.
     await page.getByRole("button", { name: "Search restaurants" }).click();
     await page.getByRole("searchbox", { name: "Search restaurants" }).fill(lateToken);
     await expect(page).toHaveURL(new RegExp(`q=[^&]*${lateToken}`));
 
     // The card for the late-sorting listing is present even though it would never
     // appear on page 1 without a query — the search reached beyond the first page.
-    // (The honest server-filtered total lives in `data.total`; the redesign
-    // replaced the visible count line with the distance-radius selector, so the
-    // presence of this beyond-page-1 result is the assertion that search is
-    // server-complete.)
+    // No visible count line exists to assert on, so this beyond-page-1 result is
+    // the proof that search is server-complete.
     const card = page.getByRole("link", { name: late.name });
     await expect(card).toHaveAttribute("href", `/listings/${late.id}`);
   });

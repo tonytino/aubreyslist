@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { waitForBrowseReady } from "./helpers";
 
 /**
- * URL hygiene for the directory (AUB-134). The directory route applies
+ * URL hygiene for the directory. The directory route applies
  * `stripSearchParams(BROWSE_SEARCH_DEFAULTS)`, so params equal to their default
  * (`page=1`, `attrs=`, `q=`, `sort=alpha`, `radius=25`, `view=list`) never appear
  * in the URL — at rest, after an interaction, or on a shared link. These assert
@@ -25,12 +25,12 @@ test("only non-default params are written to the URL", async ({ page }) => {
   await page.goto("/");
   await waitForBrowseReady(page);
 
-  // A non-default sort (via the sort chip in the filter row, AUB-198) is a real,
+  // A non-default sort (via the sort chip in the filter row) is a real,
   // shareable choice → it appears...
   await page.getByLabel("Sort by").selectOption("trust");
   await expect(page).toHaveURL(/[?&]sort=trust/);
 
-  // ...but the defaults it travels alongside do NOT leak in.
+  // ...but the defaults it travels alongside do not leak in.
   await expect(page).not.toHaveURL(/page=1/);
   await expect(page).not.toHaveURL(/radius=25/);
   await expect(page).not.toHaveURL(/attrs=/);
@@ -38,10 +38,10 @@ test("only non-default params are written to the URL", async ({ page }) => {
 });
 
 test("a shared link carrying default params is canonicalized to a clean URL", async ({ page }) => {
-  // A link someone pasted from before this change (or hand-typed) may still carry
-  // the old default noise. It must still load, and the router normalizes it to the
-  // stripped, canonical shape on the way in (search middleware runs on initial
-  // location build, not just explicit navigations).
+  // A pasted or hand-typed link may carry default-param noise. It must still
+  // load, and the router normalizes it to the stripped, canonical shape on the
+  // way in (search middleware runs on initial location build, not just
+  // explicit navigations).
   await page.goto("/?page=1&attrs=&q=&sort=alpha&radius=25&view=list");
   await waitForBrowseReady(page);
 

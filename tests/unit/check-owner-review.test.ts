@@ -266,9 +266,9 @@ describe("drift guard — CODEOWNERS and the policy module never diverge", () =>
   });
 
   it("assigns every CODEOWNERS rule solely to the owner (no other/empty owner)", () => {
-    // Review finding #3: set-equality on paths alone would let a rule reassign a
-    // gated path to a bot — or drop the owner entirely (which REMOVES ownership) —
-    // while staying green. Assert every rule's owner column is exactly the owner.
+    // Set-equality on paths alone would let a rule reassign a gated path to a
+    // bot — or drop the owner entirely, removing ownership — while staying
+    // green. Assert every rule's owner column is exactly the owner.
     const codeownersPath = join(process.cwd(), ".github/CODEOWNERS");
     const rules = readFileSync(codeownersPath, "utf8")
       .split(/\r?\n/)

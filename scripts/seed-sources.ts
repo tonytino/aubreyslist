@@ -1,46 +1,43 @@
 import type { ClaimAttribute } from "~/db/schema";
 
 /**
- * Curated Denver-metro gluten-free / celiac seed SOURCES (AUB-31).
+ * Curated Denver-metro gluten-free / celiac seed sources.
  *
- * WHAT THIS IS: the human-edited INPUT to the seed pipeline — a starter set of
- * real, currently-operating Denver-proper (and close-suburb) spots with a public
- * gluten-free reputation, so the directory has density before real users arrive.
- * Each entry is a Places Text Search `query` plus the GF-attribute "labels" the
- * curator bot ("Aubrey's Bot") should suggest for it.
+ * The human-edited input to the seed pipeline: real Denver-proper (and
+ * close-suburb) spots with a public gluten-free reputation. Each entry is a
+ * Places Text Search `query` plus the GF-attribute labels the curator bot
+ * ("Aubrey's Bot") should suggest for it.
  *
- * PIPELINE: this file is the editable source of truth. `pnpm db:seed:refresh`
- * (`scripts/refresh-seed-data.ts`) resolves each `query` against the Google Places
- * API ONCE and bakes the fully-resolved entries into
- * `scripts/seed-listings.generated.json`. The API-free `pnpm db:seed`
- * (`scripts/seed.ts`) then inserts that baked data — it never calls Places. Curate
- * here, then re-run the refresh to re-capture.
+ * Pipeline: this file is the editable source of truth. `pnpm db:seed:refresh`
+ * resolves each `query` against the Google Places API and bakes the resolved
+ * entries into `scripts/seed-listings.generated.json`. The API-free
+ * `pnpm db:seed` inserts that baked data — it never calls Places. Curate here,
+ * then re-run the refresh to re-capture.
  *
- * HONEST BY CONSTRUCTION: `suggestedAttributes` are grounded in each spot's public
- * GF reputation (dedicated kitchens/fryers, labeled GF menus, celiac-owner
- * protocols). `celiac_safe_vs_gluten_friendly` is applied ONLY to genuinely
- * dedicated or strongly celiac-reputed places; merely gluten-friendly spots get
- * the specific attributes instead. These are SUGGESTIONS, not verdicts — the
- * community owns the truth. No incidents are ever fabricated on a real business.
+ * Honest by construction: `suggestedAttributes` are grounded in each spot's
+ * public GF reputation. `celiac_safe_vs_gluten_friendly` applies only to
+ * genuinely dedicated or strongly celiac-reputed places; merely
+ * gluten-friendly spots get the specific attributes instead. These are
+ * suggestions, not verdicts — the community owns the truth. No incidents are
+ * ever fabricated on a real business.
  *
- * The `query` is fed to Google Places Text Search and biased to Denver Union
- * Station; anything that doesn't resolve (or resolves outside a 25-mile radius) is
- * skipped and logged rather than guessed. Add/curate freely and re-run the refresh
- * — the seed is idempotent (dedup on Place ID; a claim a real user has engaged with
- * is never re-suggested).
+ * The `query` is biased to Denver Union Station; anything unresolved (or
+ * outside a 25-mile radius) is skipped and logged rather than guessed. The
+ * seed is idempotent: dedup on Place ID, and a claim a real user has engaged
+ * with is never re-suggested.
  */
 
 /**
- * The curator-bot identity that authors every seed suggestion (AUB-31).
+ * The curator-bot identity that authors every seed suggestion.
  *
- * Intrinsically collision-proof with any real account on BOTH unique `users`
- * columns, so it is safe to seed in every environment including production:
- * - `googleSub` is a NON-numeric sentinel a real Google login can never produce
- *   (real Google subjects are numeric strings); and
- * - `email` uses the reserved `.invalid` TLD (RFC 2606) — an un-routable address
- *   no real Google mailbox can ever equal, so a future real sign-in can never
- *   collide with this row on the UNIQUE email constraint (which would otherwise
- *   throw in `upsertUserFromGoogle` and break that person's sign-in).
+ * Collision-proof with any real account on both unique `users` columns, so it
+ * is safe to seed in every environment including production:
+ * - `googleSub` is a non-numeric sentinel a real Google login can never
+ *   produce (real Google subjects are numeric strings); and
+ * - `email` uses the reserved `.invalid` TLD (RFC 2606) — un-routable, so a
+ *   real sign-in can never collide with this row on the unique email
+ *   constraint (which would throw in `upsertUserFromGoogle` and break that
+ *   person's sign-in).
  * Role is left to the DB default (`user`) — no standing privileged account.
  */
 export const CURATOR_BOT = {
@@ -55,7 +52,7 @@ export interface SeedSource {
   query: string;
   /** The GF-attribute labels the curator bot suggests (≥1). */
   suggestedAttributes: ClaimAttribute[];
-  /** Optional official menu / GF-info page, seeded as a `menu`-kind `listing_links` row (AUB-220). */
+  /** Optional official menu / GF-info page, seeded as a `menu`-kind `listing_links` row. */
   menuUrl?: string;
 }
 

@@ -53,8 +53,8 @@ describe("core schema — enums", () => {
       "off_menu_gf_on_request",
       "gf_substitutes",
     ]);
-    // Guard against accidental drift in the taxonomy size. `cross_contamination_protocol`
-    // and `staff_knowledge` were purged before v1 (issue #175).
+    // Guard against accidental drift in the taxonomy size — v1 ships exactly
+    // these five attributes.
     expect(schema.claimAttributes).toHaveLength(5);
   });
 

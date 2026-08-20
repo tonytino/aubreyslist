@@ -3,17 +3,17 @@ import { expect, test } from "@playwright/test";
 import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
 
 /**
- * Mocked sign-in (issue #45).
+ * Mocked sign-in.
  *
  * The repo's session is a sealed, server-signed cookie (ADR-006) — there is no
  * `sessions` table — so an authenticated state is established by minting that
- * cookie for a seeded user with the repo's OWN `sealSessionPayload` (the exact
- * seal the Google OAuth callback writes), rather than driving the off-site OAuth
- * round-trip. See `tests/e2e/fixtures.ts`.
+ * cookie for a seeded user with the repo's own `sealSessionPayload` (the exact
+ * seal the Google OAuth callback writes), rather than driving the off-site
+ * OAuth round-trip. See `tests/e2e/fixtures.ts`.
  *
- * We assert the authenticated state two ways: the header no longer offers
- * "Continue with Google", and a gated surface (add-listing) renders the intake
- * form instead of the sign-in prompt an anonymous visitor sees
+ * We assert the authenticated state two ways: the header offers no "Continue
+ * with Google", and a gated surface (add-listing) renders the intake form
+ * instead of the sign-in prompt an anonymous visitor sees
  * (`add-listing.spec.ts` covers the anonymous side).
  */
 test.describe("mocked Google sign-in", () => {
@@ -40,12 +40,12 @@ test.describe("mocked Google sign-in", () => {
     // biome-ignore lint/style/noNonNullAssertion: Playwright always provides baseURL from the config.
     await seeder.signIn(context, user.id, baseURL!);
 
-    // The header now shows the authenticated state via the combined-menu
-    // trigger, whose accessible name carries the visitor's name — and NOT the
-    // anonymous "Log in" entry. The menu's contents (name, moderation/admin
-    // link, sign out) are covered by SiteMenu/UserMenu unit tests; this e2e only
-    // needs to confirm the sealed cookie produces the authenticated header for
-    // THIS user. We assert it from the server-rendered trigger, so it doesn't
+    // The header shows the authenticated state via the combined-menu trigger,
+    // whose accessible name carries the visitor's name — not the anonymous
+    // "Log in" entry. The menu's contents (name, moderation/admin link, sign
+    // out) are covered by SiteMenu/UserMenu unit tests; this e2e only needs to
+    // confirm the sealed cookie produces the authenticated header for this
+    // user. We assert it from the server-rendered trigger, so it doesn't
     // depend on hydration timing (opening the portal'd menu would).
     await page.goto("/");
     const header = page.getByRole("banner");
@@ -54,7 +54,7 @@ test.describe("mocked Google sign-in", () => {
       header.getByRole("button", { name: `Open menu, signed in as ${user.name}` })
     ).toBeVisible();
 
-    // A gated surface now renders its authenticated intake wizard, not the
+    // A gated surface renders its authenticated intake wizard, not the
     // sign-in prompt. Step 0's manual finder ("Restaurant name" field) is
     // server-rendered, so this holds without waiting on hydration.
     await page.goto("/listings/new");

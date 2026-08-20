@@ -8,32 +8,32 @@ import { listIncidents } from "~/server/incidents";
 import { findRecentIncident, parseCalendarDay } from "~/trust/incident-recency";
 
 /**
- * Incident `occurredOn` date round-trip integration test (issue #45 follow-up).
+ * Incident `occurredOn` date round-trip integration test.
  *
- * GROUND TRUTH FOR A REAL BUG: the recent-incident banner on the listing-detail
- * page is derived by `findRecentIncident(incidents, now)` →
- * `isRecentIncident` → `parseCalendarDay(occurredOn)`, which requires a STRICT
- * `YYYY-MM-DD` string. `incidents.occurred_on` is a Postgres `date` column
- * declared as `date("occurred_on")` (Drizzle `PgDateString`, which passes the
- * driver value through verbatim). The Neon HTTP driver applies a `pg-types`
- * parser to the `date` OID (1082) that returns a JS **`Date`**, not the
- * `"YYYY-MM-DD"` text — so without a normalization boundary, `occurredOn` reaches
- * the recency logic as a `Date`, `parseCalendarDay` returns null, and the
- * banner NEVER renders (the live E2E flagged this; unit tests miss it because
- * they hand-build `"YYYY-MM-DD"` data and never round-trip through the driver).
+ * The recent-incident banner on the listing-detail page is derived by
+ * `findRecentIncident(incidents, now)` → `isRecentIncident` →
+ * `parseCalendarDay(occurredOn)`, which requires a strict `YYYY-MM-DD` string.
+ * `incidents.occurred_on` is a Postgres `date` column declared as
+ * `date("occurred_on")` (Drizzle `PgDateString`, which passes the driver value
+ * through verbatim). The Neon HTTP driver applies a `pg-types` parser to the
+ * `date` OID (1082) that returns a JS `Date`, not the `"YYYY-MM-DD"` text — so
+ * without a normalization boundary, `occurredOn` reaches the recency logic as
+ * a `Date`, `parseCalendarDay` returns null, and the banner never renders.
+ * Unit tests miss this because they hand-build `"YYYY-MM-DD"` data and never
+ * round-trip through the driver.
  *
- * This test inserts an incident via the real schema and reads it back through the
- * real `listIncidents` query, asserting:
- *   (a) the returned `occurredOn` is EXACTLY the `YYYY-MM-DD` string we wrote
+ * This test inserts an incident via the real schema and reads it back through
+ * the real `listIncidents` query, asserting:
+ *   (a) the returned `occurredOn` is exactly the `YYYY-MM-DD` string we wrote
  *       (`typeof` string + strict regex + equality), and
  *   (b) `findRecentIncident([row], now)` returns it.
- * It FAILS if the driver mangles the date, and stands as a regression guard.
+ * It fails if the driver mangles the date, and stands as a regression guard.
  *
- * GATING + IDEMPOTENCY mirror `schema-constraints.test.ts`: runs only when
- * `TEST_DATABASE_URL` is set (CI's `CI_E2E_DATABASE_URL`), uses a unique per-run
- * token so the persistent CI Neon branch never collides, and cleans up after
- * itself (deleting the listing cascades to its incidents; the user is deleted
- * separately).
+ * Gating + idempotency mirror `schema-constraints.test.ts`: runs only when
+ * `TEST_DATABASE_URL` is set (CI's `CI_E2E_DATABASE_URL`), uses a unique
+ * per-run token so the persistent CI Neon branch never collides, and cleans up
+ * after itself (deleting the listing cascades to its incidents; the user is
+ * deleted separately).
  */
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -116,12 +116,13 @@ describe.skipIf(!hasDb)("incident occurredOn round-trip (real Postgres)", () => 
 
   it("the live report→read→flag path: a yesterday-dated incident flags the recent-incident banner", async () => {
     // Mirror the E2E report-incident flow's data path against real Postgres,
-    // independent of the browser: write a YESTERDAY-dated incident (the same
-    // YYYY-MM-DD the form submits — strictly past, well inside the 90-day window),
-    // read it back through the REAL `listIncidents`, then assert the SAME
-    // `findRecentIncident(incidents, now)` the client banner uses — evaluated at
-    // the REAL current time — flags it. This proves the recent-incident banner's
-    // trust-critical signal end-to-end at the data layer, not just in the E2E.
+    // independent of the browser: write a yesterday-dated incident (the same
+    // YYYY-MM-DD the form submits — strictly past, well inside the 90-day
+    // window), read it back through the real `listIncidents`, then assert the
+    // same `findRecentIncident(incidents, now)` the client banner uses —
+    // evaluated at the real current time — flags it. This proves the
+    // recent-incident banner's trust-critical signal end-to-end at the data
+    // layer, not just in the E2E.
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 

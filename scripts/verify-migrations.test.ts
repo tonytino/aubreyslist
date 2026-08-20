@@ -11,10 +11,10 @@ import {
 } from "./verify-migrations";
 
 /**
- * Tests for the post-migrate verification guard (AUB-195). The core takes the
- * journal entries and an injected SQL executor (per `docs/agents/testing.md` /
- * the seed-script pattern), so everything here runs against a fake — no live
- * database. The fake models the two queries the core issues:
+ * Tests for the post-migrate verification guard. The core takes the journal
+ * entries and an injected SQL executor (per `docs/agents/testing.md`), so
+ * everything here runs against a fake — no live database. The fake models the
+ * two queries the core issues:
  *   1. `to_regclass('drizzle.__drizzle_migrations')` — table existence, and
  *   2. `select hash, created_at from drizzle.__drizzle_migrations` — history.
  */
@@ -29,7 +29,7 @@ const dialect = new PgDialect();
 
 /**
  * Build a fake executor. `applied` rows are returned with `created_at` as a
- * STRING, mirroring how the Neon HTTP driver returns Postgres bigints.
+ * string, mirroring how the Neon HTTP driver returns Postgres bigints.
  */
 function fakeExecutor(
   applied: AppliedMigrationRow[],
@@ -69,9 +69,9 @@ describe("verifyMigrations (core)", () => {
   });
 
   it("fails and NAMES the tag when a journal entry was never applied (the silent-skip incident)", async () => {
-    // The AUB-195 incident shape: the DB applied everything EXCEPT
-    // 0003_amazing_meteorite, which drizzle skipped because a later journal
-    // timestamp was already recorded — db:migrate still reported success.
+    // The silent-skip shape: the DB applied everything except
+    // 0003_amazing_meteorite, which drizzle skips when a later journal
+    // timestamp is already recorded — db:migrate still reports success.
     const applied = appliedFor(JOURNAL.filter((e) => e.tag !== "0003_amazing_meteorite"));
     const result = await verifyMigrations(JOURNAL, { execute: fakeExecutor(applied) });
 
@@ -80,8 +80,8 @@ describe("verifyMigrations (core)", () => {
   });
 
   it("tolerates EXTRA applied rows (renamed-but-applied history) as info, not failure", async () => {
-    // A long-lived DB that applied old-0003 before it was renumbered away keeps
-    // that row forever; its hash matches no current journal entry — allowed.
+    // A long-lived DB keeps an applied row for a tag absent from the current
+    // journal; its hash matches no current journal entry — allowed.
     const renamedAway = entry("0003_lame_carnage", 1_783_057_253_835);
     const applied = [
       ...appliedFor(JOURNAL),
@@ -95,11 +95,10 @@ describe("verifyMigrations (core)", () => {
   });
 
   it("downgrades an ALLOWLISTED hash mismatch WITH a timestamp match to DRIFTED (warn, not fail)", async () => {
-    // The persistent-CI-branch shape: 0002_old_tigra was applied as a draft,
-    // then the file was hand-edited (the documented DELETE prepend) — the
-    // recorded hash never matches the current file, but a row exists at the
-    // entry's `when`, so the migrator DID run that journal slot. The tag is in
-    // KNOWN_DRIFTED_TAGS (human-verified benign), so it warns instead of fails.
+    // The benign-drift shape: the recorded hash for 0002_old_tigra matches no
+    // journal entry, but a row exists at the entry's `when`, so the migrator
+    // did run that journal slot. The tag is in KNOWN_DRIFTED_TAGS
+    // (human-verified benign), so it warns instead of fails.
     const editedAfterApply = JOURNAL[2] as JournalMigration;
     const applied = appliedFor(JOURNAL).map((row) =>
       row.createdAt === editedAfterApply.when ? { ...row, hash: "0".repeat(64) } : row
@@ -115,11 +114,11 @@ describe("verifyMigrations (core)", () => {
   });
 
   it("FAILS on drift for a tag that is NOT allowlisted (renumber+edit keeping the timestamp)", async () => {
-    // The reviewer-raised hazard: 0003_lame_carnage was applied (hash H_old,
-    // created_at=T), then renumbered to 0004 AND content-edited while KEEPING
-    // timestamp T. The new entry's SQL never ran here, yet the old row sits at
-    // its exact `when`. Bookkeeping stores no tags, so this is structurally
-    // identical to benign drift — it must FAIL unless a human allowlists it.
+    // The hazard shape: an applied row (hash H_old, created_at=T) backs a
+    // journal entry that carries timestamp T with different content. That
+    // entry's SQL never ran here, yet a row sits at its exact `when`.
+    // Bookkeeping stores no tags, so this is structurally identical to benign
+    // drift — it must fail unless a human allowlists it.
     const renamedAndEdited: JournalMigration = {
       tag: "0004_classy_runaways",
       when: 1_783_057_253_835,
@@ -140,7 +139,7 @@ describe("verifyMigrations (core)", () => {
 
   it("still FAILS as MISSING when an unmatched entry has no applied row at its `when` either", async () => {
     // Drift tolerance must not swallow the real hazard: a skipped migration
-    // leaves NO row at its journal timestamp at all.
+    // leaves no row at its journal timestamp at all.
     const applied = appliedFor(JOURNAL.filter((e) => e.tag !== "0003_amazing_meteorite"));
     // Add allowlisted drift on 0002 to prove the classifications coexist.
     const withDrift = applied.map((row) =>
@@ -157,8 +156,8 @@ describe("verifyMigrations (core)", () => {
 
   it("claims rows 1:1 — duplicate-timestamp rows are not swept out of extraApplied together", async () => {
     // Two applied rows share created_at=T: one legitimately backs the drifted
-    // 0002 entry; the other is unrelated renamed-away history. Only ONE row is
-    // claimed by the drift; the duplicate must still surface as extra.
+    // 0002 entry; the other is unrelated history. Only one row is claimed by
+    // the drift; the duplicate must still surface as extra.
     const editedAfterApply = JOURNAL[2] as JournalMigration;
     const duplicate = {
       hash: hashMigrationSql("unrelated history"),
@@ -178,7 +177,7 @@ describe("verifyMigrations (core)", () => {
   });
 
   it("matches by HASH, not timestamp — a re-timestamped but identical file still matches", async () => {
-    // Renumbering that PRESERVES content keeps the sha256, so an applied row
+    // Renumbering that preserves content keeps the sha256, so an applied row
     // recorded under a different `created_at` still satisfies the journal.
     const applied = JOURNAL.map((e) => ({ hash: e.hash, createdAt: e.when + 999_999 }));
     const result = await verifyMigrations(JOURNAL, { execute: fakeExecutor(applied) });
@@ -308,7 +307,7 @@ describe("runCli (shell)", () => {
 
 describe("readJournalMigrations (fs seam, against the repo's real migrations)", () => {
   it("loads the committed journal and hashes each migration file like drizzle does", () => {
-    // Uses the REAL db/migrations folder — no DB, just fs — so the tuple shape
+    // Uses the real db/migrations folder — no DB, just fs — so the tuple shape
     // (tag + when + sha256) is proven against the actual committed artifacts.
     const migrations = readJournalMigrations("db/migrations");
 

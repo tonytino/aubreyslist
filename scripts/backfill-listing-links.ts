@@ -1,38 +1,37 @@
 /**
- * Listing-links backfill: `pnpm db:backfill:listing-links` — API-FREE, idempotent.
+ * Listing-links backfill: `pnpm db:backfill:listing-links`. API-free,
+ * idempotent.
  *
- * Listings created before typed links (AUB-202) carry their menu link in the
- * legacy `listings.menu_url` column, which new writes no longer populate. This
- * script inserts a `menu`-kind `listing_links` row for every listing whose
- * legacy `menuUrl` is a valid http(s) URL — so old rows join the typed model
- * and the detail page no longer needs its legacy fallback for them. Built
- * entirely from columns already on each row — no network call, no key.
+ * Some listings carry their menu link in the legacy `listings.menu_url`
+ * column, which nothing writes. This script inserts a `menu`-kind
+ * `listing_links` row for every listing whose legacy `menuUrl` is a valid
+ * http(s) URL, moving those rows onto the typed model. Built entirely from
+ * columns already on each row — no network call, no key.
  *
- * It then CLEARS the migrated `menu_url` (typed writes supersede the legacy
+ * It then clears the migrated `menu_url` (typed writes supersede the legacy
  * column — the same rule the edit-links server module enforces). This is what
  * makes a later "remove menu link" stick: the detail page's fallback renders
  * `menu_url` whenever no typed row exists, so a lingering legacy value would
  * resurrect a link users deleted. The column is also cleared when the typed
- * row ALREADY existed (insert conflict) — the typed row is authoritative
+ * row already existed (insert conflict) — the typed row is authoritative
  * either way, and the user-edited URL in it is never overwritten.
  *
- * Design (mirrors `scripts/backfill-maps-urls.ts`):
- * - The testable core is {@link backfillListingLinks}, which takes its DB as an
- *   INJECTED dependency, so unit tests need no live DB or network.
- * - The CLI shell ({@link runCli}) wires the real `getDb()`, prints a summary,
- *   and sets the exit code.
+ * Structure:
+ * - {@link backfillListingLinks} is the testable core with an injected DB, so
+ *   unit tests need no live database or network.
+ * - {@link runCli} wires the real `getDb()`, prints a summary, and sets the
+ *   exit code.
  *
- * IDEMPOTENT: the insert is `onConflictDoNothing` on the (listing, kind)
+ * Idempotent: the insert is `onConflictDoNothing` on the (listing, kind)
  * unique constraint, so a listing that already has a menu-kind row — from a
  * prior run or a real user's edit — never has its URL touched or overwritten,
  * and a migrated row (menu_url cleared) is not selected again. Re-run freely.
- * `createdBy` stays NULL (no user performed this write). Rows whose legacy
- * value is not http(s) are reported and left fully untouched, never guessed
- * (#90: a dangerous-scheme URL must not be copied into the typed table).
+ * `createdBy` stays null (no user performed this write). Rows whose legacy
+ * value is not http(s) are reported and left fully untouched, never guessed —
+ * a dangerous-scheme URL must not be copied into the typed table.
  *
- * Runs via `node --experimental-strip-types` + the dependency-free alias loader
- * (`scripts/register-aliases.mjs`) — no `tsx`/`ts-node` dependency, same as
- * `db:seed` and `db:backfill:maps-urls`.
+ * Runs via `node --experimental-strip-types` plus the dependency-free alias
+ * loader (`scripts/register-aliases.mjs`).
  */
 
 import { eq, isNotNull } from "drizzle-orm";
@@ -118,10 +117,10 @@ export async function backfillListingLinks(
     }
 
     // Typed writes supersede the legacy column (the edit-links module enforces
-    // the same rule): clear `menu_url` now that a typed menu row exists —
-    // whether this run inserted it or one already existed — so the detail
-    // page's legacy fallback can never resurrect a link a user later removes.
-    // Never reached for skipped non-http rows, which stay fully untouched.
+    // the same rule): once a typed menu row exists — whether this run inserted
+    // it or one already existed — clear `menu_url` so the detail page's legacy
+    // fallback can never resurrect a link a user later removes. Never reached
+    // for skipped non-http rows, which stay fully untouched.
     await db.update(listings).set({ menuUrl: null }).where(eq(listings.id, row.id));
   }
 

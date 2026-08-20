@@ -112,7 +112,7 @@ describe("validateTldrBlock", () => {
   });
 
   it("does not let a fenced pseudo-heading terminate the section early", () => {
-    // The `## fake heading` lives inside a fence WITHIN the TL;DR section, so
+    // The `## fake heading` lives inside a fence within the TL;DR section, so
     // the section runs past it and the real content after the fence counts.
     const body = [
       "## TL;DR",

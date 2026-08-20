@@ -10,7 +10,7 @@ import {
 } from "./seed-admin";
 
 /**
- * Tests for the first-admin seeding CLI (`pnpm db:seed-admin`, #128).
+ * Tests for the first-admin seeding CLI (`pnpm db:seed-admin`).
  *
  * The DB is injected as a dependency (no `~/db/client` import to mock), so these
  * exercise the real lookup/promote/idempotent/not-found/misuse branches with a
