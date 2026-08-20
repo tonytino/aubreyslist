@@ -30,6 +30,7 @@ import { writeFileSync } from "node:fs";
 import { z } from "zod";
 import { getPlacesApiKey } from "~/env";
 import { type Coords, haversineKm, milesToKm, UNION_STATION } from "~/listings/distance";
+import { errorMessage, logSkipped, runWhenInvokedDirectly } from "./cli";
 import type { SeededListing } from "./seed-data";
 import { SEED_SOURCES, type SeedSource } from "./seed-sources";
 
@@ -109,6 +110,13 @@ const PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
 const SEARCH_FIELD_MASK =
   "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri";
 
+/* jscpd:ignore-start -- Accepted clone of `detailsResponseSchema` in
+   app/server/places.ts. The two describe DIFFERENT Places API responses
+   (searchText here, Place Details there) and only collide because Google reuses
+   field names. This one also carries `rating`/`userRatingCount`, which Details
+   does not. A shared "common subset" schema would couple two independent API
+   surfaces, so either could not change without dragging the other. This build-
+   time script also must not import the runtime server module. */
 const searchTextResponseSchema = z.object({
   places: z
     .array(
@@ -124,6 +132,7 @@ const searchTextResponseSchema = z.object({
     )
     .optional(),
 });
+/* jscpd:ignore-end */
 
 /**
  * Build the real Places Text Search resolver. Biases results toward Union Station
@@ -243,25 +252,14 @@ export async function runCli(
     log.log(
       `Refresh complete — captured ${result.listings.length} listing(s), skipped ${result.skipped.length}. Wrote seed-listings.generated.json.`
     );
-    if (result.skipped.length > 0) {
-      log.log(`Skipped: ${result.skipped.map((s) => s.query).join("; ")}`);
-    }
+    logSkipped((m) => log.log(m), result.skipped);
     return 0;
   } catch (error) {
-    log.error(error instanceof Error ? error.message : String(error));
+    log.error(errorMessage(error));
     return 1;
   }
 }
 
 // Run when invoked directly (not when imported by tests). `getPlacesApiKey()` — and
 // thus GOOGLE_PLACES_API_KEY validation — is only touched on this path.
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runCli()
-    .then((code) => {
-      process.exitCode = code;
-    })
-    .catch((error: unknown) => {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    });
-}
+runWhenInvokedDirectly(import.meta.url, () => runCli());

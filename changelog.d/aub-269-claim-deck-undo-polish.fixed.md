@@ -1,0 +1,1 @@
+- `[manual]` Claim deck undo polish (AUB-269): reopening the deck after closing it with Done no longer shows the previous session's stale "Vote recorded · Undo" row; the undo row's slot height is reserved so its appearance never shifts the answer buttons mid-flow; and the deck's live region is the single screen-reader announcer (the row no longer double-announces).
