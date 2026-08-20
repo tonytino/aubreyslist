@@ -1,0 +1,1 @@
+- `[manual]` Added a drift guard (`app/server/flags/flags.fn.test.ts`) that parses a shared case table through both flag input schemas — the client-safe `flagFnInputSchema` mirror and `createFlagInputSchema` — asserting identical accept/reject verdicts, parsed output, and issue paths/messages, so the deliberate `jscpd:ignore`d clone can no longer silently diverge.

@@ -55,6 +55,11 @@ const reasonSchema = z
  * `./flags.fn.ts` is the authoritative server-side validation (it runs on
  * every client call). This schema mirrors it for direct callers/tests of
  * {@link createFlag}; the DB CHECK is the ultimate guarantee.
+ *
+ * The mirror is a deliberate clone (see the `jscpd:ignore` rationale in
+ * `./flags.fn.ts`: merging the two would drag drizzle/neon into the browser
+ * bundle). Edit one, edit the other — `./flags.fn.test.ts` (AUB-260) fails if
+ * they diverge.
  */
 export const createFlagInputSchema = z.discriminatedUnion("target", [
   z
