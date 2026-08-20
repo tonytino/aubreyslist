@@ -15,8 +15,8 @@ import { buildMapsUrl, runPlaceDetails } from "~/server/places";
 import { enforceWriteLimit } from "~/server/rate-limit";
 import { getSetting } from "~/server/settings";
 
-// Re-exported so server code and the existing create tests keep one import
-// surface; the client-safe definitions live in `~/listings/create-input` (#141).
+// Re-exported so server code and the create tests keep one import surface;
+// the client-safe definitions live in `~/listings/create-input`.
 export {
   type CreateListingInput,
   type CreateListingResult,
@@ -24,46 +24,43 @@ export {
 } from "~/listings/create-input";
 
 /**
- * Server-side "add a listing" write (issue #26, ADR-008).
+ * Server-side "add a listing" write (ADR-008).
  *
  * The single mutating entry point behind the add-listing UI. It honours the
- * admin-toggled intake mode (`getSetting('intake_mode')`): in `places` mode the
- * client submits a chosen Google Place ID and the canonical name/address/lat/lng
- * are resolved server-side from the Places provider (the client never gets to
- * hand-fabricate those); in `manual` mode the client submits the
- * name/address/lat/lng directly. Either way an optional set of typed links
- * (menu, gluten-free menu, website, reservations, online ordering — AUB-202)
- * rides along and is inserted into `listing_links` after the listing insert.
- * The legacy `listings.menu_url` column is NO LONGER written (it stays `null`
- * on new rows and is kept only for legacy data; the detail page falls back to
- * it when a listing has no `menu`-kind link).
+ * admin-toggled intake mode (`getSetting('intake_mode')`): in `places` mode
+ * the client submits a chosen Google Place ID and the canonical
+ * name/address/lat/lng are resolved server-side from the Places provider (the
+ * client never hand-fabricates those); in `manual` mode the client submits
+ * those fields directly. Either way an optional set of typed links (menu,
+ * gluten-free menu, website, reservations, online ordering) rides along and
+ * is inserted into `listing_links` after the listing insert. The legacy
+ * `listings.menu_url` column stays `null` on new rows and is kept only for
+ * legacy data; the detail page falls back to it when a listing has no
+ * `menu`-kind link.
  *
- * Why a server function (not a Hono route): per `docs/agents/api.md`, the
- * decision rule turns on "could anything outside this app's frontend ever need
- * this data?" — no. The add-listing form is the only consumer; there is no
- * webhook / mobile / cron / third-party caller. That points at a Layer 1 server
- * function, which also keeps `db` + the Places key strictly server-side and
- * needs no new dependency (`@hono/zod-validator` would otherwise be required).
+ * Why a server function, not a Hono route: per `docs/agents/api.md`, nothing
+ * outside this app's frontend needs this write — no webhook, mobile, cron or
+ * third-party caller. A server function also keeps `db` and the Places key
+ * strictly server-side and needs no new dependency.
  *
- * Auth: the write is gated server-side by {@link requireCurrentUser} — a UI-only
- * check is not trusted. An anonymous caller throws `401` before any DB work.
+ * Auth: the write is gated server-side by {@link requireCurrentUser} — a
+ * UI-only check is not trusted. An anonymous caller gets a 401 before any DB
+ * work.
  *
- * Dedup (issue #25):
- * - **Places mode** — `listings.place_id` is UNIQUE. Rather than surface a
- *   constraint error, a submission for an already-listed Place ID resolves to the
- *   existing row and returns it with `created: false`, so the UI can route the
- *   user to the listing that already exists (ADR-008).
- * - **Manual mode** — entries store `placeId: null`; Postgres treats NULLs as
- *   distinct, so the unique index never collides them. Before inserting we run a
- *   deterministic normalized name+address match against existing manual listings
- *   ({@link findDuplicateListing}) and BLOCK a strong match with a structured
- *   {@link DuplicateListingError} (carrying the existing listing's id/name so the
- *   UI can link to it) instead of silently creating a duplicate.
+ * Dedup:
+ * - Places mode: `listings.place_id` is unique. Rather than surface a
+ *   constraint error, a submission for an already-listed Place ID resolves to
+ *   the existing row with `created: false`, so the UI routes the user to the
+ *   existing listing (ADR-008).
+ * - Manual mode: entries store `placeId: null`; Postgres treats nulls as
+ *   distinct, so the unique index never collides them. Before inserting, a
+ *   deterministic normalized name+address match against existing manual
+ *   listings ({@link findDuplicateListing}) blocks a strong match with a
+ *   structured {@link DuplicateListingError} carrying the existing id/name.
  *
- * The validated input schema (`createListingInputSchema`) and the
- * `CreateListingInput` / `CreateListingResult` types are the client-safe contract
- * and live in `~/listings/create-input` (#141); they are imported + re-exported
- * above so this module — and its callers — keep one import surface.
+ * The validated input schema and the input/result types are the client-safe
+ * contract in `~/listings/create-input`, re-exported above so this module and
+ * its callers keep one import surface.
  */
 
 /** The canonical, ready-to-insert shape, independent of which intake mode produced it. */
@@ -77,24 +74,24 @@ interface ResolvedListing {
 }
 
 /**
- * Resolve a validated input into the canonical insert shape. The active mode is
- * read from app settings (not taken from the client), but the rule is
- * ASYMMETRIC — manual entry is a first-class fallback in EVERY mode (ADR-008:
- * "the manual form must always work … it is the safety net, not dead code"):
+ * Resolve a validated input into the canonical insert shape. The active mode
+ * is read from app settings, not the client, and the rule is asymmetric —
+ * manual entry is a first-class fallback in every mode (ADR-008: "the manual
+ * form must always work; it is the safety net, not dead code"):
  *
- * - **Manual** submissions are ALWAYS accepted, regardless of the active mode —
- *   this powers the wizard's "Enter manually instead" fallback even while Places
+ * - Manual submissions are always accepted, regardless of the active mode —
+ *   this powers the wizard's "Enter manually instead" fallback while Places
  *   is the default intake.
- * - **Places** submissions are rejected ONLY when the admin has degraded intake
- *   to `manual` (budget / rate-limit): disabling Places must still block the
- *   Google-backed writes it turns off. That degradation intent is preserved.
+ * - Places submissions are rejected only when the admin has degraded intake
+ *   to `manual` (budget/rate-limit): disabling Places must still block the
+ *   Google-backed writes it turns off.
  *
  * So the sole rejection is `input.mode === "places" && activeMode === "manual"`.
  *
- * In `places` mode the name/address/lat/lng are fetched from the Places provider
+ * In `places` mode the name/address/lat/lng come from the Places provider
  * (the submitted `placeId` is the only trusted field). A provider failure
- * (disabled, missing key, upstream/network) is surfaced as a thrown error
- * carrying the provider's friendly message.
+ * (disabled, missing key, upstream/network) surfaces as a thrown error with
+ * the provider's friendly message.
  */
 async function resolveListing(input: CreateListingInput): Promise<ResolvedListing> {
   const activeMode = await getSetting("intake_mode");
@@ -139,27 +136,27 @@ async function resolveListing(input: CreateListingInput): Promise<ResolvedListin
 
 /**
  * Block a manual entry that duplicates an existing manual listing on a
- * normalized name+address match (issue #25).
+ * normalized name+address match.
  *
- * The query loads the **visible manual** candidate subset — `place_id IS NULL`
- * (manual only; Places rows dedup on Place ID and must never block/merge a manual
- * entry) AND `moderation_status = 'visible'`. The visibility filter matters: a
- * moderator-`hidden`/`removed` listing must NOT block a legitimate re-add and must
- * never be surfaced to / linked for a user who can't even see it (public reads are
- * visible-only → they'd 404, #41). This is a full scan of that subset, NOT a true
- * SQL prefilter on the normalized key — the authoritative name AND address match
- * runs in JS ({@link findDuplicateListing}), because `normalizeForDedup`'s NFKD
- * diacritic fold can't be replicated in SQL without `unaccent` (a DB extension we
- * deliberately don't add). Manual entry is the low-volume ADR-008 fallback, so the
- * scan is bounded by the manual-listing count and cheap in practice.
+ * The query loads the visible manual candidate subset: `place_id is null`
+ * (manual only — Places rows dedup on Place ID and must never block/merge a
+ * manual entry) and `moderation_status = 'visible'`. The visibility filter
+ * matters: a hidden/removed listing must not block a legitimate re-add and
+ * must never be linked for a user who can't see it (public reads are
+ * visible-only, so it would 404). This is a full scan of that subset, not a
+ * SQL prefilter on the normalized key — the authoritative match runs in JS
+ * ({@link findDuplicateListing}), because the NFKD diacritic fold can't be
+ * replicated in SQL without `unaccent`, an extension we deliberately don't
+ * add. Manual entry is the low-volume ADR-008 fallback, so the scan is
+ * bounded by the manual-listing count and cheap in practice.
  *
- * Residual TOCTOU: there is no DB unique on normalized name+address (by design —
- * addresses are free-form), so this read-then-write check is racier than the
- * Places path; two concurrent identical manual submissions can both pass. Such
- * slipped-through dups are moderatable after the fact (#41). See `dedup.ts`.
+ * Residual TOCTOU: no DB unique on normalized name+address (addresses are
+ * free-form), so this read-then-write check is racier than the Places path;
+ * two concurrent identical submissions can both pass. Moderation is the
+ * backstop. See `dedup.ts`.
  *
- * On a match we throw a {@link DuplicateListingError} (carrying the existing
- * id/name) instead of inserting.
+ * On a match, throws {@link DuplicateListingError} with the existing id/name
+ * instead of inserting.
  */
 async function assertNoManualDuplicate(resolved: ResolvedListing): Promise<void> {
   const db = getDb();
@@ -178,11 +175,11 @@ async function assertNoManualDuplicate(resolved: ResolvedListing): Promise<void>
 }
 
 /**
- * Insert the intake-provided typed links for a freshly-created listing
- * (AUB-202). One batched insert into `listing_links`, with the creating user
- * recorded as `createdBy` (provenance). `onConflictDoNothing` on the
- * (listing, kind) unique target keeps a race with a concurrent post-creation
- * edit from surfacing as a constraint error. No-op for an empty set.
+ * Insert the intake-provided typed links for a freshly created listing. One
+ * batched insert into `listing_links`, with the creating user recorded as
+ * `createdBy` (provenance). `onConflictDoNothing` on the (listing, kind)
+ * unique target keeps a race with a concurrent post-creation edit from
+ * surfacing as a constraint error. No-op for an empty set.
  */
 async function insertListingLinks(
   listingId: string,
@@ -199,26 +196,24 @@ async function insertListingLinks(
 }
 
 /**
- * Insert the resolved listing, handling dedup for both intake modes (issue #25):
+ * Insert the resolved listing, handling dedup for both intake modes:
  *
- * - **Places** — first look up any existing row for the Place ID and return it
- *   (`created: false`) instead of erroring, and guard the race where a concurrent
- *   insert wins by treating the resulting conflict as "already listed" and
- *   re-reading the existing row.
- * - **Manual** — run a normalized name+address duplicate check and BLOCK a strong
- *   match with a {@link DuplicateListingError} before inserting.
+ * - Places: look up any existing row for the Place ID and return it
+ *   (`created: false`) instead of erroring; treat a lost concurrent-insert
+ *   race as "already listed" and re-read the existing row.
+ * - Manual: run the normalized name+address duplicate check and block a
+ *   strong match with a {@link DuplicateListingError} before inserting.
  */
 async function insertListing(resolved: ResolvedListing): Promise<CreateListingResult> {
   const db = getDb();
 
-  // Places-mode dedup: a Place ID is canonical, so an existing *visible* row IS
-  // the listing. The `moderation_status = 'visible'` filter mirrors the manual
-  // path (`assertNoManualDuplicate`): a moderator-`hidden`/`removed` row must
-  // never be surfaced to / linked for a user who can't even see it, and must not
-  // leak its full metadata or act as a `created: false` moderation-state oracle
-  // (#41). A Place ID that maps ONLY to a hidden/removed row is therefore treated
-  // as ABSENT here, so we fall through to the insert — where the `place_id`
-  // UNIQUE index + `onConflictDoNothing` still prevent a real duplicate row.
+  // Places-mode dedup: a Place ID is canonical, so an existing visible row is
+  // the listing. The `moderation_status = 'visible'` filter mirrors the
+  // manual path: a hidden/removed row must never be surfaced or linked, leak
+  // its metadata, or act as a `created: false` moderation-state oracle. A
+  // Place ID that maps only to a hidden/removed row is treated as absent
+  // here, falling through to the insert — where the `place_id` unique index
+  // plus `onConflictDoNothing` still prevent a real duplicate row.
   if (resolved.placeId !== null) {
     const existing = await db.query.listings.findFirst({
       where: and(eq(listings.placeId, resolved.placeId), eq(listings.moderationStatus, "visible")),
@@ -232,9 +227,9 @@ async function insertListing(resolved: ResolvedListing): Promise<CreateListingRe
   }
 
   // `onConflictDoNothing` on the unique place_id index makes a concurrent
-  // duplicate a no-op (empty `returning`) rather than a thrown constraint error.
-  // NOTE: `menuUrl` is deliberately absent — new rows keep it `null`; typed
-  // links go to `listing_links` instead (AUB-202).
+  // duplicate a no-op (empty `returning`) rather than a thrown constraint
+  // error. `menuUrl` is deliberately absent — new rows keep it `null`; typed
+  // links go to `listing_links` instead.
   const inserted = await db
     .insert(listings)
     .values({
@@ -253,19 +248,17 @@ async function insertListing(resolved: ResolvedListing): Promise<CreateListingRe
     return { listing: row, created: true };
   }
 
-  // Empty `returning` ⇒ the `place_id` UNIQUE conflicted, so a row already holds
-  // this Place ID. Re-read the *visible* row so the caller can still route the
-  // user to the (now-existing) listing.
+  // Empty `returning` means the `place_id` unique index conflicted: a row
+  // already holds this Place ID. Re-read the visible row so the caller can
+  // still route the user to the existing listing.
   //
-  // Edge: the conflicting row may be moderator-`hidden`/`removed`. That happens
-  // either when a concurrent insert lost the race to a moderated row, OR (the
-  // common case) when the pre-insert visible-only lookup above correctly skipped
-  // an existing hidden/removed row and we fell through to the insert, which then
-  // conflicted on the UNIQUE `place_id`. In both cases this visible-only re-read
-  // finds nothing — by design: we must never return the moderated row. We surface
-  // a clear, non-leaky error instead of a confusing success/null so the UX reads
-  // as "this place can't be added right now" rather than a silent failure. The
-  // message is deliberately generic (it does not reveal the moderation state).
+  // Edge: the conflicting row may be hidden/removed — a concurrent insert
+  // lost the race to a moderated row, or (the common case) the visible-only
+  // lookup above skipped an existing hidden/removed row and the insert then
+  // conflicted. In both cases this visible-only re-read finds nothing, by
+  // design: never return the moderated row. Surface a clear, non-leaky error
+  // instead of a confusing success/null; the message is deliberately generic
+  // and does not reveal the moderation state.
   if (resolved.placeId !== null) {
     const existing = await db.query.listings.findFirst({
       where: and(eq(listings.placeId, resolved.placeId), eq(listings.moderationStatus, "visible")),
@@ -282,20 +275,19 @@ async function insertListing(resolved: ResolvedListing): Promise<CreateListingRe
 }
 
 /**
- * Core add-listing logic, factored out of the server-function transport so it is
- * directly unit-testable with a mocked DB / provider. Resolves the input for the
+ * Core add-listing logic, factored out of the server-function transport so it
+ * is unit-testable with a mocked DB/provider. Resolves the input for the
  * active intake mode, inserts (deduping on Place ID), then records any typed
- * links on a NEWLY created listing (AUB-202).
+ * links on a newly created listing.
  *
- * Links are written only when `created` is true: a places pick that deduped to
- * an already-existing listing must not silently overwrite (or seed) that
- * listing's links from an intake form — the detail page's edit-links flow is
- * the deliberate surface for changing an existing listing's links.
+ * Links are written only when `created` is true: a places pick that deduped
+ * to an existing listing must not overwrite (or seed) that listing's links
+ * from an intake form — the detail page's edit-links flow is the deliberate
+ * surface for that.
  *
- * NOTE: the auth gate lives on the {@link createListing} server function, not
- * here — keeping this helper pure of session plumbing mirrors `places.ts`
- * (`runAutocomplete` / `runPlaceDetails`). `createdBy` is passed in by the
- * gated wrappers for the same reason (link provenance, AUB-202).
+ * The auth gate lives on the {@link createListing} server function, not here,
+ * keeping this helper free of session plumbing (mirrors `places.ts`).
+ * `createdBy` is passed in by the gated wrappers for link provenance.
  */
 export async function runCreateListing(
   input: CreateListingInput,
@@ -304,15 +296,14 @@ export async function runCreateListing(
   const resolved = await resolveListing(input);
   const result = await insertListing(resolved);
   if (result.created) {
-    // NON-FATAL: the listing insert has already committed, and the Neon HTTP
-    // driver offers no interactive transaction to roll it back with (and
-    // `db.batch` can't express this flow — the links depend on the dedup
-    // branch's outcome). Failing here would surface an error for a listing
-    // that EXISTS, and the user's retry would dedup to `created: false` and
-    // silently drop the links anyway. So degrade to success-without-links —
-    // the wiki-style edit dialog on the detail page is the recovery path —
-    // and report the error (Sentry + server logs) like the favorites
-    // read-degrade does.
+    // Non-fatal: the listing insert has already committed, and the Neon HTTP
+    // driver offers no interactive transaction to roll it back (`db.batch`
+    // can't express this flow — the links depend on the dedup branch's
+    // outcome). Failing here would surface an error for a listing that
+    // exists, and a retry would dedup to `created: false` and drop the links
+    // anyway. So degrade to success-without-links — the detail page's edit
+    // dialog is the recovery path — and report the error (Sentry + server
+    // logs), like the favorites read-degrade.
     try {
       await insertListingLinks(result.listing.id, input.links, createdBy);
     } catch (error) {
@@ -327,11 +318,11 @@ export async function runCreateListing(
  * Add-listing server function — the entry point the add-listing UI calls.
  *
  * Order of operations:
- * 1. {@link requireCurrentUser} — server-side auth gate (throws 401 if anonymous).
- * 2. {@link enforceWriteLimit} — per-user write rate limit (issue #18), applied
- *    immediately AFTER the auth gate and BEFORE the write so an abusive burst is
- *    capped (throws 429) while an anonymous caller still gets a 401, not a 429.
- * 3. {@link runCreateListing} — resolve for the active intake mode + insert/dedup.
+ * 1. {@link requireCurrentUser} — server-side auth gate (401 if anonymous).
+ * 2. {@link enforceWriteLimit} — per-user write rate limit, after the auth
+ *    gate and before the write, so an abusive burst gets a 429 while an
+ *    anonymous caller still gets a 401.
+ * 3. {@link runCreateListing} — resolve for the active mode + insert/dedup.
  */
 export const createListing = createServerFn({ method: "POST" })
   .validator(createListingInputSchema)

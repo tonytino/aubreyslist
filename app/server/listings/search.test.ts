@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // --- Mocks -----------------------------------------------------------------
 // `runListingSearch` runs
 //   getDb().select().from(listings).where(predicate).orderBy(asc(name)).limit(n).offset(m)
-// We model that exact chain so we can assert the predicate handed to `.where()`
-// AND the bound `.limit()`/`.offset()` (issue #97) without a live database.
-// Everything else (the predicate-building logic) is pure and tested directly.
+// The mock models that exact chain to assert the predicate handed to
+// `.where()` and the bound `.limit()`/`.offset()` without a live database.
+// The predicate-building logic is pure and tested directly.
 let returnedRows: unknown[] = [];
 const offsetMock = vi.fn((_offset: number) => Promise.resolve(returnedRows));
 const limitMock = vi.fn((_limit: number) => ({ offset: offsetMock }));
@@ -86,7 +86,7 @@ describe("runListingSearch", () => {
     // The predicate passed to `.where()` is a real SQL node (not undefined).
     const predicate = whereMock.mock.calls[0]?.[0] as SQL | undefined;
     expect(predicate).toBeDefined();
-    // Visibility (#41) is AND-folded first, then the two `%term%` search params.
+    // Visibility is AND-folded first, then the two `%term%` search params.
     expect(renderSql(predicate as SQL).params).toEqual(["visible", "%taco%", "%taco%"]);
   });
 
@@ -111,17 +111,17 @@ describe("runListingSearch", () => {
     const result = await search({ query: "  " });
 
     expect(result).toHaveLength(2);
-    // A blank query adds no text constraint, but the public read still excludes
-    // hidden/removed listings (#41) — the ONLY bound param is the visibility one.
+    // A blank query adds no text constraint, but the public read still
+    // excludes hidden/removed listings — the only bound param is visibility.
     const predicate = whereMock.mock.calls[0]?.[0] as SQL | undefined;
     expect(predicate).toBeDefined();
     expect(renderSql(predicate as SQL).params).toEqual(["visible"]);
   });
 
   it("excludes hidden/removed listings from search results (#41)", async () => {
-    // This is a PUBLIC, addressable RPC (mounted via api.$.ts), so hidden/removed
-    // listings must never be returned by a name/address search. Assert the WHERE
-    // always carries `moderation_status = 'visible'`, AND-folded with the search.
+    // A public, addressable RPC: hidden/removed listings must never come back
+    // from a name/address search. The WHERE always carries
+    // `moderation_status = 'visible'`, AND-folded with the search.
     await search({ query: "taco" });
 
     const predicate = whereMock.mock.calls[0]?.[0] as SQL;

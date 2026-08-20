@@ -20,9 +20,9 @@ vi.mock("~/server/listings/get-listing", () => ({
   getListing: (input: { id: string }) => getListingMock(input),
 }));
 
-// The BATCH path (AUB-219) queries the DB directly (no N+1 via `getListing` per
-// id) — model the exact chain it uses: `select({...}).from(listings).where(...)`.
-// The predicate itself is built with the REAL `drizzle-orm` `and`/`eq`/`inArray`
+// The batch path queries the DB directly (no N+1 via `getListing` per id) —
+// model the exact chain it uses: `select({...}).from(listings).where(...)`.
+// The predicate itself is built with the real `drizzle-orm` `and`/`eq`/`inArray`
 // (unmocked — they just build a SQL AST, no DB touched), so only the terminal
 // `where(...)` needs mocking to resolve canned rows.
 const selectListingsMock = vi.fn(() =>
@@ -213,7 +213,7 @@ describe("runListingPhotos", () => {
       expect(await runListingPhotos({ listingId: "listing-1" })).toEqual([]);
       expect(emptySpy).toHaveBeenCalledTimes(1);
 
-      // Failure → NOT cached; a later view may retry.
+      // Failure → not cached; a later view may retry.
       listingPhotosCache.clear();
       const failSpy = mockFetchOnce({}, false, 502);
       vi.stubGlobal("fetch", failSpy);
@@ -247,14 +247,14 @@ describe("TtlCache", () => {
     cache.set("b", 2);
     cache.set("c", 3);
 
-    // At the cap: a new key evicts the OLDEST ("a"), the rest survive.
+    // At the cap: a new key evicts the oldest ("a"), the rest survive.
     cache.set("d", 4);
     expect(cache.get("a")).toBeUndefined();
     expect(cache.get("b")).toBe(2);
     expect(cache.get("c")).toBe(3);
     expect(cache.get("d")).toBe(4);
 
-    // Overwriting an existing key does NOT evict anyone — it just re-ages.
+    // Overwriting an existing key does not evict anyone — it just re-ages.
     cache.set("b", 20);
     expect(cache.get("b")).toBe(20);
     expect(cache.get("c")).toBe(3);
@@ -350,7 +350,7 @@ describe("getPhotosForListings (browse batch, AUB-219)", () => {
     });
 
     expect(Object.keys(result).sort()).toEqual(["listing-1", "listing-2"]);
-    // ONE photo per listing (the FIRST), not the full up-to-MAX_LISTING_PHOTOS list.
+    // One photo per listing (the first), not the full up-to-MAX_LISTING_PHOTOS list.
     expect(result["listing-1"]?.photoToken).toBe("places/ChIJ_one/photos/resource-1");
     expect(result["listing-2"]?.photoToken).toBe("places/ChIJ_two/photos/resource-1");
     expect(result["listing-3"]).toBeUndefined();
@@ -365,7 +365,7 @@ describe("getPhotosForListings (browse batch, AUB-219)", () => {
     await runListingPhotos({ listingId: "hero-listing" });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-    // A browse listing mapping to the SAME Place ID reuses the cache entry.
+    // A browse listing mapping to the same Place ID reuses the cache entry.
     selectListingsMock.mockResolvedValue([{ id: "browse-listing", placeId: "ChIJ_place" }]);
     const result = await getPhotosForListings({ listingIds: ["browse-listing"] });
 
@@ -490,7 +490,7 @@ describe("getPhotosForListings (browse batch, AUB-219)", () => {
   });
 });
 
-// NOTE: the thin `fetchListingPhotos`/`fetchBrowsePhotos` wrappers in
+// The thin `fetchListingPhotos`/`fetchBrowsePhotos` wrappers in
 // `places-photos.fn.ts` are not direct-invoked here — GET server fns don't run
 // through the in-process `callServerFn` harness (repo-wide, no GET `*.fn.ts`
 // wrapper has a direct test; cf. browse.fn / incidents.fn / get-listing.fn).

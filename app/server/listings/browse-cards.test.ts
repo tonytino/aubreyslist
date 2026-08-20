@@ -1,29 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * GOLDEN regression test for `buildBrowseCards` (AUB-121).
+ * Golden regression test for `buildBrowseCards`.
  *
- * SAFETY-CRITICAL (ADR-007): `buildBrowseCards` owns the browse trust-glance
- * derivation — it batches the two visible-evidence signals (the headline celiac
- * aggregate + the recent-incident dates) and reduces each listing to a pure
- * {@link ListingTrustGlance}. This test PINS that output byte-for-byte across a
- * representative set of listings spanning EVERY trust state, so any future drift
- * in the glance mapping (a flipped tier, a lost evidence count, a changed
- * freshness cue, a mutated/dropped listing field) fails loudly here.
+ * Safety-critical (ADR-007): `buildBrowseCards` owns the browse trust-glance
+ * derivation. This test pins its output byte-for-byte across a representative
+ * set of listings spanning every trust state, so any drift in the glance
+ * mapping (a flipped tier, a lost evidence count, a changed freshness cue, a
+ * mutated/dropped listing field) fails loudly here.
  *
  * It exercises the helper directly (not the DB-backed `getBrowseListings`) by
- * mocking `~/db/client` the SAME way `browse.test.ts` does — a `getDb()` whose
- * `select()` chains resolve to fixture rows — so we assert the assembled cards
- * without a live database (docs/agents/testing.md). `buildBrowseCards` issues
- * exactly four batched queries (celiac aggregate + incidents + the AUB-193
- * bot-suggested-attribute set + the AUB-226 confirmed non-headline attribute
- * set); the mock routes each by its `select()` projection and returns the
- * fixtures verbatim, so the IN(...) filter is irrelevant to what a row maps to
- * (the row's own `listingId` keys it).
+ * mocking `~/db/client` the same way `browse.test.ts` does — a `getDb()`
+ * whose `select()` chains resolve to fixture rows — so the assembled cards
+ * are asserted without a live database (docs/agents/testing.md).
+ * `buildBrowseCards` issues exactly four batched queries (celiac aggregate,
+ * incidents, the bot-suggested-attribute set, the confirmed non-headline
+ * attribute set); the mock routes each by its `select()` projection and
+ * returns the fixtures verbatim, so the IN(...) filter is irrelevant to what
+ * a row maps to (the row's own `listingId` keys it).
  *
- * The helper is DISTANCE-AGNOSTIC (the "0.4 mi" label lives in
- * `getBrowseListings`), so no distance is asserted here — that path stays pinned
- * in `browse.test.ts`.
+ * The helper is distance-agnostic (the "0.4 mi" label lives in
+ * `getBrowseListings`), so no distance is asserted here — that path stays
+ * pinned in `browse.test.ts`.
  */
 
 const h = vi.hoisted(() => {
@@ -44,16 +42,16 @@ const h = vi.hoisted(() => {
   const incidentWhereMock = vi.fn(() => Promise.resolve(state.incidentRows));
   const incidentFromMock = vi.fn(() => ({ where: incidentWhereMock }));
 
-  // The bot-suggestion existence chain (AUB-193): select(proj).from().where()
+  // The bot-suggestion existence chain: select(proj).from().where()
   const suggestionWhereMock = vi.fn(() => Promise.resolve(state.suggestionRows));
   const suggestionFromMock = vi.fn(() => ({ where: suggestionWhereMock }));
 
-  // The confirmed-attribute consensus chain (AUB-226):
+  // The confirmed-attribute consensus chain:
   //   select(proj).from().leftJoin().where().groupBy().having()
-  // The `.where()` and `.having()` SQL args are captured (the mocks record their
-  // calls) so a test can render them with PgDialect and assert the real SQL rule
-  // (headline excluded; strict confirms > disputes) — the mock returns rows
-  // verbatim, so the SQL itself is where those guarantees live.
+  // The `.where()` and `.having()` SQL args are captured (the mocks record
+  // their calls) so a test can render them with PgDialect and assert the real
+  // SQL rule (headline excluded; strict confirms > disputes) — the mock
+  // returns rows verbatim, so the SQL itself is where those guarantees live.
   const confirmedHavingMock = vi.fn((_having?: unknown) => Promise.resolve(state.confirmedRows));
   const confirmedGroupByMock = vi.fn(() => ({ having: confirmedHavingMock }));
   const confirmedWhereMock = vi.fn((_predicate?: unknown) => ({ groupBy: confirmedGroupByMock }));
@@ -62,8 +60,8 @@ const h = vi.hoisted(() => {
 
   // Route each query to the right chain by its select() projection:
   //  - has `occurredOn`           → incidents
-  //  - has `suggestedListingId`   → bot-suggestion existence (AUB-193)
-  //  - has `confirmedListingId`   → confirmed-attribute consensus (AUB-226)
+  //  - has `suggestedListingId`   → bot-suggestion existence
+  //  - has `confirmedListingId`   → confirmed-attribute consensus
   //  - otherwise (claim cols)     → celiac aggregate
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
     if (projection && "occurredOn" in projection) return { from: incidentFromMock };
@@ -90,9 +88,9 @@ const NOW = new Date("2026-06-28T00:00:00Z");
 
 /**
  * A full, valid `Listing` fixture. Every field is set (and asserted to pass
- * through the card verbatim) so the golden test also pins that `buildBrowseCards`
- * carries the listing through UNCHANGED — it never mutates, drops, or reshapes a
- * listing field.
+ * through the card verbatim) so the golden test also pins that
+ * `buildBrowseCards` carries the listing through unchanged — it never
+ * mutates, drops, or reshapes a listing field.
  */
 function mkListing(overrides: Partial<Listing> & Pick<Listing, "id" | "name">): Listing {
   return {
@@ -130,7 +128,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
   });
 
   it("pins the card + glance for every trust state, in listing order", async () => {
-    // A representative set spanning EVERY trust state the derivation can produce:
+    // A representative set spanning every trust state the derivation can produce:
     //  - fresh celiac-safe   (fresh confirm-majority)
     //  - stale               (confirm-majority aged past the window)
     //  - contested           (disputes tie/lead → gluten-friendly)
@@ -144,8 +142,9 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
 
     const listings = [fresh, stale, contested, incident, unattested];
 
-    // One grouped celiac-aggregate row per listing that HAS a celiac claim. The
-    // unattested listing is deliberately absent (no row) → honest empty glance.
+    // One grouped celiac-aggregate row per listing that has a celiac claim.
+    // The unattested listing is deliberately absent (no row) — honest empty
+    // glance.
     state.celiacRows = [
       {
         listingId: "l-fresh",
@@ -194,7 +193,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
       "l-unattested",
     ]);
 
-    // --- Every listing is carried through UNCHANGED, all fields (no distanceLabel here). --
+    // --- Every listing is carried through unchanged, all fields (no distanceLabel here). --
     expect(cards.map((c) => c.listing)).toEqual(listings);
     for (const card of cards) {
       expect(card).not.toHaveProperty("distanceLabel");
@@ -291,11 +290,11 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
   });
 
   it("flags suggestedByBot for a listing whose ONLY suggestion is a non-celiac claim (AUB-193)", async () => {
-    // The shipped regression: 25 of the 46 seeded listings suggest only
-    // non-celiac attributes (e.g. dedicated_fryer), so they have NO celiac
-    // aggregate row — but the batched suggested-attribute query still finds
-    // their live bot suggestion, so the card shows its provenance instead of a
-    // bare "Not yet attested".
+    // Many seeded listings suggest only non-celiac attributes (e.g.
+    // dedicated_fryer), so they have no celiac aggregate row — but the
+    // batched suggested-attribute query still finds their live bot
+    // suggestion, so the card shows its provenance instead of a bare "Not
+    // yet attested".
     const listing = mkListing({ id: "l-seeded", name: "Seeded Non-Celiac" });
     state.celiacRows = []; // no celiac claim at all
     state.suggestionRows = [
@@ -316,9 +315,9 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
   });
 
   it("KEEPS suggestedByBot true when live suggestions coexist with real celiac evidence (owner nit 7)", async () => {
-    // A bot-suggested (non-celiac) claim plus a real celiac verdict: the label
-    // is PROVENANCE and stays visible — but the verdict/evidence still derive
-    // from evidence only (ADR-007: the suggestion never alters them).
+    // A bot-suggested (non-celiac) claim plus a real celiac verdict: the
+    // label is provenance and stays visible — but the verdict/evidence still
+    // derive from evidence only (ADR-007: the suggestion never alters them).
     const listing = mkListing({ id: "l-mixed", name: "Mixed Evidence" });
     state.celiacRows = [
       {
@@ -374,8 +373,9 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
   });
 
   it("threads the staleness window so the SAME confirmation flips fresh↔stale", async () => {
-    // The injected `stalenessMonths` is the ONLY thing that changes between the
-    // two calls, proving the boundary is caller-controlled (matches the sort).
+    // The injected `stalenessMonths` is the only thing that changes between
+    // the two calls, proving the boundary is caller-controlled (matches the
+    // sort).
     const listing = mkListing({ id: "l-window", name: "Window Test" });
     state.celiacRows = [
       {
@@ -400,8 +400,8 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
 
 describe("buildBrowseCards — CONFIRMED non-headline claim badges (AUB-226)", () => {
   it("surfaces a CONFIRMED non-headline attribute on the glance (detail-page parity)", async () => {
-    // The regression this fixes: a confirmed non-headline claim (e.g. "Off-menu
-    // GF on request") showed on the detail page but never on the browse card.
+    // Detail-page parity: a confirmed non-headline claim (e.g. "Off-menu GF
+    // on request") must badge the browse card, not just the detail page.
     const listing = mkListing({ id: "l-confirmed", name: "Confirmed Claims" });
     state.celiacRows = [];
     state.confirmedRows = [
@@ -411,7 +411,7 @@ describe("buildBrowseCards — CONFIRMED non-headline claim badges (AUB-226)", (
     const cards = await buildBrowseCards([listing], NOW, 6);
 
     expect(cards[0]?.glance.confirmedAttributes).toEqual(["off_menu_gf_on_request"]);
-    // Confirmed is EVIDENCE, not a bot suggestion — the provenance flag stays off.
+    // Confirmed is evidence, not a bot suggestion — the provenance flag stays off.
     expect(cards[0]?.glance.suggestedByBot).toBe(false);
     expect(cards[0]?.glance.suggestedAttributes).toEqual([]);
   });
@@ -450,9 +450,9 @@ describe("buildBrowseCards — CONFIRMED non-headline claim badges (AUB-226)", (
   });
 
   it("excludes the headline claim and requires STRICT confirms>disputes in the query SQL", async () => {
-    // The mock returns rows verbatim, so the "headline excluded" and "a tie/
-    // dispute-majority does NOT surface" guarantees live in the SQL itself.
-    // Render the captured WHERE + HAVING and assert the rule directly.
+    // The mock returns rows verbatim, so the "headline excluded" and "a
+    // tie/dispute-majority does not surface" guarantees live in the SQL
+    // itself. Render the captured WHERE + HAVING and assert the rule directly.
     const listing = mkListing({ id: "l-sql", name: "SQL Shape" });
 
     await buildBrowseCards([listing], NOW, 6);
@@ -465,18 +465,18 @@ describe("buildBrowseCards — CONFIRMED non-headline claim badges (AUB-226)", (
       .sqlToQuery(h.confirmedHavingMock.mock.calls[0]?.[0] as SQL)
       .sql.toLowerCase();
 
-    // Headline excluded: the WHERE filters the celiac attribute OUT (`<>`).
+    // Headline excluded: the WHERE filters the celiac attribute out (`<>`).
     expect(whereSql).toContain("<>");
     expect(whereSql).toContain("celiac_safe_vs_gluten_friendly");
-    // Visibility (#41): only `visible` claims count toward consensus.
+    // Only `visible` claims count toward consensus.
     expect(whereSql).toContain("moderation_status");
-    // STRICT positive consensus: confirms `>` disputes, never `>=` — a tie or
-    // dispute-majority (contested) must NOT surface as a confirmed badge.
+    // Strict positive consensus: confirms `>` disputes, never `>=` — a tie or
+    // dispute-majority (contested) must not surface as a confirmed badge.
     expect(havingSql).toContain("'confirm'");
     expect(havingSql).toContain("'dispute'");
     expect(havingSql).toContain(" > ");
     expect(havingSql).not.toContain(">=");
-    // Confirms on the LEFT of `>`, disputes on the RIGHT (not the inverse).
+    // Confirms left of `>`, disputes right (not the inverse).
     const gtIndex = havingSql.indexOf(" > ");
     expect(havingSql.indexOf("'confirm'")).toBeLessThan(gtIndex);
     expect(havingSql.lastIndexOf("'dispute'")).toBeGreaterThan(gtIndex);

@@ -2,18 +2,17 @@ import { HTTPException } from "hono/http-exception";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Guard tests for the Places autocomplete SEAM (`autocompletePlaces`, #141).
+ * Guard tests for the Places autocomplete seam (`autocompletePlaces`).
  *
- * This is the server fn `PlacesIntakeForm` actually calls, so it — not the now
- * forms-orphaned `autocompletePlaces` in `~/server/places` — is the live
- * call-site for the CRITICAL auth + per-user write-limit gate that protects the
- * PAID Google Places call (#86/#18). The seam lazy-imports its collaborators (the
- * pure `runAutocomplete` impl, the auth guard, the limiter) inside the handler;
- * we mock all three so we can assert the gate without cookie/DB plumbing:
+ * This is the server fn `PlacesIntakeForm` actually calls — the live
+ * call-site for the auth + per-user write-limit gate that protects the paid
+ * Google Places call. The seam lazy-imports its collaborators (the pure
+ * `runAutocomplete` impl, the auth guard, the limiter) inside the handler;
+ * all three are mocked so the gate is asserted without cookie/DB plumbing:
  *
- *   - anonymous  -> 401, and the upstream impl is NOT invoked,
- *   - over-limit -> 429, and the upstream impl is NOT invoked,
- *   - happy path -> requireCurrentUser BEFORE enforceWriteLimit BEFORE the impl.
+ *   - anonymous  -> 401, and the upstream impl is not invoked,
+ *   - over-limit -> 429, and the upstream impl is not invoked,
+ *   - happy path -> requireCurrentUser before enforceWriteLimit before the impl.
  *
  * `runAutocomplete`'s own provider logic is covered in `places.test.ts`; the
  * guards' window logic in `auth/guards.test.ts` + `rate-limit/index.test.ts`.
@@ -60,7 +59,7 @@ describe("autocompletePlaces — auth + rate limit seam (#141)", () => {
     expect(runAutocompleteMock).toHaveBeenCalledTimes(1);
     expect(runAutocompleteMock).toHaveBeenCalledWith(input.data);
 
-    // Auth BEFORE limit BEFORE the paid upstream call.
+    // Auth before limit before the paid upstream call.
     const authOrder = requireCurrentUserMock.mock.invocationCallOrder[0];
     const limitOrder = enforceWriteLimitMock.mock.invocationCallOrder[0];
     const implOrder = runAutocompleteMock.mock.invocationCallOrder[0];

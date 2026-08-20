@@ -2,14 +2,14 @@ import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the favorites write + read layer (AUB-120 / F2).
+ * Tests for the favorites write + read layer.
  *
  * The module's only server-only deps are the DB client, the auth guard, the
- * current-user accessor, and the rate limiter. We model the exact drizzle chains
- * it uses so we can assert behaviour — the idempotent add, the delete no-op, the
- * visibility gate, and the count aggregate — without a live database, per
- * `docs/agents/testing.md` (minimal mocking). Because everything is mocked these
- * tests run everywhere (locally and in CI) with no DB gating — nothing is skipped.
+ * current-user accessor, and the rate limiter. The exact drizzle chains it
+ * uses are modeled so behaviour — the idempotent add, the delete no-op, the
+ * visibility gate, the count aggregate — is asserted without a live database,
+ * per `docs/agents/testing.md` (minimal mocking). Everything is mocked, so
+ * nothing is skipped in CI.
  *
  * DB chains modeled:
  *   listing lookup:  getDb().select().from().where().limit()          -> [{ moderationStatus }]
@@ -79,20 +79,19 @@ const h = vi.hoisted(() => {
   // `getCurrentUser` backs the viewer read: `null` for anonymous, else the row.
   const getCurrentUserMock = vi.fn(() => Promise.resolve(state.signedIn ? { id: "user-1" } : null));
 
-  // `enforceWriteLimit` is the per-user write rate limit (#18). We spy on it to
-  // assert each write entry point meters the authenticated user.
+  // Per-user write rate limit — spied to assert each write entry point meters
+  // the authenticated user.
   const enforceWriteLimitMock = vi.fn((_userId?: string) => Promise.resolve());
 
-  // `buildBrowseCards` is the SHARED, server-only card builder getViewerFavorites
-  // reuses. We mock it to echo the listings it receives as trust cores (a neutral
-  // glance), so we can assert getViewerFavorites orders + attaches counts without
-  // pulling the real (db-backed) glance derivation into this unit test.
+  // `buildBrowseCards` is the shared server-only card builder. The mock echoes
+  // the listings it receives as neutral trust cores, so ordering + count
+  // attachment can be asserted without the real db-backed glance derivation.
   const buildBrowseCardsMock = vi.fn((listings: Array<{ id: string }>) =>
     Promise.resolve(listings.map((listing) => ({ listing, glance: {} })))
   );
 
-  // `Sentry.captureException` — spied so we can assert a degraded read still
-  // REPORTS its error (observability is preserved when we swallow it).
+  // `Sentry.captureException` — spied to assert a degraded read still reports
+  // its error.
   const captureExceptionMock = vi.fn();
 
   return {
@@ -177,11 +176,10 @@ afterEach(() => {
 });
 
 describe("read degradation — a favorites read failure never 500s the page", () => {
-  // The favorites reads run on hot paths (getFavoriteCounts on EVERY browse
-  // render + /favorites; getViewerFavoriteIds on the __root prefetch for every
-  // signed-in page; getViewerFavorites on /favorites). A read failure — e.g. the
-  // `favorites` table briefly unavailable on a fresh/preview DB, or the deploy
-  // window before a schema migration applies — must degrade, not crash the page.
+  // The favorites reads run on hot paths (every browse render, the __root
+  // prefetch, /favorites). A read failure — e.g. the `favorites` table briefly
+  // unavailable on a fresh/preview DB or during a migration deploy window —
+  // must degrade, not crash the page.
   let errorSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -389,7 +387,7 @@ describe("getViewerFavorites — viewer cards, newest-saved first", () => {
     const now = new Date("2026-07-03T00:00:00Z");
     const cards = await getViewerFavorites(now, 6);
 
-    // Reuses the SHARED builder with the viewer's listings + the SAME now/window.
+    // Reuses the shared builder with the viewer's listings and the same now/window.
     expect(h.buildBrowseCardsMock).toHaveBeenCalledWith(
       [{ id: "listing-1" }, { id: "listing-2" }],
       now,

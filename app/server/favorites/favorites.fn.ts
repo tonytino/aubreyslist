@@ -5,18 +5,14 @@ import { getSetting } from "~/server/settings";
 import { addFavorite, getViewerFavoriteIds, getViewerFavorites, removeFavorite } from "./index";
 
 /**
- * Client-callable favorite server functions (issue AUB-120 / F2).
+ * Client-callable favorite server functions — the only part of the favorites
+ * server layer that client code imports. The db-touching implementations live
+ * in `./index.ts`; the TanStack Start plugin strips these handler bodies from
+ * the browser bundle, so importing from here never drags `getDb` (neon/drizzle)
+ * into the client build.
  *
- * These `createServerFn` entry points are the ONLY part of the favorites server
- * layer that client code imports. Following the `*.fn.ts` convention (see
- * `attestations.fn.ts`, `current-user.fn.ts`), the db-touching implementations
- * live in `./index.ts` and the TanStack Start plugin strips these handler bodies
- * out of the browser bundle — so importing from here never drags `getDb`
- * (neon/drizzle) into the client build.
- *
- * The write validators reuse the client-safe {@link favoriteInputSchema} from
- * `~/listings/favorite-input` (which imports only `zod`), so no schema/drizzle
- * runtime leaks to the client.
+ * The write validators reuse the client-safe {@link favoriteInputSchema}
+ * (imports only `zod`), so no schema/drizzle runtime leaks to the client.
  */
 
 /** Favorite a listing (login-gated, validated). See {@link addFavorite}. */
@@ -35,13 +31,13 @@ export const fetchViewerFavoriteIds = createServerFn({ method: "GET" }).handler(
 );
 
 /**
- * The current viewer's favorited listings as browse cards (issue AUB-127 / F9) —
- * the data behind the `/favorites` page. See {@link getViewerFavorites}.
+ * The current viewer's favorited listings as browse cards — the data behind
+ * the `/favorites` page. See {@link getViewerFavorites}.
  *
- * Resolves "now" ONCE on the server and reads the admin-tunable `staleness_months`
- * setting the SAME way `fetchBrowseListings` does, then threads both into the
- * shared card builder so the `/favorites` cards match browse exactly (glance +
- * save-count pill). Anonymous callers resolve to `[]` with no DB hit.
+ * Resolves "now" once on the server and reads `staleness_months` the same way
+ * `fetchBrowseListings` does, then threads both into the shared card builder
+ * so `/favorites` cards match browse exactly. Anonymous callers resolve to
+ * `[]` with no DB hit.
  */
 export const fetchViewerFavorites = createServerFn({ method: "GET" }).handler(
   async (): Promise<BrowseListingCard[]> => {

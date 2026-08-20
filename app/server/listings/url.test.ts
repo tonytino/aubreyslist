@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isHttpUrl } from "./url";
 
-/**
- * Tests for the http(s)-scheme guard shared by the add-listing intake validator
- * and the listing detail render sink (#90). No DB/network — pure string logic.
- */
 describe("isHttpUrl", () => {
   it("accepts http and https URLs (case-insensitive scheme)", () => {
     expect(isHttpUrl("https://example.com/menu")).toBe(true);

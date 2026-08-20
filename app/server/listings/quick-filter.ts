@@ -7,46 +7,45 @@ import { stalenessCutoff } from "~/trust/summary";
 
 /**
  * Server-side SQL expression of the directory's prebuilt "quick" filters
- * (`?quick=`, AUB-135). Each token's BASE rule is the SQL analogue of a DISPLAYED
+ * (`?quick=`). Each token's base rule is the SQL analogue of a displayed
  * glance value (ADR-007) — the same reading a user gets from the card — so
- * filtering can never overstate safety (a celiac could be hurt by a false match):
+ * filtering can never overstate safety (a celiac could be hurt by a false
+ * match):
  *
- *   - `celiac`   → `safetyState === "celiac-safe"`   (has evidence, confirms strictly
- *                  outnumber disputes, and the confirmation is fresh)
- *   - `friendly` → `safetyState === "gluten-friendly"` (has evidence, disputes tie or
- *                  outnumber confirms — the contested / safer-lower reading)
- *   - `recent`   → `freshness.kind === "fresh"`      (a within-staleness-window
- *                  confirmation AND no recent "got glutened" incident — the incident
- *                  cue outranks freshness, ADR-007)
+ *   - `celiac`   → `safetyState === "celiac-safe"` (has evidence, confirms
+ *                  strictly outnumber disputes, and the confirmation is fresh)
+ *   - `friendly` → `safetyState === "gluten-friendly"` (has evidence, disputes
+ *                  tie or outnumber confirms — the contested reading)
+ *   - `recent`   → `freshness.kind === "fresh"` (a within-window confirmation
+ *                  and no recent incident — the incident cue outranks
+ *                  freshness, ADR-007)
  *
- * These MUST stay in lockstep with the pure derivations they mirror
+ * These must stay in lockstep with the pure derivations they mirror
  * (`deriveHeadlineSafetyState` / `formatFreshness` in `app/trust`) — the same
- * `confirmCount > disputeCount`, `hasEvidence`, staleness-cutoff, and
- * recent-incident boundaries the card and the "trust" sort use. `quick-filter.test.ts`
- * pins these boundaries against a weakening regression.
+ * `confirmCount > disputeCount`, `hasEvidence`, staleness-cutoff and
+ * recent-incident boundaries the card and the "trust" sort use.
+ * `quick-filter.test.ts` pins these boundaries against a weakening regression.
  *
- * PLUS LIVE BOT SUGGESTIONS BY DEFAULT (AUB-31): the `celiac` token ALSO matches
- * a live, unvoted curator-bot suggestion on the headline claim (the shared
- * `buildLiveSuggestionHaving` badge rule from `./filter.ts` — dateless, so no
- * freshness bound; any real vote kills it). Default on; the `?bot=false` param
- * (`includeSuggested: false`) reverts this token to community-evidence-only —
- * and, separately, hides bot-suggested-only listings from the result set
- * outright (`buildSuggestedOnlyExclusion` in `./filter.ts`, folded in by
- * `buildBrowseWhere`; not this module's concern). `friendly` and
- * `recent` deliberately ignore suggestions (a suggestion asserts celiac-safe,
- * not the contested reading, and is not a verification).
+ * The `celiac` token also matches a live, unvoted curator-bot suggestion on
+ * the headline claim by default (the shared `buildLiveSuggestionHaving` badge
+ * rule from `./filter.ts` — dateless, so no freshness bound; any real vote
+ * kills it). The `?bot=false` param (`includeSuggested: false`) reverts this
+ * token to community-evidence-only; hiding bot-suggested-only listings from
+ * the result set is `buildBrowseWhere`'s concern, not this module's.
+ * `friendly` and `recent` deliberately ignore suggestions: a suggestion
+ * asserts celiac-safe, not the contested reading, and is not a verification.
  *
- * Each token is a self-contained correlated subquery over `listings.id` (mirroring
- * the taxonomy filter in `./filter.ts`). A faceted selection (AUB-140) AND-composes
- * the active tokens' subqueries — narrowing to listings that match EVERY selected
- * facet (e.g. celiac-safe AND recently-verified). The result is a plain `SQL` the
- * caller AND-folds into the SHARED browse `where` — applying to the page query AND
- * the count query alike, so `total`/`hasMore` stay honest under the filter (no
- * fetch-then-filter). Returns `undefined` when no quick filter is active.
+ * Each token is a self-contained correlated subquery over `listings.id`
+ * (mirroring the taxonomy filter in `./filter.ts`). A faceted selection
+ * AND-composes the active tokens' subqueries, narrowing to listings that
+ * match every selected facet. The result is a plain `SQL` the caller
+ * AND-folds into the shared browse `where` — page and count queries alike, so
+ * `total`/`hasMore` stay honest under the filter. Returns `undefined` when no
+ * quick filter is active.
  *
- * Server-only: references DB tables to build SQL; imported by `./browse.ts` only.
- * The pure classification RULES live in the client-safe `app/trust/*` modules;
- * this is the SQL expression of those same rules.
+ * Server-only: references DB tables to build SQL; imported by `./browse.ts`
+ * only. The pure classification rules live in the client-safe `app/trust/*`
+ * modules; this is their SQL expression.
  */
 
 /** The single headline celiac claim attribute the glance derives from. */
@@ -72,20 +71,20 @@ function celiacClaimForListing(): SQL {
 }
 
 /**
- * `safetyState === "celiac-safe"` (tier 4): the listing has a visible celiac claim
- * whose confirms STRICTLY outnumber disputes (`> `, never `>=` — a tie is contested,
- * not affirmed) AND whose last confirmation is fresh (null, or on/after the staleness
- * cutoff — inclusive, mirroring `isStale`). Confirms-lead implies at least one
- * confirm, so `lastConfirmedAt` is non-null here in practice; the `is null` branch
- * mirrors the pure `fresh` predicate exactly.
+ * `safetyState === "celiac-safe"` (tier 4): a visible celiac claim whose
+ * confirms strictly outnumber disputes (`>`, never `>=` — a tie is contested,
+ * not affirmed) and whose last confirmation is fresh (null, or on/after the
+ * staleness cutoff — inclusive, mirroring `isStale`). Confirms-lead implies
+ * at least one confirm, so `lastConfirmedAt` is non-null in practice; the
+ * `is null` branch mirrors the pure `fresh` predicate exactly.
  *
- * When `includeSuggested`, a LIVE curator-bot suggestion on the celiac claim ALSO
- * matches (the shared {@link buildLiveSuggestionHaving} rule — suggested and
- * ZERO votes, exactly the badge rule). The freshness window applies ONLY to the
- * community path: a suggestion is dateless provenance (no `lastConfirmedAt` to
- * age), so it matches without one — and it dies the moment any real vote lands,
- * at which point the community rule takes over. The matched card shows the
- * "Suggested by Aubrey's Bot" badge, never a community-confirmed signal.
+ * When `includeSuggested`, a live curator-bot suggestion on the celiac claim
+ * also matches (the shared {@link buildLiveSuggestionHaving} rule — suggested
+ * with zero votes, exactly the badge rule). The freshness window applies only
+ * to the community path: a suggestion is dateless provenance, and it dies the
+ * moment any real vote lands, when the community rule takes over. The matched
+ * card shows the "Suggested by Aubrey's Bot" badge, never a
+ * community-confirmed signal.
  */
 function celiacSafeExists(cutoff: Date, includeSuggested: boolean): SQL {
   const { confirmCount, disputeCount } = tallies();
@@ -94,9 +93,7 @@ function celiacSafeExists(cutoff: Date, includeSuggested: boolean): SQL {
   const having = includeSuggested
     ? sql`${communityHaving} or ${buildLiveSuggestionHaving(confirmCount, disputeCount)}`
     : communityHaving;
-  // `suggested_by` only enters the GROUP BY when the HAVING references it, so
-  // the flag-off predicate is semantically identical to the pre-AUB-31 form
-  // (it differs only by the grouping parentheses around the community HAVING).
+  // `suggested_by` enters the GROUP BY only when the HAVING references it.
   const groupBy = includeSuggested
     ? sql`${claims.id}, ${claims.lastConfirmedAt}, ${claims.suggestedBy}`
     : sql`${claims.id}, ${claims.lastConfirmedAt}`;
@@ -111,11 +108,11 @@ function celiacSafeExists(cutoff: Date, includeSuggested: boolean): SQL {
 }
 
 /**
- * `safetyState === "gluten-friendly"` (tier 2): the listing has a visible celiac
- * claim WITH evidence (at least one attestation) whose disputes tie or outnumber
+ * `safetyState === "gluten-friendly"` (tier 2): a visible celiac claim with
+ * evidence (at least one attestation) whose disputes tie or outnumber
  * confirms (`confirms <= disputes`). Contested-first, mirroring
- * `deriveHeadlineSafetyState` — a live dispute majority is the safer, lower reading
- * and must never be masked.
+ * `deriveHeadlineSafetyState`: a live dispute majority is the safer, lower
+ * reading and must never be masked.
  */
 function glutenFriendlyExists(): SQL {
   const { confirmCount, disputeCount } = tallies();
@@ -131,16 +128,17 @@ function glutenFriendlyExists(): SQL {
 }
 
 /**
- * `freshness.kind === "fresh"`: a within-window confirmation AND no recent incident
- * (the incident cue outranks freshness — ADR-007 — so a listing with a recent
- * incident is NOT "fresh" even if recently confirmed).
+ * `freshness.kind === "fresh"`: a within-window confirmation and no recent
+ * incident (the incident cue outranks freshness — ADR-007 — so a listing with
+ * a recent incident is not "fresh" even if recently confirmed).
  *
- *  - fresh confirmation: a visible celiac claim with a non-null `lastConfirmedAt`
- *    on/after the staleness cutoff (a never-confirmed claim has no timestamp to
- *    phrase → not "fresh", matching `formatFreshness` returning `null`);
- *  - no recent incident: no visible incident whose `occurredOn` falls inside the
- *    inclusive {@link RECENT_INCIDENT_WINDOW_DAYS} window ending today (UTC calendar,
- *    matching `isRecentIncident`).
+ *  - fresh confirmation: a visible celiac claim with a non-null
+ *    `lastConfirmedAt` on/after the staleness cutoff (a never-confirmed claim
+ *    has no timestamp to phrase, so it is not "fresh" — matching
+ *    `formatFreshness` returning `null`);
+ *  - no recent incident: no visible incident whose `occurredOn` falls inside
+ *    the inclusive {@link RECENT_INCIDENT_WINDOW_DAYS} window ending today
+ *    (UTC calendar, matching `isRecentIncident`).
  */
 function recentExists(cutoff: Date, now: Date): SQL {
   const freshConfirmation = sql`exists (
@@ -151,15 +149,15 @@ function recentExists(cutoff: Date, now: Date): SQL {
       and ${claims.lastConfirmedAt} >= ${cutoff}
   )`;
 
-  // The recency window as UTC calendar-date bounds, matching `isRecentIncident`:
-  // `occurredOn` in [today − WINDOW, today], inclusive. `now` is injected (SSR
-  // resolves it once) rather than using SQL `current_date`, so the boundary is
-  // deterministic and testable.
+  // The recency window as UTC calendar-date bounds, matching
+  // `isRecentIncident`: `occurredOn` in [today − window, today], inclusive.
+  // `now` is injected (SSR resolves it once) rather than SQL `current_date`,
+  // so the boundary is deterministic and testable.
   const todayMs = todayUtcMidnight(now);
   const today = utcDay(todayMs);
   const windowStart = utcDay(todayMs - RECENT_INCIDENT_WINDOW_DAYS * MS_PER_DAY);
-  // `::date` casts the bound string params explicitly so Postgres compares the
-  // `date` column against a `date` (no reliance on parameter-type inference).
+  // `::date` casts the bound string params so Postgres compares the `date`
+  // column against a `date` (no reliance on parameter-type inference).
   const noRecentIncident = sql`not exists (
     select 1
     from ${incidents}
@@ -179,12 +177,11 @@ function utcDay(ms: number): string {
 /**
  * The correlated `exists` predicate for a single quick token.
  *
- * `includeSuggested` (AUB-31 participation) affects ONLY the `celiac` token. A
- * bot suggestion of the headline claim asserts "celiac-safe" — it says nothing
- * about the CONTESTED `friendly` reading (matching there would fabricate a
- * "gluten-friendly only" verdict the bot never made), and it is not a
- * verification, so the `recent` (freshly-verified) token stays community-only
- * by definition. Both deliberately ignore the flag.
+ * `includeSuggested` affects only the `celiac` token. A bot suggestion of the
+ * headline claim asserts "celiac-safe": matching `friendly` would fabricate a
+ * contested verdict the bot never made, and a suggestion is not a
+ * verification, so `recent` stays community-only. Both deliberately ignore
+ * the flag.
  */
 function quickTokenPredicate(
   token: QuickFilterValue,
@@ -207,16 +204,16 @@ function quickTokenPredicate(
 }
 
 /**
- * Build the `quick`-filter predicate for a faceted selection, or `undefined` when
- * the selection is empty (drizzle then applies no constraint, so the caller can
- * `and(...)`-fold it safely). The active tokens' correlated subqueries are
- * AND-composed, so the result matches listings satisfying EVERY selected facet.
- * `now`/`stalenessMonths` are threaded from the loader so the freshness/staleness
- * boundary matches the displayed glance exactly.
+ * Build the `quick`-filter predicate for a faceted selection, or `undefined`
+ * when the selection is empty (drizzle then applies no constraint, so the
+ * caller can `and(...)`-fold it safely). The active tokens' correlated
+ * subqueries AND-compose, so the result matches listings satisfying every
+ * selected facet. `now`/`stalenessMonths` are threaded from the loader so the
+ * freshness/staleness boundary matches the displayed glance exactly.
  *
- * Tokens are applied in canonical `QUICK_FILTER_VALUES` order (not the incoming
+ * Tokens apply in canonical `QUICK_FILTER_VALUES` order (not the incoming
  * array's order) so the composed SQL text is stable; a single-token selection
- * returns the bare subquery (byte-identical to the pre-AUB-140 single-select form).
+ * returns the bare subquery.
  */
 export function buildQuickFilterPredicate(
   quick: readonly QuickFilterValue[],

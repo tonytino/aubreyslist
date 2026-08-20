@@ -113,7 +113,7 @@ describe("GET /google (sign-in initiation)", () => {
     // The cookie is URL-encoded by Set-Cookie; decode before comparing.
     expect(decodeURIComponent(cookies.get("al_oauth_return_to") ?? "")).toBe("/listings/x?save=y");
 
-    // returnTo must NEVER be round-tripped through Google's OAuth state param.
+    // returnTo must never be round-tripped through Google's OAuth state param.
     const authUrl = new URL(res.headers.get("location") ?? "");
     expect(authUrl.searchParams.get("state")).not.toContain("listings");
   });

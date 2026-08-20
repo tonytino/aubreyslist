@@ -3,12 +3,10 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the single-listing-by-id loader (#41 visibility extension).
- *
- * The loader uses `getDb().query.listings.findFirst({ where })`; we model that
- * relational chain and capture the `where` so we can assert that this PUBLIC read
- * constrains to a VISIBLE listing — a hidden/removed listing is treated like a
- * non-existent one (returns null → the route 404s). No live DB needed.
+ * The loader uses `getDb().query.listings.findFirst({ where })`; the mock
+ * models that chain and captures the `where` to assert this public read
+ * constrains to a visible listing — a hidden/removed listing reads like a
+ * non-existent one (null, so the route 404s). No live DB needed.
  */
 
 const h = vi.hoisted(() => {
@@ -64,8 +62,8 @@ describe("getListing — visibility-aware public read (#41)", () => {
   });
 
   it("returns null when no VISIBLE listing matches (hidden/removed → 404)", async () => {
-    // A hidden/removed listing fails the visibility predicate, so findFirst
-    // yields undefined and the loader returns null — the route then 404s, so a
+    // A hidden/removed listing fails the visibility predicate: findFirst
+    // yields undefined, the loader returns null, and the route 404s — a
     // moderated-away listing is unreachable by direct link.
     state.result = undefined;
     expect(await getListing({ id: "listing-1" })).toBeNull();

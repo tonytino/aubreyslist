@@ -10,45 +10,38 @@ import { type BrowseListingCard, buildBrowseCards } from "~/server/listings/brow
 import { enforceWriteLimit } from "~/server/rate-limit";
 
 /**
- * Favorites (bookmarks) — the WRITE + READ layer (issue AUB-120 / F2).
+ * Favorites (bookmarks): the write + read layer.
  *
- * A signed-in user favorites a listing (one row) and unfavorites by deleting it
- * — the row is never mutated (domain.md; `favorites` schema). One favorite per
- * user per listing is enforced at the DB level by the
- * `favorites_user_listing_unique` constraint on (`user_id`, `listing_id`), which
- * makes {@link addFavorite} idempotent and concurrent-safe via
- * `onConflictDoNothing`.
+ * A signed-in user favorites a listing (one row) and unfavorites by deleting
+ * it — the row is never mutated (domain.md). One favorite per user per listing
+ * is enforced by the `favorites_user_listing_unique` constraint on
+ * (`user_id`, `listing_id`), which makes {@link addFavorite} idempotent and
+ * concurrent-safe via `onConflictDoNothing`.
  *
- * Server-only: imports the DB client, the auth guards, and the current-user
- * accessor. Never import this from client code — the client calls the
- * `createServerFn` wrappers in `./favorites.fn.ts` (the `*.fn.ts` convention),
- * which the TanStack Start plugin strips from the browser bundle so `getDb`
- * (neon/drizzle) never leaks client-side.
+ * Server-only: imports the DB client and auth guards. Never import this from
+ * client code — clients call the `createServerFn` wrappers in
+ * `./favorites.fn.ts`.
  *
- * Open-read / gated-write (ADR-010): the writes ({@link addFavorite},
- * {@link removeFavorite}) are login-gated via {@link requireCurrentUser} (401 for
- * anonymous) and then rate-limited per user via {@link enforceWriteLimit} (#18;
- * 429 on an abusive burst), applied in that order and BEFORE any DB work — the
- * gate fires exactly once. The viewer read ({@link getViewerFavoriteIds}) is
- * scoped to the current user (empty for anonymous, with no DB hit); the count
- * aggregate ({@link getFavoriteCounts}) is public and user-agnostic.
+ * Open-read / gated-write (ADR-010): writes are login-gated via
+ * {@link requireCurrentUser} (401) then rate-limited per user via
+ * {@link enforceWriteLimit} (429), in that order, before any DB work. The
+ * viewer read ({@link getViewerFavoriteIds}) is scoped to the current user
+ * (empty for anonymous, no DB hit); the count aggregate
+ * ({@link getFavoriteCounts}) is public and user-agnostic.
  */
 
 /**
- * Run a NON-ESSENTIAL favorites READ, degrading to `fallback` if it throws.
+ * Run a non-essential favorites read, degrading to `fallback` if it throws.
  *
- * Favorites are an enhancement layered over the core directory — the public
- * save-count and the viewer's saved set. A read failure here must NEVER 500 the
- * browse loader or the `__root` prefetch that runs on every page. The realistic
- * failure is the `favorites` table being briefly unavailable: a fresh/preview DB
- * that hasn't had the migration applied, or the deploy window on a schema
- * release BEFORE `migrate.yml` finishes applying it. We report the error (so it
- * stays visible in Sentry + server logs) and fall back, so the core page still
- * renders — cards simply show no save-count and no saved state.
+ * Favorites are an enhancement over the core directory; a read failure must
+ * never 500 the browse loader or the `__root` prefetch that runs on every
+ * page. The realistic failure is the `favorites` table being briefly
+ * unavailable (a fresh/preview DB, or a schema-release deploy window). The
+ * error is reported to Sentry and logged, then the fallback renders — cards
+ * simply show no save-count and no saved state.
  *
- * Only READS degrade. The gated WRITES ({@link addFavorite}/{@link removeFavorite})
- * still throw — a failed save must surface to the user (the island toasts + rolls
- * back), not silently no-op.
+ * Only reads degrade. The gated writes still throw — a failed save must
+ * surface to the user, not silently no-op.
  */
 async function readOrDegrade<T>(label: string, read: () => Promise<T>, fallback: T): Promise<T> {
   try {
@@ -61,18 +54,14 @@ async function readOrDegrade<T>(label: string, read: () => Promise<T>, fallback:
 }
 
 /**
- * Favorite a listing for the current user (idempotent, concurrent-safe).
+ * Favorite a listing for the current user. Idempotent and concurrent-safe.
  *
- * Login-gated then rate-limited (in that order, before any DB work). The target
- * listing must EXIST and be `visible`: a hidden/removed or non-existent listing
- * must not be favoritable, so we resolve its `moderationStatus` first and throw
- * `404 Not Found` (matching how the codebase surfaces not-found, e.g.
- * `admin/set-role.ts`) for any non-`visible` or missing listing — never
- * inserting a favorite for content the user cannot see.
+ * Login-gated then rate-limited, in that order, before any DB work. The
+ * target listing must exist and be `visible`; any other state throws 404 —
+ * never insert a favorite for content the user cannot see.
  *
- * The insert is `onConflictDoNothing` on `favorites_user_listing_unique`, so a
- * repeated favorite (or a concurrent double-add) is a no-op rather than a
- * duplicate or an error — one row per (user, listing).
+ * The insert is `onConflictDoNothing` on `favorites_user_listing_unique`, so
+ * a repeated or concurrent favorite is a no-op — one row per (user, listing).
  */
 export async function addFavorite(input: FavoriteInput): Promise<void> {
   const user = await requireCurrentUser();
@@ -80,8 +69,7 @@ export async function addFavorite(input: FavoriteInput): Promise<void> {
 
   const db = getDb();
 
-  // Resolve the listing's visibility first: a hidden/removed or missing listing
-  // must not be favoritable (404), never leaking a favorite on unseen content.
+  // A hidden/removed or missing listing must not be favoritable (404).
   const rows = await db
     .select({ moderationStatus: listings.moderationStatus })
     .from(listings)
@@ -100,12 +88,11 @@ export async function addFavorite(input: FavoriteInput): Promise<void> {
 }
 
 /**
- * Unfavorite a listing for the current user — deletes their `favorites` row for
- * the listing.
+ * Unfavorite a listing for the current user — deletes their `favorites` row.
  *
- * Login-gated then rate-limited (in that order, before any DB work). A no-op
- * when no favorite exists for the (user, listing) pair (the delete simply
- * matches zero rows) — no visibility check is needed to REMOVE a bookmark.
+ * Login-gated then rate-limited, before any DB work. A no-op when no favorite
+ * exists (the delete matches zero rows). Removing a bookmark needs no
+ * visibility check.
  */
 export async function removeFavorite(input: FavoriteInput): Promise<void> {
   const user = await requireCurrentUser();
@@ -119,14 +106,12 @@ export async function removeFavorite(input: FavoriteInput): Promise<void> {
 }
 
 /**
- * The current viewer's favorited listing ids, filtered to listings that are
- * still `visible`.
+ * The current viewer's favorited listing ids, filtered to `visible` listings.
  *
- * Anonymous callers have no favorites: we return `[]` WITHOUT touching the DB
- * (reads stay open, and there is nothing to look up). For a signed-in user we
- * INNER JOIN `listings` and filter to `moderationStatus = "visible"`, so a
- * favorite whose listing was later hidden/removed by a moderator is excluded —
- * the viewer never sees ids for content that is no longer visible.
+ * Anonymous callers get `[]` with no DB hit — there is nothing to look up.
+ * For a signed-in user the inner join on `listings` filters to
+ * `moderationStatus = "visible"`, so a favorite whose listing a moderator
+ * hid or removed is excluded.
  */
 export async function getViewerFavoriteIds(): Promise<string[]> {
   const user = await getCurrentUser();
@@ -134,9 +119,8 @@ export async function getViewerFavoriteIds(): Promise<string[]> {
     return [];
   }
 
-  // Runs on the `__root` prefetch for every signed-in page view — degrade to an
-  // empty set (the viewer momentarily sees no saved state) rather than 500 the
-  // whole app if the favorites read fails.
+  // Runs on the `__root` prefetch for every signed-in page view — degrade to
+  // an empty set rather than 500 the whole app.
   return readOrDegrade("getViewerFavoriteIds", async () => {
     const db = getDb();
 
@@ -151,28 +135,23 @@ export async function getViewerFavoriteIds(): Promise<string[]> {
 }
 
 /**
- * The current viewer's favorited listings as ready-to-render browse cards (issue
- * AUB-127 / F9) — the data behind the `/favorites` page.
+ * The current viewer's favorited listings as ready-to-render browse cards —
+ * the data behind the `/favorites` page.
  *
- * Anonymous callers have no favorites: we return `[]` WITHOUT touching the DB
- * (reads stay open, nothing to look up). For a signed-in user we INNER JOIN
- * `listings` and filter to `moderationStatus = "visible"` (so a favorite whose
- * listing was later hidden/removed is excluded), ordered by `favorites.createdAt
- * DESC` — most-recently-saved first.
+ * Anonymous callers get `[]` with no DB hit. For a signed-in user the inner
+ * join on `listings` filters to `visible`, ordered by `favorites.createdAt`
+ * desc — most-recently-saved first.
  *
- * The resulting listings run through the SHARED, distance-agnostic
- * {@link buildBrowseCards} so each card's trust glance is byte-identical to the
- * browse page (same celiac aggregate + recent-incident + suggested-attribute
- * derivation). We then attach the public save-count aggregate
- * ({@link getFavoriteCounts}) for those ids — batched alongside the glance (NO
- * N+1) — so the save-count pill renders on `/favorites` exactly as it does on
- * browse. No distance is computed (favorites have no distance origin), so
- * `distanceLabel` stays absent.
+ * The listings run through the shared, distance-agnostic
+ * {@link buildBrowseCards} so each card's trust glance matches the browse page
+ * byte-for-byte, and the public save-count aggregate
+ * ({@link getFavoriteCounts}) is batched alongside — no N+1. Favorites have no
+ * distance origin, so `distanceLabel` stays absent.
  *
- * v1 loads the FULL favorite set unbounded — favorites lists are small.
+ * Loads the full favorite set unbounded — favorites lists are small.
  *
- * SERVER-ONLY: drives the db client + `buildBrowseCards`; the route/query reach it
- * only through the client-safe `favorites.fn` seam.
+ * Server-only: drives the db client + `buildBrowseCards`; routes reach it
+ * through the client-safe `favorites.fn` seam.
  */
 export async function getViewerFavorites(
   now: Date,
@@ -183,12 +162,10 @@ export async function getViewerFavorites(
     return [];
   }
 
-  // Backs the `/favorites` page — degrade to an empty set (the page shows its
-  // empty state) rather than 500 if the favorites read fails.
+  // Degrade to an empty set (the page shows its empty state) rather than 500.
   return readOrDegrade("getViewerFavorites", async () => {
     const db = getDb();
 
-    // The viewer's favorited listings, visibility-gated and newest-saved first.
     const rows = await db
       .select({ listing: listings })
       .from(favorites)
@@ -199,16 +176,14 @@ export async function getViewerFavorites(
     const viewerListings = rows.map((row) => row.listing);
     const listingIds = viewerListings.map((listing) => listing.id);
 
-    // Build the trust cores through the SAME helper the browse page uses (so the
-    // glance matches byte-for-byte), and batch the public save-counts alongside it
-    // (one grouped query, NO N+1) — mirroring how getBrowseListings assembles a card.
+    // Same card builder as browse (the glance matches byte-for-byte); the
+    // save-counts are batched alongside in one grouped query — no N+1.
     const [baseCards, favoriteCounts] = await Promise.all([
       buildBrowseCards(viewerListings, now, stalenessMonths),
       getFavoriteCounts(listingIds),
     ]);
 
-    // Attach the save-count (defaulting to 0 for a listing absent from the grouped
-    // aggregate). No distance origin here, so `distanceLabel` is intentionally absent.
+    // A listing absent from the grouped aggregate defaults to 0 saves.
     return baseCards.map((card) => ({
       ...card,
       favoriteCount: favoriteCounts.get(card.listing.id) ?? 0,
@@ -218,20 +193,18 @@ export async function getViewerFavorites(
 
 /**
  * Public, user-agnostic favorite counts for the given listing ids: a grouped
- * `count(*)` over `favorites`.
+ * `count(*)` over `favorites`, keyed by listing id.
  *
- * Empty input yields an empty map WITHOUT a DB hit. The returned map contains
- * only listings that have at least one favorite (a listing with none is simply
- * absent — callers default it to 0), keyed by listing id.
+ * Empty input yields an empty map with no DB hit. Listings with no favorites
+ * are absent from the map — callers default them to 0.
  */
 export async function getFavoriteCounts(listingIds: string[]): Promise<Map<string, number>> {
   if (listingIds.length === 0) {
     return new Map();
   }
 
-  // Runs on EVERY browse render (public, user-agnostic) and on `/favorites` —
-  // degrade to an empty map (cards default each count to 0) rather than 500 the
-  // directory if the aggregate fails.
+  // Runs on every browse render and on `/favorites` — degrade to an empty map
+  // (cards default each count to 0) rather than 500 the directory.
   return readOrDegrade(
     "getFavoriteCounts",
     async () => {
@@ -252,8 +225,3 @@ export async function getFavoriteCounts(listingIds: string[]): Promise<Map<strin
     new Map<string, number>()
   );
 }
-
-// The client-callable `createServerFn` wrappers (favoriteListing /
-// unfavoriteListing / fetchViewerFavoriteIds) live in `./favorites.fn.ts` (the
-// `*.fn.ts` convention), so client code never imports this db-touching module —
-// see the module docstring above.

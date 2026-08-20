@@ -8,9 +8,8 @@ import {
 } from "./dedup";
 
 /**
- * Unit tests for the manual-entry duplicate safeguard (issue #25). These exercise
- * the pure normalization + matching rule in isolation (no DB); `create.test.ts`
- * covers how `runCreateListing` wires it into the manual intake path.
+ * Exercises the pure normalization + matching rule in isolation (no DB);
+ * `create.test.ts` covers how `runCreateListing` wires it into intake.
  */
 
 function listingRow(overrides: Partial<Listing> = {}): Listing {

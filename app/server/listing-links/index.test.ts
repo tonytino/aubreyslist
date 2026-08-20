@@ -4,16 +4,15 @@ import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the typed listing-links DB layer (AUB-202) — the login-gated,
- * rate-limited, visibility-checked writes (upsert-by-kind save + idempotent
- * remove), the legacy `menu_url` supersede rule (a `menu`-kind write also
- * clears the legacy column), and the public, parent-visibility-gated read
- * that returns the typed rows plus the legacy fallback.
+ * Tests for the typed listing-links DB layer — the login-gated, rate-limited,
+ * visibility-checked writes (upsert-by-kind save + idempotent remove), the
+ * legacy `menu_url` supersede rule (a `menu`-kind write also clears the
+ * legacy column), and the public, parent-visibility-gated read that returns
+ * the typed rows plus the legacy fallback.
  *
- * We model the exact drizzle chains the module uses so we can assert behaviour
- * without a live database, per `docs/agents/testing.md` (the incidents-module
- * test pattern). The pure taxonomy + Zod schemas live in
- * `app/listings/links.ts` and are tested there (no mocks needed).
+ * The exact drizzle chains the module uses are modeled so behaviour is
+ * asserted without a live database, per `docs/agents/testing.md`. The pure
+ * taxonomy + Zod schemas live in `app/listings/links.ts` and are tested there.
  */
 
 // --- Mocks -----------------------------------------------------------------
@@ -50,7 +49,7 @@ const h = vi.hoisted(() => {
   const fromMock = vi.fn(() => ({ where: selectWhereMock }));
   const selectMock = vi.fn(() => ({ from: fromMock }));
 
-  // The visible-listing gate before every write AND at the top of the read;
+  // The visible-listing gate before every write and at the top of the read;
   // its row carries the legacy `menuUrl` the read returns as the fallback.
   const findFirstMock = vi.fn((_args?: { where?: unknown; columns?: unknown }) =>
     Promise.resolve(state.listingVisible ? { menuUrl: state.listingMenuUrl } : undefined)
@@ -184,7 +183,7 @@ describe("saveListingLink — login-gated, rate-limited, visibility-checked upse
       url: "https://example.com/menu",
       createdBy: "user-1",
     });
-    // Conflict path: url + updatedAt only — createdBy is NEVER rewritten, so
+    // Conflict path: url + updatedAt only — createdBy is never rewritten, so
     // the original contributor's provenance survives someone else's edit.
     expect(onConflictDoUpdateMock).toHaveBeenCalledTimes(1);
     const conflict = state.lastConflictArgs as {
@@ -292,8 +291,8 @@ describe("removeListingLink — login-gated, rate-limited, visibility-checked de
   });
 
   it("clears the legacy menu_url on a menu-kind remove (no fallback resurrection)", async () => {
-    // Without this, removing the menu link on a pre-AUB-202 row deletes the
-    // typed row but the render fallback resurrects the legacy URL — and a
+    // Without this, removing the menu link on a legacy row deletes the typed
+    // row but the render fallback resurrects the legacy URL — and a
     // legacy-only row could never lose its menu link at all.
     await removeListingLink(removeInput);
 
@@ -378,7 +377,7 @@ describe("listListingLinks — public read in LINK_KINDS order (+ legacy fallbac
     // Links carry no moderation state of their own and `moderationStatus` has
     // no parent→child propagation, so this addressable per-listing RPC
     // resolves the visible parent first and returns the empty result — never
-    // the typed rows NOR the legacy menu URL — when it is moderated away.
+    // the typed rows nor the legacy menu URL — when it is moderated away.
     state.listingVisible = false;
     state.listRows = [{ id: "x", kind: "menu" }];
 

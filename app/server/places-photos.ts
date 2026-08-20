@@ -7,38 +7,37 @@ import { getListing } from "~/server/listings/get-listing";
 import { getSetting } from "~/server/settings";
 
 /**
- * Render-time Google Place photos for the listing-detail hero (AUB-215,
- * ADR-014) AND the browse-surface cards / map carousel (AUB-219).
+ * Render-time Google Place photos for the listing-detail hero and the
+ * browse-surface cards / map carousel.
  *
- * COMPLIANCE POSTURE (ADR-014): Google content is NEVER persisted — no DB
- * column, no blob store, no committed JSON. This module fetches photo metadata
- * at render time, holds it only in a short-TTL in-process cache, and hands the
- * client a transient `photoToken` (the Google photo resource `name`) that the
- * `/api/places/photo` media proxy resolves server-side. The
+ * Compliance posture (ADR-014): Google content is never persisted — no DB
+ * column, no blob store, no committed JSON. This module fetches photo
+ * metadata at render time, holds it only in a short-TTL in-process cache, and
+ * hands the client a transient `photoToken` (the Google photo resource
+ * `name`) that the `/api/places/photo` media proxy resolves server-side. The
  * `GOOGLE_PLACES_API_KEY` stays strictly server-side, exactly like
  * `~/server/places` (ADR-008).
  *
  * This is a deliberately separate, tight Place Details call with field mask
- * `photos` ONLY (Pro SKU) — it is not folded into the intake details call in
- * `~/server/places`, so the paid photo lookup happens only where a hero photo
- * is actually rendered and its result is cached per Place ID.
+ * `photos` only (Pro SKU) — not folded into the intake details call in
+ * `~/server/places` — so the paid photo lookup happens only where a hero
+ * photo is actually rendered, cached per Place ID.
  *
- * Photos are DECORATIVE: every failure mode (kill switch off, key unset,
+ * Photos are decorative: every failure mode (kill switch off, key unset,
  * manual listing without a Place ID, upstream/network/shape errors) returns
- * `[]` — a `console.warn` server-side at most — and the hero falls back to its
- * brand gradient. This module must never break the listing page.
+ * `[]` — a `console.warn` server-side at most — and the hero falls back to
+ * its brand gradient. This module must never break the listing page.
  *
- * BROWSE SURFACES (AUB-219): {@link getPhotosForListings} answers a whole PAGE
- * of listing ids in one call — the list cards and the map-carousel mini-cards
- * both derive their photo from it through the single `listingToCardVM` mapping
- * site (`~/components/listing/ListingCard`). It shares {@link fetchPhotosForPlace}
- * (and therefore the SAME per-Place-ID {@link listingPhotosCache}) with the hero
- * path, so a place already warmed by a detail-page view costs zero browse calls
- * and vice versa — at most one billed photos-only call per place per
- * {@link PLACE_PHOTOS_CACHE_TTL_MS} window, however many surfaces render it.
- * Every listing degrades independently to "no photo" (never throws), and a
- * cold cache fetches at most {@link BATCH_PHOTO_CONCURRENCY} places at once so
- * a full page of misses doesn't fire dozens of parallel Google calls.
+ * Browse surfaces: {@link getPhotosForListings} answers a whole page of
+ * listing ids in one call — the list cards and the map-carousel mini-cards
+ * both derive their photo from it through the single `listingToCardVM`
+ * mapping site. It shares {@link fetchPhotosForPlace} (and the per-Place-ID
+ * {@link listingPhotosCache}) with the hero path, so a place warmed by either
+ * surface is warm for the other — at most one billed photos-only call per
+ * place per {@link PLACE_PHOTOS_CACHE_TTL_MS} window, however many surfaces
+ * render it. Every listing degrades independently to "no photo" (never
+ * throws), and a cold cache fetches at most {@link BATCH_PHOTO_CONCURRENCY}
+ * places at once so a full page of misses doesn't burst parallel Google calls.
  */
 
 // ---------------------------------------------------------------------------
@@ -48,11 +47,11 @@ import { getSetting } from "~/server/settings";
 /**
  * TTL for the in-process caches (photo metadata per Place ID here; resolved
  * media `photoUri` per (name, width) in the `/api/places/photo` route). 12
- * hours is the risk posture ADR-014 lands on: long enough that a popular
- * listing costs at most a couple of billed Place Details (photos-only) calls
- * per day per server instance, short enough that Google content is only ever
- * held transiently in memory — never persisted — and that a removed/updated
- * photo (or a flipped kill switch) propagates within half a day.
+ * hours is the ADR-014 risk posture: long enough that a popular listing costs
+ * at most a couple of billed photos-only calls per day per server instance,
+ * short enough that Google content is only ever held transiently in memory
+ * and that a removed photo (or a flipped kill switch) propagates within half
+ * a day.
  */
 export const PLACE_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -63,7 +62,7 @@ export const MAX_LISTING_PHOTOS = 3;
 const DETAILS_URL_BASE = "https://places.googleapis.com/v1/places";
 
 // ---------------------------------------------------------------------------
-// In-process TTL cache — the ONLY place Google photo data ever lives on our side
+// In-process TTL cache — the only place Google photo data ever lives on our side
 // ---------------------------------------------------------------------------
 
 /**
@@ -77,7 +76,7 @@ export const PLACE_PHOTOS_CACHE_MAX_ENTRIES = 1_000;
 /**
  * Minimal in-process TTL cache. Values live in module memory only (ADR-014 —
  * transient by construction: a redeploy or instance recycle empties it) and
- * expire after `ttlMs`. Bounded: at `maxEntries` the OLDEST-INSERTED entry is
+ * expire after `ttlMs`. Bounded: at `maxEntries` the oldest-inserted entry is
  * evicted (Map preserves insertion order — simple FIFO, no LRU bookkeeping
  * needed for a cache this small). Shared mechanism for photo-metadata-per-place
  * (this module) and resolved-photoUri / negative caches (`routes/places.ts`).
@@ -139,7 +138,7 @@ export interface PlacePhotoAttribution {
 
 /**
  * Client-safe photo descriptor. `photoToken` is the Google photo resource
- * `name` (`places/PLACE_ID/photos/RESOURCE`) — a TRANSIENT handle the client
+ * `name` (`places/PLACE_ID/photos/RESOURCE`) — a transient handle the client
  * feeds back to the `/api/places/photo` proxy. It is never persisted
  * (ADR-014) and contains no key material.
  */
@@ -177,9 +176,9 @@ const photosResponseSchema = z.object({
 /**
  * Google returns author profile links protocol-relative
  * (`//www.google.com/maps/contrib/…`). Normalize to https and drop anything
- * that isn't an https URL afterwards — the client renders these as anchors, so
- * only a safe scheme may ever reach an `href` (same posture as `isHttpUrl` on
- * `mapsUrl`, #90).
+ * that isn't an https URL afterwards — the client renders these as anchors,
+ * so only a safe scheme may ever reach an `href` (same posture as `isHttpUrl`
+ * on `mapsUrl`).
  */
 function normalizeAttributionUri(uri: string | undefined): string | undefined {
   if (!uri) return undefined;
@@ -193,16 +192,17 @@ function normalizeAttributionUri(uri: string | undefined): string | undefined {
 
 /**
  * Fetch (or serve from cache) up to {@link MAX_LISTING_PHOTOS} client-safe
- * photo descriptors for ONE Place ID. Shared by {@link runListingPhotos} (hero,
- * one listing) and {@link getPhotosForListings} (browse, a page of listings) so
- * both paths write/read the SAME per-Place-ID {@link listingPhotosCache} — a
- * place warmed by either surface is warm for the other.
+ * photo descriptors for one Place ID. Shared by {@link runListingPhotos}
+ * (hero, one listing) and {@link getPhotosForListings} (browse, a page of
+ * listings), so both paths write/read the same per-Place-ID
+ * {@link listingPhotosCache} — a place warmed by either surface is warm for
+ * the other.
  *
  * Never throws: a successful lookup (including a legit "this place has no
  * photos" empty result) is cached for {@link PLACE_PHOTOS_CACHE_TTL_MS} and
  * returned; any failure (non-2xx, bad shape, network error) is logged via
  * `console.warn` (status/message only — never the response body, which may
- * reference the key/quota) and resolves to `[]`, NOT cached, so a later page
+ * reference the key/quota) and resolves to `[]`, not cached, so a later page
  * view may retry.
  */
 async function fetchPhotosForPlace(placeId: string, apiKey: string): Promise<PlacePhoto[]> {
@@ -214,7 +214,7 @@ async function fetchPhotosForPlace(placeId: string, apiKey: string): Promise<Pla
       method: "GET",
       headers: {
         "X-Goog-Api-Key": apiKey,
-        // Photos ONLY — keep this paid (Pro SKU) call as tight as possible.
+        // Photos only — keep this paid (Pro SKU) call as tight as possible.
         "X-Goog-FieldMask": "photos",
       },
     });
@@ -264,8 +264,8 @@ async function fetchPhotosForPlace(placeId: string, apiKey: string): Promise<Pla
  * 3. listing missing/hidden ({@link getListing} is visibility-aware) or has no
  *    Place ID (manual entry).
  *
- * Delegates the actual fetch+cache to {@link fetchPhotosForPlace}; see its doc
- * for the caching/failure contract.
+ * Delegates the fetch + cache to {@link fetchPhotosForPlace}; see its doc for
+ * the caching/failure contract.
  */
 export async function runListingPhotos({ listingId }: ListingPhotosInput): Promise<PlacePhoto[]> {
   try {
@@ -288,7 +288,7 @@ export async function runListingPhotos({ listingId }: ListingPhotosInput): Promi
 }
 
 // ---------------------------------------------------------------------------
-// Batch operation — browse cards + map carousel (AUB-219)
+// Batch operation — browse cards + map carousel
 // ---------------------------------------------------------------------------
 
 /** Hard cap on how many listing ids one {@link getPhotosForListings} call accepts. */
@@ -322,7 +322,7 @@ export const listingIdsInputSchema = z.object({
 /** Validated shape accepted by {@link getPhotosForListings}. */
 export type ListingIdsInput = z.infer<typeof listingIdsInputSchema>;
 
-/** Client-safe result of {@link getPhotosForListings}: listing id -> its ONE hero photo. */
+/** Client-safe result of {@link getPhotosForListings}: listing id -> its one hero photo. */
 export type ListingPhotoMap = Record<string, PlacePhoto>;
 
 /**
@@ -356,9 +356,9 @@ async function mapWithConcurrency<T, R>(
 }
 
 /**
- * Look up the Place ID for every VISIBLE listing among `listingIds`, in one
+ * Look up the Place ID for every visible listing among `listingIds`, in one
  * batched query (no N+1) — mirrors the visibility rule in {@link getListing}
- * (a hidden/removed listing is treated as if it didn't exist). Manual listings
+ * (a hidden/removed listing is treated as missing). Manual listings
  * (`placeId` null) are simply absent from the returned map.
  */
 async function getPlaceIdsForListings(listingIds: string[]): Promise<Map<string, string>> {
@@ -375,11 +375,11 @@ async function getPlaceIdsForListings(listingIds: string[]): Promise<Map<string,
 }
 
 /**
- * Batched browse-surface lookup (AUB-219): listing id -> its single hero photo
- * (the FIRST photo {@link fetchPhotosForPlace} returns for that listing's
- * Place ID), for every id in `listingIds` that has one. Powers the browse list
- * cards AND the map-carousel mini-cards through the one `listingToCardVM`
- * mapping site — both surfaces agree because they both read this same map.
+ * Batched browse-surface lookup: listing id -> its single hero photo (the
+ * first photo {@link fetchPhotosForPlace} returns for that listing's Place
+ * ID), for every id in `listingIds` that has one. Powers the browse list
+ * cards and the map-carousel mini-cards through the one `listingToCardVM`
+ * mapping site — both surfaces agree because they read this same map.
  *
  * Guard order (each short-circuits to `{}` with no upstream call, mirroring
  * {@link runListingPhotos}):
@@ -387,21 +387,19 @@ async function getPlaceIdsForListings(listingIds: string[]): Promise<Map<string,
  * 2. `GOOGLE_PLACES_API_KEY` unset.
  *
  * Cost bounding:
- * - Reuses the SAME per-Place-ID {@link listingPhotosCache} as the hero path —
- *   a place already warmed by a detail-page view (or an earlier browse page)
- *   costs zero calls here, and vice versa.
- * - Distinct Place IDs are deduped BEFORE fetching (two listings can't double
- *   the cost of one place), and fetched with at most
- *   {@link BATCH_PHOTO_CONCURRENCY} calls in flight (`mapWithConcurrency`).
+ * - Reuses the same per-Place-ID {@link listingPhotosCache} as the hero path
+ *   — a place already warmed by either surface costs zero calls on the other.
+ * - Distinct Place IDs are deduped before fetching (two listings can't double
+ *   the cost of one place), with at most {@link BATCH_PHOTO_CONCURRENCY}
+ *   calls in flight (`mapWithConcurrency`).
  * - Manual listings (no Place ID) are omitted with no DB/upstream cost.
  *
- * Failure isolation: a single listing/place's failure resolves to that
- * listing being ABSENT from the returned map (never a thrown error, never a
- * partial/malformed entry) — `fetchPhotosForPlace` already degrades
- * per-place failures to `[]` internally. A failure in the batch's own DB
- * lookup (or any other unexpected error) degrades the WHOLE call to `{}` via
- * the outer catch, exactly like `runListingPhotos` degrades to `[]` — photos
- * are decorative and must never fail the browse page.
+ * Failure isolation: a single place's failure leaves its listings absent from
+ * the returned map (never a thrown error, never a partial entry) —
+ * `fetchPhotosForPlace` degrades per-place failures to `[]` internally. A
+ * failure in the batch's own DB lookup (or any other unexpected error)
+ * degrades the whole call to `{}` via the outer catch — photos are decorative
+ * and must never fail the browse page.
  */
 export async function getPhotosForListings({
   listingIds,

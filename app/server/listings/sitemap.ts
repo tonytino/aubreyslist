@@ -4,26 +4,21 @@ import { listings } from "~/db/schema";
 import { absoluteUrl } from "~/lib/seo";
 
 /**
- * Server-side sitemap builder for `/sitemap.xml` (AUB-161).
+ * Server-side sitemap builder for `/sitemap.xml`.
  *
  * Lives in `app/server/` (not the route file) because it imports the database
- * as a value — the Hard Rule "No `db` imports in client-side code" scopes
- * `app/routes/**` as client surface, so the route file
- * (`app/routes/sitemap[.]xml.ts`) stays a thin server-handler shell that
- * imports this module through the `~/server` seam.
+ * as a value — the "no `db` imports in client-side code" Hard Rule scopes
+ * `app/routes/**` as client surface, so the route file stays a thin
+ * server-handler shell over this module.
  *
- * Lists every PUBLICLY reachable URL so search engines can discover listing
- * detail pages without crawling the SPA:
- *   - the static public marketing pages (`/`, `/about`);
- *   - every listing detail page (`/listings/$id`) for a listing whose
- *     `moderationStatus` is `visible` — the exact idiom the public browse/detail
- *     reads use (see `getListing` in `app/server/listings/get-listing.ts` and
- *     `browse.ts`'s `visibleListing`) so a hidden/removed listing, which 404s
- *     for a direct visitor, is never advertised to a crawler either.
+ * Lists every publicly reachable URL so search engines can discover listing
+ * detail pages without crawling the SPA: the static marketing pages plus
+ * every `/listings/$id` whose `moderationStatus` is `visible` — the same
+ * idiom as the public browse/detail reads, so a listing that 404s for a
+ * direct visitor is never advertised to a crawler.
  *
- * Deliberately excludes auth-gated/admin routes (`/favorites`, `/listings/new`,
- * `/admin`) — none of those are indexable by an anonymous crawler anyway, since
- * they either require a session or mutate data.
+ * Deliberately excludes auth-gated/admin routes (`/favorites`,
+ * `/listings/new`, `/admin`): they require a session or mutate data.
  */
 
 /** Static, publicly-indexable pages outside the listing-detail set. */
@@ -42,7 +37,7 @@ function urlEntry(loc: string): string {
   return `  <url>\n    <loc>${escapeXml(loc)}</loc>\n  </url>`;
 }
 
-/** Ids of every publicly-visible listing, in the browse/detail idiom (#41). */
+/** Ids of every publicly visible listing, in the browse/detail idiom. */
 async function getVisibleListingIds(): Promise<string[]> {
   const rows = await getDb().query.listings.findMany({
     columns: { id: true },
@@ -51,7 +46,7 @@ async function getVisibleListingIds(): Promise<string[]> {
   return rows.map((row) => row.id);
 }
 
-/** Builds the full sitemap XML document. Exported for the route + its test. */
+/** Builds the full sitemap XML document. */
 export async function buildSitemapXml(): Promise<string> {
   const listingIds = await getVisibleListingIds();
   const paths = [...STATIC_PATHS, ...listingIds.map((id) => `/listings/${id}`)];
