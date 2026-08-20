@@ -54,6 +54,8 @@
 # ── Supply chain / legal ──────────────────────────────────────────────────────
 /package.json                    @tonytino
 /pnpm-lock.yaml                  @tonytino
+/pnpm-workspace.yaml             @tonytino
+/osv-scanner.toml                @tonytino
 /LICENSE                         @tonytino
 
 # ── Safety / medical-disclaimer copy (content check catches it if it moves) ───

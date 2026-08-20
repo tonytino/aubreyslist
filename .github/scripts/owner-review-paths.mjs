@@ -81,8 +81,18 @@ export const OWNED_PATHS = [
   "/drizzle.config.ts",
 
   // ── Supply chain / legal ──
+  // pnpm-workspace.yaml holds the supply-chain posture itself: the
+  // `minimumReleaseAge` quarantine, its `minimumReleaseAgeExclude` fast-track
+  // list, `blockExoticSubdeps`, the `allowBuilds` postinstall allowlist, and the
+  // security-floor `overrides`. It previously slipped the net — `/*.config.ts`
+  // matches .ts only — so a PR that ONLY weakened it (deleting the quarantine,
+  // adding a fast-track entry, lowering a floor) tripped neither layer and could
+  // ship `safe:agent`. osv-scanner.toml is gated for the same reason: an entry
+  // there is a decision to accept a known vulnerability.
   "/package.json",
   "/pnpm-lock.yaml",
+  "/pnpm-workspace.yaml",
+  "/osv-scanner.toml",
   "/LICENSE",
 
   // ── Safety / medical-disclaimer copy (current home; the content check below
