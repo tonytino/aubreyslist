@@ -1,0 +1,1 @@
+- `[manual]` Switched the osv-scanner CI step from `--output` to `--output-file`; osv-scanner v2.3.8 warns that the former is deprecated. No behaviour change — the results file is written to the same path either way.
