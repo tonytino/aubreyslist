@@ -325,6 +325,77 @@ function IncidentOwnerControls({
 /** A severity selection plus the "" sentinel meaning "not specified". */
 type SeverityChoice = (typeof INCIDENT_SEVERITIES)[number] | "";
 
+/**
+ * The three editable incident fields — date, severity, note — shared by the
+ * report form and the inline edit form.
+ *
+ * They are one component rather than two copies because the two forms describe
+ * the SAME record: `reportIncidentInputSchema` and `editIncidentInputSchema`
+ * deliberately carry identical `occurredOn`/`severity`/`note` rules
+ * (`app/trust/incident-recency.ts`), so a field that drifted between them would
+ * be a bug. Everything the two forms genuinely differ on — labels, error copy,
+ * submit/cancel affordances — stays in the callers.
+ */
+function IncidentFields({
+  occurredOn,
+  onOccurredOnChange,
+  severity,
+  onSeverityChange,
+  note,
+  onNoteChange,
+}: {
+  occurredOn: string;
+  onOccurredOnChange: (value: string) => void;
+  severity: SeverityChoice;
+  onSeverityChange: (value: SeverityChoice) => void;
+  note: string;
+  onNoteChange: (value: string) => void;
+}) {
+  return (
+    <>
+      <label className="flex flex-col gap-1">
+        <span className="text-body-sm font-medium text-foreground">
+          Date it happened <span className="text-incident">*</span>
+        </span>
+        <input
+          type="date"
+          required
+          value={occurredOn}
+          onChange={(event) => onOccurredOnChange(event.target.value)}
+          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-body-sm font-medium text-foreground">Severity (optional)</span>
+        <select
+          value={severity}
+          onChange={(event) => onSeverityChange(event.target.value as SeverityChoice)}
+          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
+        >
+          <option value="">Not specified</option>
+          {INCIDENT_SEVERITIES.map((value) => (
+            <option key={value} value={value}>
+              {formatSeverity(value)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-body-sm font-medium text-foreground">What happened (optional)</span>
+        <textarea
+          value={note}
+          onChange={(event) => onNoteChange(event.target.value)}
+          rows={3}
+          maxLength={2000}
+          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
+        />
+      </label>
+    </>
+  );
+}
+
 /** Inline form to edit an OWN incident's date/severity/note (#32). */
 function IncidentEditForm({
   listingId,
@@ -373,45 +444,14 @@ function IncidentEditForm({
         }
       }}
     >
-      <label className="flex flex-col gap-1">
-        <span className="text-body-sm font-medium text-foreground">
-          Date it happened <span className="text-incident">*</span>
-        </span>
-        <input
-          type="date"
-          required
-          value={occurredOn}
-          onChange={(event) => setOccurredOn(event.target.value)}
-          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-body-sm font-medium text-foreground">Severity (optional)</span>
-        <select
-          value={severity}
-          onChange={(event) => setSeverity(event.target.value as SeverityChoice)}
-          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
-        >
-          <option value="">Not specified</option>
-          {INCIDENT_SEVERITIES.map((value) => (
-            <option key={value} value={value}>
-              {formatSeverity(value)}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-body-sm font-medium text-foreground">What happened (optional)</span>
-        <textarea
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          rows={3}
-          maxLength={2000}
-          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
-        />
-      </label>
+      <IncidentFields
+        occurredOn={occurredOn}
+        onOccurredOnChange={setOccurredOn}
+        severity={severity}
+        onSeverityChange={setSeverity}
+        note={note}
+        onNoteChange={setNote}
+      />
 
       {save.isError ? (
         <p role="alert" className="text-body-sm text-incident">
@@ -538,45 +578,14 @@ function IncidentForm({ listingId, onSuccess }: { listingId: string; onSuccess: 
         }
       }}
     >
-      <label className="flex flex-col gap-1">
-        <span className="text-body-sm font-medium text-foreground">
-          Date it happened <span className="text-incident">*</span>
-        </span>
-        <input
-          type="date"
-          required
-          value={occurredOn}
-          onChange={(event) => setOccurredOn(event.target.value)}
-          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-body-sm font-medium text-foreground">Severity (optional)</span>
-        <select
-          value={severity}
-          onChange={(event) => setSeverity(event.target.value as SeverityChoice)}
-          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
-        >
-          <option value="">Not specified</option>
-          {INCIDENT_SEVERITIES.map((value) => (
-            <option key={value} value={value}>
-              {formatSeverity(value)}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-body-sm font-medium text-foreground">What happened (optional)</span>
-        <textarea
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          rows={3}
-          maxLength={2000}
-          className="rounded-card border border-border bg-background px-3 py-2 text-body text-foreground"
-        />
-      </label>
+      <IncidentFields
+        occurredOn={occurredOn}
+        onOccurredOnChange={setOccurredOn}
+        severity={severity}
+        onSeverityChange={setSeverity}
+        note={note}
+        onNoteChange={setNote}
+      />
 
       {report.isError ? (
         <p role="alert" className="text-body-sm text-incident">
