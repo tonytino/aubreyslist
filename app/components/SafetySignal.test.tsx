@@ -39,6 +39,16 @@ describe("SafetySignal", () => {
     }
   );
 
+  it.each(SAFETY_STATES)("keeps the %s chip a one-line pill that never squeezes", (state) => {
+    // Same box contract as `ClaimChip`: in a flex row that runs out of room the
+    // chip holds its width and lets the row overflow, instead of wrapping its
+    // label onto a second line and growing the row's height. A scrolling badge
+    // row (browse card, detail hero) depends on this.
+    const { container } = render(<SafetySignal state={state} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveClass("shrink-0", "whitespace-nowrap");
+  });
+
   it("renders distinct labels for celiac-safe vs gluten-friendly", () => {
     expect(safetyLabel("celiac-safe")).not.toBe(safetyLabel("gluten-friendly"));
   });
