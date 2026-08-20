@@ -9,10 +9,14 @@ import { type Coords, coordsSchema } from "~/listings/distance";
  *
  *  - Never requests location on mount — only when the caller invokes
  *    {@link GeolocationState.request}. No surprise permission prompt.
+ *  - Checks {@link geolocationPermission} first: a browser that already holds a
+ *    "denied" grant answers `getCurrentPosition` instantly with
+ *    `PERMISSION_DENIED` and shows no prompt, so that case gets its own message
+ *    naming the browser setting rather than blaming the user for declining.
  *  - Unavailable (no `navigator.geolocation`, e.g. SSR or an old browser),
- *    denied, errored, or timed out resolves to `{ status: "error" }` with an
- *    accessible message — never throws, never hangs — so the caller can fall
- *    back to the default sort.
+ *    blocked, denied, errored, or timed out resolves to `{ status: "error" }`
+ *    with an accessible message — never throws, never hangs — so the caller can
+ *    fall back to the default sort.
  *  - Success resolves to validated {@link Coords} (WGS84-range-checked via
  *    the shared `coordsSchema`), so a bogus reading can't reach the sort.
  *
@@ -23,10 +27,19 @@ import { type Coords, coordsSchema } from "~/listings/distance";
 /** The current state of the geolocation request. */
 export type GeolocationStatus = "idle" | "prompting" | "success" | "error";
 
+/**
+ * Why a request failed. `blocked` (the browser holds a "denied" grant, so no
+ * prompt appears) and `denied` (the visitor declined the prompt) are answers
+ * about permission; `unavailable` and `error` (timeout, no fix, bogus reading)
+ * are transient or environmental. Callers act on the difference: only a
+ * permission answer should forget a remembered opt-in.
+ */
+export type GeolocationFailure = "unavailable" | "blocked" | "denied" | "error";
+
 /** The outcome of a single {@link GeolocationState.request} call. */
 export type GeolocationResult =
   | { status: "success"; coords: Coords }
-  | { status: "error"; message: string };
+  | { status: "error"; reason: GeolocationFailure; message: string };
 
 export interface GeolocationState {
   status: GeolocationStatus;
@@ -43,28 +56,64 @@ const UNAVAILABLE_MESSAGE =
 const DENIED_MESSAGE =
   "Location access was denied. Showing listings alphabetically instead. " +
   "Enable location in your browser to sort by distance.";
+const BLOCKED_MESSAGE =
+  "Your browser blocks location for this site, so no prompt appeared. " +
+  "Showing listings alphabetically. Allow location in your browser settings, then pick Near me again.";
 const GENERIC_MESSAGE = "Couldn’t get your location. Showing listings alphabetically instead.";
 
-function messageForError(error: GeolocationPositionError): string {
+/**
+ * The browser's stored geolocation grant, or `"unknown"` when it can't be read
+ * (SSR, no Permissions API, or a browser whose `query` rejects the
+ * `geolocation` name — Safari before 16.4 throws).
+ *
+ * Read-only: querying never prompts. Callers use it to tell an
+ * already-blocked browser (no prompt is coming) from one that will ask.
+ */
+export async function geolocationPermission(): Promise<PermissionState | "unknown"> {
+  if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+    return "unknown";
+  }
+  try {
+    const status = await navigator.permissions.query({ name: "geolocation" });
+    return status.state;
+  } catch {
+    return "unknown";
+  }
+}
+
+function outcomeForError(error: GeolocationPositionError): {
+  reason: GeolocationFailure;
+  message: string;
+} {
   // `PERMISSION_DENIED` is 1 in the spec; guard the constant in case it's absent.
-  return error.code === error.PERMISSION_DENIED ? DENIED_MESSAGE : GENERIC_MESSAGE;
+  return error.code === error.PERMISSION_DENIED
+    ? { reason: "denied", message: DENIED_MESSAGE }
+    : { reason: "error", message: GENERIC_MESSAGE };
 }
 
 export function useGeolocation(): GeolocationState {
   const [status, setStatus] = useState<GeolocationStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const request = useCallback((): Promise<GeolocationResult> => {
+  const request = useCallback(async (): Promise<GeolocationResult> => {
     // Unavailable (SSR, old browser, or a locked-down context). Fall back, don't
     // throw — the caller reverts to the default sort.
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setStatus("error");
       setError(UNAVAILABLE_MESSAGE);
-      return Promise.resolve({ status: "error", message: UNAVAILABLE_MESSAGE });
+      return { status: "error", reason: "unavailable", message: UNAVAILABLE_MESSAGE };
     }
 
     setStatus("prompting");
     setError(null);
+
+    // Awaiting the permission read before requesting is safe: geolocation needs
+    // no transient user activation, so the prompt still opens after the await.
+    if ((await geolocationPermission()) === "denied") {
+      setStatus("error");
+      setError(BLOCKED_MESSAGE);
+      return { status: "error", reason: "blocked", message: BLOCKED_MESSAGE };
+    }
 
     return new Promise<GeolocationResult>((resolve) => {
       navigator.geolocation.getCurrentPosition(
@@ -76,7 +125,7 @@ export function useGeolocation(): GeolocationState {
           if (!parsed.success) {
             setStatus("error");
             setError(GENERIC_MESSAGE);
-            resolve({ status: "error", message: GENERIC_MESSAGE });
+            resolve({ status: "error", reason: "error", message: GENERIC_MESSAGE });
             return;
           }
           setStatus("success");
@@ -84,10 +133,10 @@ export function useGeolocation(): GeolocationState {
           resolve({ status: "success", coords: parsed.data });
         },
         (positionError) => {
-          const message = messageForError(positionError);
+          const { reason, message } = outcomeForError(positionError);
           setStatus("error");
           setError(message);
-          resolve({ status: "error", message });
+          resolve({ status: "error", reason, message });
         },
         // Don't hang forever: time out and fall back rather than leaving the user
         // staring at an unchanged list with no feedback.

@@ -74,6 +74,24 @@ hits the URL, and the mirror reconciles when `?q=` changes from a link /
 back-forward / clear-all. A discrete control (a chip, a `<select>`, a pagination
 link) has no such need — navigate directly; do not add a mirror.
 
+## Device preferences: `localStorage`, not the URL
+
+A *per-device preference* is not shareable view state. It belongs in
+`localStorage` (theme: `app/components/ThemeToggle.tsx`; the "Near me" opt-in:
+`app/listings/near-me-preference.ts`), under two rules:
+
+1. **Restore into the URL.** The preference only decides what to `navigate()`
+   to on mount; the restored state itself still lives in the URL, so a refresh
+   or a shared link behaves identically for everyone. Use `replace: true` so
+   Back leaves the page instead of undoing the restore.
+2. **An explicit param wins.** Restore only when the param is at its default.
+   A pasted `?sort=trust` must never be overwritten by a stored preference.
+
+Guard every access (`try`/`catch`): storage throws in some privacy modes, and a
+preference that cannot be read is just an unset preference. Store the smallest
+flag that works, never the underlying data (the near-me flag is a boolean; the
+coordinates are re-read from the browser).
+
 ## Reusable helpers
 
 - `app/listings/browse-search.ts` — `browseSearchSchema`, `BROWSE_SEARCH_DEFAULTS`.
