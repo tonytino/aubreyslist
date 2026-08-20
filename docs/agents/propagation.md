@@ -1,43 +1,13 @@
 # Propagation
 
-This doc is for agents tasked with propagating construct template changes to existing project instances.
+How to roll construct template changes out to projects previously scaffolded
+from it.
 
----
+## Version tracking
 
-## What Propagation Means
-
-When construct is updated, some changes should be rolled out to projects that were previously scaffolded from it. This doc explains how to do that reliably.
-
----
-
-## How Scaffolded Projects Track Their Template Version
-
-Every project scaffolded from construct has a `.construct` JSON file at the repository root. This is the **single source of truth** for which template version the project was created from. The scaffold script (`scripts/scaffold.mjs`) writes this file automatically during setup.
-
-The key field is **`constructVersion`** — it records the construct `package.json` version at the time of scaffolding. During propagation, you update this field to the current construct version after applying changes.
-
-Always check `.construct` first when working with a scaffolded project. If the file is missing or the `constructVersion` field is absent, the project predates version tracking and should be treated as version `0.0.0`.
-
----
-
-## Source of Truth During Propagation
-
-Two documents describe what changed between versions: the **migration guide** (`docs/migrations/vX.Y.md`) and the **CHANGELOG** (`CHANGELOG.md`). They are not redundant:
-
-| Document | Role | When it wins |
-| -------- | ---- | ------------ |
-| Migration guide | **Authoritative** — step-by-step playbook for applying changes | Always. It is the thing you execute. |
-| CHANGELOG | **Discovery index** — which entries carry which propagation tag | When checking that no `[propagate]` item was forgotten in the migration guide |
-
-**Rule:** follow the migration guide. Use the CHANGELOG only to cross-check that every `[propagate]` entry for the target version is represented in the guide. If a `[propagate]` CHANGELOG entry has no corresponding migration step, stop and flag it rather than guessing.
-
-The migration guide wins because it encodes ordering and interdependencies (install before typecheck, copy before merge, etc.) that a flat changelog cannot.
-
----
-
-## Setup
-
-You will be pointed at a directory containing one or more construct instances. Each instance has a `.construct` file at its root:
+Every scaffolded project has a `.construct` JSON file at the repo root — the
+single source of truth for its template version (written by
+`scripts/scaffold.mjs`):
 
 ```json
 {
@@ -48,25 +18,37 @@ You will be pointed at a directory containing one or more construct instances. E
 }
 ```
 
-You will also have access to the current construct repo, its `CHANGELOG.md`, and its `docs/migrations/` directory.
+Check `.construct` first. If the file or the `constructVersion` field is
+missing, treat the project as version `0.0.0`. After applying changes, bump
+`constructVersion` to the current construct version.
 
----
+## Source of truth during propagation
 
-## Propagation Workflow
+| Document | Role | When it wins |
+| -------- | ---- | ------------ |
+| Migration guide (`docs/migrations/vX.Y.md`) | **Authoritative** step-by-step playbook | Always. It is the thing you execute — it encodes ordering and interdependencies. |
+| CHANGELOG (`CHANGELOG.md`) | **Discovery index** — which entries carry which propagation tag | Only to cross-check that no `[propagate]` item was forgotten in the guide |
+
+**Rule:** follow the migration guide. If a `[propagate]` CHANGELOG entry has no
+corresponding migration step, stop and flag it rather than guessing.
+
+## Propagation workflow
 
 For each instance in the target directory:
 
-1. **Read `.construct`** — note the `constructVersion` the instance was scaffolded from.
-2. **Open the migration guide(s)** — read `docs/migrations/vX.Y.md` for every version bump between the instance and construct. If the instance is on 0.1.0 and construct is on 0.2.0, read `v0.2.md`. If multiple jumps are needed, apply each guide in order.
-3. **Cross-check with `CHANGELOG.md`** — scan entries newer than the instance's version and confirm every `[propagate]` entry has a corresponding step in the migration guide. If something is missing, stop and flag for human review.
+1. **Read `.construct`** — note its `constructVersion`.
+2. **Open the migration guide(s)** — one per version bump between the instance
+   and construct, applied in order (0.1.0 → 0.2.0 means `v0.2.md`).
+3. **Cross-check `CHANGELOG.md`** — every `[propagate]` entry newer than the
+   instance's version must have a step in the guide. If not, stop and flag for
+   human review.
 4. **Skip `[template-only]`** entries. Flag `[manual]` entries for human review.
-5. **Apply the migration guide** — follow its steps in order, respecting the instance's existing code.
-6. **Update `.construct`** — bump `constructVersion` to the current construct version.
-7. **Run `pnpm preflight` and `pnpm build`** — verify the instance is still healthy after changes.
+5. **Apply the migration guide** in order, respecting the instance's existing
+   code.
+6. **Update `.construct`** — bump `constructVersion`.
+7. **Run `pnpm preflight` and `pnpm build`** — verify the instance is healthy.
 
----
-
-## What Propagates vs What Stays Template-Only
+## What propagates vs what stays template-only
 
 | Category | Examples | Propagates? |
 | -------- | -------- | ----------- |
@@ -78,32 +60,32 @@ For each instance in the target directory:
 | Instance-owned | `README.md`, `CHANGELOG.md`, `db/schema.ts`, most of `app/routes/`, `.env*`, `.construct` | **No** — never overwrite |
 | Template-only | `TEMPLATE.md`, `docs/decisions/`, `docs/migrations/`, `scripts/scaffold.mjs`, `scripts/labels.mjs`, `.github/workflows/validate-template.yml` | **No** — these describe or validate construct itself |
 
----
-
 ## Rules
 
-- **Never overwrite instance-specific files** — see the "Instance-owned" row above.
-- **Never copy template-only files** — see the "Template-only" row above.
-- **Config files are propagatable with care** — additive changes only; do not remove existing customizations.
-- **If a change conflicts with instance code**, flag it for human review rather than guessing.
-- **One instance at a time** — complete and verify each instance before moving to the next.
+- **Never overwrite instance-specific files** ("Instance-owned" row above).
+- **Never copy template-only files** ("Template-only" row above).
+- **Config files propagate with care** — additive changes only; keep existing
+  customizations.
+- **If a change conflicts with instance code**, flag it for human review rather
+  than guessing.
+- **One instance at a time** — complete and verify each before the next.
 
----
+## Migration guides
 
-## Migration Guides
+Every construct version bump ships a guide in `docs/migrations/`, named after
+the target version (e.g. `v0.2.md`), based on `docs/migrations/template.md`.
+Required sections:
 
-Every version bump to construct must include a corresponding migration guide in `docs/migrations/`. The guide is named after the target version (e.g., `v0.2.md` for the 0.1.0 to 0.2.0 migration). Use `docs/migrations/template.md` as the starting point.
-
-A migration guide must contain:
-
-- **Breaking Changes** — anything that will break existing instances if not addressed
+- **Breaking Changes** — anything that breaks existing instances if unaddressed
 - **Migration Steps** — an ordered checklist an agent can follow mechanically
-- **Files Affected** — every file that changed, with a one-line description
+- **Files Affected** — every changed file, one-line description each
 
-The convention for version bumps (CHANGELOG entry + migration guide + PR template checkbox) is documented in `docs/agents/releases.md` and enforced by `.github/workflows/release-check.yml`.
+The bump convention (CHANGELOG entry + migration guide + PR template checkbox)
+is in `docs/agents/releases.md`, enforced by
+`.github/workflows/release-check.yml`.
 
----
+## After propagation
 
-## After Propagation
-
-Leave a summary of what was applied, what was skipped, and what needs manual review. Format it as a short markdown file dropped into the instance root as `PROPAGATION_NOTES.md` — the human can delete it once reviewed.
+Drop a short `PROPAGATION_NOTES.md` in the instance root summarizing what was
+applied, skipped, and what needs manual review. The human deletes it once
+reviewed.

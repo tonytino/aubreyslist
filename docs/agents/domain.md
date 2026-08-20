@@ -11,7 +11,7 @@
 
 | Entity | What it is |
 | --- | --- |
-| **Listing** | A restaurant. Canonical identity is its **Google Place ID** (dedup key). Carries name, address, lat/lng, Maps deep-link, and **typed links** (AUB-202): at most one per kind (menu, gluten-free menu, website, reservations, online ordering) in the `listing_links` table. The kind taxonomy is `LINK_KINDS` in `app/listings/links.ts`. The legacy `menu_url` column remains only as a render fallback for any stray pre-AUB-202 row (shown as the menu link when no `menu`-kind row exists); no product code writes it anymore (E2E fixtures still create legacy rows deliberately, to test this fallback) — intake and the seed pipeline both write typed `menu`-kind rows (AUB-220), and typed `menu`-kind saves/removes (plus the `db:backfill:listing-links` script, whose one-time prod run has completed) CLEAR it — typed writes supersede the legacy column. |
+| **Listing** | A restaurant. Canonical identity is its **Google Place ID** (dedup key). Carries name, address, lat/lng, Maps deep-link, and **typed links** (AUB-202): at most one per kind (menu, gluten-free menu, website, reservations, online ordering) in the `listing_links` table. Kind taxonomy: `LINK_KINDS` in `app/listings/links.ts`. The legacy `menu_url` column is a render fallback only, shown when no `menu`-kind row exists; no product code writes it (E2E fixtures create legacy rows deliberately, to test the fallback). Typed `menu`-kind saves/removes CLEAR it — typed writes supersede the legacy column. |
 | **Claim** | A community-attested statement about a listing, one per attribute in the fixed taxonomy below. Carries an aggregate of confirmations/disputes and a "last confirmed" timestamp. |
 | **Attestation** | A single user's **confirm** or **dispute** on a claim. **One per user per claim** (changeable/retractable, not stackable). |
 | **Incident** | A "got glutened here" report on a listing: required **date**, optional **severity**, optional **note**, attributed to a user. |
@@ -24,46 +24,44 @@
 ## The GF Attribute Taxonomy (fixed / curated for v1)
 
 The set is **curated, not user-extensible** in v1 — consistent, comparable,
-filterable data. New attributes are added by us over time, never by contributors
-at runtime.
+filterable data. New attributes are added by us, never by contributors at
+runtime.
 
 1. **Celiac-safe** — the headline distinction, surfaced most prominently. Does
    the restaurant take cross-contamination seriously (confirm ⇒ celiac-safe), or
    merely offer GF-ish options (dispute ⇒ gluten-friendly)? Every listing is
-   assumed gluten-free-friendly already, so the useful community question is just
-   "is it celiac-safe?" The enum key is still `celiac_safe_vs_gluten_friendly`
-   (rename deferred — see below); only its label is "Celiac-safe".
+   assumed gluten-free-friendly already, so the community question is just "is
+   it celiac-safe?" The enum key is `celiac_safe_vs_gluten_friendly` (rename
+   deferred — see below); only its label is "Celiac-safe".
 2. **Dedicated / separate fryer** — yes / no / shared.
 3. **Dedicated GF menu** — labeled GF items exist.
 4. **Off-menu GF on request** — will make non-GF-labeled dishes GF when asked.
 5. **GF substitutes available** — bread/buns, pizza crust, pasta, etc.
 
 > When adding or renaming attributes, update this list **and** the filter UI
-> **and** any seed data in the same change. The taxonomy is referenced in many
-> places; keep it singular and authoritative. The client-safe source of truth is
+> **and** any seed data in the same change. The client-safe source of truth is
 > `app/listings/taxonomy.ts` (`CLAIM_ATTRIBUTES`); the `claim_attribute` pgEnum
 > derives from it.
 
 ### Deferred (post-v1)
 
-Two attributes were **purged before v1** (issue #175) because they were ambiguous
-as a community confirm/dispute and need a clearer design before they earn a vote:
+Two attributes are deferred because they are ambiguous as a community
+confirm/dispute, tracked in
+[issue #175](https://github.com/tonytino/aubreyslist/issues/175):
 
-- **Cross-contamination protocol** — "confirm what, exactly?" Too vague as a
-  yes/no; needs a structured shape (e.g. specific practices) rather than one vote.
-- **Staff knowledge & attitude** — close, but not crisp enough to attest reliably.
+- **Cross-contamination protocol** — too vague as a yes/no; needs a structured
+  shape.
+- **Staff knowledge & attitude** — not crisp enough to attest reliably.
 
-They are tracked for re-introduction in [issue #175](https://github.com/tonytino/aubreyslist/issues/175).
-Also deferred: renaming the headline enum key `celiac_safe_vs_gluten_friendly →
-celiac_safe` (a cosmetic cleanup that would force an enum type-recreate
-migration).
+Also deferred: renaming the enum key `celiac_safe_vs_gluten_friendly →
+celiac_safe` (cosmetic; would force an enum type-recreate migration).
 
 ---
 
 ## Trust Model (see ADR-007 for the decision)
 
 **Hybrid: a transparent summary layer over fully visible evidence.** The summary
-is a *roll-up of the raw evidence*, never a secret formula.
+is a roll-up of the raw evidence, never a secret formula.
 
 For each claim, show **the distribution and recency**, e.g.
 *"Dedicated fryer — 8 confirm / 1 dispute · last confirmed 3 weeks ago."* Below
@@ -102,12 +100,11 @@ Rules every trust-related feature must honor:
 - **Read is open / write is gated** — anonymous users browse; any write requires
   Google login.
 - **Listing links are wiki-editable** (AUB-202): the "own contributions" rule
-  above does NOT apply to a listing's typed links — ANY signed-in user may add,
-  edit, or remove any listing's links (a deliberate product decision, enforced
-  without ownership checks server-side). Abuse is handled like other content:
-  rate limits plus moderation, with `created_by` kept as provenance.
-- **Admins grant the moderator role** to any Google account at any time (starts
-  with the owner + trusted people).
+  does NOT apply to a listing's typed links — ANY signed-in user may add, edit,
+  or remove any listing's links (deliberate product decision, enforced without
+  ownership checks server-side). Abuse is handled like other content: rate
+  limits plus moderation, with `created_by` kept as provenance.
+- **Admins grant the moderator role** to any Google account at any time.
 - **Light rate limiting** applies to writes as an anti-abuse guardrail; there is
   **no reputation gating** in v1.
 
@@ -127,12 +124,11 @@ Rules every trust-related feature must honor:
 
 ## Discovery (v1)
 
-List-first. Originally "no embedded map — deep-link to Google Maps"; that was
-**revised 2026-07-06 by owner direction** (Linear project "Google Maps
-enrichment") — embedded map surfaces and Google place photos are now in scope,
-governed by the GMP usage & content policy in **ADR-014** (storage limits,
-attribution, key split, cost/degradation rules). Deep-linking remains the
-fallback whenever the browser Maps key is absent. Supports: **text search**
-(name/cuisine), **filters** by the taxonomy above (the killer feature —
-"celiac-safe + dedicated fryer"), **sort** by trust/recency or alphabetical,
-and **"near me"** distance sort using listing lat/lng + browser geolocation.
+List-first, with embedded map surfaces and Google place photos in scope
+(owner-directed, Linear project "Google Maps enrichment") — governed by the GMP
+usage & content policy in **ADR-014** (storage limits, attribution, key split,
+cost/degradation rules). Deep-linking to Google Maps is the fallback whenever
+the browser Maps key is absent. Supports: **text search** (name/cuisine),
+**filters** by the taxonomy above (the killer feature — "celiac-safe + dedicated
+fryer"), **sort** by trust/recency or alphabetical, and **"near me"** distance
+sort using listing lat/lng + browser geolocation.
