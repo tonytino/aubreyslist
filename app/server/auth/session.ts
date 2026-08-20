@@ -5,13 +5,11 @@ import { getEnv } from "~/env";
 /**
  * Stateless, server-signed session.
  *
- * ADR-006 deliberately ships **no `sessions` table** — the session is a sealed
- * (signed + encrypted) cookie. We use `iron-webcrypto` (the same primitive h3's
- * built-in `useSession` seals with) directly so the seal/unseal logic is a
- * single portable module usable from BOTH the Hono auth routes (which receive a
- * raw `Request`, not an ambient h3 event) and server functions. The cookie
- * holds only the user id; the full user row is always re-read from the DB by the
- * current-user accessor, so a stale/forged cookie can never elevate a session.
+ * ADR-006: no `sessions` table — the session is a sealed (signed + encrypted)
+ * cookie. `iron-webcrypto` is used directly so seal/unseal works from both the
+ * Hono auth routes (raw `Request`, no h3 event) and server functions. The
+ * cookie holds only the user id; the user row is always re-read from the DB,
+ * so a stale or forged cookie can never elevate a session.
  */
 
 /** Name of the session cookie. */
@@ -30,11 +28,10 @@ const sessionPayloadSchema = z.object({
 export type SessionPayload = z.infer<typeof sessionPayloadSchema>;
 
 /**
- * Read the session signing secret, throwing a clear error if it is unset.
+ * Read the session signing secret, throwing if unset.
  *
- * `SESSION_SECRET` stays declared `optional()` in `app/env.ts` (CI lacks it),
- * so we guard at the point of use: any auth flow that needs to sign or verify a
- * session fails loudly here rather than silently producing an unsigned cookie.
+ * `SESSION_SECRET` is `optional()` in `app/env.ts` (CI lacks it), so guard at
+ * the point of use: auth fails loudly here rather than signing with nothing.
  */
 function getSessionSecret(): string {
   const secret = getEnv().SESSION_SECRET;
@@ -48,8 +45,6 @@ function getSessionSecret(): string {
 
 /** Seal a session payload into an opaque cookie value. */
 export async function sealSessionPayload(payload: SessionPayload): Promise<string> {
-  // iron-webcrypto v2 uses the global Web Crypto implementation directly — no
-  // more `_Crypto` first parameter (and no more cast to bridge its types).
   return seal(payload, getSessionSecret(), sealDefaults);
 }
 

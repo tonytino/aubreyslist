@@ -2,16 +2,12 @@ import { z } from "zod";
 import { getEnv } from "~/env";
 
 /**
- * Minimal, hand-rolled Google OAuth 2.0 authorization-code flow (ADR-006:
- * Google is the sole provider). We avoid an OAuth dependency: the flow is a
- * small, well-specified set of `fetch` calls. We handle CSRF with the `state`
- * parameter and additionally use PKCE (S256), so the flow is hardened even
- * though Google issues a client secret.
+ * Hand-rolled Google OAuth 2.0 authorization-code flow (ADR-006: Google is the
+ * sole provider). No OAuth dependency — the flow is a small set of `fetch`
+ * calls. CSRF is handled via `state`, plus PKCE (S256).
  *
- * Secrets (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`) are read lazily via
- * `getEnv()` and guarded here — they stay `optional()` in `app/env.ts` so CI
- * (which lacks them) stays green, and the auth routes throw a clear error if a
- * sign-in is attempted without them.
+ * `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` stay `optional()` in
+ * `app/env.ts` (CI lacks them); sign-in throws a clear error if unset.
  */
 
 const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -129,7 +125,7 @@ const userInfoSchema = z.object({
   sub: z.string().min(1),
   email: z.string().email(),
   // `email_verified` can arrive as a boolean or the string "true"/"false".
-  // Enforced (not just parsed) below — see `isEmailVerified` (AUB-183).
+  // Enforced (not just parsed) by `isEmailVerified`.
   email_verified: z.union([z.boolean(), z.string()]).optional(),
   name: z.string().optional(),
   picture: z.string().url().optional(),
@@ -150,13 +146,10 @@ export function isEmailVerified(value: boolean | string | undefined): boolean {
 /**
  * Fetch the authenticated user's profile from Google's userinfo endpoint.
  *
- * AUB-183: rejects the sign-in outright (throws) when Google has not verified
- * the email address. Chosen failure mode is fail-closed rather than
- * "sign in anyway but flag it" — we key identity/session on this email
- * (see `upsertUserFromGoogle`), so trusting an unverified address would let
- * an attacker claim an email they don't control (e.g. before the real owner
- * ever signs up) and hijack whatever access that email implies. There is no
- * recovery flow here; the user must verify the address with Google and retry.
+ * Throws when Google has not verified the email address (fail closed).
+ * Identity is keyed on this email, so an unverified address would let an
+ * attacker claim an email they don't control. No recovery flow here; the user
+ * must verify the address with Google and retry.
  */
 export async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
   const res = await fetch(GOOGLE_USERINFO_ENDPOINT, {

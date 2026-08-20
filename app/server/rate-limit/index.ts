@@ -59,11 +59,11 @@ export interface RateLimitConfig {
 /**
  * Default write thresholds: 50 writes per rolling 60-second window per user —
  * generous enough never to bother a real user, tight enough to blunt scripted
- * bursts (issue #18).
+ * bursts.
  *
  * @remarks These live in code for v1. They can later be sourced from
- * `app_settings` (issue #13) so an admin can tune them without a deploy; until
- * then, treat these constants as the single source of truth.
+ * `app_settings` so an admin can tune them without a deploy; until then, treat
+ * these constants as the single source of truth.
  */
 export const DEFAULT_WRITE_RATE_LIMIT: RateLimitConfig = {
   limit: 50,

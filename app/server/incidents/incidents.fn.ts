@@ -8,15 +8,13 @@ import {
 import { editIncident, listIncidents, reportIncident, retractIncident } from "./index";
 
 /**
- * Client-callable incident server functions (issue #30).
+ * Client-callable incident server functions.
  *
- * These `createServerFn` entry points are the ONLY part of the incident server
- * layer that client code (the listing-detail route + `IncidentReports`) imports.
- * Following the established `*.fn.ts` convention (see
- * `app/server/auth/current-user.fn.ts`), the db-touching implementations live in
- * `./index.ts` and the TanStack Start plugin strips their handler bodies out of
- * the browser bundle — so importing from here never drags `getDb` (neon/drizzle)
- * or server-only stream code into the client build.
+ * These `createServerFn` entry points are the only part of the incident
+ * server layer that client code imports. Per the `*.fn.ts` convention, the
+ * db-touching implementations live in `./index.ts` and the TanStack Start
+ * plugin strips their handler bodies out of the browser bundle — importing
+ * from here never drags `getDb` (neon/drizzle) into the client build.
  *
  * Server-only at runtime; safe to import from client modules.
  */

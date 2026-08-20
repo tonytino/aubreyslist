@@ -1,17 +1,16 @@
-// Server-side Sentry initialization (AUB-110).
+// Server-side Sentry initialization.
 //
-// This module MUST be imported/evaluated BEFORE any other server code so that
+// This module must be imported/evaluated before any other server code so that
 // Sentry's auto-instrumentation can patch Node internals (http, fetch, etc.)
-// as early as possible. The production `--import` wiring that guarantees that
-// ordering lives in a separate task (AUB-106) — this file only owns the
-// `Sentry.init(...)` call itself.
+// as early as possible. This file only owns the `Sentry.init(...)` call
+// itself; the production `--import` wiring guarantees the ordering.
 //
-// The DSN below is a PUBLIC client key: it only identifies which Sentry
+// The DSN below is a public client key: it only identifies which Sentry
 // project to send events to and carries no privileged access, so committing it
 // is safe and expected (see Sentry's docs on DSNs).
 //
 // PII / `sendDefaultPii` and other data-collection tuning is deliberately left
-// at library defaults here — that decision is tracked as its own issue.
+// at library defaults here.
 import * as Sentry from "@sentry/tanstackstart-react";
 
 Sentry.init({

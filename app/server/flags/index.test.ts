@@ -2,7 +2,7 @@ import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the content-flagging write layer (#39).
+ * Tests for the content-flagging write layer.
  *
  * The module's only server-only dependencies are the DB client and the auth
  * guard + rate limiter. We model the exact drizzle chain it uses
@@ -40,9 +40,9 @@ const h = vi.hoisted(() => {
     return Promise.resolve({ id: "user-1" });
   });
 
-  // `enforceWriteLimit` is the per-user write rate limit (#18). We spy on it to
-  // assert the write meters the authenticated user; the limiter's own window
-  // logic has dedicated coverage in `rate-limit/index.test.ts`.
+  // `enforceWriteLimit` is the per-user write rate limit. Spied on to assert
+  // the write meters the authenticated user; the limiter's own window logic
+  // has dedicated coverage in `rate-limit/index.test.ts`.
   const enforceWriteLimitMock = vi.fn((_userId?: string) => Promise.resolve());
 
   return { state, valuesMock, insertMock, requireCurrentUserMock, enforceWriteLimitMock };
@@ -106,7 +106,7 @@ describe("createFlagInputSchema — exclusive-arc target validation", () => {
   });
 
   it("rejects multiple targets (extra target id is not allowed on a branch)", () => {
-    // A claim branch carries ONLY claimId; supplying a second target id makes the
+    // A claim branch carries only claimId; supplying a second target id makes the
     // payload invalid (strict-by-construction discriminated union branches).
     const parsed = createFlagInputSchema.safeParse({
       target: "claim",
@@ -186,7 +186,7 @@ describe("createFlag — inserts an open flag attributed to the reporter", () =>
       createFlag({ target: "listing", listingId: "listing-1", reason: "Spam" })
     ).rejects.toThrow("Authentication required.");
     expect(insertMock).not.toHaveBeenCalled();
-    // The auth gate short-circuits BEFORE the rate limiter — an anonymous caller
+    // The auth gate short-circuits before the rate limiter — an anonymous caller
     // gets a 401, never a 429. Locks the security-critical ordering.
     expect(enforceWriteLimitMock).not.toHaveBeenCalled();
   });
@@ -196,7 +196,7 @@ describe("createFlag — inserts an open flag attributed to the reporter", () =>
 
     expect(enforceWriteLimitMock).toHaveBeenCalledTimes(1);
     expect(enforceWriteLimitMock).toHaveBeenCalledWith("user-1");
-    // Auth must run BEFORE the rate limiter so anonymous callers get 401, not 429.
+    // Auth must run before the rate limiter so anonymous callers get 401, not 429.
     const authOrder = requireCurrentUserMock.mock.invocationCallOrder[0];
     const limitOrder = enforceWriteLimitMock.mock.invocationCallOrder[0];
     expect(authOrder).toBeDefined();

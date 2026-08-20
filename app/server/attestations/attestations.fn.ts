@@ -7,22 +7,18 @@ import type {
 import { castVote, getClaimAggregate, retractVote } from "./index";
 
 /**
- * Client-callable attestation server functions (wired into the listing-detail
- * voting UI for #32; the DB-touching write/aggregate logic itself is #28).
+ * Client-callable attestation server functions.
  *
- * These `createServerFn` entry points are the ONLY part of the attestation
- * server layer that client code (the listing-detail `ClaimVoteControls`)
- * imports. Following the `*.fn.ts` convention (see `incidents.fn.ts`,
- * `current-user.fn.ts`), the db-touching implementations live in `./index.ts`
- * and the TanStack Start plugin strips these handler bodies out of the browser
- * bundle — so importing from here never drags `getDb` (neon/drizzle) into the
- * client build.
+ * These `createServerFn` entry points are the only part of the attestation
+ * server layer that client code imports. Per the `*.fn.ts` convention, the
+ * db-touching implementations live in `./index.ts` and the TanStack Start
+ * plugin strips these handler bodies out of the browser bundle — importing
+ * from here never drags `getDb` (neon/drizzle) into the client build.
  *
- * The Zod validators are declared HERE with a client-safe literal mirror of the
- * `attestation_value` enum (rather than importing the runtime `attestationValues`
- * tuple from `~/db/schema`, which would pull `drizzle-orm/pg-core` into the
- * client). A compile-time assertion keeps the mirror in lockstep with the DB
- * enum — exactly the pattern `app/trust/incident-recency.ts` uses.
+ * The Zod validators are declared here with client-safe literal mirrors of
+ * the DB enums (importing the runtime tuples from `~/db/schema` would pull
+ * `drizzle-orm/pg-core` into the client). Compile-time assertions keep each
+ * mirror in lockstep with its DB enum.
  */
 
 /**
@@ -44,7 +40,7 @@ export type AttestationValuesInSyncWithDb = _AssertValuesMatch;
  * Client-safe mirror of the `claim_attribute` DB enum (the fixed GF taxonomy,
  * `db/schema.ts`). Kept as a plain literal so this module pulls in no schema
  * runtime; the type-level check below fails the build if it ever drifts from
- * `claimAttributes` — same pattern as the attestation-value mirror above.
+ * `claimAttributes`.
  */
 const CLAIM_ATTRIBUTES = [
   "celiac_safe_vs_gluten_friendly",
@@ -64,8 +60,8 @@ export type ClaimAttributesInSyncWithDb = _AssertAttributesMatch;
 
 /**
  * A `confirm` / `dispute` vote on a `(listing, attribute)` slot (client-safe
- * validator). The claim row is created lazily server-side on the first vote
- * (#150), so no `claimId` is required.
+ * validator). The claim row is created lazily server-side on the first vote,
+ * so no `claimId` is required.
  */
 const voteFnInputSchema = z.object({
   listingId: z.string().min(1, "listingId is required"),

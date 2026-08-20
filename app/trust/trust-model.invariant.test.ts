@@ -11,27 +11,24 @@ import {
 } from "~/trust/summary";
 
 /**
- * ════════════════════════════════════════════════════════════════════════════
- * CANONICAL TRUST-MODEL INVARIANT SUITE — ADR-007 / ADR-008 (issues #178, #185)
- * ════════════════════════════════════════════════════════════════════════════
+ * Canonical trust-model invariant suite — ADR-007 / ADR-008.
  *
- * DO NOT WEAKEN. These tests encode the product's core SAFETY guarantees — the
- * "evals" for the trust model. They are deliberately phrased as INVARIANTS over
- * the pure derivations (`app/trust/*`), so an agent's change to a trust function
- * cannot silently regress a guarantee a celiac relies on. If a change makes one
- * of these go red, the change is wrong (or the ADR must change first) — do not
+ * Do not weaken. These tests encode the product's core safety guarantees —
+ * the "evals" for the trust model — phrased as invariants over the pure
+ * derivations (`app/trust/*`), so a change to a trust function cannot
+ * silently regress a guarantee a celiac relies on. If a change makes one of
+ * these go red, the change is wrong (or the ADR must change first) — do not
  * adjust the test to make app code pass.
  *
  * Each `describe` block names the ADR-007/008 rule it pins (domain.md → Trust
- * Model / Listing Intake). Property-style blocks generate many inputs with plain
- * loops / `Array.from` (no new test libraries) and assert the invariant holds
- * across the whole generated space, not just hand-picked examples.
+ * Model / Listing Intake). Property-style blocks generate many inputs with
+ * plain loops (no new test libraries) and assert the invariant across the
+ * whole generated space, not just hand-picked examples.
  *
  * The DB-enforced half of "one attestation per user per claim" (the UNIQUE
- * constraint) is a DB-gated integration test —
- * `tests/integration/schema-constraints.test.ts` already pins it, and
- * `tests/integration/trust-model.invariant.test.ts` re-pins it as part of THIS
- * canonical suite. Those self-skip without `TEST_DATABASE_URL`.
+ * constraint) is pinned by `tests/integration/schema-constraints.test.ts` and
+ * `tests/integration/trust-model.invariant.test.ts`; those self-skip without
+ * `TEST_DATABASE_URL`.
  */
 
 // A fixed "now" keeps the suite deterministic; all ages are measured back from it.
@@ -63,15 +60,15 @@ const AGE_GRID_MS = [
 ];
 
 // ───────────────────────────────────────────────────────────────────────────
-// INVARIANT 1 — No secret scoring (ADR-007: "no secret scoring"; the summary is
-// a roll-up of *visible* evidence, reproducible by any user looking at the same
+// Invariant 1 — no secret scoring (ADR-007: the summary is a roll-up of
+// visible evidence, reproducible by any user looking at the same
 // confirm/dispute counts + recency).
 // ───────────────────────────────────────────────────────────────────────────
 
 describe("INVARIANT 1 — no secret scoring (summary is a pure function of visible evidence)", () => {
   it("is DETERMINISTIC: identical visible inputs always yield an identical summary", () => {
     // Property-style: sweep the full grid of (confirm, dispute, recency) and
-    // assert a second derivation from the SAME inputs is byte-identical. Any
+    // assert a second derivation from the same inputs is byte-identical. Any
     // hidden state (a clock read, randomness, a per-call counter) would break
     // reproducibility here.
     for (const confirmCount of COUNT_GRID) {
@@ -92,12 +89,12 @@ describe("INVARIANT 1 — no secret scoring (summary is a pure function of visib
   });
 
   it("derives EVERY summary field from the visible aggregate — no opaque field", () => {
-    // The summary must carry nothing a user can't reconstruct from VISIBLE
+    // The summary must carry nothing a user can't reconstruct from visible
     // evidence: the confirm/dispute counts + recency, plus `suggested` — the
-    // curator-bot provenance surfaced as the "Suggested by Aubrey's Bot" badge
-    // (AUB-31), which is visible and explainable, never a hidden weighted score.
-    // We pin the exact field set so an added field (e.g. a secret score) forces
-    // this invariant to be revisited.
+    // curator-bot provenance surfaced as the "Suggested by Aubrey's Bot"
+    // badge, visible and explainable, never a hidden weighted score. The
+    // exact field set is pinned so an added field (e.g. a secret score)
+    // forces this invariant to be revisited.
     const summary: ClaimTrustSummary = summarizeClaim(
       "dedicated_fryer",
       aggregate(8, 1, new Date(NOW.getTime() - 21 * DAY_MS)),
@@ -127,7 +124,7 @@ describe("INVARIANT 1 — no secret scoring (summary is a pure function of visib
   });
 
   it("ignores claim IDENTITY (claimId) — equal evidence ⇒ equal summary across different claims", () => {
-    // The roll-up must depend only on the EVIDENCE, never on which claim row it
+    // The roll-up must depend only on the evidence, never on which claim row it
     // is (no per-claim hidden weighting). Same counts + recency on two different
     // claimIds ⇒ identical derived signal.
     const agg1: ClaimAggregate = {
@@ -149,24 +146,24 @@ describe("INVARIANT 1 — no secret scoring (summary is a pure function of visib
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// INVARIANT 2 — Recent incident dominates (ADR-007: "Recent incidents visibly
+// Invariant 2 — recent incident dominates (ADR-007: "Recent incidents visibly
 // flag the trust summary regardless of older confirmations — fresh harm is
-// never buried"). The browse glance keeps the incident flag as its OWN field,
+// never buried"). The browse glance keeps the incident flag as its own field,
 // independent of the confirm-majority safety state.
 // ───────────────────────────────────────────────────────────────────────────
 
 describe("INVARIANT 2 — a recent incident flags the summary regardless of confirmations", () => {
   it("surfaces hasRecentIncident as an orthogonal field that tracks its input for ANY confirm count", () => {
     // Property-style: a glowingly-confirmed, perfectly-fresh celiac-safe claim
-    // (the strongest possible positive evidence) must STILL carry the recent-
+    // (the strongest possible positive evidence) must still carry the recent-
     // incident flag when one exists — old/large confirmations can never bury
-    // fresh harm. We sweep BOTH flag values so this proves the field TRACKS its
+    // fresh harm. We sweep both flag values so this proves the field tracks its
     // input (not a hard-coded constant), not just that `true` round-trips.
     const freshConfirm = new Date(NOW.getTime() - DAY_MS); // confirmed yesterday → celiac-safe
     for (const confirmCount of COUNT_GRID) {
       const celiacSafe = aggregate(confirmCount, 0, freshConfirm);
       for (const hasRecentIncident of [true, false]) {
-        // The glance now takes the most recent in-window incident's INSTANT (or
+        // The glance now takes the most recent in-window incident's instant (or
         // null); `hasRecentIncident` is derived from it (non-null ⟺ flagged), so
         // we thread a within-window date when the case wants the flag set.
         const recentIncidentAt = hasRecentIncident ? new Date(NOW.getTime() - DAY_MS) : null;
@@ -174,8 +171,8 @@ describe("INVARIANT 2 — a recent incident flags the summary regardless of conf
 
         // Surfaced verbatim, never buried by the confirm count.
         expect(glance.hasRecentIncident).toBe(hasRecentIncident);
-        // The incident flag is orthogonal: it does NOT silently flip the headline
-        // state, it sits ALONGSIDE it so the card shows both (never just "safe").
+        // The incident flag is orthogonal: it does not silently flip the headline
+        // state, it sits alongside it so the card shows both (never just "safe").
         if (confirmCount > 0) {
           expect(glance.safetyState).toBe("celiac-safe");
         }
@@ -217,19 +214,14 @@ describe("INVARIANT 2 — a recent incident flags the summary regardless of conf
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// INVARIANT 2b — A bot suggestion is PROVENANCE, never a verdict (ADR-007 /
-// AUB-31 / AUB-193, revised by owner nit 7). The label/badges are provenance
-// and show WHENEVER live suggestions exist — including alongside real community
-// evidence on other claims — but a suggestion must NEVER influence the safety
-// verdict or the evidence counts: `safetyState`/`evidence` are a pure function
-// of the visible evidence alone, identical with or without suggestions. The
-// headline celiac claim's own `suggested` fallback flag stays live only while
-// THAT claim has no votes (a vote clears the suggestion server-side).
-//
-// (History: before owner nit 7 this invariant additionally gated the label on
-// "no evidence at all". The owner explicitly removed that gate — provenance
-// stays visible — while the safety core, "a suggestion never fabricates or
-// alters a verdict", is unchanged and pinned below.)
+// Invariant 2b — a bot suggestion is provenance, never a verdict (ADR-007).
+// The label/badges are provenance and show whenever live suggestions exist —
+// including alongside real community evidence on other claims — but a
+// suggestion must never influence the safety verdict or the evidence counts:
+// `safetyState`/`evidence` are a pure function of the visible evidence alone,
+// identical with or without suggestions. The headline celiac claim's own
+// `suggested` fallback flag stays live only while that claim has no votes (a
+// vote clears the suggestion server-side).
 // ───────────────────────────────────────────────────────────────────────────
 
 describe("INVARIANT 2b — a bot suggestion never influences the verdict or evidence", () => {
@@ -259,15 +251,15 @@ describe("INVARIANT 2b — a bot suggestion never influences the verdict or evid
             );
             const baseline = deriveListingTrustGlance(evidenceOnly, 1, null, NOW, undefined, []);
 
-            // The suggestion inputs change NOTHING about the evidence reading.
+            // The suggestion inputs change nothing about the evidence reading.
             expect(glance.safetyState).toEqual(baseline.safetyState);
             expect(glance.evidence).toEqual(baseline.evidence);
             expect(glance.freshness).toEqual(baseline.freshness);
 
             // The label tracks live suggestions verbatim (provenance stays
-            // visible, owner nit 7): any batched suggested attribute keeps it
-            // on; the celiac fallback flag stays live only while the celiac
-            // claim itself has no votes.
+            // visible): any batched suggested attribute keeps it on; the
+            // celiac fallback flag stays live only while the celiac claim
+            // itself has no votes.
             const celiacStillLive = celiacSuggested && confirmCount + disputeCount === 0;
             expect(glance.suggestedByBot).toBe(suggestedAttributes.length > 0 || celiacStillLive);
             // And the label is always exactly "suggestedAttributes is non-empty"
@@ -291,8 +283,8 @@ describe("INVARIANT 2b — a bot suggestion never influences the verdict or evid
   it("a voted-out celiac suggestion never badges the card via the FALLBACK flag (the vote cleared it)", () => {
     // The celiac claim was suggested, then voted: `suggested` may still read
     // true on a stale aggregate snapshot, but the fold-in is per-claim gated on
-    // "no votes on THAT claim", so the badge honestly disappears. SCOPE: this
-    // exercises the pure FALLBACK path only; the batched per-attribute set is
+    // "no votes on that claim", so the badge honestly disappears. Scope: this
+    // exercises the pure fallback path only; the batched per-attribute set is
     // vote-gated in SQL too (the correlated NOT EXISTS attestations guard in
     // `getBotSuggestedAttributesByListing`, pinned in browse.test.ts), so a
     // voted claim cannot enter `suggestedAttributes` from that path either —
@@ -312,16 +304,16 @@ describe("INVARIANT 2b — a bot suggestion never influences the verdict or evid
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// INVARIANT 4 — Staleness flags, never hides (ADR-007: a claim not confirmed
-// within the 6-month admin-tunable window gets a "may be stale" treatment — it
-// is SURFACED, not removed). Invariant 3 (one-per-user) is server/DB-side; see
+// Invariant 4 — staleness flags, never hides (ADR-007: a claim not confirmed
+// within the admin-tunable window gets a "may be stale" treatment — it is
+// surfaced, not removed). Invariant 3 (one-per-user) is server/DB-side; see
 // the integration suite.
 // ───────────────────────────────────────────────────────────────────────────
 
 describe("INVARIANT 4 — staleness FLAGS a claim, never hides/removes it", () => {
   it("a stale claim still renders its full summary (counts + recency stay visible)", () => {
     // Property-style: for every count combo with a confirmation past the window,
-    // the summary still carries the SAME visible distribution — staleness only
+    // the summary still carries the same visible distribution — staleness only
     // adds a `stale: true` flag, it never zeroes counts or drops the claim.
     const pastWindow = new Date(NOW.getTime() - (6 * MONTH_MS + DAY_MS));
     for (const confirmCount of COUNT_GRID) {
@@ -332,7 +324,7 @@ describe("INVARIANT 4 — staleness FLAGS a claim, never hides/removes it", () =
           NOW
         );
         expect(summary.stale).toBe(true);
-        // Evidence is NOT hidden by staleness:
+        // Evidence is not hidden by staleness:
         expect(summary.confirmCount).toBe(confirmCount);
         expect(summary.disputeCount).toBe(disputeCount);
         expect(summary.countsLabel).toBe(`${confirmCount} confirm / ${disputeCount} dispute`);
@@ -343,7 +335,7 @@ describe("INVARIANT 4 — staleness FLAGS a claim, never hides/removes it", () =
 
   it("a confirm-majority stale claim surfaces the `stale` headline state (flagged, not dropped)", () => {
     // A fresh-enough confirm-majority is "celiac-safe"; once it ages past the
-    // window the SAME evidence is surfaced as "stale" — never null/hidden.
+    // window the same evidence is surfaced as "stale" — never null/hidden.
     const fresh = aggregate(5, 1, new Date(NOW.getTime() - DAY_MS));
     const stale = aggregate(5, 1, new Date(NOW.getTime() - (6 * MONTH_MS + DAY_MS)));
     expect(deriveHeadlineSafetyState(fresh, NOW)).toBe("celiac-safe");
@@ -352,7 +344,7 @@ describe("INVARIANT 4 — staleness FLAGS a claim, never hides/removes it", () =
 
   it("honours the admin-tunable window (default 6 months) — boundary is inclusive-fresh", () => {
     // ADR-007: the window is an admin-tunable AppSetting; the default is 6
-    // months. A confirmation EXACTLY on the edge is fresh; strictly older is
+    // months. A confirmation exactly on the edge is fresh; strictly older is
     // stale. Pin both the default and a custom (tightened) window.
     const exactlyDefault = new Date(NOW.getTime() - DEFAULT_STALENESS_MONTHS * MONTH_MS);
     expect(isStale(exactlyDefault, NOW)).toBe(false); // on the edge ⇒ fresh
@@ -374,12 +366,10 @@ describe("INVARIANT 4 — staleness FLAGS a claim, never hides/removes it", () =
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// INVARIANT 5 (dedup half) — ADR-008 intake: Place ID is the dedup key, and the
-// manual-entry fallback path is reachable (not dead code). The DB-level
-// UNIQUE(place_id) is pinned in the integration suite; here we pin the pure
-// manual-dedup safeguard + the always-present manual-entry validation path.
-//
-// Lives alongside in `app/server/listings/intake-dedup.invariant.test.ts` so it
-// can value-import the server-only dedup module. (browse-glance/summary/incident
-// invariants stay client-safe in THIS file.)
+// Invariant 5 (dedup half) — ADR-008 intake: Place ID is the dedup key, and
+// the manual-entry fallback path is reachable (not dead code). The DB-level
+// UNIQUE(place_id) is pinned in the integration suite; the pure manual-dedup
+// safeguard lives in `app/server/listings/intake-dedup.invariant.test.ts`,
+// which can value-import the server-only dedup module.
+// (browse-glance/summary/incident invariants stay client-safe in this file.)
 // ───────────────────────────────────────────────────────────────────────────

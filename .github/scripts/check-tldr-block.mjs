@@ -9,30 +9,30 @@
 // jargon-free, only that the author wrote *something* real in the section.
 //
 // ── Validity contract ────────────────────────────────────────────────────────
-// The body is VALID iff BOTH:
+// The body is valid iff both:
 //   1. It contains an ATX Markdown heading whose text is "TL;DR"
 //      (case-insensitive, any heading level `#`..`######`, surrounding
 //      whitespace and trailing `:`/`.`/`!` punctuation ignored). The spelling
 //      variants "TLDR" and "TL DR" are tolerated so a hand-typed heading
 //      doesn't fail on punctuation. ATX-only is deliberate: the template
 //      already provides the `## TL;DR` heading to fill in, so the setext form
-//      (`TL;DR` underlined with `---`/`===`) is not recognized; AND
+//      (`TL;DR` underlined with `---`/`===`) is not recognized; and
 //   2. The section content (the lines up to the next heading of same-or-
-//      shallower level, or end of body), AFTER stripping HTML comments, has at
+//      shallower level, or end of body), after stripping HTML comments, has at
 //      least one meaningful line — not empty and not the template's bare `-`
 //      placeholder. Comment-stripping is what rejects a body where the only
 //      "content" is the template's `<!-- ... -->` instruction block, and an
-//      UNCLOSED `<!--` is treated as running to the end of the text so a typo'd
+//      unclosed `<!--` is treated as running to the end of the text so a typo'd
 //      comment can't count as content.
 //
 // Heading detection is code-fence aware: a `## TL;DR` line inside a ```/~~~
-// fenced block is NOT the heading (it's sample text), and a fenced `## Foo`
-// inside the real TL;DR section does NOT terminate the section early.
+// fenced block is not the heading (it's sample text), and a fenced `## Foo`
+// inside the real TL;DR section does not terminate the section early.
 //
-// It is INVALID (and main() exits 1) when the heading is missing or the section
+// It is invalid (and main() exits 1) when the heading is missing or the section
 // is empty / placeholder-only.
 //
-// The PR body is read from process.env.PR_BODY — NEVER from argv inline — so a
+// The PR body is read from process.env.PR_BODY — never from argv inline — so a
 // hostile body can't inject into the calling shell (mirrors how the pr-title job
 // passes the title via env to commitlint, and how check-review-block.mjs reads
 // its input).
@@ -53,7 +53,7 @@ const TLDR_TEXT_RE = /tl[\s;]*dr/i;
 
 /**
  * Strip `<!-- ... -->` HTML comments so a template instruction isn't mistaken
- * for content. An UNCLOSED `<!--` extends to the end of the text — that's how
+ * for content. An unclosed `<!--` extends to the end of the text — that's how
  * browsers/GitHub treat it, and it stops a typo'd comment (missing `-->`) from
  * counting as meaningful TL;DR content.
  */
@@ -94,7 +94,7 @@ function isTldrHeadingText(text) {
  * (slack-merge-update.mjs's extractTldr): the section is the lines after the
  * TL;DR heading, up to the next heading of same-or-shallower level (or end of
  * body), with HTML comments stripped. Heading matches inside fenced code
- * blocks are ignored in BOTH directions: a fenced `## TL;DR` is not the
+ * blocks are ignored in both directions: a fenced `## TL;DR` is not the
  * heading, and a fenced `## Foo` does not end the section.
  *
  * @param {string} body - the raw PR description.

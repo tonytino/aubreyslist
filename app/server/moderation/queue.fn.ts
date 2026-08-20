@@ -1,18 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 
 /**
- * Client-callable moderation-queue server function (issue #40).
+ * Client-callable moderation-queue server function.
  *
- * This `createServerFn` entry point is the ONLY part of the moderation-queue
- * server layer that client code (the route loader + the queue UI's TanStack
- * Query) imports. Mirroring `admin-view.fn.ts` / `set-role.fn.ts`, the
- * db-touching implementation lives in the server-only `./queue` module and is
- * referenced only from inside the handler via a lazy `import()`, so the bundler
- * strips it (and its `db`-bound imports) out of the browser bundle.
+ * This `createServerFn` entry point is the only part of the moderation-queue
+ * server layer that client code imports. The db-touching implementation lives
+ * in the server-only `./queue` module and is referenced only via a lazy
+ * `import()` inside the handler, so the bundler strips it (and its `db`-bound
+ * imports) out of the browser bundle.
  *
  * The exported types below are type-only (erased at build time), so they are
- * safe to import from client code — the route loader and the queue component
- * consume them.
+ * safe to import from client code.
  */
 
 /** Which entity a flag targets — the exclusive arc on the `flags` table. */
@@ -42,7 +40,7 @@ export interface QueueReporter {
 
 /** One open flag with the context a moderator needs to triage it. */
 export interface QueueItem {
-  /** The flag row id (the unit a moderation action will act on, #41). */
+  /** The flag row id — the unit a moderation action acts on. */
   id: string;
   /** The reporter's free-text reason for flagging. */
   reason: string;

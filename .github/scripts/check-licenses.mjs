@@ -1,44 +1,48 @@
 #!/usr/bin/env node
 
-// License allowlist gate (issue #190). Zero-dependency: it shells out to the
-// package manager already in the repo (`pnpm licenses list --json`), parses the
-// result, and FAILS if any installed dependency carries a license that is not on
-// an explicit permissive allowlist (and is not a package-scoped, documented
+// License allowlist gate. Zero-dependency: it shells out to the package
+// manager already in the repo (`pnpm licenses list --json`), parses the
+// result, and fails if any installed dependency carries a license that is not
+// on an explicit permissive allowlist (and is not a package-scoped, documented
 // exception). Copyleft / unknown licenses are surfaced as GitHub `::error::`
 // annotations naming the offending package + license for human review.
 //
 // Mirrors the in-repo guard style (.github/scripts/check-hard-rules.mjs and
-// check-changelog-tags.mjs): the matching predicate is an exported PURE function
-// (`isAllowedLicense`) so it is unit-testable without spawning pnpm; the file
-// only runs `main()` when invoked directly. Tests: tests/unit/check-licenses.test.ts.
+// check-changelog-tags.mjs): the matching predicate is an exported pure
+// function (`isAllowedLicense`) so it is unit-testable without spawning pnpm;
+// the file only runs `main()` when invoked directly. Tests:
+// tests/unit/check-licenses.test.ts.
 //
-// ── How to EXTEND the allowlist ──────────────────────────────────────────────
-//   1. A new PERMISSIVE SPDX id (e.g. you adopt a dep under `Zlib`): add the
-//      exact SPDX identifier to the ALLOWLIST set below. Keep it permissive-only
-//      — do NOT add copyleft ids (GPL/LGPL/AGPL) or weak-copyleft (MPL, EPL,
-//      CDDL) here. Those belong in REVIEWED_EXCEPTIONS, package-scoped, with a
-//      written rationale, after a human OKs them.
-//   2. A specific PACKAGE under a non-allowlisted license that a human has
-//      reviewed and accepted (e.g. a weak-copyleft transitive build tool): add a
-//      `{ name, license, reason }` entry to REVIEWED_EXCEPTIONS. This is
+// ── How to extend the allowlist ──────────────────────────────────────────────
+//   1. A new permissive SPDX id (e.g. you adopt a dep under `Zlib`): add the
+//      exact SPDX identifier to the ALLOWLIST set below. Keep it
+//      permissive-only — never add copyleft ids (GPL/LGPL/AGPL) or
+//      weak-copyleft (MPL, EPL, CDDL) here. Those belong in
+//      REVIEWED_EXCEPTIONS, package-scoped, with a written rationale, after a
+//      human OKs them.
+//   2. A specific package under a non-allowlisted license that a human has
+//      reviewed and accepted (e.g. a weak-copyleft transitive build tool): add
+//      a `{ name, license, reason }` entry to REVIEWED_EXCEPTIONS. This is
 //      deliberately package-scoped (not license-scoped) so accepting one MPL
 //      build tool does not silently wave through every future MPL dependency.
 //
 // ── SPDX expression handling ─────────────────────────────────────────────────
-//   pnpm reports SPDX *expressions*, not just bare ids — e.g. "MIT OR Apache-2.0"
-//   or "(BSD-3-Clause OR GPL-2.0)". `isAllowedLicense` parses the boolean form:
-//     - "A OR B" is allowed if EITHER side is allowed (the consumer may pick the
-//       permissive side — this is why node-forge's "(BSD-3-Clause OR GPL-2.0)"
-//       passes: we choose BSD-3-Clause).
-//     - "A AND B" is allowed only if BOTH sides are allowed (you must comply with
-//       every listed license).
-//   Parentheses and arbitrary nesting are supported. `WITH <exception>` clauses
-//   are stripped (the exception narrows the grant, it doesn't change the family).
+//   pnpm reports SPDX *expressions*, not just bare ids — e.g. "MIT OR
+//   Apache-2.0" or "(BSD-3-Clause OR GPL-2.0)". `isAllowedLicense` parses the
+//   boolean form:
+//     - "A OR B" is allowed if either side is allowed (the consumer may pick
+//       the permissive side — this is why node-forge's "(BSD-3-Clause OR
+//       GPL-2.0)" passes: BSD-3-Clause is chosen).
+//     - "A AND B" is allowed only if both sides are allowed (you must comply
+//       with every listed license).
+//   Parentheses and arbitrary nesting are supported. `WITH <exception>`
+//   clauses are stripped (the exception narrows the grant, it doesn't change
+//   the family).
 
 import { execFileSync } from "node:child_process";
 
 // ── The permissive allowlist (exact SPDX ids; matched case-insensitively) ────
-// Kept intentionally small and permissive-only. SEE "How to EXTEND" above.
+// Kept intentionally small and permissive-only. See "How to extend" above.
 export const ALLOWLIST = new Set(
   [
     "MIT",
@@ -59,11 +63,11 @@ export const ALLOWLIST = new Set(
 );
 
 // ── Reviewed, package-scoped exceptions ──────────────────────────────────────
-// Each entry is a SPECIFIC package whose (non-allowlisted) license a human has
-// reviewed and accepted, with the rationale recorded here. This list is the
-// audit trail for "we looked at this and decided it's fine". Adding a package
-// here is the human decision the allowlist deliberately refuses to make on its
-// own. Match is by package name AND its reported license string.
+// Each entry is a specific package whose (non-allowlisted) license a human
+// has reviewed and accepted, with the rationale recorded here. This list is
+// the audit trail for "we looked at this and decided it's fine". Adding a
+// package here is the human decision the allowlist deliberately refuses to
+// make on its own. Match is by package name and its reported license string.
 export const REVIEWED_EXCEPTIONS = [
   {
     name: "lightningcss",
@@ -142,7 +146,7 @@ function tokenizeSpdx(expr) {
  * (a Set of lowercased SPDX ids)? Handles OR (either side suffices), AND (both
  * sides required), parentheses, and `WITH <exception>` (the exception token is
  * dropped — it narrows, not broadens, the grant). Comparison is case-insensitive.
- * An unparseable, empty, or "UNKNOWN" string is NOT allowed (fail closed).
+ * An unparseable, empty, or "UNKNOWN" string is not allowed (fail closed).
  *
  * Recursive-descent over: expr := term (OR term)* ; term := factor (AND factor)* ;
  * factor := "(" expr ")" | <spdx-id>.

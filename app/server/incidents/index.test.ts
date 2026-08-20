@@ -4,13 +4,13 @@ import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the incident reports DB layer (#30) — the login-gated, rate-limited
+ * Tests for the incident reports DB layer — the login-gated, rate-limited
  * write and the most-recent-first read.
  *
  * The module's only server-only dependencies are the DB client and the auth
- * guard. We model the exact drizzle chains it uses so we can assert behaviour
- * — the login gate, most-recent-first ordering, and the rate-limit
- * short-circuit — without a live database, per `docs/agents/testing.md`. The
+ * guard. The exact drizzle chains it uses are modeled so behaviour — the
+ * login gate, most-recent-first ordering, and the rate-limit short-circuit —
+ * is assertable without a live database, per `docs/agents/testing.md`. The
  * pure recency helpers + input schema live in `app/trust/incident-recency.ts`
  * and are tested there (no mocks needed).
  */
@@ -27,16 +27,16 @@ const h = vi.hoisted(() => {
     lastInsertValues: undefined as unknown,
     lastOrderByArgs: [] as unknown[],
     lastUpdateSet: undefined as unknown,
-    // The WHERE predicates handed to the edit UPDATE / retract DELETE — captured
-    // so we can assert ownership filters by BOTH `id` AND `userId` (#114).
+    // The WHERE predicates handed to the edit UPDATE / retract DELETE —
+    // captured to assert ownership filters by both `id` and `userId`.
     lastUpdateWhere: undefined as unknown,
     lastDeleteWhere: undefined as unknown,
-    // The WHERE predicate handed to the read list — captured to assert the #41
+    // The WHERE predicate handed to the read list — captured to assert the
     // public-read visibility filter (`moderation_status = 'visible'`).
     lastListWhere: undefined as unknown,
-    // Rows the UPDATE ... RETURNING resolves to: non-empty ⇒ owner match. A real
-    // row always carries `occurredOn`; include it so the read-boundary date
-    // normalization (#45) is exercised.
+    // Rows the UPDATE ... RETURNING resolves to: non-empty ⇒ owner match. A
+    // real row always carries `occurredOn`; included so the read-boundary
+    // date normalization is exercised.
     updatedRows: [{ id: "incident-1", occurredOn: "2026-06-15" }] as Array<Record<string, unknown>>,
     // Rows the DELETE ... RETURNING resolves to: non-empty ⇒ owner match.
     deletedRows: [{ id: "incident-1" }] as Array<Record<string, unknown>>,
@@ -220,7 +220,7 @@ describe("editIncident — owner-only, server-enforced", () => {
     expect(set.severity).toBe("moderate");
     expect(set.note).toBe("updated");
     expect(set.updatedAt).toBeInstanceOf(Date);
-    // The returned row is normalized to the canonical YYYY-MM-DD contract (#45).
+    // The returned row is normalized to the canonical YYYY-MM-DD contract.
     expect(row).toEqual({ id: "incident-1", occurredOn: "2026-06-15" });
   });
 
@@ -233,15 +233,15 @@ describe("editIncident — owner-only, server-enforced", () => {
   });
 
   it("filters the UPDATE by BOTH id AND userId (ownership is in the WHERE, not just the 403)", async () => {
-    // The 403 above only proves "zero rows ⇒ reject". This pins WHY zero rows:
-    // the WHERE must constrain on BOTH the incident `id` AND the current user's
-    // `userId`. An id-only predicate would let a non-owner's edit MATCH the row
+    // The 403 above only proves "zero rows ⇒ reject". This pins why zero rows:
+    // the WHERE must constrain on both the incident `id` and the current user's
+    // `userId`. An id-only predicate would let a non-owner's edit match the row
     // (and silently succeed) — so we assert both columns and both bound values.
     await editIncident({ id: "incident-1", occurredOn: "2026-06-15" });
 
     expect(state.lastUpdateWhere).toBeDefined();
     const { sql, params } = renderWhere(state.lastUpdateWhere);
-    // Both ownership columns are referenced, AND-combined.
+    // Both ownership columns are referenced, combined with `and`.
     expect(sql).toContain('"id"');
     expect(sql).toContain('"user_id"');
     expect(sql).toContain(" and ");
@@ -355,10 +355,10 @@ describe("listIncidents — most-recent first", () => {
     // `PgDateString` passes it through verbatim). The recent-incident banner's
     // recency logic requires a strict `YYYY-MM-DD` string, so `listIncidents`
     // normalizes at the read boundary. Model the driver handing back a Date —
-    // and model it FAITHFULLY: the driver (pg-types, OID 1082) builds the Date at
-    // LOCAL midnight, `new Date(y, m-1, d)`, NOT UTC midnight (#144). Using a
-    // UTC-midnight Date here would be a TZ-sensitive mismodel that reads back the
-    // prior calendar day on any negative-offset runner (e.g. America/Denver).
+    // faithfully: the driver (pg-types, OID 1082) builds the Date at local
+    // midnight, `new Date(y, m-1, d)`, not UTC midnight. A UTC-midnight Date
+    // here would be a TZ-sensitive mismodel that reads back the prior
+    // calendar day on any negative-offset runner (e.g. America/Denver).
     state.listRows = [{ id: "d", occurredOn: new Date(2026, 5, 28) }];
 
     const rows = await listIncidents({ listingId: "listing-1" });
@@ -368,8 +368,8 @@ describe("listIncidents — most-recent first", () => {
   });
 
   it("excludes hidden/removed incidents from this PUBLIC read (#41)", async () => {
-    // This is the read that feeds BOTH the incident list AND the recent-incident
-    // banner on the detail page. The WHERE must constrain to the listing AND to
+    // This is the read that feeds both the incident list and the recent-incident
+    // banner on the detail page. The WHERE must constrain to the listing and to
     // `moderation_status = 'visible'`, so a moderated-away incident drops out —
     // while a still-visible recent incident is never buried (domain.md trust).
     await listIncidents({ listingId: "listing-1" });
@@ -384,7 +384,7 @@ describe("listIncidents — most-recent first", () => {
   });
 
   it("ALSO requires the PARENT listing visible — hidden/removed listing leaks no incidents", async () => {
-    // `moderationStatus` has no parent→child propagation: hiding the LISTING
+    // `moderationStatus` has no parent→child propagation: hiding the listing
     // leaves its incidents `visible`. This addressable per-listing RPC must cross-
     // check the parent listing, so it INNER JOINs `listings` and the WHERE
     // additionally requires the listings table's `moderation_status = 'visible'`.
@@ -395,12 +395,12 @@ describe("listIncidents — most-recent first", () => {
     const rows = await listIncidents({ listingId: "listing-1" });
 
     // The join to `listings` ran (the visibility gate), and the WHERE references
-    // BOTH the `listings` and `incidents` moderation columns, requiring 'visible'.
+    // both the `listings` and `incidents` moderation columns, requiring 'visible'.
     expect(innerJoinMock).toHaveBeenCalledTimes(1);
     const { sql, params } = renderWhere(state.lastListWhere);
     expect(sql).toContain('"listings"."moderation_status"');
     expect(sql).toContain('"incidents"."moderation_status"');
-    // Two `'visible'` binds: the incident's own status AND the parent listing's.
+    // Two `'visible'` binds: the incident's own status and the parent listing's.
     expect(params.filter((p) => p === "visible")).toHaveLength(2);
     // The mock can't enforce the join, so it still resolves rows; the real query's
     // inner join + listings predicate is what drops a hidden listing's incidents.

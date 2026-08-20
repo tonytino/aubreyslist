@@ -2,16 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 import type { Role } from "~/server/auth/guards";
 
 /**
- * Server function backing the admin-panel shell (issue #38).
+ * Server function backing the admin-panel shell.
  *
- * This is the client-callable entry point the admin route loader uses; the
- * actual access-gate logic lives in the server-only `./admin-view` module and
- * is referenced only from inside the `createServerFn` handler below, so the
- * bundler strips it (and its `db`-bound imports) out of the client bundle.
+ * Client-callable entry point for the admin route loader. The access-gate
+ * logic lives in the server-only `./admin-view` module, referenced only from
+ * inside the `createServerFn` handler, so the bundler strips it (and its
+ * `db`-bound imports) out of the client bundle.
  *
  * The exported `AdminView` / `AdminSettingsView` types are safe to import from
- * client code (type-only, erased at build time) and are consumed by the route
- * loader and the `AdminPanel` component.
+ * client code (type-only, erased at build time).
  */
 
 /** Read-only snapshot of the app settings shown in the (admin-only) settings section. */

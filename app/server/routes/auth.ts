@@ -50,8 +50,8 @@ const OAUTH_TX_MAX_AGE_SECONDS = 60 * 10;
  * path; otherwise falls back to `/`. Kept pure + exported so it can be
  * unit/fuzz-tested in isolation.
  *
- * `returnTo` is NEVER round-tripped through Google's OAuth `state`; it lives in
- * a short-lived httpOnly cookie set alongside the other transaction cookies.
+ * `returnTo` is never round-tripped through Google's OAuth `state`; it lives
+ * in a short-lived httpOnly cookie set alongside the other transaction cookies.
  */
 export function validateReturnTo(returnTo: string | undefined, requestOrigin: string): string {
   const fallback = "/";
@@ -112,11 +112,11 @@ function callbackUrl(requestUrl: string): string {
 }
 
 /**
- * Resolve the preview tester (creating/reusing a `preview:`-namespaced user, or
- * throwing 403 for a real account), write the SAME sealed session cookie the
- * OAuth callback writes, and redirect to the already-validated `returnTo`.
+ * Resolve the preview tester (creating/reusing a `preview:`-namespaced user,
+ * or throwing 403 for a real account), write the same sealed session cookie
+ * the OAuth callback writes, and redirect to the already-validated `returnTo`.
  * Shared by the GET (`?secret=`) and POST (form body) dev-login paths, called
- * only AFTER the gate + secret check pass.
+ * only after the gate + secret check pass.
  */
 async function completeDevLogin(
   c: Context,
@@ -209,19 +209,19 @@ export const authRoutes = new Hono()
     return c.redirect(new URL(returnTo, requestUrl).toString());
   })
 
-  // Preview-only dev-login (AUB-138): mint a session WITHOUT Google so a tester
-  // can sign in on a Vercel per-deployment preview URL (where OAuth's
-  // exact-match redirect URIs can't be registered). Prod-inert + double-gated:
+  // Preview-only dev-login: mint a session without Google so a tester can
+  // sign in on a Vercel per-deployment preview URL (where OAuth's exact-match
+  // redirect URIs can't be registered). Prod-inert + double-gated:
   //   1. 404 unless `isPreviewLoginEnabled()` (not Vercel production + a secret
   //      is provisioned) — invisible in production.
   //   2. 401 unless the caller presents the correct `PREVIEW_LOGIN_SECRET`
   //      (constant-time compared).
-  // On success it writes the SAME sealed session cookie as the OAuth callback
+  // On success it writes the same sealed session cookie as the OAuth callback
   // and lands on a `validateReturnTo`-checked path (never an open redirect).
   //
   // Two ways in, same gates:
-  //   - GET with no secret → serve an HTML sign-in FORM (below), so the tester
-  //     enters the secret in a POST body rather than the URL (keeps it out of
+  //   - GET with no secret → serve an HTML sign-in form, so the tester enters
+  //     the secret in a POST body rather than the URL (keeps it out of
   //     history/logs). This is what the header "Dev sign-in" link opens.
   //   - GET/POST with a secret (`?secret=`, `x-preview-login-secret` header, or
   //     the form's POST body) → verify + sign in. The query form stays for

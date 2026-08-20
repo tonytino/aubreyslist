@@ -6,9 +6,9 @@
 // supply-chain release-age quarantine stop contradicting each other.
 //
 // ── The problem this exists to solve ─────────────────────────────────────────
-// `pnpm-workspace.yaml` sets `minimumReleaseAge: 10080` (7 days, in MINUTES),
-// mirrored by `cooldown: default-days: 7` in .github/dependabot.yml. pnpm will
-// REFUSE to install a version younger than that — including transitive deps —
+// `pnpm-workspace.yaml` sets `minimumReleaseAge: 10080` (7 days, in minutes),
+// mirrored by `cooldown: default-days: 7` in .github/dependabot.yml. pnpm
+// refuses to install a version younger than that — including transitive deps —
 // because a compromised release is usually caught within days of publish.
 //
 // A bare `osv-scanner` run fails the instant an advisory is published. For up to
@@ -21,46 +21,46 @@
 // ── What this does instead ───────────────────────────────────────────────────
 // For every finding, it asks: is the fixed version old enough for pnpm to
 // install it yet?
-//   - NO  → `::warning::`, deferred, build stays green, and the summary records
-//           the exact date the deferral lapses.
-//   - YES → `::error::`, build fails. The fix is installable, so install it.
+//   - No  → `::warning::`, deferred, build stays green, and the summary
+//           records the exact date the deferral lapses.
+//   - Yes → `::error::`, build fails. The fix is installable, so install it.
 // The deferral is therefore self-expiring and cannot be forgotten: the moment
 // the quarantine lapses this turns red on its own.
 //
-// NOTHING is suppressed indefinitely. An advisory with no fixed version at all
+// Nothing is suppressed indefinitely. An advisory with no fixed version at all
 // fails immediately — there is no release to wait for, so deferring would just
 // be hiding it.
 //
 // ── Deliberate carve-out (owner decision, 2026-08-06) ────────────────────────
-// CVSS >= CRITICAL_SEVERITY_FLOOR hard-fails REGARDLESS of the quarantine. A
+// CVSS >= CRITICAL_SEVERITY_FLOOR hard-fails regardless of the quarantine. A
 // Critical is worth an explicit human call — fast-track it past the quarantine
 // with a `minimumReleaseAgeExclude` entry, or accept it in `osv-scanner.toml` —
 // but it must never pass silently. High and below are deferrable.
 //
 // ── Relationship to osv-scanner.toml ─────────────────────────────────────────
 // This file handles "the fix exists but is still quarantined". It deliberately
-// CANNOT express "we looked at this and accepted it" — that is what the native
+// cannot express "we looked at this and accepted it" — that is what the native
 // `[[IgnoredVulns]]` waivers in ./osv-scanner.toml are for (no fix available, or
 // not applicable to how we use the package). The two never overlap: osv-scanner
-// applies `IgnoredVulns` BEFORE emitting JSON, so a waived advisory never
+// applies `IgnoredVulns` before emitting JSON, so a waived advisory never
 // reaches this script.
 //
 // ── Fail-closed posture ──────────────────────────────────────────────────────
 // If the results file is missing/unparseable, or the npm registry cannot be
-// reached, this FAILS the build. A security gate that goes quiet when it cannot
+// reached, this fails the build. A security gate that goes quiet when it cannot
 // verify is worse than one that is occasionally noisy. Those errors are worded
 // to make it obvious they are infrastructure failures, not advisories, so nobody
 // learns to wave a real finding through.
 //
 // Mirrors the in-repo guard style (.github/scripts/check-licenses.mjs and
-// check-hard-rules.mjs): the decision logic is a set of exported PURE functions
+// check-hard-rules.mjs): the decision logic is a set of exported pure functions
 // so it is unit-testable without a network or a scanner binary; the file only
 // runs `main()` when invoked directly. Tests: tests/unit/check-osv.test.ts.
 
 import { appendFileSync, readFileSync } from "node:fs";
 
 // CVSS base score at or above which a finding hard-fails even while its fix is
-// still quarantined. 9.0 is the CVSS v3/v4 floor for CRITICAL. Owner's explicit
+// still quarantined. 9.0 is the CVSS v3/v4 floor for Critical. Owner's explicit
 // choice (2026-08-06) was "Critical only" — High and below stay deferrable, so
 // do not lower this to 7.0 without re-opening that decision.
 export const CRITICAL_SEVERITY_FLOOR = 9.0;

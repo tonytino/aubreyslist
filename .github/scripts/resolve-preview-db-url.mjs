@@ -1,18 +1,20 @@
 // @ts-nocheck — plain ESM CI glue, run by node in `.github/workflows/migrate-preview.yml`.
 //
-// Resolve the Neon connection URI for a PR's Vercel **preview** database branch
-// (AUB-139), so a GitHub Action can apply Drizzle migrations to it. Without this,
-// a schema PR's preview 500s: the Neon↔Vercel integration forks the preview branch
-// from PRODUCTION, which isn't migrated until the PR merges, so the deployed
-// preview code queries a column/table the preview DB doesn't have yet.
+// Resolve the Neon connection URI for a PR's Vercel preview database branch,
+// so a GitHub Action can apply Drizzle migrations to it. Without this, a
+// schema PR's preview 500s: the Neon↔Vercel integration forks the preview
+// branch from production, which isn't migrated until the PR merges, so the
+// deployed preview code queries a column/table the preview DB doesn't have
+// yet.
 //
 // The testable core is {@link resolvePreviewConnectionUri} (all I/O injected). The
 // thin {@link main} reads env, masks the URI in the log, writes it to
-// `$GITHUB_OUTPUT` (`url` + `found`), and records a step summary. It NEVER throws on
+// `$GITHUB_OUTPUT` (`url` + `found`), and records a step summary. It never throws on
 // "branch not found" — it sets `found=false` (a loud, visible skip via a
-// `::warning::` + step summary) so a reviewer can tell the preview was NOT migrated,
-// rather than the skip hiding behind a green check. It DOES hard-fail on genuine
-// misconfiguration (e.g. an ambiguous/absent NEON_PROJECT_ID) so the fix is seen.
+// `::warning::` + step summary) so a reviewer can tell the preview was not migrated,
+// rather than the skip hiding behind a green check. It does hard-fail on
+// genuine misconfiguration (e.g. an ambiguous/absent NEON_PROJECT_ID) so the
+// fix is seen.
 
 import { appendFileSync } from "node:fs";
 
@@ -103,7 +105,7 @@ async function findBranchByName(apiKey, projectId, branchName, fetchImpl) {
  * Retries the branch lookup for up to ~3 minutes by default, because Vercel may
  * still be creating the Neon preview branch right after a first deploy — the
  * timing this action races. Returns `{ found: false }` when it never appears — a
- * graceful, VISIBLE skip (see {@link main}), not an error; a later push (or a
+ * graceful, visible skip (see {@link main}), not an error; a later push (or a
  * re-run once the preview deploy has finished) applies it. On success returns the
  * direct (non-pooled) URI, which is what drizzle-kit's migrate wants for DDL.
  */
@@ -199,8 +201,8 @@ export async function main({
   });
 
   if (!result.found) {
-    // A VISIBLE skip (minor review finding): a `::warning::` annotation + a step
-    // summary, so a green check never hides "the preview was NOT migrated".
+    // A visible skip: a `::warning::` annotation + a step summary, so a green
+    // check never hides "the preview was not migrated".
     const msg = `Preview database NOT migrated: Neon branch "${env.PREVIEW_BRANCH_NAME}" was not found (Vercel may still be creating it). Re-run this workflow once the preview deploy has finished, or it will apply on the next push.`;
     log.log(`::warning::${msg}`);
     summarize(`### ⚠️ Preview database not migrated\n\n${msg}`);
@@ -208,7 +210,7 @@ export async function main({
     return 0;
   }
 
-  // Mask the URI job-wide BEFORE writing it to a step output, so the later migrate
+  // Mask the URI job-wide before writing it to a step output, so the later migrate
   // step's `DATABASE_URL` is masked in logs too. Never print the URI itself.
   log.log(`::add-mask::${result.uri}`);
   writeOut("url", result.uri);

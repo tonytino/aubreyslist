@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatDistanceLabel, formatFreshness } from "./browse-card-format";
 
 /**
- * Unit tests for the pure browse-card presentation formatters (AUB-61 Phase 2a).
+ * Unit tests for the pure browse-card presentation formatters.
  *
  * Both functions are pure/deterministic — `formatFreshness` takes `now` so we can
  * pin every branch (incident → fresh → stale precedence) and the exact boundary

@@ -3,17 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "~/db/schema";
 
 /**
- * Tests for the admin-only intake-mode toggle logic (`setIntakeMode`, #24).
+ * Tests for the admin-only intake-mode toggle logic (`setIntakeMode`).
  *
  * Flipping the active listing-intake mode is the ADR-008 admin power and an
  * ADR-010 security boundary: the gate is enforced server-side off the
- * authoritative `users` row, never the UI. These tests pin down that PERMISSION
- * BOUNDARY — anonymous (401), `user` (403), and `moderator` (403) callers must
- * all be rejected with NO write, and only an `admin` may persist — by driving
- * the real `requireCurrentRole` guard through a mocked current-user accessor (so
- * we exercise the genuine 401/403 policy, not a stub). `setSetting` is mocked,
- * so no live DB is needed; we assert the correct `setSetting("intake_mode", ...)`
- * call and that an invalid mode is rejected by Zod before any write, per
+ * authoritative `users` row, never the UI. These tests pin down the permission
+ * boundary — anonymous (401), `user` (403), and `moderator` (403) callers must
+ * all be rejected with no write, and only an `admin` may persist — by driving
+ * the real `requireCurrentRole` guard through a mocked current-user accessor,
+ * so the genuine 401/403 policy runs. `setSetting` is mocked, so no live DB is
+ * needed; the tests assert the correct `setSetting("intake_mode", ...)` call
+ * and that an invalid mode is rejected by Zod before any write, per
  * `docs/agents/testing.md` (minimal mocking).
  */
 

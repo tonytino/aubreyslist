@@ -3,23 +3,23 @@ import { z } from "zod";
 import { createFlag } from "./index";
 
 /**
- * Client-callable content-flagging server function (issue #39).
+ * Client-callable content-flagging server function.
  *
- * This `createServerFn` entry point is the ONLY part of the flag server layer
- * that client code (the listing-detail flag controls) imports. Following the
- * established `*.fn.ts` convention (see `attestations.fn.ts`,
- * `incidents.fn.ts`), the db-touching implementation lives in `./index.ts` and
- * the TanStack Start plugin strips this handler body out of the browser bundle —
- * so importing from here never drags `getDb` (neon/drizzle) into the client.
+ * This `createServerFn` entry point is the only part of the flag server layer
+ * that client code imports. Per the `*.fn.ts` convention, the db-touching
+ * implementation lives in `./index.ts` and the TanStack Start plugin strips
+ * this handler body out of the browser bundle — importing from here never
+ * drags `getDb` (neon/drizzle) into the client.
  *
- * The Zod validator is declared HERE as a client-safe schema (declaring it in
- * `./index.ts` would couple the validator to that db-touching module). It
- * enforces the exclusive-arc invariant — exactly one of listing/claim/incident —
- * via a discriminated union, plus a non-empty, length-bounded reason. This
- * `createServerFn().validator(flagFnInputSchema)` boundary IS the authoritative
- * server-side validation (it runs on every call); `createFlagInputSchema` in
- * `./index.ts` mirrors it for direct callers/tests, and the DB
- * `flags_one_target` CHECK is the ultimate guarantee.
+ * The Zod validator is declared here as a client-safe schema (declaring it in
+ * `./index.ts` would couple it to that db-touching module). It enforces the
+ * exclusive-arc invariant — exactly one of listing/claim/incident — via a
+ * discriminated union, plus a non-empty, length-bounded reason. This
+ * `createServerFn().validator(flagFnInputSchema)` boundary is the
+ * authoritative server-side validation (it runs on every call);
+ * `createFlagInputSchema` in `./index.ts` mirrors it for direct
+ * callers/tests, and the DB `flags_one_target` CHECK is the ultimate
+ * guarantee.
  *
  * Server-only at runtime; safe to import from client modules.
  */

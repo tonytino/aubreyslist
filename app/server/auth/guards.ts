@@ -8,21 +8,17 @@ import { getCurrentUser } from "./current-user";
  * server function or Hono route must reject unauthenticated — and, where noted,
  * under-privileged — callers.
  *
- * Two consumption styles share one core so the same policy backs both API
- * layers (see `docs/agents/api.md`):
+ * Two consumption styles share one core so one policy backs both API layers
+ * (`docs/agents/api.md`):
  *
- * - **Hono routes** resolve the user from the request themselves (the auth
- *   routes read the sealed cookie via `hono/cookie`), then pass it to the
- *   *synchronous* {@link requireUser} / {@link requireRole} guards.
- * - **Server functions** can skip that plumbing with the *async* convenience
- *   wrappers {@link requireCurrentUser} / {@link requireCurrentRole}, which read
- *   the ambient session via {@link getCurrentUser} first.
+ * - Hono routes resolve the user from the request, then call the synchronous
+ *   {@link requireUser} / {@link requireRole}.
+ * - Server functions call the async {@link requireCurrentUser} /
+ *   {@link requireCurrentRole}, which read the ambient session first.
  *
- * Failures throw an `HTTPException` (401/403). The Hono error handler in
- * `app/server/index.ts` passes it through verbatim with the right status; in a
- * server function it surfaces as a thrown error, so an anonymous (or
- * under-privileged) write never proceeds. This module imports `db` transitively
- * and must stay server-only.
+ * Failures throw an `HTTPException` (401/403), so an anonymous or
+ * under-privileged write never proceeds. Imports `db` transitively — must stay
+ * server-only.
  */
 
 /** A guarded user is a non-null `users` row — the absence of `null` is the guarantee. */

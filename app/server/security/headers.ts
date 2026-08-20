@@ -2,20 +2,17 @@ import type { MiddlewareHandler } from "hono";
 import { cookieSecure } from "~/server/auth/session";
 
 /**
- * Security response headers (AUB-162).
+ * Security response headers.
  *
- * A single source of truth for the response-hardening header set, applied to
- * BOTH backend surfaces (see `docs/agents/api.md` for the two-layer model):
+ * Single source of truth for the response-hardening header set, applied to
+ * both backend surfaces (`docs/agents/api.md`):
  *
- * - the Hono `/api/*` surface, via {@link honoSecurityHeaders} mounted ahead of
- *   the routes in `app/server/index.ts`; and
- * - SSR/document + server-function responses, via the global request middleware
- *   in `app/start.ts`, which calls {@link applySecurityHeaders}.
+ * - the Hono `/api/*` surface, via {@link honoSecurityHeaders}; and
+ * - SSR/document + server-function responses, via the global request
+ *   middleware, which calls {@link applySecurityHeaders}.
  *
- * Keeping the header VALUES in one module (rather than configuring
- * `hono/secure-headers` on one surface and hand-rolling the other) guarantees
- * the two surfaces can never drift apart. This is the "equivalent" the AUB-162
- * acceptance criteria allow in place of `secureHeaders()`.
+ * Keeping the header values in one module guarantees the two surfaces never
+ * drift apart.
  */
 
 /**
@@ -56,7 +53,7 @@ const CSP_DIRECTIVES: Readonly<Record<string, readonly string[]>> = {
   // so inline scripts must be allowed; `'unsafe-eval'` is still withheld.
   // `va.vercel-scripts.com` serves the Vercel Analytics client on preview/dev.
   // `maps.googleapis.com` serves the Maps JavaScript API (the directory map's
-  // loader + its on-demand libraries, AUB-111).
+  // loader + its on-demand libraries).
   "script-src": [
     "'self'",
     "'unsafe-inline'",
@@ -64,9 +61,9 @@ const CSP_DIRECTIVES: Readonly<Record<string, readonly string[]>> = {
     "https://maps.googleapis.com",
   ],
   // Sentry error ingestion + Vercel Analytics beacon. Google OAuth is a
-  // top-level server-side 302 redirect (not a fetch/XHR/iframe), so it is NOT
+  // top-level server-side 302 redirect (not a fetch/XHR/iframe), so it is not
   // subject to connect-src and needs no entry here.
-  // The Maps JS API (AUB-111) fetches vector tiles/attribution from
+  // The Maps JS API fetches vector tiles/attribution from
   // `maps.googleapis.com`, static assets from `maps.gstatic.com`, and map-label
   // webfonts from `fonts.gstatic.com` via fetch/XHR — the tightest host set for
   // a working map (img-src's broad `https:` already covers its raster imagery).
@@ -79,17 +76,15 @@ const CSP_DIRECTIVES: Readonly<Record<string, readonly string[]>> = {
     "https://maps.gstatic.com",
     "https://fonts.gstatic.com",
   ],
-  // The Maps JS API's vector renderer spawns Web Workers from blob: URLs
-  // (AUB-111). Without an explicit worker-src, workers fall back to script-src,
-  // which must NOT be widened to blob: (that would loosen script execution
-  // globally) — so scope blob: to workers only, the narrowest grant that lets
-  // the map render.
+  // The Maps JS API's vector renderer spawns Web Workers from blob: URLs.
+  // Without an explicit worker-src, workers fall back to script-src, which
+  // must not be widened to blob: (that would loosen script execution
+  // globally) — so scope blob: to workers only.
   "worker-src": ["'self'", "blob:"],
-  // The listing-detail embedded map (AUB-216, ADR-014): a plain `<iframe>` to
-  // the Maps Embed API, a DIFFERENT surface from the Maps JavaScript API above
-  // (script-src/connect-src, AUB-111) — Embed is free/unrestricted-quota with
-  // no JS SDK. Scoped to exactly this one origin; no wildcard, no 'self' (the
-  // app embeds nothing else in an iframe).
+  // The listing-detail embedded map (ADR-014): a plain `<iframe>` to the Maps
+  // Embed API, a different surface from the Maps JavaScript API above — Embed
+  // is free/unrestricted-quota with no JS SDK. Scoped to exactly this one
+  // origin; no wildcard, no 'self' (the app embeds nothing else in an iframe).
   "frame-src": ["https://www.google.com"],
 };
 

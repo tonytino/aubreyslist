@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
-// Diff-coverage gate (issue #183, part of #178). Fails a PR when the lines it
-// ADDS or CHANGES are not covered by tests at or above THRESHOLD (%). Coverage
-// is measured ONLY on changed lines — legacy untested code is never retroactively
-// failed, so the gate is safe to drop onto an existing tree.
+// Diff-coverage gate. Fails a PR when the lines it adds or changes are not
+// covered by tests at or above the threshold (%). Coverage is measured only on
+// changed lines — legacy untested code is never retroactively failed, so the
+// gate is safe on an existing tree.
 //
 // Zero dependencies (Node ESM + git/`coverage-final.json` only). The matching
-// logic lives in exported PURE functions (no FS/git inside them) so it is
+// logic lives in exported pure functions (no FS/git inside them) so it is
 // unit-testable in isolation; main() does all the IO. Tests live in
 // tests/unit/diff-coverage.test.ts (Vitest's include globs do not cover
 // .github/**, so the test file lives where Vitest discovers it).
@@ -15,20 +15,22 @@
 // check-changelog-tags.mjs): `::error file=…,line=…::` annotations, a legible
 // summary, exit 1 on failure / 0 when clean.
 //
-// ALWAYS-ON, TWO-MODE (the load-bearing design decision): the gate runs on EVERY
-// PR, not just when a DB secret is configured. app/server/** is largely exercised
-// only by the DB-gated integration suite, so coverage of those lines depends on
-// whether `CI_E2E_DATABASE_URL` is present:
-//   - FULL mode (secret present): the CI job runs the full suite (unit +
-//     integration) with coverage, so EVERY changed line is gated, server included.
-//   - DB-FREE mode (secret absent, DIFF_COVERAGE_DBFREE=true): coverage comes from
-//     the DB-free unit/component run only. The pure modules (app/trust/**,
-//     app/components/**, app/listings/**, db/schema.ts, …) ARE covered there and
-//     are gated on every PR. Changed lines under DB-only paths (DB_ONLY_PREFIXES,
-//     i.e. app/server/**) are EXCLUDED from the gate — they need the DB to be
-//     covered, so gating them DB-free would false-fail — and the exclusion is
-//     logged explicitly (no silent caps).
-// See the `diff-coverage` job in .github/workflows/ci.yml for how the mode is set.
+// Always-on, two-mode (the load-bearing design decision): the gate runs on
+// every PR, not just when a DB secret is configured. app/server/** is largely
+// exercised only by the DB-gated integration suite, so coverage of those lines
+// depends on whether `CI_E2E_DATABASE_URL` is present:
+//   - Full mode (secret present): the CI job runs the full suite (unit +
+//     integration) with coverage, so every changed line is gated, server
+//     included.
+//   - DB-free mode (secret absent, DIFF_COVERAGE_DBFREE=true): coverage comes
+//     from the DB-free unit/component run only. The pure modules (app/trust/**,
+//     app/components/**, app/listings/**, db/schema.ts, …) are covered there
+//     and are gated on every PR. Changed lines under DB-only paths
+//     (DB_ONLY_PREFIXES, i.e. app/server/**) are excluded from the gate — they
+//     need the DB to be covered, so gating them DB-free would false-fail — and
+//     the exclusion is logged explicitly (no silent caps).
+// See the `diff-coverage` job in .github/workflows/ci.yml for how the mode is
+// set.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -37,11 +39,12 @@ import { readFileSync } from "node:fs";
 // the DIFF_COVERAGE_THRESHOLD env var (CI may override) with an 80% default.
 export const DEFAULT_THRESHOLD = 80;
 
-// Repo-relative path prefixes whose coverage requires the DB-gated integration
-// suite. In DB-FREE mode these are excluded from the gate (they can't be covered
-// without a database; gating them would false-fail). In FULL mode nothing is
-// excluded. Keep this list explicit + documented — it is the ONLY thing the
-// DB-free floor does not gate, and main() logs it on every DB-free run.
+// Repo-relative path prefixes whose coverage requires the DB-gated
+// integration suite. In DB-free mode these are excluded from the gate (they
+// can't be covered without a database; gating them would false-fail). In full
+// mode nothing is excluded. Keep this list explicit + documented — it is the
+// only thing the DB-free floor does not gate, and main() logs it on every
+// DB-free run.
 export const DB_ONLY_PREFIXES = ["app/server/"];
 
 // ---------------------------------------------------------------------------
@@ -53,7 +56,7 @@ export const DB_ONLY_PREFIXES = ["app/server/"];
  *
  * Each entry has a `statementMap` (statement id -> { start:{line}, end:{line} })
  * and `s` (statement id -> hit count). We derive, for each file:
- *   - `coverable`: the set of line numbers spanned by ANY statement.
+ *   - `coverable`: the set of line numbers spanned by any statement.
  *   - `covered`:   the set of line numbers spanned by a statement with hits > 0.
  * A line counts as covered if any statement covering it ran at least once.
  *
@@ -88,10 +91,10 @@ export function parseCoverage(report) {
 }
 
 /**
- * Parse `git diff` unified output into a map of file -> set of ADDED/changed
- * line numbers on the RIGHT-HAND (new) side.
+ * Parse `git diff` unified output into a map of file -> set of added/changed
+ * line numbers on the right-hand (new) side.
  *
- * We track the post-image line counter from each hunk header
+ * Tracks the post-image line counter from each hunk header
  * `@@ -a,b +c,d @@` and record every `+` line (added/changed), skipping `-`
  * lines (which don't exist in the new file) and the `+++ ` file header. Renames
  * and binary diffs carry no `+` content lines, so they contribute nothing.
@@ -172,13 +175,13 @@ export function isExcluded(relPath, excludePrefixes) {
 /**
  * Intersect changed lines with coverage to compute diff coverage.
  *
- * For every changed line that is COVERABLE in a coverage-eligible file, count it
- * as covered/uncovered. Changed lines in files absent from the coverage report
+ * For every changed line that is coverable in a coverage-eligible file, count
+ * it as covered/uncovered. Changed lines in files absent from the coverage report
  * (excluded by config) or that are not coverable (blank lines, comments, type-only
  * positions v8 doesn't instrument) are ignored — only executable changed lines
  * are gated.
  *
- * `excludePrefixes` (DB-FREE mode passes DB_ONLY_PREFIXES; FULL mode passes [])
+ * `excludePrefixes` (DB-free mode passes DB_ONLY_PREFIXES; full mode passes [])
  * drops changed files under a DB-only path from the gate entirely. Such files
  * are reported in `excludedFiles` so the caller can log the exclusion — they are
  * never silently dropped.
@@ -232,14 +235,14 @@ export function coveragePercent({ total, covered }) {
 }
 
 /**
- * Whether the gate runs in DB-FREE mode, from the workflow-set env.
+ * Whether the gate runs in DB-free mode, from the workflow-set env.
  *
- * STRICT equality on the literal string `"true"` — never generic truthiness.
- * The workflow renders `DIFF_COVERAGE_DBFREE` as the STRING `"true"` (secret
- * absent) or `"false"` (secret present). `"false"` is a NON-empty string and is
- * therefore TRUTHY in JS, so a `Boolean(env.X)` / regex-truthy check would read
- * full mode as DB-free. This helper is the regression guard for that exact bug
- * class (a GitHub Actions `A && '' || 'true'` expression that was always 'true').
+ * Strict equality on the literal string `"true"` — never generic truthiness.
+ * The workflow renders `DIFF_COVERAGE_DBFREE` as the string `"true"` (secret
+ * absent) or `"false"` (secret present). `"false"` is a non-empty string and
+ * is therefore truthy in JS, so a `Boolean(env.X)` / regex-truthy check would
+ * read full mode as DB-free. This helper guards that exact bug class (e.g. a
+ * GitHub Actions `A && '' || 'true'` expression that is always 'true').
  *
  * @param {Record<string, string | undefined>} env Environment (e.g. process.env).
  * @returns {boolean}
@@ -290,9 +293,9 @@ function main() {
     process.exit(2);
   }
 
-  // DB-FREE mode: coverage came from the DB-free unit/component run only, so
+  // DB-free mode: coverage came from the DB-free unit/component run only, so
   // exclude DB-only paths (they can't be covered without the integration DB).
-  // FULL mode (secret present): gate everything. Strict `=== "true"` — see
+  // Full mode (secret present): gate everything. Strict `=== "true"` — see
   // isDbFreeMode (the string "false" is truthy, so generic truthiness is wrong).
   const dbFree = isDbFreeMode(process.env);
   const excludePrefixes = dbFree ? DB_ONLY_PREFIXES : [];

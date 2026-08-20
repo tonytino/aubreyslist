@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the listing-level claim-aggregate loader (#29, extended for #32).
+ * Tests for the listing-level claim-aggregate loader.
  *
  * The module's server-only deps are the DB client and the current-user resolver.
- * We model the two drizzle chains it uses:
+ * The two drizzle chains it uses are modeled:
  *   - aggregates: select().from().leftJoin().innerJoin().where().groupBy() -> grouped rows
  *   - viewer vote: select().from().innerJoin().innerJoin().where()         -> own-vote rows
- * so we can assert the row-shaping and the per-claim `viewerVote` (#32) without a
- * live database, per docs/agents/testing.md. Both chains INNER JOIN `listings` to
- * gate on the parent listing's visibility (no parent→child moderation propagation).
+ * so the row-shaping and the per-claim `viewerVote` are assertable without a
+ * live database, per docs/agents/testing.md. Both chains INNER JOIN `listings`
+ * to gate on the parent listing's visibility (no parent→child moderation
+ * propagation).
  */
 
 const h = vi.hoisted(() => {
@@ -77,7 +78,7 @@ afterEach(() => {
 });
 
 // The fixed GF taxonomy (db/schema.ts `claim_attribute`). The loader always
-// returns ONE ENTRY PER attribute (#150), in this canonical order.
+// returns one entry per attribute, in this canonical order.
 const TAXONOMY = [
   "celiac_safe_vs_gluten_friendly",
   "dedicated_fryer",
@@ -185,7 +186,7 @@ describe("getListingClaimAggregates — full taxonomy, attestable (#150)", () =>
     await getListingClaimAggregates({ listingId: "listing-1" });
 
     // The aggregate WHERE constrains to `moderation_status = 'visible'`, so a
-    // hidden/removed claim drops off the surface AND out of the headline cue,
+    // hidden/removed claim drops off the surface and out of the headline cue,
     // whose counts then recompute from the surviving visible claims. A moderated
     // attribute simply falls back to its honest empty entry.
     const lower = dialect.sqlToQuery(state.aggWhere as SQL).sql.toLowerCase();
@@ -194,7 +195,7 @@ describe("getListingClaimAggregates — full taxonomy, attestable (#150)", () =>
   });
 
   it("ALSO requires the PARENT listing visible — hidden/removed listing leaks no claim aggregates (no propagation)", async () => {
-    // `moderationStatus` has no parent→child propagation: hiding the LISTING
+    // `moderationStatus` has no parent→child propagation: hiding the listing
     // leaves its claims `visible`. The aggregate query INNER JOINs `listings` and
     // its WHERE additionally requires the listings table's
     // `moderation_status = 'visible'`, so a hidden listing yields zero aggregate
@@ -208,7 +209,7 @@ describe("getListingClaimAggregates — full taxonomy, attestable (#150)", () =>
     const lower = query.sql.toLowerCase();
     expect(lower).toContain('"listings"."moderation_status"');
     expect(lower).toContain('"claims"."moderation_status"');
-    // Two `'visible'` binds: the claim's own status AND the parent listing's.
+    // Two `'visible'` binds: the claim's own status and the parent listing's.
     expect(query.params.filter((p) => p === "visible")).toHaveLength(2);
     // A hidden parent's empty aggregate ⇒ every attribute is an honest empty entry.
     for (const entry of result) {

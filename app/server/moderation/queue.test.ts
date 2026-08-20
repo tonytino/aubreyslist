@@ -5,20 +5,20 @@ import type { User } from "~/db/schema";
 
 /**
  * Tests for the moderation-queue access gate + shape (`resolveModerationQueue`,
- * #40, ADR-010).
+ * ADR-010).
  *
- * The queue is a moderator+ surface and an ADR-010 security boundary: the gate
- * is enforced SERVER-SIDE off the authoritative `users` row, never the UI. We
- * drive the REAL `requireCurrentRole` guard through a mocked current-user
- * accessor (so the genuine 401/403 policy runs, not a stubbed one) and assert it
- * maps to the typed access discriminator:
+ * The queue is a moderator+ surface and an ADR-010 security boundary: the
+ * gate is enforced server-side off the authoritative `users` row, never the
+ * UI. The real `requireCurrentRole` guard runs through a mocked current-user
+ * accessor (so the genuine 401/403 policy runs, not a stubbed one) and maps
+ * to the typed access discriminator:
  *
  *   no user          → { access: "anonymous" }          (DB never queried)
  *   role "user"      → { access: "forbidden" }          (DB never queried)
  *   role "moderator" → { access: "granted", items }     (queue loaded)
  *   role "admin"     → { access: "granted", items }     (admins out-rank, pass)
  *
- * A separate test pins the queue's SHAPE: open flags only, each carrying the
+ * A separate test pins the queue's shape: open flags only, each carrying the
  * target (type + id + label), reason, reporter (name/email), and date. The DB is
  * mocked (a single `select()...orderBy()` chain), so no live connection is
  * needed, per `docs/agents/testing.md` (minimal mocking).
@@ -266,10 +266,10 @@ describe("resolveModerationQueue — queue shape", () => {
   });
 
   it("constrains the query to OPEN flags only (status = 'open')", async () => {
-    // The queue is a triage surface for OPEN flags only — resolved/dismissed/
+    // The queue is a triage surface for open flags only — resolved/dismissed/
     // in-review flags have left it. Pin the terminal `.where()` predicate so
     // dropping or widening `where(eq(flags.status, "open"))` fails here: the
-    // captured SQL must reference the flags.status column AND bind "open".
+    // captured SQL must reference the flags.status column and bind "open".
     mockSelectRows([]);
 
     await resolveModerationQueue();

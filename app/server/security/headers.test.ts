@@ -29,7 +29,7 @@ describe("contentSecurityPolicy", () => {
     // Static map assets + map-label webfonts are fetched via XHR.
     expect(csp).toMatch(/connect-src [^;]*https:\/\/maps\.gstatic\.com/);
     expect(csp).toMatch(/connect-src [^;]*https:\/\/fonts\.gstatic\.com/);
-    // The vector renderer spawns blob: workers — scoped to worker-src ONLY,
+    // The vector renderer spawns blob: workers — scoped to worker-src only,
     // never script-src (which would loosen script execution globally).
     expect(csp).toMatch(/worker-src 'self' blob:/);
     expect(csp).not.toMatch(/script-src [^;]*blob:/);

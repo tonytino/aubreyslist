@@ -4,31 +4,28 @@ import type { User } from "~/db/schema";
 import type { Role } from "~/server/auth/guards";
 
 /**
- * Tests for the admin-only role-management logic (`setRole`, #16, #127).
+ * Tests for the admin-only role-management logic (`setRole`).
  *
- * `setRole` is the ADR-010 security boundary for promoting/demoting moderators:
- * the gate is enforced server-side off the authoritative `users` row, never the
- * UI. The bulk of these tests pin down that PERMISSION BOUNDARY — anonymous,
- * `user`, and `moderator` callers must all be rejected, and only an `admin` may
- * write — by driving the real `requireCurrentRole` guard through a mocked
- * current-user accessor (so we exercise the actual 401/403 policy, not a stubbed
- * one). The DB is mocked, so no live connection is needed; we assert the correct
- * `UPDATE users SET role = ... WHERE id = userId` is issued and the 404 / Zod
- * rejection paths behave, per `docs/agents/testing.md` (minimal mocking).
+ * `setRole` is the ADR-010 security boundary for promoting/demoting moderators.
+ * Most tests pin down the permission boundary — anonymous, `user`, and
+ * `moderator` callers must all be rejected; only an `admin` may write — by
+ * driving the real `requireCurrentRole` guard through a mocked current-user
+ * accessor, so the actual 401/403 policy runs. The DB is mocked; the tests
+ * assert the correct `UPDATE users SET role = ... WHERE id = userId` plus the
+ * 404 / Zod rejection paths, per `docs/agents/testing.md` (minimal mocking).
  *
- * The last-admin guard (#127) reads two `SELECT`s before any write: the target's
- * current role (SELECT #1), then a count of the OTHER admins (SELECT #2). The
- * first is staged FIFO via {@link stageSelects}. The second is NOT a hardcoded
+ * The last-admin guard reads two `SELECT`s before any write: the target's
+ * current role (SELECT 1), then a count of the other admins (SELECT 2). The
+ * first is staged FIFO via {@link stageSelects}. The second is not a hardcoded
  * scalar — that would let a mutation dropping `ne(users.id, userId)` from the
- * source slip through, the exact regression #127 prevents. Instead the count
- * mock reads the bound parameter values out of the REAL drizzle predicate the
- * source built ({@link boundParamValues}) and counts a staged "admin universe"
- * of rows, EXCLUDING any whose `id` is bound in the predicate. So if the source
- * keeps `ne(users.id, userId)`, the target's own id is bound and excluded; if a
- * mutant drops it, the id is no longer bound, the target counts itself, and the
- * sole-admin self-demotion test below flips from blocked to allowed and FAILS.
- * By default the target is a plain `moderator`, so the guard is a no-op and the
- * existing #16 expectations are unaffected.
+ * source slip through. Instead the count mock reads the bound parameter values
+ * out of the real drizzle predicate the source built
+ * ({@link boundParamValues}) and counts a staged "admin universe" of rows,
+ * excluding any whose `id` is bound in the predicate. If a mutant drops
+ * `ne(users.id, userId)`, the id is not bound, the target counts itself, and
+ * the sole-admin self-demotion test flips from blocked to allowed and fails.
+ * By default the target is a plain `moderator`, so the guard is a no-op for
+ * the permission-boundary expectations.
  */
 
 // --- Mocks -----------------------------------------------------------------
@@ -79,10 +76,10 @@ const {
 
 /**
  * Walk a drizzle predicate (the `SQL` object returned by `and(eq(...), ne(...))`)
- * and collect every BOUND parameter value (the values live in `Param` chunks
- * nested under `queryChunks`). This lets the count mock see exactly which values
- * the source bound — so if `ne(users.id, userId)` is dropped, `userId` no longer
- * appears here and the self-exclusion stops taking effect.
+ * and collect every bound parameter value (`Param` chunks nested under
+ * `queryChunks`). The count mock sees exactly which values the source bound —
+ * if `ne(users.id, userId)` is dropped, `userId` does not appear here and the
+ * self-exclusion stops taking effect.
  */
 function boundParamValues(node: unknown, out: unknown[] = []): unknown[] {
   if (!node || typeof node !== "object") return out;
@@ -225,12 +222,12 @@ describe("setRole — admin-only role management (ADR-010)", () => {
     expect(setArg.role).toBe("user");
   });
 
-  // --- Last-admin guard (#127) ---------------------------------------------
+  // --- Last-admin guard ----------------------------------------------------
 
   it("rejects demoting the LAST admin with 409 (no DB write)", async () => {
     getCurrentUserMock.mockResolvedValue(userRow("admin"));
     // Target is an admin; the only admin in existence is the target itself, so
-    // the `ne(users.id, userId)` self-exclusion leaves ZERO others.
+    // the `ne(users.id, userId)` self-exclusion leaves zero others.
     stageSelects([{ role: "admin" }]);
     stageAdminUniverse("last-admin");
 
@@ -244,7 +241,7 @@ describe("setRole — admin-only role management (ADR-010)", () => {
 
   it("allows demoting a NON-last admin (another admin remains), issuing the update", async () => {
     getCurrentUserMock.mockResolvedValue(userRow("admin"));
-    // Target is an admin; a SECOND admin exists ⇒ one OTHER remains after the
+    // Target is an admin; a second admin exists ⇒ one other remains after the
     // self-exclusion ⇒ safe to demote.
     stageSelects([{ role: "admin" }]);
     stageAdminUniverse("demote-me", "other-admin");
@@ -278,10 +275,10 @@ describe("setRole — admin-only role management (ADR-010)", () => {
   });
 
   it("BLOCKS a sole admin from self-demoting — fails if `ne(users.id, userId)` is dropped", async () => {
-    // The mutation #127 must catch: if the source stops excluding the target
-    // from the OTHER-admin count, a sole admin counts themselves (1 ≥ 1), the
+    // The mutation this must catch: if the source stops excluding the target
+    // from the other-admin count, a sole admin counts themselves (1 ≥ 1), the
     // guard never fires, the self-demote write goes through, and the app locks
-    // itself out of administration. Here the ONLY admin is the caller demoting
+    // itself out of administration. Here the only admin is the caller demoting
     // themselves: with the self-exclusion the count is 0 ⇒ 409 (no write); drop
     // it and the count becomes 1 ⇒ this expectation fails.
     const me = userRow("admin", { id: "me" });

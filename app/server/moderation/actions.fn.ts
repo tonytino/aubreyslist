@@ -2,20 +2,19 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 /**
- * Client-callable moderation-action server functions (issue #41).
+ * Client-callable moderation-action server functions.
  *
- * These `createServerFn` POST entry points are the ONLY part of the moderation
- * write layer that client code (the moderation-queue UI's TanStack Query
- * mutations) imports. The db-touching implementations live in the server-only
- * `./actions` module and are referenced only from inside each handler via a lazy
- * `import()`, so the bundler strips them (and their `db`-bound imports) out of
- * the browser bundle — mirroring `queue.fn.ts` / `flags.fn.ts`.
+ * These `createServerFn` POST entry points are the only part of the
+ * moderation write layer that client code imports. The db-touching
+ * implementations live in the server-only `./actions` module and are
+ * referenced only via a lazy `import()` inside each handler, so the bundler
+ * strips them (and their `db`-bound imports) out of the browser bundle.
  *
- * The validator below mirrors `moderationActionInputSchema` in `./actions` (the
- * exclusive-arc target + optional prompting flag + optional note). It runs on
- * every client call as the authoritative server-side input gate; the server
- * module re-parses for direct callers/tests, and the DB CHECK is the ultimate
- * guarantee.
+ * The validator below mirrors `moderationActionInputSchema` in `./actions`
+ * (the exclusive-arc target + optional prompting flag + optional note). It
+ * runs on every client call as the authoritative server-side input gate; the
+ * server module re-parses for direct callers/tests, and the DB CHECK is the
+ * ultimate guarantee.
  */
 
 const MODERATION_NOTE_MAX_LENGTH = 2000;
@@ -75,7 +74,7 @@ export const removeContentAction = createServerFn({ method: "POST" })
     return removeContent(data);
   });
 
-/** Restore previously hidden/removed content to visible. See `restoreContent`. */
+/** Restore hidden/removed content to visible. See `restoreContent`. */
 export const restoreContentAction = createServerFn({ method: "POST" })
   .validator(moderationActionFnInputSchema)
   .handler(async ({ data }) => {
