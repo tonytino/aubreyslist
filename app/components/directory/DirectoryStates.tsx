@@ -1,11 +1,10 @@
 import { MapPin, Search, ShieldCheck } from "lucide-react";
 
 /**
- * The directory's non-list content states (AUB-61, Phase 2b): the first-run empty
- * state and the no-results state. The route renders EXACTLY ONE of these (or the
- * list) at a time. (Loading skeletons were retired when the quick chips became a
- * server-side filter — AUB-135 — so filtering pends via the loader like every
- * other server param, with no artificial shimmer.)
+ * The directory's non-list content states: the first-run empty state and the
+ * no-results state. The route renders exactly one of these (or the list) at a
+ * time. There are no loading skeletons — filtering pends via the loader like
+ * every other server param, with no artificial shimmer.
  */
 
 /** Shared centred layout for the empty / no-results messages. */

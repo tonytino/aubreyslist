@@ -4,15 +4,14 @@ import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { SafetySignal } from "~/components/SafetySignal";
 
 /**
- * Regression guard for AUB-224: the WHOLE badge family must resolve to the EXACT
- * same rendered size — same font-size utility, same border-radius utility — no
- * matter that the two components compose different primitives. This is a
- * class-LEVEL assertion on purpose: the shared {@link BADGE_FAMILY_SIZE} string
- * only actually unifies the size once `cn` (tailwind-merge) is taught the custom
- * `--text-*` / `--radius-*` tokens (see `app/lib/utils.ts`). Without that,
- * `text-body-sm` was mis-grouped as a text-colour and dropped, `SafetySignal`
- * rendered with no font-size and `ClaimBadge` fell back to the primitive's
- * `text-xs` — different sizes, silently, with a green test suite.
+ * Regression guard: the whole badge family must resolve to the same rendered
+ * size — same font-size utility, same border-radius utility — even though the
+ * two components compose different primitives. Class-level assertions on
+ * purpose: the shared {@link BADGE_FAMILY_SIZE} string only unifies the size
+ * once `cn` (tailwind-merge) knows the custom `--text-*` / `--radius-*` tokens
+ * (see `app/lib/utils.ts`). Without that, tailwind-merge mis-groups
+ * `text-body-sm` as a text-colour and drops it, and the two badges silently
+ * render at different sizes with a green test suite.
  */
 
 // The custom font-size + radius utilities defined under `@theme` in
@@ -61,7 +60,7 @@ describe("badge family shared size (AUB-224)", () => {
     render(<ClaimBadge attribute="off_menu_gf_on_request" />);
     const claimFonts = pick(screen.getByTestId("claim-badge"), FONT_SIZE_CLASSES);
 
-    // Exactly ONE font-size class each (a leftover primitive size would make 2)...
+    // Exactly one font-size class each (a leftover primitive size would make 2)...
     expect(safetyFonts).toEqual(["text-body-sm"]);
     // ...and no fallback to the Badge primitive's base `text-xs`.
     expect(claimFonts).toEqual(["text-body-sm"]);

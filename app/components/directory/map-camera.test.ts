@@ -86,7 +86,7 @@ describe("cameraForBounds", () => {
   it("shifts the centre north under heavy bottom padding (bounds centred above the carousel band)", () => {
     const padded = cameraForBounds(denver, size, { top: 0, right: 0, bottom: 200, left: 0 });
     const bare = cameraForBounds(denver, size, noPadding);
-    // The camera centre moves SOUTH of the bounds midpoint so the bounds sit
+    // The camera centre moves south of the bounds midpoint so the bounds sit
     // centred in the upper (unpadded) part of the viewport.
     expect(padded.center.lat).toBeLessThan(bare.center.lat);
     expect(padded.center.lng).toBeCloseTo(bare.center.lng, 10);

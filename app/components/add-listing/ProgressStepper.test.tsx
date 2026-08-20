@@ -4,7 +4,7 @@ import type { AnswerMap } from "./AddListingWizard";
 import { deriveStepperNodes, ProgressStepper } from "./ProgressStepper";
 
 /**
- * ProgressStepper tests (collapsed 3-node rail, AUB-231): the pure status
+ * ProgressStepper tests (collapsed 3-node rail): the pure status
  * derivation (current / done / skipped / todo — the single attest node rolls
  * the whole deck up) and the `Step N of 3 · name` aria-live line, plus that
  * back-nav is a button and forward is gated until a place is chosen.

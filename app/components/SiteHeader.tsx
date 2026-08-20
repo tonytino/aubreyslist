@@ -14,30 +14,26 @@ import { Wordmark } from "~/components/Wordmark";
  * loader) and passes the result into the presentational menus, so the auth
  * state renders correctly on first paint with no useEffect/useState fetch.
  *
- * Layout is MOBILE-FIRST (see docs/agents/styling.md → Mobile-first) with ONE
- * breakpoint switch at `sm` (640px), an owner-approved consolidation:
+ * One breakpoint switch at `sm` (640px), mobile-first
+ * (docs/agents/styling.md):
  *
- *  - Below `sm`: a flex row of left-aligned wordmark + a single right-anchored
- *    combined menu (`SiteMenu`) that holds the primary nav AND the account
- *    controls (theme toggle folded in as a row). No left hamburger. The
+ *  - Below `sm`: left-aligned wordmark + a single right-anchored combined menu
+ *    (`SiteMenu`) holding the primary nav and account controls. The
  *    `<nav aria-label="Primary">` landmark wraps the menu trigger so the
- *    navigation landmark persists even though the items live in a portaled menu.
- *  - `sm:`+ : the layout splits back apart — inline primary nav links
- *    (directly reachable, "Add a listing" as the brand-purple CTA), a
- *    standalone `ThemeToggle`, and the avatar `UserMenu` in the right cluster.
+ *    landmark persists even though the items live in a portaled menu.
+ *  - `sm:`+ : inline primary nav links ("Add a listing" as the brand-purple
+ *    CTA), a standalone `ThemeToggle`, and the avatar `UserMenu`.
  *
  * Exactly one `Primary` nav landmark and one theme control are display-visible
  * at any width (the other variant is CSS-hidden), so the a11y tree never
  * doubles up.
  *
- * ALWAYS-VISIBLE (user feedback #2): the header is `sticky top-0` with an opaque
- * `bg-background` so the primary nav stays reachable at any scroll position. Its
- * inner row has a STABLE, known height (`h-16`), mirrored by the `--site-header-h`
- * token (app/styles/app.css) so the directory's own sticky filter bar can offset
- * exactly below it (`sticky top-[var(--site-header-h)]`) with no overlap or gap.
- * Z-INDEX: this sits at `z-40` — above the directory's sticky filter bar (`z-20`)
- * but BELOW Radix overlays (sheet/dialog/dropdown at `z-50`), so a menu/sheet
- * always renders over the nav.
+ * The header is `sticky top-0` with an opaque `bg-background`. Its inner row
+ * height (`h-16`) is mirrored by the `--site-header-h` token
+ * (app/styles/app.css); the directory's sticky filter bar offsets by that token
+ * to sit exactly below with no overlap or gap — keep them in sync. Sits at
+ * `z-40`: above the directory's sticky filter bar (`z-20`), below Radix
+ * overlays (`z-50`) so a menu/sheet always renders over the nav.
  */
 export function SiteHeader() {
   const { data: user } = useSuspenseQuery(currentUserQuery);
@@ -46,8 +42,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background">
       <div className="mx-auto flex h-16 w-full max-w-[96rem] items-center gap-2 px-4 sm:px-6">
-        {/* Left: brand wordmark, links home. Left-aligned (owner decision 2) —
-            it takes the space the removed left hamburger vacated. */}
+        {/* Left: brand wordmark, links home. */}
         <Link to="/" aria-label="Aubrey's List home" className="whitespace-nowrap">
           <Wordmark size="sm" />
         </Link>

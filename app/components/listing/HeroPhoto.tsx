@@ -4,31 +4,27 @@ import { placePhotoProxyUrl } from "~/listings/place-photo-url";
 import { fetchListingPhotos } from "~/server/places-photos.fn";
 
 /**
- * Render-time Google Place photo for the listing-detail hero (AUB-215).
+ * Render-time Google Place photo for the listing-detail hero.
  *
- * Sits INSIDE the hero media band, between the brand-gradient/blob layers and
- * the bottom scrim: when a photo resolves, the `<img>` covers the gradient
- * (and the "Food photo" placeholder label); until then — and on every failure
- * mode (no Place ID, kill switch off, key unset, upstream error, broken image)
- * — it renders nothing and the existing gradient band shows through unchanged.
+ * Sits inside the hero media band, between the brand-gradient/blob layers and the
+ * bottom scrim: when a photo resolves, the `<img>` covers the gradient; until then —
+ * and on every failure mode (no Place ID, kill switch off, key unset, upstream error,
+ * broken image) — it renders nothing and the gradient band shows through unchanged.
  *
- * Fetching is a client-side TanStack Query (never in the route loader, no
- * suspense): photos are decorative and must never block or break page render.
- * The photo itself loads through the `/api/places/photo` server-side media
- * proxy — nothing Google-sourced is persisted and no key ships to the client
- * (ADR-014).
+ * Fetching is a client-side TanStack Query (never in the route loader, no suspense):
+ * photos are decorative and must never block or break page render. The photo loads
+ * through the `/api/places/photo` server-side proxy — nothing Google-sourced is
+ * persisted and no key ships to the client (ADR-014).
  *
- * Attribution: Google photos require author credit, so a real photo renders a
- * small "Photo: {author}" line over the scrim (linking to the author profile
- * when available). It only exists when a photo is actually shown.
+ * Attribution: Google photos require author credit, so a real photo renders a small
+ * "Photo: {author}" line over the scrim, only when a photo is actually shown.
  */
 
 /**
- * Width requested from the proxy for the hero band. The band renders edge to
- * edge in a `max-w-3xl` card (~768px CSS), so 1280px covers retina displays
- * without asking Google for the full-size original. Deliberately a rung on the
- * proxy's fixed width ladder (`PHOTO_WIDTH_LADDER` in
- * `app/server/routes/places.ts`) — off-ladder asks get quantized server-side.
+ * Width requested from the proxy for the hero band. The band renders edge to edge in
+ * a `max-w-3xl` card (~768px CSS), so 1280px covers retina displays without asking
+ * Google for the full-size original. A rung on the proxy's fixed width ladder —
+ * off-ladder asks get quantized server-side.
  */
 export const HERO_PHOTO_MAX_WIDTH_PX = 1280;
 
@@ -38,13 +34,11 @@ export function listingPhotosQueryKey(listingId: string) {
 }
 
 export function HeroPhoto({ listingId }: { listingId: string }) {
-  // Ephemeral render state, not data fetching: a broken image (e.g. the proxy
-  // 503s after the kill switch flips mid-session) falls back to the gradient.
-  // The FAILED SRC is stored (not a boolean) so the suppression is scoped to
-  // the exact image that broke: when client-side navigation reuses this
-  // instance for another listing (or the photo list changes), the new src no
-  // longer matches and the photo renders again. The call site additionally
-  // keys the component by listing id (belt and braces).
+  // A broken image (e.g. the proxy 503s after the kill switch flips mid-session)
+  // falls back to the gradient. Storing the failed src (not a boolean) scopes the
+  // suppression to the exact image that broke: when navigation reuses this instance
+  // for another listing, the new src does not match and the photo renders again.
+  // The call site additionally keys the component by listing id.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
   const { data: photos } = useQuery({
@@ -56,7 +50,7 @@ export function HeroPhoto({ listingId }: { listingId: string }) {
     retry: 1,
   });
 
-  // Hero shows the FIRST photo only; errors surface as `data: undefined`.
+  // Hero shows the first photo only; errors surface as `data: undefined`.
   const photo = photos?.[0];
   if (!photo) return null;
 
@@ -77,26 +71,13 @@ export function HeroPhoto({ listingId }: { listingId: string }) {
         className="absolute inset-0 z-0 h-full w-full object-cover"
       />
       {photo.attributions.length > 0 ? (
-        // Above the scrim (z-20, like the name/address block) so the credit
-        // stays AA-legible on the darkest part of the photo. Bottom-right,
-        // single line, truncated — it may never crowd the name/address at 375px.
-        //
-        // Softened deliberately (owner: the credit read as too prominent,
-        // especially since Google's authorAttributions is often just the
-        // business's own name) — one step below the `text-caption` token
-        // (12px, the smallest in the type scale) via an arbitrary 11px value,
-        // and text-white/90 -> /80. Google's Places attribution requirement
-        // ("must display and be legible") and the repo's AA-contrast rule
-        // (styling.md) are both still met with real margin: this line sits at
-        // the bottom edge of the parent hero band's scrim
-        // (`from-black/75 via-black/25 to-transparent`, listings.$id.tsx),
-        // right at the near-opaque `from` stop. Worst case — a pure-white
-        // photo behind a 75%-opaque black scrim — yields an effective
-        // background of ~rgb(64,64,64) (L ~= 0.051); white/80 text over that
-        // composites to ~rgb(217,217,217) (L ~= 0.69), a contrast ratio of
-        // ~7.3:1 — well clear of the 4.5:1 AA floor for normal-size text, with
-        // the `text-shadow` below as extra (unmodeled) headroom on top. Weight
-        // was already regular (no bold to step down).
+        // Above the scrim (z-20, like the name/address block) so the credit stays
+        // AA-legible on the darkest part of the photo. Bottom-right, single line,
+        // truncated — it may never crowd the name/address at 375px. Google's Places
+        // attribution requirement ("must display and be legible") and the AA-contrast
+        // rule (styling.md) both hold: the line sits at the near-opaque stop of the
+        // hero scrim, and even over a pure-white photo the /75 scrim + white/80 text
+        // clears ~7.3:1 — don't lighten either without re-checking that worst case.
         <p className="absolute bottom-1.5 right-3 z-20 max-w-[70%] truncate text-[11px] text-white/80 [text-shadow:0_1px_8px_rgba(0,0,0,0.8)]">
           Photo:{" "}
           {photo.attributions.map((attribution, index) => (

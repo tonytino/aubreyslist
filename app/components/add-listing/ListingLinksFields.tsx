@@ -16,10 +16,10 @@ export function emptyLinkFieldValues(): LinkFieldValues {
 }
 
 /**
- * The typed-link URL fields (AUB-202): one labeled input per link kind (menu,
+ * The typed-link URL fields: one labeled input per link kind (menu,
  * gluten-free menu, website, reservations, online ordering), all optional —
- * a fixed set of five, no dynamic add/remove. Replaces the single
- * `MenuUrlField` (issue #26); no file uploads in v1 (ADR-008), just links.
+ * a fixed set of five, no dynamic add/remove. No file uploads in v1 (ADR-008),
+ * just links.
  *
  * Shared by the add-listing wizard (collect at intake) and the detail page's
  * edit-links dialog (edit after creation). Controlled inputs so the parent

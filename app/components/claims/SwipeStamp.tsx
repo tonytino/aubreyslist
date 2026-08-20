@@ -4,13 +4,13 @@ import { WheatStrike } from "~/components/icons/WheatStrike";
 import { cn } from "~/lib/utils";
 
 /**
- * The drag stamp on a claim card (AUB-231): an ICON + WORD pair that fades in as
- * the card is dragged toward Confirm (right) or Dispute (left). NEVER colour
- * alone (styling.md non-negotiable): the word "Confirm"/"Dispute" is always part
- * of the stamp.
+ * The drag stamp on a claim card: an icon + word pair that fades in as the
+ * card is dragged toward Confirm (right) or Dispute (left). Never colour alone
+ * (styling.md non-negotiable): the word "Confirm"/"Dispute" is always part of
+ * the stamp.
  *
  * Tints follow the safety rules:
- *   - HEADLINE card only: Confirm = celiac-safe green + ShieldCheck, Dispute =
+ *   - Headline card only: Confirm = celiac-safe green + ShieldCheck, Dispute =
  *     gluten-friendly amber + the branded WheatStrike (never a leaf).
  *   - Fact cards: neutral foreground/brand tints with plain Check / X glyphs —
  *     a plain fact must never borrow the safety verdict colours.
@@ -19,12 +19,11 @@ import { cn } from "~/lib/utils";
  * meaning lives in the always-visible button row + the deck's live region.
  *
  * Two rendering modes:
- *   - Full motion: opacity is BOUND to the drag-derived {@link MotionValue}, so
+ *   - Full motion: opacity is bound to the drag-derived {@link MotionValue}, so
  *     the stamp tracks drag distance.
  *   - Reduced motion (`dragOpacity` undefined): the stamp is hidden until the
- *     card exits, then the matching stamp appears at FULL opacity via the exit
- *     variant (spec: "stamps appear at full opacity on press instead of
- *     tracking drag"). The variant's `custom` is the deck's exit answer.
+ *     card exits, then the matching stamp appears at full opacity via the exit
+ *     variant. The variant's `custom` is the deck's exit answer.
  */
 export function SwipeStamp({
   kind,
@@ -38,7 +37,7 @@ export function SwipeStamp({
 }) {
   const confirm = kind === "confirm";
   const Icon: LucideIcon = isHeadline ? (confirm ? ShieldCheck : WheatStrike) : confirm ? Check : X;
-  // Headline stamps ride on the SOFT safety fills (kept light in BOTH themes —
+  // Headline stamps ride on the soft safety fills (kept light in both themes —
   // styling.md dark-mode rule) so the strong-colour text stays WCAG AA in dark
   // mode too; `text-celiac-safe` on the dark surface would not be. Fact stamps
   // are neutral on the card surface — never the safety verdict colours.

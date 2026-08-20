@@ -6,7 +6,7 @@ import { RecentIncidentBanner } from "./RecentIncidentBanner";
 describe("RecentIncidentBanner", () => {
   it("announces via a polite live region carrying the incident text label (not colour alone)", () => {
     render(<RecentIncidentBanner occurredOn="2026-06-01" />);
-    // A SAFETY-CRITICAL "recent harm" warning is an ARIA live region (role=status,
+    // A safety-critical "recent harm" warning is an ARIA live region (role=status,
     // aria-live=polite) so assistive tech announces it when it appears — not a
     // passive landmark region.
     const banner = screen.getByRole("status", { name: "Recent incident warning" });
@@ -17,10 +17,10 @@ describe("RecentIncidentBanner", () => {
   });
 
   it("keeps the pill to the plain, non-wrapping 'Recent incident' label", () => {
-    // Regression for the mobile 3-line wrap bug: the pill used to interpolate
-    // the relative recency into its own label ("Recent incident · 2 days ago"),
-    // which wrapped on narrow screens. It must now render the exact default
-    // label with a nowrap guard, and never the interpolated form.
+    // Regression guard for a mobile 3-line wrap: an interpolated pill label
+    // ("Recent incident · 2 days ago") wraps on narrow screens. The pill must
+    // render the exact default label with a nowrap guard, never the
+    // interpolated form.
     const { container } = render(
       <RecentIncidentBanner
         occurredOn="2026-06-01"

@@ -13,9 +13,9 @@ interface ClaimTrustSummaryProps {
   attribute: ClaimAttribute;
   /**
    * The claim's aggregate — visible confirm/dispute counts + recency, plus the
-   * optional curator-bot `suggested` flag (AUB-31). `suggested` is optional so a
-   * bare `{confirm,dispute,lastConfirmed}` Pick still type-checks; when true (and
-   * there is no real evidence) the row shows the "Suggested by Aubrey's Bot" badge.
+   * optional curator-bot `suggested` flag. `suggested` is optional so a bare
+   * `{confirm,dispute,lastConfirmed}` Pick still type-checks; when true (and there
+   * is no real evidence) the row shows the "Suggested by Aubrey's Bot" badge.
    */
   aggregate: Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt"> &
     Partial<Pick<ClaimAggregate, "suggested">>;
@@ -30,20 +30,18 @@ interface ClaimTrustSummaryProps {
 }
 
 /**
- * Transparent per-claim trust summary (issue #29, ADR-007) — a roll-up of
- * VISIBLE evidence, never a secret score. Renders e.g.
+ * Transparent per-claim trust summary (ADR-007) — a roll-up of visible evidence,
+ * never a secret score. Renders e.g.
  *
  *   Dedicated fryer
  *   8 confirm / 1 dispute · last confirmed 3 weeks ago
  *
- * Every value shown is derivable from evidence the user can also see (the
- * confirm/dispute counts are of the visible attestations; the recency is the
- * stored "last confirmed" timestamp). See {@link summarizeClaim}.
+ * Every value shown is derivable from evidence the user can also see. See
+ * {@link summarizeClaim}.
  *
- * REUSABLE / DROP-IN: this component takes only an `attribute` + `aggregate`
- * (no DB, no route coupling), so the browse-list cards (#33) can render the
- * same summary without change. Accessibility: meaning is carried in text +
- * (for a stale claim) an explicit "Needs update" word — never colour alone.
+ * Takes only `attribute` + `aggregate` (no DB, no route coupling), so any surface
+ * can render the same summary. Meaning is carried in text + (for a stale claim) an
+ * explicit "Needs update" word — never colour alone.
  */
 export function ClaimTrustSummaryRow({
   attribute,
@@ -60,8 +58,8 @@ export function ClaimTrustSummaryRow({
       <p className="text-body font-semibold text-foreground">{summary.label}</p>
 
       {/* Every attribute carries a one-line descriptor — clarifying confirm/dispute
-          meaning for the headline (e.g. "Celiac-safe", issue #175) and stating the
-          plain fact for the rest — so a vote is never ambiguous. */}
+          meaning for the headline and stating the plain fact for the rest — so a
+          vote is never ambiguous. */}
       <p className="text-caption text-muted-foreground">{description}</p>
 
       {summary.hasEvidence ? (
@@ -77,15 +75,13 @@ export function ClaimTrustSummaryRow({
           ) : null}
         </p>
       ) : summary.suggested ? (
-        // Curator-bot suggestion (AUB-31): a starter label seeded by "Aubrey's
-        // Bot" from public info, NOT community evidence. Renders through the ONE
-        // shared `SuggestedRing` gradient primitive + the shared `Badge` shell at
-        // the `BADGE_FAMILY_SIZE`, so it is the SAME suggested treatment as the
-        // per-claim `ClaimBadge` suggested variant (AUB-227) — no hand-rolled
-        // gradient/chip duplication. The content still DIFFERS by design: this is
-        // the full-text provenance chip (Sparkles + "Suggested by Aubrey's Bot"),
-        // whereas `ClaimBadge` keeps the attribute's own icon + an "AI" marker
-        // (AUB-225). It clears the instant a real user confirms or disputes below.
+        // Curator-bot suggestion: a starter label seeded by "Aubrey's Bot" from
+        // public info, not community evidence. Renders through the shared
+        // `SuggestedRing` primitive + `Badge` shell at `BADGE_FAMILY_SIZE`, the same
+        // suggested treatment as `ClaimBadge`'s suggested variant. The content
+        // differs by design: this is the full-text provenance chip, whereas
+        // `ClaimBadge` keeps the attribute's icon + an "AI" marker. It clears the
+        // instant a real user confirms or disputes.
         <SuggestedRing>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -105,9 +101,9 @@ export function ClaimTrustSummaryRow({
           </Tooltip>
         </SuggestedRing>
       ) : (
-        // Honest empty state: a claim exists but no one has attested yet. We
-        // never fabricate a verdict (a celiac could be hurt) — domain.md. The
-        // "Not yet attested" lead mirrors the browse card's empty chip (AUB-131).
+        // Honest empty state: a claim exists but no one has attested yet. Never
+        // fabricate a verdict (a celiac could be hurt) — domain.md. The lead
+        // mirrors the browse card's empty chip.
         <p className="text-body-sm text-muted-foreground">
           <span className="font-medium text-foreground">Not yet attested</span>, no confirmations or
           disputes yet

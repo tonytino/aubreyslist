@@ -11,13 +11,13 @@ import { describe, expect, it } from "vitest";
 import { DirectoryPager } from "./DirectoryPager";
 
 /**
- * Tests for the visible browse pager (AUB-200). The pager derives an honest
- * "Page N of M" from the server response's `total`/`pageSize`, renders real
- * `<Link>`s that write `?page=` (carrying every other param via the functional
- * search updater), uses REAL disabled semantics (`<button disabled>`, not a
- * colour-only cue) at the boundaries, and hides entirely when there is only one
- * page. It uses TanStack Router's `Link`, so we mount a minimal in-memory router
- * (mirrors DirectoryList.test.tsx).
+ * Tests for the visible browse pager. The pager derives an honest "Page N of
+ * M" from the server response's `total`/`pageSize`, renders real `<Link>`s
+ * that write `?page=` (carrying every other param via the functional search
+ * updater), uses real disabled semantics (`<button disabled>`, not a
+ * colour-only cue) at the boundaries, and hides entirely when there is only
+ * one page. It uses TanStack Router's `Link`, so it mounts inside a minimal
+ * in-memory router (mirrors DirectoryList.test.tsx).
  */
 
 function renderInRouter(element: ReactNode, initialPath = "/") {
@@ -86,7 +86,7 @@ describe("DirectoryPager", () => {
   });
 
   it("on a middle page: both directions are live links", async () => {
-    // NOTE: the minimal test router has no stripSearchParams middleware, so
+    // The minimal test router has no stripSearchParams middleware, so
     // `page=1` appears literally here; in the app the route strips it to `/`.
     renderInRouter(<DirectoryPager page={2} pageSize={20} total={45} />);
 

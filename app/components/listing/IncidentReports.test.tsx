@@ -5,11 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Incident } from "~/db/schema";
 
 /**
- * Component tests for the "Incident reports" body (#30 + #32): the signed-out
- * gate, the list-refresh-after-submit path, and the OWNER-ONLY edit/retract
- * controls. The incident server functions are mocked — the test only asserts the
- * component's behaviour (gate + permission visibility + query invalidation), not
- * the real DB write.
+ * Component tests for the "Incident reports" body: the signed-out gate, the
+ * list-refresh-after-submit path, and the owner-only edit/retract controls. The
+ * incident server functions are mocked — the test only asserts the component's
+ * behaviour (gate + permission visibility + query invalidation), not the real DB
+ * write.
  */
 const submitIncidentMock = vi.fn((_args: unknown) => Promise.resolve({} as Incident));
 const updateIncidentMock = vi.fn((_args: unknown) => Promise.resolve({} as Incident));

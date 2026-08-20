@@ -4,9 +4,9 @@ import { BROWSE_SORT_OPTIONS } from "~/listings/sort";
 import { SortSelector } from "./SortSelector";
 
 /**
- * Tests for the sort selector chip (AUB-198). A single accessible `<select>`
- * styled as a chip — mirroring DistanceSelector — that surfaces the server-side
- * `?sort=` control in the filter chip row now that the Filters sheet is retired.
+ * Tests for the sort selector chip. A single accessible `<select>` styled as a
+ * chip — mirroring DistanceSelector — that surfaces the server-side `?sort=`
+ * control in the filter chip row.
  */
 
 describe("SortSelector", () => {

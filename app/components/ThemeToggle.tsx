@@ -28,18 +28,17 @@ function readAppliedTheme(): Theme {
  * with no hydration mismatch. The page's own theme is already correct pre-paint
  * via that script; only the control's icon/label reconciles here.
  *
- * Exposed as a hook so BOTH the standalone header button (`ThemeToggle`, shown
- * on `sm:`+) and the in-menu theme row (`SiteMenu`, mobile) drive the same
- * behaviour and copy from one place — no drift between the two surfaces.
+ * Exposed as a hook so both the standalone header button (`ThemeToggle`,
+ * `sm:`+) and the in-menu theme row (`SiteMenu`, mobile) drive the same
+ * behaviour and copy from one place.
  *
- * KNOWN COSMETIC LIMITATION (intentionally not fixed): each call site owns its
- * OWN `useState`, so toggling in one instance does not update the other's
- * icon/label. This only surfaces if you resize ACROSS the 640px breakpoint AFTER
- * toggling in the now-hidden instance (a devtools-only edge case) — the actual
- * page theme is always correct (it lives on the `<html>` class, not this state),
- * and the stale control reconciles to the applied theme on its next mount. Only
- * one of the two instances is ever visible at a time, so a shared store /
- * cross-instance listener would add live-state machinery for no user-facing win.
+ * Known cosmetic limitation, intentionally unfixed: each call site owns its own
+ * `useState`, so toggling in one instance does not update the other's
+ * icon/label. It only surfaces when resizing across the 640px breakpoint after
+ * toggling in the hidden instance. The page theme is always correct (it lives
+ * on the `<html>` class), and the stale control reconciles on its next mount.
+ * Only one instance is ever visible, so shared state would add machinery for no
+ * user-facing win.
  */
 export function useThemeToggle() {
   const [theme, setTheme] = useState<Theme>("light");
@@ -84,8 +83,8 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       // Touch ergonomics: >= 44px hit area on coarse pointers (the icon-size
-      // Button is 36px, fine for a mouse but tight for a thumb), matching the
-      // adjacent hamburger + avatar triggers (#269). Desktop stays compact.
+      // Button is 36px, tight for a thumb), matching the adjacent hamburger +
+      // avatar triggers. Desktop stays compact.
       className="pointer-coarse:size-11"
       aria-label={label}
       title={label}

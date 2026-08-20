@@ -10,10 +10,10 @@ import { describe, expect, it } from "vitest";
 import { SiteFooter } from "./SiteFooter";
 
 /**
- * Component tests for `SiteFooter` (AUB-142). Mirrors `SiteHeader.test.tsx`:
- * the footer renders TanStack Router `<Link>`s, so its link targets must exist
- * as routes in the test tree, and it's exercised through a real `RouterProvider`
- * rather than a raw render.
+ * Component tests for `SiteFooter`. Mirrors `SiteHeader.test.tsx`: the footer
+ * renders TanStack Router `<Link>`s, so its link targets must exist as routes
+ * in the test tree, and it's exercised through a real `RouterProvider` rather
+ * than a raw render.
  */
 async function renderFooter() {
   const rootRoute = createRootRoute({
@@ -63,9 +63,9 @@ describe("SiteFooter", () => {
   it("does not link to any not-yet-existing legal route", async () => {
     await renderFooter();
 
-    // AUB-142: the legal-links slot (privacy/terms/disclaimer/moderation/
-    // contact) is reserved but unpopulated until those routes ship — asserting
-    // their absence here guards against a future accidental 404 link.
+    // The legal-links slot (privacy/terms/disclaimer/moderation/contact) is
+    // reserved but unpopulated until those routes ship — asserting their
+    // absence guards against an accidental 404 link.
     for (const label of [
       "Privacy policy",
       "Terms of service",

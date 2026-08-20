@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { SearchChip } from "./SearchChip";
 
 /**
- * Tests for the search-as-chip control (user feedback #5). The chip collapses/
- * expands and, when a query is applied, reads as the active (brand) filter chip
- * carrying the query text + a clear affordance.
+ * Tests for the search-as-chip control. The chip collapses/expands and, when a
+ * query is applied, reads as the active (brand) filter chip carrying the query
+ * text + a clear affordance.
  */
 
 describe("SearchChip", () => {
@@ -28,7 +28,7 @@ describe("SearchChip", () => {
 
   it("focuses the input synchronously on click (iOS double-tap fix)", () => {
     // Regression test for the iOS Safari double-tap bug: focus must land inside
-    // the SAME synchronous click handler, not a deferred `requestAnimationFrame`
+    // the same synchronous click handler, not a deferred `requestAnimationFrame`
     // callback. jsdom never fires a real rAF during a synchronous `fireEvent`, so
     // this only passes if `expand()` focuses synchronously (via `flushSync`).
     render(<SearchChip value="" onChange={() => {}} />);

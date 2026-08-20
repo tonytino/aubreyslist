@@ -22,7 +22,7 @@ export type FlagTarget =
   | { target: "incident"; incidentId: string };
 
 /**
- * A login-gated "Flag" affordance for a listing, claim, or incident (#39).
+ * A login-gated "Flag" affordance for a listing, claim, or incident.
  *
  * Anonymous viewers see nothing — flagging is a write, and writes are
  * login-gated (the server function re-gates regardless, so hiding the control is
@@ -39,12 +39,11 @@ export function FlagControl(
     isSignedIn: boolean;
     label?: string;
     /**
-     * `"inline"` (default) renders the small text "Flag" trigger that expands
-     * into the reason form in place — used on claim/incident rows and anywhere
-     * a text affordance fits. `"icon"` (AUB-131) renders a compact icon button +
-     * tooltip whose reason form opens in a portaled dialog instead, so it can
-     * live in tight spots (the listing hero's overlay) without the form
-     * overflowing. Both share the same login gate + `submitFlag` write.
+     * `"inline"` (default) renders the small text "Flag" trigger that expands into
+     * the reason form in place. `"icon"` renders a compact icon button + tooltip
+     * whose reason form opens in a portaled dialog, so it fits tight spots (the
+     * listing hero's overlay) without the form overflowing. Both share the same
+     * login gate + `submitFlag` write.
      */
     variant?: "inline" | "icon";
     /** Classes for the `"icon"` variant's trigger button (e.g. the hero's circular chip). */
@@ -90,9 +89,9 @@ export function FlagControl(
     setReason("");
   };
 
-  // The reason-capture form, shared by BOTH presentations. In `"inline"` it
-  // renders in place; in `"icon"` it is portaled inside a dialog. Submit/cancel
-  // manage `isOpen`, so it closes the dialog too.
+  // The reason-capture form, shared by both presentations. In `"inline"` it renders
+  // in place; in `"icon"` it is portaled inside a dialog. Submit/cancel manage
+  // `isOpen`, so it closes the dialog too.
   const reasonForm = (
     <form
       aria-label={accessibleLabel}
@@ -148,8 +147,8 @@ export function FlagControl(
     </form>
   );
 
-  // Icon presentation (AUB-131): a compact icon button + tooltip; the reason form
-  // opens in a portaled dialog so it never overflows a tight host (the hero).
+  // Icon presentation: a compact icon button + tooltip; the reason form opens in a
+  // portaled dialog so it never overflows a tight host (the hero).
   if (variant === "icon") {
     return (
       <>

@@ -1,14 +1,14 @@
 /**
- * Pure bounds/camera math for the real directory map (AUB-111).
+ * Pure bounds/camera math for the real directory map.
  *
  * `boundsForEntries` computes the lat/lng bounding box of the current result
  * pins (the initial camera, the recenter-FAB target, and the refit-on-filter
  * target all fit this box). `cameraForBounds` converts that box into an
- * explicit `{ center, zoom }` for `map.moveCamera(...)` — the INSTANT camera
+ * explicit `{ center, zoom }` for `map.moveCamera(...)` — the instant camera
  * write used when the visitor prefers reduced motion (Maps JS `fitBounds` can
  * animate; `moveCamera` never does).
  *
- * CLIENT-SAFE + PURE: no `db`/server import, no React, no `google.maps`
+ * Client-safe and pure: no `db`/server import, no React, no `google.maps`
  * runtime dependency — just Web-Mercator arithmetic, so it is trivially
  * unit-testable and safe in the browse client bundle (same contract as
  * `map-projection.ts`).
@@ -115,7 +115,7 @@ function worldXToLng(x: number): number {
  * the never-animated `map.moveCamera(...)` (reduced-motion path).
  *
  * Asymmetric padding shifts the returned center so the bounds sit centred in
- * the REMAINING content box (e.g. the directory map pads the bottom heavily so
+ * the remaining content box (e.g. the directory map pads the bottom heavily so
  * pins clear the opaque carousel band).
  */
 export function cameraForBounds(
@@ -143,7 +143,7 @@ export function cameraForBounds(
 
   // Center of the padded content box in viewport pixels vs. the viewport's own
   // center: the difference (converted to world units at this zoom) is how far
-  // the CAMERA center must shift so the bounds land centred in the content box.
+  // the camera center must shift so the bounds land centred in the content box.
   const offsetX = (size.width / 2 - (padding.left + effWidth / 2)) / scale;
   const offsetY = (size.height / 2 - (padding.top + effHeight / 2)) / scale;
 

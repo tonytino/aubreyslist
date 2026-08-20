@@ -4,17 +4,17 @@ import { CLAIM_ATTRIBUTES } from "~/listings/taxonomy";
 import type { AnswerMap } from "./AddListingWizard";
 
 /**
- * The 3-node progress rail for the add-listing wizard (collapsed for the
- * ClaimCardDeck, AUB-231): find-the-place → ONE attest stage (the deck keeps
- * its own internal "n of 5" indicator) → review. Each node is a button for
- * back-navigation; forward jumps are gated until a place is chosen (there is
- * nothing to attest before then). Status is derived — never alarming:
+ * The 3-node progress rail for the add-listing wizard: find-the-place → one
+ * attest stage (the deck keeps its own internal "n of 5" indicator) → review.
+ * Each node is a button for back-navigation; forward jumps are gated until a
+ * place is chosen (there is nothing to attest before then). Status is derived
+ * — never alarming:
  *
  *   current  — brand-filled (the stage you're on)
  *   done     — celiac-safe green + check (a chosen place, or every attribute
  *              answered with confirm/dispute)
- *   skipped  — muted DASHED (every attribute answered but at least one skip —
- *              a valid, honest choice, NOT incident-red)
+ *   skipped  — muted dashed (every attribute answered but at least one skip —
+ *              a valid, honest choice, not incident-red)
  *   todo     — neutral border + number (any attribute still unanswered)
  *
  * An `aria-live="polite"` line announces "Step N of 3 · <name>" as the stage

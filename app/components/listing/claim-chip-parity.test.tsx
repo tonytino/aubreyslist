@@ -11,8 +11,8 @@ import { ClaimVoteControls } from "./ClaimVoteControls";
 
 // The vote toggle imports the attestation server fns; stub them so this pure
 // render-parity test never touches the network. Behaviour (clicks, toasts,
-// aria-pressed) is covered in ClaimVoteControls.test.tsx — here we only assert
-// WHAT the confirm chip renders, to prove it shares the family primitive.
+// aria-pressed) is covered in ClaimVoteControls.test.tsx — here only what the
+// confirm chip renders is asserted, to prove it shares the family primitive.
 vi.mock("~/server/attestations/attestations.fn", () => ({
   submitVote: vi.fn(() => Promise.resolve()),
   removeVote: vi.fn(() => Promise.resolve()),
@@ -20,21 +20,16 @@ vi.mock("~/server/attestations/attestations.fn", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 /**
- * PARITY GUARD (AUB-227) — the "means to maintain consistency" the issue asks for.
+ * Parity guard. The per-claim chip is rendered by more than one surface: the
+ * add-listing review `FactOutcomeChip`, the listing-detail `ClaimBadge`, and the
+ * interactive vote toggle's confirm button. All draw their per-attribute icon +
+ * label from the single source in `~/trust/summary` and share the one badge family
+ * size (`BADGE_FAMILY_SIZE`). This test fails if any surface drifts — a hard-coded
+ * glyph, a hand-tuned size, a vote toggle re-hand-rolled off the shared primitive.
  *
- * The per-claim chip is rendered by more than one surface: the add-listing review
- * `FactOutcomeChip`, the listing-detail `ClaimBadge`, AND — since V2 deep-unified
- * them onto the shared `ClaimChip` primitive — the interactive vote toggle's
- * confirm button. All draw their per-attribute ICON + attribute LABEL from the
- * SINGLE source in `~/trust/summary` and share the ONE badge family size
- * (`BADGE_FAMILY_SIZE`). This test FAILS if any surface drifts — e.g. someone
- * hard-codes a different glyph in the review step, hand-tunes a chip's size, or
- * re-hand-rolls the vote toggle off the shared primitive — so they can't silently
- * diverge again.
- *
- * It is intentionally NOT vacuous: it extracts the ACTUAL lucide glyph token that
- * each surface renders and the ACTUAL family-size tokens each applies, then
- * asserts they match the shared source. Swap one out and the assertion breaks.
+ * Intentionally not vacuous: it extracts the actual lucide glyph token each
+ * surface renders and the actual family-size tokens each applies, then asserts
+ * they match the shared source. Swap one out and the assertion breaks.
  */
 
 /** Wrap a vote-toggle render in a QueryClient — its mutations need the provider. */
@@ -67,7 +62,7 @@ function lucideToken(svg: SVGElement | null): string {
  */
 const FAMILY_TOKENS = ["rounded-chip", "px-2.5", "py-1", "text-body-sm", "font-medium"] as const;
 
-// Sanity: the tokens we check are genuinely the shared constant's, so this guard
+// Sanity: the tokens checked are genuinely the shared constant's, so this guard
 // tracks BADGE_FAMILY_SIZE rather than a stale hand-copied list.
 for (const token of FAMILY_TOKENS) {
   if (!BADGE_FAMILY_SIZE.includes(token)) {
@@ -139,7 +134,7 @@ describe("claim-chip parity (add-listing review ⇄ listing detail)", () => {
     const confirmed = render(<FactOutcomeChip attribute="dedicated_fryer" confirmed />);
     const disputed = render(<FactOutcomeChip attribute="dedicated_fryer" confirmed={false} />);
 
-    // The outcome WORD is present and differs — meaning never rests on colour.
+    // The outcome word is present and differs — meaning never rests on colour.
     expect(confirmed.container.querySelector('[data-testid="fact-confirmed"]')).toHaveTextContent(
       "Confirmed"
     );
@@ -158,16 +153,16 @@ describe("claim-chip parity (add-listing review ⇄ listing detail)", () => {
     expect(disputedChip?.querySelector("svg")).not.toBeNull();
     expect(confirmedChip?.getAttribute("class")).toContain("bg-brand-soft");
     expect(disputedChip?.getAttribute("class")).toContain("bg-muted");
-    // Neither borrows the celiac-safe / gluten-friendly SAFETY colours — a plain
+    // Neither borrows the celiac-safe / gluten-friendly safety colours — a plain
     // fact must never read as a safety verdict.
     expect(confirmedChip?.getAttribute("class")).not.toContain("celiac-safe");
     expect(disputedChip?.getAttribute("class")).not.toContain("gluten-friendly");
   });
 
-  // V2 deep-unify: the interactive vote toggle now renders THROUGH the same
-  // `ClaimChip` primitive as the static chips. These assertions FAIL if the vote
-  // toggle is ever re-hand-rolled off the shared chip — the confirm affordance
-  // must keep the family icon + size, proving the unify is real, not cosmetic.
+  // The interactive vote toggle renders through the same `ClaimChip` primitive as
+  // the static chips. These assertions fail if the vote toggle is ever
+  // re-hand-rolled off the shared chip — the confirm affordance must keep the
+  // family icon + size.
   it.each(FACT_ATTRIBUTES)(
     "renders the vote toggle's confirm chip on the SAME shared primitive (icon + family size) for '%s'",
     (attribute) => {
@@ -176,7 +171,7 @@ describe("claim-chip parity (add-listing review ⇄ listing detail)", () => {
         render(<Icon aria-hidden="true" />).container.querySelector("svg")
       );
 
-      // The confirm affordance IS the attribute's own badge (its role name is the
+      // The confirm affordance is the attribute's own badge (its role name is the
       // attribute label), and it renders as a real native <button>.
       const label = claimAttributeLabel(attribute);
       const { getByRole } = render(renderVoteControls(attribute));

@@ -12,37 +12,24 @@ interface RecentIncidentBannerProps {
 }
 
 /**
- * Prominent warning shown near the top of a listing when a RECENT "got
- * glutened" incident exists — fresh harm is never buried beneath older
- * confirmations (ADR-007, domain.md → Trust Model: "Recent incidents flag the
- * summary").
+ * Prominent warning shown near the top of a listing when a recent "got glutened"
+ * incident exists — fresh harm is never buried beneath older confirmations
+ * (ADR-007, domain.md trust model).
  *
- * Accessibility: a labelled `<output>` polite live region (implicit
- * `role="status"`, `aria-live="polite"`) carrying the `incident` safety signal
- * (warning-triangle icon + the "Recent incident" text label + colour) — meaning
- * never rests on colour alone (docs/agents/styling.md, NON-NEGOTIABLE). This is a
- * SAFETY-CRITICAL "recent harm" warning, so it is an ARIA live region (not a
- * passive `role="region"` landmark) — assistive tech announces it when it
- * appears, including when it materialises post-navigation/filter on the client.
- * We use a polite `status` rather than an assertive `alert` because it is also
- * SSR'd on load (present, not an interruptive live update); `alert` stays
- * reserved for the post-submit error message in the report form. `<output>` is
- * the project's semantic role=status element (see listings.index.tsx,
- * FlagControl.tsx), so no explicit `role` is needed.
+ * Accessibility: a labelled `<output>` polite live region (implicit `role="status"`)
+ * carrying the `incident` safety signal (icon + "Recent incident" label + colour) —
+ * meaning never rests on colour alone (docs/agents/styling.md). A live region, not
+ * a passive landmark, so assistive tech announces it when it materialises
+ * post-navigation/filter on the client. Polite `status`, not assertive `alert`,
+ * because it is also SSR'd on load; `alert` stays reserved for the report form's
+ * post-submit error.
  *
- * The pill itself carries ONLY the plain "Recent incident" label (default
- * `SafetySignal` label) with `whitespace-nowrap` — the relative recency ("2 days
- * ago") used to be interpolated into the pill text ("Recent incident · 2 days
- * ago"), which wrapped to three lines on mobile and read as broken
- * (screenshot-confirmed owner feedback). The recency now lives in the body copy
- * instead, alongside the absolute date, where it wraps naturally. Because the
- * whole `<output>` is one polite live region, screen readers still announce
- * BOTH the incident (pill) and its recency (body sentence) together — the
- * accessibility contract is preserved, just relocated.
+ * The pill carries only the plain "Recent incident" label with `whitespace-nowrap`;
+ * the relative recency lives in the body copy alongside the absolute date, where it
+ * wraps naturally. The whole `<output>` is one live region, so screen readers still
+ * announce the pill and the recency sentence together.
  *
- * Kept as its own small, prop-only component so the same recent-incident cue can
- * be reused by the browse list-card signal that lands with issue #33 (the browse
- * list does not exist yet).
+ * A small, prop-only component so the same cue is reusable on other surfaces.
  */
 export function RecentIncidentBanner({ occurredOn, nowMs }: RecentIncidentBannerProps) {
   const relative = relativeIncidentDate(
@@ -51,16 +38,16 @@ export function RecentIncidentBanner({ occurredOn, nowMs }: RecentIncidentBanner
   );
   return (
     // `<output>` is the project's semantic polite-live-region element (implicit
-    // role="status"); used here so the warning is announced when it appears. We
-    // keep aria-live explicit and add an accessible name for the announcement.
+    // role="status"). aria-live stays explicit, with an accessible name for the
+    // announcement.
     <output
       aria-live="polite"
       aria-label="Recent incident warning"
       className="flex flex-col gap-2 rounded-card border border-incident/30 border-l-4 border-l-incident bg-incident-soft p-gutter sm:flex-row sm:items-center sm:gap-3"
     >
-      {/* Plain "Recent incident" label only — `whitespace-nowrap` keeps the pill
-          on a single line at every width; the recency detail moved to the body
-          sentence below, which wraps naturally instead of breaking the pill. */}
+      {/* Plain "Recent incident" label only — `whitespace-nowrap` keeps the pill on
+          one line at every width; the recency detail lives in the body sentence,
+          which wraps naturally instead of breaking the pill. */}
       <SafetySignal state="incident" variant="solid" className="self-start whitespace-nowrap" />
       <p className="text-body-sm text-incident">
         A diner reported getting glutened here on {formatIncidentDate(occurredOn)} ({relative}).

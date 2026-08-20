@@ -24,26 +24,26 @@ import type { QueueItem, QueueTarget, QueueTargetType } from "~/server/moderatio
 import { moderationQueueQueryKey, moderationQueueQueryOptions } from "./moderation-queue-query";
 
 /**
- * The moderation-queue surface inside the admin panel (issue #40, ACTIONS #41).
+ * The moderation-queue surface inside the admin panel.
  *
- * Lists OPEN flags for moderators/admins to triage — each with its target
- * (type + human label), the reporter, the reason, and the date filed. Data comes
- * from TanStack Query (the route loader prefetches it; this reads the hydrated
- * cache), per the API doc's "no useEffect + useState for data fetching" rule.
+ * Lists open flags for moderators/admins to triage — each with its target
+ * (type + human label), the reporter, the reason, and the date filed. Data
+ * comes from TanStack Query (the route loader prefetches it; this reads the
+ * hydrated cache), per the API doc's "no useEffect + useState for data
+ * fetching" rule.
  *
- * Moderation ACTIONS (#41): each row now carries real Dismiss / Hide / Remove
- * controls wired through `*.fn.ts` server functions via TanStack Query
- * `useMutation`. The server re-gates every action to moderator+ (admins pass;
- * `user` 403; anon 401) and validates input, so the UI is convenience only — it
- * is never the access control. On success the queue is invalidated and refetched,
- * so the acted-on flag (now resolved/dismissed) drops out of the open-flags view.
- * (`restore` exists in the action layer for un-hiding content, but is not
- * surfaced HERE because the open-flags queue only ever shows still-visible,
- * un-acted content — there is nothing to restore in this view.)
+ * Each row carries Dismiss / Hide / Remove controls wired through `*.fn.ts`
+ * server functions via `useMutation`. The server re-gates every action to
+ * moderator+ (admins pass; `user` 403; anon 401) and validates input, so the
+ * UI is convenience only — never the access control. On success the queue is
+ * invalidated and refetched, so the acted-on flag drops out of the open-flags
+ * view. `restore` exists in the action layer for un-hiding content but is not
+ * surfaced here: the open-flags queue only shows still-visible, un-acted
+ * content, so there is nothing to restore.
  *
- * Accessibility: the per-item target type AND every action are conveyed by an
- * icon SHAPE plus a TEXT label (never colour alone), mirroring `SafetySignal`'s
- * contract.
+ * Accessibility: the per-item target type and every action are conveyed by an
+ * icon shape plus a text label (never colour alone), mirroring
+ * `SafetySignal`'s contract.
  */
 export function ModerationQueue() {
   const { data } = useSuspenseQuery(moderationQueueQueryOptions());
@@ -142,21 +142,20 @@ function buildActionPayload(target: QueueTarget, flagId: string): ActionPayload 
 }
 
 /**
- * Dismiss / Hide / Remove controls for one open flag (#41).
+ * Dismiss / Hide / Remove controls for one open flag.
  *
  * Each calls its `*.fn.ts` server function (which re-gates to moderator+ and
  * validates server-side) via `useMutation`, passing the prompting `flagId` and
  * the exclusive-arc target. On success the whole queue query is invalidated so
- * the now-resolved/dismissed flag drops out — a simple, always-correct refresh
- * (the acted-on row leaves the open-flags set). An inline alert surfaces any
- * error; controls disable while a mutation is in flight.
+ * the resolved/dismissed flag drops out — a simple, always-correct refresh. An
+ * inline alert surfaces any error; controls disable while a mutation is in
+ * flight.
  *
  * Dismiss (which only clears the flag, leaving the content untouched) fires
- * directly. Hide and Remove DO change what the public sees, so they are gated
- * behind a confirmation `Dialog` that names the consequence before the existing
- * mutation fires — Remove uses the `destructive` confirm variant. The dialog
- * only gates the click; it is NOT the authorization (the server fn re-gates to
- * moderator+ either way).
+ * directly. Hide and Remove change what the public sees, so they are gated
+ * behind a confirmation `Dialog` that names the consequence — Remove uses the
+ * `destructive` confirm variant. The dialog only gates the click; it is not
+ * the authorization (the server fn re-gates to moderator+ either way).
  */
 function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget }) {
   const queryClient = useQueryClient();
@@ -252,7 +251,7 @@ function QueueActions({ flagId, target }: { flagId: string; target: QueueTarget 
 
 /**
  * A moderation action whose click is gated behind a confirmation `Dialog` that
- * names the consequence (icon SHAPE + visible TEXT label, never colour alone).
+ * names the consequence (icon shape + visible text label, never colour alone).
  * The dialog only gates the click — the underlying mutation (and the server-side
  * moderator+ gate it re-runs) is unchanged. Destructive actions pass
  * `variant="destructive"` for both the trigger and the confirm button.
@@ -429,7 +428,7 @@ const TARGET_TOOLTIP: Record<QueueTargetType, string> = {
 };
 
 /**
- * Target-type chip: icon SHAPE + visible TEXT label (never colour alone), with a
+ * Target-type chip: icon shape + visible text label (never colour alone), with a
  * supplementary `Tooltip` naming what kind of thing was flagged. `tabIndex={0}`
  * makes the chip reachable on keyboard focus as well as hover; the label already
  * carries the meaning, so the tooltip is purely supplementary.

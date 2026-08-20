@@ -35,33 +35,28 @@ interface IncidentReportsProps {
   /** A listing's incidents, most-recent first (from the route loader / query). */
   incidents: readonly Incident[];
   /**
-   * The signed-in viewer's user id, or `null` when anonymous. Drives the
-   * submission form gate AND the OWNER-ONLY edit/retract controls (#32): a
-   * control renders only on an incident whose `userId` matches `viewerId`. This
-   * is UX only — the writes are re-gated + ownership-checked server-side.
+   * The signed-in viewer's user id, or `null` when anonymous. Drives the submission
+   * form gate and the owner-only edit/retract controls. UX only — writes are re-gated
+   * and ownership-checked server-side.
    */
   viewerId: string | null;
   /**
-   * Reference instant for the per-row "Recent" recency tag (AUB-131), resolved
-   * once server-side and threaded down so SSR and client agree. Defaults to the
-   * current time when omitted.
+   * Reference instant for the per-row "Recent" tag, resolved once server-side and
+   * threaded down so SSR and client agree. Defaults to the current time.
    */
   now?: Date | undefined;
 }
 
 /**
- * The "Incident reports" body: the list of a listing's "got glutened" reports
- * (most-recent first, with dates + optional severity/note) plus the submission
- * form for signed-in visitors. Rendered in the listing-detail trust section
- * (issue #30; the original `TrustPlaceholder` scaffold was removed once real
- * claim/incident evidence landed — EPIC 4).
+ * The "Incident reports" body: a listing's "got glutened" reports (most-recent first)
+ * plus the submission form for signed-in visitors.
  *
- * Recent harm is also surfaced prominently at the top of the page via
- * `RecentIncidentBanner`; this section is the full, always-visible evidence
- * underneath (ADR-007: the summary is a roll-up of visible evidence).
+ * Recent harm is also surfaced at the top of the page via `RecentIncidentBanner`; this
+ * section is the full, always-visible evidence underneath (ADR-007: the summary is a
+ * roll-up of visible evidence).
  *
- * Owners may edit or retract their OWN reports inline (issue #32). The controls
- * appear only on the viewer's own incidents; ownership is enforced server-side.
+ * Owners may edit or retract their own reports inline; ownership is enforced
+ * server-side.
  */
 export function IncidentReports({ listingId, incidents, viewerId, now }: IncidentReportsProps) {
   return (
@@ -106,7 +101,7 @@ function IncidentList({
           incident={incident}
           // Owner-only controls: render edit/retract iff the viewer owns this row.
           isOwn={viewerId !== null && viewerId === incident.userId}
-          // Any signed-in viewer can flag a report (#39); the server re-gates.
+          // Any signed-in viewer can flag a report; the server re-gates.
           isSignedIn={viewerId !== null}
           now={now}
         />
@@ -116,14 +111,12 @@ function IncidentList({
 }
 
 /**
- * Per-severity colour + tooltip for the incident SEVERITY tag (AUB-131).
+ * Per-severity colour + tooltip for the incident severity tag.
  *
- * Severity is a yellow→orange→red scale (Mild → Moderate → Severe) and is the
- * coloured focus of a report row. It is NOT a safety signal — it grades how bad
- * ONE report was — so it uses the dedicated `--color-severity-*` tokens, not the
- * safety palette. Every tag pairs the colour with the warning-triangle icon AND
- * the visible text label, so meaning survives greyscale; the tooltip only adds a
- * supplementary gloss.
+ * Severity grades how bad one report was — not a safety signal — so it uses the
+ * dedicated `--color-severity-*` tokens, not the safety palette. Every tag pairs the
+ * colour with the icon and visible text label, so meaning survives greyscale; the
+ * tooltip is supplementary.
  */
 const SEVERITY_TAG: Record<IncidentSeverity, { className: string; tip: string }> = {
   mild: {
@@ -160,9 +153,9 @@ function SeverityTag({ severity }: { severity: IncidentSeverity }) {
 }
 
 /**
- * The "Recent" recency tag — intentionally LOW intensity (muted outline, no red)
- * so the coloured severity tag dominates the row. Shown only when the incident is
- * inside the recency window (it is what flags the listing at the top of the page).
+ * The "Recent" tag — intentionally low intensity (muted outline, no red) so the
+ * coloured severity tag dominates the row. Shown only inside the recency window,
+ * which is what flags the listing at the top of the page.
  */
 function RecencyTag() {
   return (
@@ -208,9 +201,9 @@ function IncidentItem({
         />
       ) : (
         <>
-          {/* Label order (AUB-131): date (left) · recency (muted) · severity
-              (coloured, far-right). `mr-auto` on the date pushes the recency +
-              severity group to the right so severity anchors the far edge. */}
+          {/* Label order: date (left) · recency (muted) · severity (coloured,
+              far-right). `mr-auto` on the date pushes the tag group right so
+              severity anchors the far edge. */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="mr-auto text-body-sm font-bold text-foreground">
               {formatIncidentDate(incident.occurredOn)}
@@ -228,9 +221,8 @@ function IncidentItem({
               onEdit={() => setIsEditing(true)}
             />
           ) : null}
-          {/* Flag this report as inappropriate/spam/wrong (#39). Login-gated;
-              the control renders nothing for anonymous viewers and the server
-              re-gates regardless. */}
+          {/* Flag this report as inappropriate/spam/wrong. Login-gated; renders
+              nothing for anonymous viewers and the server re-gates regardless. */}
           <FlagControl
             target="incident"
             incidentId={incident.id}
@@ -325,7 +317,7 @@ function IncidentOwnerControls({
 /** A severity selection plus the "" sentinel meaning "not specified". */
 type SeverityChoice = (typeof INCIDENT_SEVERITIES)[number] | "";
 
-/** Inline form to edit an OWN incident's date/severity/note (#32). */
+/** Inline form to edit an own incident's date/severity/note. */
 function IncidentEditForm({
   listingId,
   incident,
@@ -434,18 +426,15 @@ function IncidentEditForm({
 }
 
 /**
- * The `YYYY-MM-DD` default for the "date it happened" field: the viewer's LOCAL
- * calendar day (the natural "it happened today" default), CLAMPED so it never
- * exceeds the UTC calendar day.
+ * The `YYYY-MM-DD` default for the "date it happened" field: the viewer's local
+ * calendar day, clamped so it never exceeds the UTC calendar day.
  *
  * Why the clamp: the report schema's no-future rule is UTC-based
- * (`occurredOn <= todayUtcMidnight()`). A browser AHEAD of UTC (positive offset,
- * e.g. Asia/Tokyo in the morning) has a local calendar day that can be UTC-
- * *tomorrow*, which the server would reject as "in the future". Taking the
- * earlier of {local day, UTC day} keeps the friendly local default where it's
- * valid (incl. the Americas / Denver pilot, always behind UTC) and falls back to
- * the UTC ceiling exactly when the local day would be rejected. `YYYY-MM-DD`
- * strings compare chronologically, so the min is a plain string comparison.
+ * (`occurredOn <= todayUtcMidnight()`). A browser ahead of UTC (e.g. Asia/Tokyo in
+ * the morning) can have a local day that is UTC-tomorrow, which the server rejects.
+ * Taking the earlier of {local day, UTC day} keeps the friendly local default where
+ * valid and falls back to the UTC ceiling otherwise. `YYYY-MM-DD` strings compare
+ * chronologically, so the min is a plain string comparison.
  */
 export function todayForDateInput(now: Date = new Date()): string {
   const localDay = toCalendarDayString(now);
@@ -468,8 +457,8 @@ function ReportIncidentDialog({ listingId }: { listingId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {/* Right-aligned (AUB-131): `self-end` in the incident section's column
-            flex anchors the CTA to the right edge, under the report list. */}
+        {/* `self-end` in the incident section's column flex anchors the CTA to the
+            right edge, under the report list. */}
         <Button type="button" variant="destructive" className="self-end">
           Report an incident
         </Button>

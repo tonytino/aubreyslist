@@ -21,21 +21,19 @@ interface FavoriteButtonProps {
   /** The listing's name, woven into the accessible label ("Save Blue Sparrow"). */
   listingName?: string;
   /**
-   * Optional positioning/appearance override. When provided, it REPLACES the
-   * default browse-card overlay chrome (the `absolute right-3 top-3 …
-   * bg-background/80` styling) so a different surface (e.g. the listing hero) can
-   * restyle the button — the disabled-state utilities are always kept. When
-   * omitted, the button renders with its exact browse-card styling unchanged.
+   * Optional positioning/appearance override. When provided, it replaces the default
+   * browse-card overlay chrome so another surface (e.g. the listing hero) can restyle
+   * the button; the disabled-state utilities are always kept.
    */
   className?: string;
 }
 
 /**
- * Build the relative post-sign-in `returnTo` for an anonymous save: the CURRENT
- * path plus a `?save=<listingId>` marker, so the OAuth callback lands the diner
- * back where they were with the intent to save preserved (F8a wires the marker).
+ * Build the relative post-sign-in `returnTo` for an anonymous save: the current path
+ * plus a `?save=<listingId>` marker, so the OAuth callback lands the diner back where
+ * they were with the intent to save preserved.
  *
- * A RELATIVE path only (`/listings/x?save=y`) — the server's `validateReturnTo`
+ * A relative path only (`/listings/x?save=y`) — the server's `validateReturnTo`
  * rejects anything else. Computed from `window.location`; SSR-safe via the
  * `typeof window` guard (the button hydrates before any anonymous click).
  */
@@ -51,34 +49,28 @@ function buildReturnTo(listingId: string): string {
 }
 
 /**
- * The favorite (bookmark) affordance for a listing — a self-contained client
- * island (issue AUB-123 / F5). Drops into the browse card's top-right corner
- * exactly where the previously-inert heart sat.
+ * The favorite (bookmark) affordance for a listing — a self-contained client island
+ * in the browse card's top-right corner.
  *
- * Reads the prefetched `favoriteIdsQuery` + `currentUserQuery` via
- * `useSuspenseQuery` (the repo convention — both are hydrated by the root
- * loader), so the filled/empty state renders correctly on first paint with no
- * `useEffect`/`useState` fetch.
+ * Reads the prefetched `favoriteIdsQuery` + `currentUserQuery` via `useSuspenseQuery`
+ * (both hydrated by the root loader), so the filled/empty state renders correctly on
+ * first paint with no effect-driven fetch.
  *
- * SIGNED-IN: an OPTIMISTIC toggle — the `["favorites"]` cache flips immediately
- * on click; a successful write confirms with a direction-aware success toast
- * (favorited vs unfavorited, read from the mutation variable — not the
- * post-invalidation cache); a failed write rolls back to the pre-click snapshot
- * and surfaces an error toast; `onSettled` re-invalidates so the cache
- * reconciles with the server. The button is disabled while the write is in
- * flight.
+ * Signed-in: an optimistic toggle — the `["favorites"]` cache flips immediately;
+ * success confirms with a direction-aware toast (read from the mutation variable, not
+ * the post-invalidation cache); failure rolls back to the pre-click snapshot;
+ * `onSettled` re-invalidates so the cache reconciles with the server. The button is
+ * disabled while the write is in flight.
  *
- * ANONYMOUS: NO write is attempted. The click opens a Radix dialog explaining
- * favorites with a "Sign in" action linking to Google OAuth, carrying a
- * `returnTo` that returns the diner here with a `?save=<listingId>` marker.
+ * Anonymous: no write is attempted. The click opens a dialog with a "Sign in" action
+ * carrying a `returnTo` that returns the diner here with a `?save=<listingId>` marker.
  *
- * ACCESSIBILITY (styling.md — never colour alone): `aria-pressed` reflects the
- * favorited state, and the accessible label FLIPS ("Save …" ↔ "Saved, remove
- * …"); the filled heart (`fill-current`) is a redundant cue on top of the label,
- * never the sole signal.
+ * Accessibility (styling.md — never colour alone): `aria-pressed` reflects the state
+ * and the accessible label flips ("Save …" ↔ "Saved, remove …"); the filled heart is
+ * a redundant cue, never the sole signal.
  *
- * CLIENT-SAFE: imports only the client-safe `favorites.fn` seam, the query
- * modules, the UI dialog, and icons — never `~/server/favorites/index` or `db`.
+ * Client-safe: imports only the `favorites.fn` seam, query modules, dialog, and
+ * icons — never `~/server/favorites/index` or `db`.
  */
 export function FavoriteButton({ listingId, listingName, className }: FavoriteButtonProps) {
   const queryClient = useQueryClient();
@@ -111,10 +103,9 @@ export function FavoriteButton({ listingId, listingName, className }: FavoriteBu
       return { previous };
     },
     onSuccess: (_data, nextFavorited) => {
-      // Direction comes from the mutation variable, not post-invalidation cache
-      // state — the cache has already been flipped optimistically by the time
-      // this runs, so reading it back would be redundant (and fragile if a
-      // concurrent invalidation lands first).
+      // Direction comes from the mutation variable — the cache was already flipped
+      // optimistically, and reading it back is fragile if a concurrent invalidation
+      // lands first.
       toast.success(nextFavorited ? "Saved to your spots" : "Removed from your saved spots");
     },
     onError: (_error, _nextFavorited, context) => {
@@ -151,8 +142,8 @@ export function FavoriteButton({ listingId, listingName, className }: FavoriteBu
         disabled={toggleFavorite.isPending}
         onClick={handleClick}
         className={cn(
-          // Default browse-card overlay chrome — replaced wholesale when a caller
-          // (e.g. the listing hero) passes its own `className`.
+          // Default browse-card overlay chrome — replaced wholesale when the caller
+          // passes its own `className`.
           className ??
             "absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand",
           // Disabled-while-pending treatment is kept regardless of the override.

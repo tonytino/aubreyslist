@@ -2,8 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 
 /**
- * Floating "Add listing" action (AUB-61). A persistent purple pill, bottom-right,
- * that links to the existing add-listing route (`/listings/new`). Rendered as a
+ * Floating "Add listing" action. A persistent purple pill, bottom-right,
+ * that links to the add-listing route (`/listings/new`). Rendered as a
  * {@link Link} so it's a real navigation target (keyboard + screen reader
  * reachable), not a mystery button. Positioned `fixed` to the viewport's
  * bottom-right so it stays pinned there at any scroll position and viewport

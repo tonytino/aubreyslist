@@ -3,9 +3,9 @@ import { CLAIM_ATTRIBUTES } from "~/listings/taxonomy";
 import type { DeckAnswerMap } from "./ClaimCardDeck";
 
 /**
- * The deck's lightweight "n of 5" indicator (AUB-231). The TEXT counter carries
- * the meaning (never dots alone — spec §6); the dot rail is decorative
- * (`aria-hidden`) and mirrors the ProgressStepper's status language:
+ * The deck's lightweight "n of 5" indicator. The text counter carries the
+ * meaning (never dots alone); the dot rail is decorative (`aria-hidden`) and
+ * mirrors the ProgressStepper's status language:
  *
  *   current  — brand-filled
  *   answered — celiac-safe soft (a confirm/dispute answer)

@@ -3,10 +3,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Tests for the listing-detail hero place photo (AUB-215). The photos server fn
- * is mocked; we assert the gradient fallback (renders NOTHING without a photo),
- * the proxied <img> for the first photo, the author attribution line (linked
- * and unlinked, joined with ", "), and the onError fallback back to nothing.
+ * Tests for the listing-detail hero place photo. The photos server fn is mocked;
+ * asserted: the gradient fallback (renders nothing without a photo), the proxied
+ * <img> for the first photo, the author attribution line (linked and unlinked,
+ * joined with ", "), and the onError fallback back to nothing.
  */
 const fetchListingPhotosMock = vi.fn((_args: unknown) => Promise.resolve<unknown>([]));
 vi.mock("~/server/places-photos.fn", () => ({

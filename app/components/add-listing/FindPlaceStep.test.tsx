@@ -6,8 +6,8 @@ import type { PlacePrediction, PlacesResult } from "~/listings/places-input";
 import type { WizardPlace } from "./AddListingWizard";
 
 /**
- * FindPlaceStep tests: it COLLECTS a place (Places pick or manual entry) via
- * onSelect and NEVER creates a listing itself (submitCreateListing is not even
+ * FindPlaceStep tests: it collects a place (Places pick or manual entry) via
+ * onSelect and never creates a listing itself (submitCreateListing is not even
  * imported here — the create is deferred to the wizard's final submit). Also
  * covers the selected-place card's Change / Continue affordances.
  */

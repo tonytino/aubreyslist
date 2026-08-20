@@ -33,8 +33,8 @@ const claim = (overrides: Partial<ListingClaimAggregate>): ListingClaimAggregate
   ...overrides,
 });
 
-// The full fixed taxonomy as the loader returns it (#150): one entry per
-// attribute, all empty (claimId null, zero votes) unless overridden.
+// The full fixed taxonomy as the loader returns it: one entry per attribute,
+// all empty (claimId null, zero votes) unless overridden.
 const TAXONOMY = [
   "celiac_safe_vs_gluten_friendly",
   "dedicated_fryer",
@@ -103,8 +103,8 @@ describe("CommunityClaims", () => {
 
     // One row per taxonomy attribute — no "coming soon" dead-end.
     expect(screen.getAllByRole("listitem")).toHaveLength(TAXONOMY.length);
-    // A zero-vote attribute shows its honest empty state (AUB-131: "Not yet
-    // attested — no confirmations or disputes yet"), never a fabricated rating.
+    // A zero-vote attribute shows its honest empty state ("Not yet attested — no
+    // confirmations or disputes yet"), never a fabricated rating.
     expect(screen.getAllByText(/no confirmations or disputes yet/).length).toBe(TAXONOMY.length);
     expect(screen.getAllByText("Not yet attested").length).toBe(TAXONOMY.length);
     // Every attribute is attestable via its own confirm badge...
@@ -206,7 +206,7 @@ describe("CommunityClaims", () => {
       />
     );
     const flagButton = screen.getByRole("button", { name: "Flag claim" });
-    // Right-aligned on the SAME header row as the claim's title: the flag
+    // Right-aligned on the same header row as the claim's title: the flag
     // control and the title share the header container, and the vote badges
     // live outside it.
     const headerRow = flagButton.parentElement;
@@ -217,7 +217,7 @@ describe("CommunityClaims", () => {
   });
 
   it("derives each row's recency + staleness from the injected `now`, not a live clock (#115)", () => {
-    // Pin the real system clock FAR in the future. If a row read a fresh
+    // Pin the real system clock far in the future. If a row read a fresh
     // `new Date()` instead of the passed-in instant, this confirmation would
     // age out and read "stale" / "years ago" — proving the regression.
     vi.useFakeTimers();
@@ -241,7 +241,7 @@ describe("CommunityClaims", () => {
       );
       // Recency phrasing is relative to the injected `now`, not the live clock.
       expect(screen.getByText("last confirmed 3 weeks ago")).toBeInTheDocument();
-      // 3 weeks < 6-month window relative to `now`, so it is NOT flagged stale.
+      // 3 weeks < 6-month window relative to `now`, so it is not flagged stale.
       expect(screen.queryByText("Needs update")).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();

@@ -6,23 +6,22 @@ import type { ListingLink } from "~/db/schema";
 import type { LinkKind } from "~/listings/links";
 
 /**
- * ListingLinks tests (AUB-202): the detail page's Links section. Load-bearing
- * assertions:
+ * ListingLinks tests: the detail page's Links section. Load-bearing assertions:
  *
  *   - typed links render as external anchors in LINK_KINDS order,
- *   - a non-http(s) URL is suppressed at the render sink (#90 defence-in-depth),
+ *   - a non-http(s) URL is suppressed at the render sink (defence-in-depth),
  *   - a legacy `menuUrl` renders as the menu link when no menu-kind row exists,
  *   - the edit affordance is signed-in only (writes are re-gated server-side),
  *   - the edit dialog pre-fills, saves changed kinds, and removes cleared ones —
- *     INCLUDING a cleared legacy-prefilled menu field, which must fire a real
+ *     including a cleared legacy-prefilled menu field, which must fire a real
  *     `deleteListingLink` (the server also clears the legacy column) and never
  *     silently no-op,
  *   - the links query is invalidated even when the mutation fails mid-sequence
  *     (earlier writes already committed — the page must refetch what landed),
- *   - the dialog's mobile full-screen layout (AUB-221): full-viewport base
- *     classes with sm: overrides restoring the centred dialog, and the
- *     header/actions pinned OUTSIDE the one internal scroll region (structure
- *     only — pixels are not assertable in jsdom).
+ *   - the dialog's mobile full-screen layout: full-viewport base classes with sm:
+ *     overrides restoring the centred dialog, and the header/actions pinned
+ *     outside the one internal scroll region (structure only — pixels are not
+ *     assertable in jsdom).
  */
 
 const submitLinkMock = vi.fn((_args: unknown) => Promise.resolve({} as never));
@@ -173,8 +172,8 @@ describe("ListingLinks — edit dialog", () => {
         data: { listingId: "listing-1", kind: "reservations", url: "https://book.example" },
       });
     });
-    // ONLY the changed kind is written: the untouched website row and the
-    // untouched legacy menu value (its EFFECTIVE current value equals the
+    // Only the changed kind is written: the untouched website row and the
+    // untouched legacy menu value (its effective current value equals the
     // pre-fill) issue no writes, and nothing is removed.
     expect(submitLinkMock).toHaveBeenCalledTimes(1);
     expect(deleteLinkMock).not.toHaveBeenCalled();
@@ -202,8 +201,8 @@ describe("ListingLinks — edit dialog", () => {
   });
 
   it("clearing a LEGACY-only menu field fires a real remove, never a silent no-op", async () => {
-    // Case B of the legacy interplay: no typed menu row, only the legacy
-    // column. Clearing the pre-filled field must issue deleteListingLink —
+    // Legacy interplay: no typed menu row, only the legacy column.
+    // Clearing the pre-filled field must issue deleteListingLink —
     // whose server side also nulls listings.menu_url — so the button actually
     // goes away after the refetch instead of a success toast over a no-op.
     renderWithQuery(
@@ -225,9 +224,9 @@ describe("ListingLinks — edit dialog", () => {
   });
 
   it("clearing the menu field removes the typed row even when a legacy value also exists", async () => {
-    // Case A of the legacy interplay (post-backfill rows): typed menu row AND
-    // a lingering legacy column value. The remove fires for the menu kind; the
-    // server deletes the row AND clears the legacy column, and because the
+    // Legacy interplay: a typed menu row and a lingering legacy column value.
+    // The remove fires for the menu kind; the
+    // server deletes the row and clears the legacy column, and because the
     // legacy fallback is served by the same invalidated links query, the
     // refetch cannot resurrect the button.
     renderWithQuery(

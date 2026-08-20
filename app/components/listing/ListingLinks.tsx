@@ -44,13 +44,11 @@ export function listingLinksQueryKey(listingId: string) {
 }
 
 /**
- * One distinct glyph per link kind, next to the visible text label (never
- * colour/icon alone). `BookOpenText` marks the MENU link — an open printed
- * document, i.e. a restaurant menu, NOT lucide's `Menu` hamburger, which reads
- * as app navigation (owner mobile feedback, AUB-221). `WheatOff` marks the
- * gluten-free MENU link — a document pointer, not the gluten-friendly SAFETY
- * state, so the `WheatStrike` safety glyph contract (styling.md) does not
- * apply here.
+ * One distinct glyph per link kind, next to the visible text label (never colour/icon
+ * alone). `BookOpenText` marks the menu link — never lucide's `Menu` hamburger, which
+ * reads as app navigation. `WheatOff` marks the gluten-free menu link — a document
+ * pointer, not the gluten-friendly safety state, so the `WheatStrike` safety glyph
+ * contract (styling.md) does not apply here.
  */
 const LINK_KIND_ICONS: Record<LinkKind, LucideIcon> = {
   menu: BookOpenText,
@@ -61,33 +59,24 @@ const LINK_KIND_ICONS: Record<LinkKind, LucideIcon> = {
 };
 
 /**
- * The listing-detail "Links" section (AUB-202): the Google Maps deep-link
- * plus the listing's typed links in `LINK_KINDS` order, and — for signed-in
- * viewers — an edit affordance that opens a dialog of per-kind URL fields
- * (the same `ListingLinksFields` the intake wizard uses) with save/remove
- * semantics.
+ * The listing-detail "Links" section: the Google Maps deep-link plus the listing's
+ * typed links in `LINK_KINDS` order, and — for signed-in viewers — an edit dialog of
+ * per-kind URL fields (the same `ListingLinksFields` the intake wizard uses).
  *
- * The deep-link is KEPT even now that the detail page embeds a map above
- * this section (`ListingMap`, AUB-216): it is the mobile hand-off to
- * turn-by-turn in the native Maps app. ADR-014 revises v1's "no embedded map
- * — deep-link only" decision (previously mislabeled here as ADR-009, which
- * is Vercel hosting); the embed renders as a SIBLING of this region, never
- * inside it, so the role assertions the edit-listing-links E2E spec makes
- * within this region are unaffected.
+ * The deep-link stays alongside the embedded map (ADR-014): it is the mobile hand-off
+ * to turn-by-turn in the native Maps app. The map embed renders as a sibling of this
+ * region, never inside it, so the edit-listing-links E2E role assertions hold.
  *
- * Legacy fallback: a listing created before typed links may carry only the
- * legacy `listings.menu_url`. When there is no `menu`-kind row, that legacy
- * URL renders as the menu link, so old rows keep their button. Both `links`
- * and `legacyMenuUrl` come from the ONE links query (`fetchListingLinks`), so
- * invalidating it after an edit refreshes the fallback too — the server nulls
- * the legacy column whenever a typed menu write supersedes it, and the
- * refetch picks that up (a loader-sourced legacy value would go stale here).
+ * Legacy fallback: a listing may carry only `listings.menu_url`. When there is no
+ * `menu`-kind row, that legacy URL renders as the menu link. Both `links` and
+ * `legacyMenuUrl` come from the one links query (`fetchListingLinks`), so invalidating
+ * it after an edit refreshes the fallback too — the server nulls the legacy column
+ * whenever a typed menu write supersedes it, and the refetch picks that up.
  *
- * Security (#90, defence-in-depth): EVERY anchor href in this section — maps,
- * typed links, the legacy fallback — is `isHttpUrl`-guarded at the render
- * sink, so a dangerous-scheme URL is suppressed even if one ever reached the
- * DB. Writes are wiki-style (any signed-in user) and re-gated server-side —
- * hiding the edit button from anonymous viewers is UX, not access control.
+ * Defence-in-depth: every anchor href in this section is `isHttpUrl`-guarded at the
+ * render sink, so a dangerous-scheme URL is suppressed even if one reached the DB.
+ * Writes are wiki-style (any signed-in user) and re-gated server-side — hiding the
+ * edit button from anonymous viewers is UX, not access control.
  */
 export function ListingLinks({
   listingId,
@@ -155,23 +144,18 @@ export function ListingLinks({
 }
 
 /**
- * The signed-in edit affordance + dialog. Fields are pre-filled from the
- * current typed links; with no `menu`-kind row the legacy `menu_url` pre-fills
- * the menu field, so the dialog shows exactly what the page renders.
+ * The signed-in edit affordance + dialog. Fields pre-fill from the current typed links;
+ * with no `menu`-kind row the legacy `menu_url` pre-fills the menu field, so the dialog
+ * shows exactly what the page renders.
  *
- * Save semantics per kind, run through one mutation, diffed against the
- * EFFECTIVE current value (the typed row, or the legacy menu fallback): a
- * filled field that differs upserts (`submitListingLink`), a cleared field
- * that HAD a value removes it (`deleteListingLink`) — including a legacy-only
- * menu value, because the server's menu-kind remove also clears the legacy
- * column (typed writes supersede it), so clearing a legacy-prefilled menu
- * field is a real removal and never a silent no-op. An unchanged field issues
- * no write.
+ * Save semantics per kind, diffed against the effective current value (typed row, or
+ * the legacy menu fallback): a changed filled field upserts, a cleared field that had
+ * a value removes — including a legacy-only menu value, since the server's menu-kind
+ * remove also clears the legacy column. An unchanged field issues no write.
  *
- * The links query is invalidated in `onSettled`, not only on success: the
- * mutation runs up to five sequential server calls, so a mid-sequence failure
- * has already committed earlier writes — the page must refetch what actually
- * landed, error or not, rather than showing stale buttons under an error toast.
+ * The links query is invalidated in `onSettled`, not only on success: the mutation
+ * runs up to five sequential server calls, so a mid-sequence failure has already
+ * committed earlier writes — the page must refetch what actually landed.
  */
 function EditListingLinks({
   listingId,
@@ -203,10 +187,9 @@ function EditListingLinks({
   };
 
   /**
-   * The kind's EFFECTIVE current URL: its typed row, or — for the menu kind
-   * with no typed row — the legacy `menu_url` fallback the page renders. The
-   * diff below runs against this, so the legacy value behaves like any other
-   * stored link: clearing it removes (Case B), rewriting it saves.
+   * The kind's effective current URL: its typed row, or — for the menu kind with no
+   * typed row — the legacy `menu_url` fallback the page renders. The diff runs against
+   * this, so the legacy value behaves like any other stored link.
    */
   const effectiveUrl = (kind: LinkKind): string | undefined => {
     const typed = linkByKind.get(kind)?.url;
@@ -224,7 +207,7 @@ function EditListingLinks({
         if (url && url !== existing) {
           await submitListingLink({ data: { listingId, kind, url } });
         } else if (!url && existing !== undefined) {
-          // Removes the typed row AND (for menu) clears the legacy column
+          // Removes the typed row and (for menu) clears the legacy column
           // server-side — a legacy-only clear must not silently no-op.
           await deleteListingLink({ data: { listingId, kind } });
         }
@@ -246,7 +229,7 @@ function EditListingLinks({
 
   const handleSubmit = () => {
     // Client-side pre-check so a bad URL gets an inline message instead of a
-    // failed server round-trip. The server re-validates regardless (#90).
+    // failed server round-trip. The server re-validates regardless.
     const invalid = LINK_KINDS.filter((kind) => {
       const url = drafts[kind].trim();
       return url !== "" && !listingLinkInputSchema.safeParse({ kind, url }).success;
@@ -277,13 +260,11 @@ function EditListingLinks({
       </Button>
 
       {/*
-        Mobile (below sm): a FULL-SCREEN takeover — the base classes override
-        the primitive's centred positioning/size via `cn`'s tailwind-merge, so
-        the dialog fills the whole viewport (dvh, not vh, so mobile browser
-        chrome never hides the footer) with square corners. The header and the
-        action buttons stay pinned; ONLY the fields area scrolls internally.
-        At sm+ the overrides restore the primitive's centred dialog, height
-        capped at 85dvh with the same internal-scroll split.
+        Below sm: a full-screen takeover — the base classes override the primitive's
+        centred positioning via tailwind-merge, filling the viewport (dvh, not vh, so
+        mobile browser chrome never hides the footer). Header and action buttons stay
+        pinned; only the fields area scrolls. At sm+ the overrides restore the centred
+        dialog, capped at 85dvh with the same internal-scroll split.
       */}
       <Dialog open={isOpen} onOpenChange={(open) => (open ? setIsOpen(true) : setIsOpen(false))}>
         <DialogContent className="top-0 left-0 flex h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[85dvh] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:border">
@@ -302,7 +283,7 @@ function EditListingLinks({
             }}
             className="flex min-h-0 flex-1 flex-col"
           >
-            {/* The ONLY scrolling region — header/footer stay visible. */}
+            {/* The only scrolling region — header/footer stay visible. */}
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
               <div className="flex flex-col gap-4">
                 <ListingLinksFields

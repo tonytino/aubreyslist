@@ -20,35 +20,29 @@ import type { ListingClaimAggregate } from "~/server/attestations/listing-summar
 import { useClaimVoteMutations } from "./use-claim-vote-mutations";
 
 /**
- * The listing-detail host for the {@link ClaimCardDeck} (AUB-231): a prominent
- * "Been here? Confirm what you know" CTA at the top of the Claims tab that
- * opens the deck in a bottom sheet on mobile / a centered dialog on ≥sm.
+ * The listing-detail host for the {@link ClaimCardDeck}: a "Been here? Confirm what
+ * you know" CTA at the top of the Claims tab that opens the deck in a bottom sheet
+ * on mobile / a centered dialog on ≥sm.
  *
- * Semantics (all owner-approved spec decisions):
- *   - SIGNED-IN ONLY: anonymous viewers see nothing here — the tab's existing
- *     sign-in copy and per-row prompts remain the sign-in path.
- *   - PRE-SEEDED: on open, each card seeds from the viewer's current vote
- *     (`viewerVote`), with a small "You marked this …" caption on pre-voted
- *     cards. The snapshot is taken ONCE per open so mid-flow refetches never
- *     reshuffle the deck.
- *   - IMMEDIATE WRITES: confirm/dispute writes through the SAME
- *     {@link useClaimVoteMutations} seam the inline `ClaimVoteControls` use
- *     (upsert + claims roll-up invalidation), so counts, trust rows, and the
- *     hero badges refresh live.
- *   - SKIP IS SAFE: "Not sure" on an already-voted card leaves the existing
- *     vote untouched (retract stays available via the inline toggles).
- *   - MIS-SWIPE UNDO: every write surfaces an INLINE "Vote recorded · Undo"
- *     row inside the sheet whose Undo restores the previous state — the
- *     previous vote via another upsert, or a retract when there was none. It
- *     is deliberately NOT a sonner toast: the sheet is a MODAL Radix dialog
- *     (body pointer-events disabled + focus trapped while open), so a toast's
- *     action would be unreachable until the sheet closed. The row always
- *     targets only the LATEST write — a newer write replaces it — so a stale
- *     Undo can never clobber a newer vote (a write-id guard backstops this).
+ * Semantics:
+ *   - Signed-in only: anonymous viewers see nothing here — the tab's sign-in copy
+ *     and per-row prompts remain the sign-in path.
+ *   - Pre-seeded: on open, each card seeds from the viewer's current vote, with a
+ *     "You marked this …" caption on pre-voted cards. The snapshot is taken once
+ *     per open so mid-flow refetches never reshuffle the deck.
+ *   - Immediate writes: confirm/dispute writes through the same
+ *     {@link useClaimVoteMutations} seam the inline `ClaimVoteControls` use, so
+ *     counts, trust rows, and the hero badges refresh live.
+ *   - Skip is safe: "Not sure" on an already-voted card leaves the existing vote
+ *     untouched (retract stays available via the inline toggles).
+ *   - Mis-swipe undo: every write surfaces an inline "Vote recorded · Undo" row
+ *     inside the sheet. Deliberately not a sonner toast: the sheet is a modal Radix
+ *     dialog (body pointer-events disabled + focus trapped), so a toast's action
+ *     would be unreachable while it is open. The row targets only the latest
+ *     write — a newer write replaces it — and a write-id guard backstops staleness.
  *
- * The sheet never dismisses on horizontal drag (Radix has no drag-to-dismiss;
- * the deck additionally keeps ~24px edge dead zones for the OS back gesture).
- * The existing CommunityClaims list below stays fully functional.
+ * The sheet never dismisses on horizontal drag (Radix has no drag-to-dismiss; the
+ * deck keeps ~24px edge dead zones for the OS back gesture).
  */
 export function ClaimDeckSection({
   listingId,
@@ -67,7 +61,7 @@ export function ClaimDeckSection({
     emptyVotes()
   );
   // The latest write's undo target — the inline "Vote recorded · Undo" row.
-  // Each new write REPLACES it (one live undo at a time), and `id` against the
+  // Each new write replaces it (one live undo at a time), and `id` against the
   // monotonic counter guards any stale callback from clobbering a newer vote.
   const [lastWrite, setLastWrite] = useState<{
     id: number;
@@ -96,9 +90,9 @@ export function ClaimDeckSection({
   };
 
   /**
-   * Roll the LATEST write back to its pre-write state (the inline Undo). The
-   * write-id check no-ops any stale invocation — only the newest write is
-   * undoable, so an older Undo can never blind-retract a newer vote.
+   * Roll the latest write back to its pre-write state (the inline Undo). The
+   * write-id check no-ops any stale invocation — only the newest write is undoable,
+   * so an older Undo can never blind-retract a newer vote.
    */
   const undoLastWrite = () => {
     if (lastWrite === null || lastWrite.id !== writeIdRef.current) {
@@ -207,10 +201,9 @@ export function ClaimDeckSection({
               onDone={() => setOpen(false)}
               cardCaption={caption}
             />
-            {/* Inline mis-swipe recovery (AUB-231 review round 1): the sheet is
-                MODAL, so a toast action would sit outside the focus trap and
-                behind Radix's body pointer-events lock — this row is inside
-                both. It always reflects only the LATEST write. */}
+            {/* Inline mis-swipe recovery: the sheet is modal, so a toast action would
+                sit outside the focus trap and behind Radix's body pointer-events
+                lock — this row is inside both. It reflects only the latest write. */}
             {lastWrite !== null ? (
               <div
                 role="status"

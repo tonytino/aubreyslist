@@ -4,9 +4,9 @@ import { DISTANCE_RADIUS_OPTIONS } from "~/listings/distance";
 import { DistanceSelector } from "./DistanceSelector";
 
 /**
- * Tests for the distance-radius selector (user feedback #7). A single accessible
- * `<select>` styled as a chip, reading "Within {value} miles" — the origin is NOT
- * shown — that reports the chosen radius (miles) back to the caller.
+ * Tests for the distance-radius selector. A single accessible `<select>`
+ * styled as a chip, reading "Within {value} miles" — the origin is not shown —
+ * that reports the chosen radius (miles) back to the caller.
  */
 
 describe("DistanceSelector", () => {

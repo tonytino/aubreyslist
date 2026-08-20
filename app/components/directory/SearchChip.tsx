@@ -3,46 +3,44 @@ import { useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 /**
- * Directory search rendered as a filter chip (user feedback #5).
+ * Directory search rendered as a filter chip.
  *
- * The search shares the visual language of {@link FilterChips}: a pill that reads
- * as "just another filter". It has three states:
+ * The search shares the visual language of {@link FilterChips}: a pill that
+ * reads as "just another filter". It has three states:
  *
- *   - **Collapsed + empty** — an inactive-style chip (a `<button>`), ICON-ONLY (no
- *     visible label text — repo-owner mobile feedback: a compact icon chip, not a
- *     wide "Search restaurants" pill, leads the row). The accessible name still
- *     comes from `aria-label="Search restaurants"` and it carries `aria-expanded`,
- *     so screen readers get the same information sighted users lose by dropping
- *     the text. Clicking/focusing it EXPANDS to a real input, which keeps the
- *     "Search restaurants" placeholder.
- *   - **Collapsed + applied** — when there's a query, the chip takes the ACTIVE
- *     brand-filled treatment (colour signals "applied", but never alone — the
- *     query text and an explicit clear affordance carry the meaning too) and
- *     shows the (truncated) query with a small ✕ that clears it. This state
- *     STAYS text + icon (never collapses to icon-only) — an applied filter must
- *     remain visibly identifiable, not hidden behind a bare icon.
+ *   - **Collapsed + empty** — an inactive-style chip (a `<button>`), icon-only
+ *     so a compact chip, not a wide "Search restaurants" pill, leads the row.
+ *     The accessible name comes from `aria-label="Search restaurants"` and it
+ *     carries `aria-expanded`, so screen readers get the information sighted
+ *     users lose by dropping the text. Clicking/focusing it expands to a real
+ *     input with the "Search restaurants" placeholder.
+ *   - **Collapsed + applied** — when there's a query, the chip takes the
+ *     active brand-filled treatment (colour signals "applied", but never alone
+ *     — the query text and an explicit clear affordance carry the meaning too)
+ *     and shows the (truncated) query with a small ✕ that clears it. This
+ *     state stays text + icon (never icon-only) — an applied filter must
+ *     remain visibly identifiable.
  *   - **Expanded** — a real, labelled `<input type="search">` wired to
  *     value/onChange, autofocused on expand, with its own inline ✕ while
- *     non-empty. Blurring the input COLLAPSES back to the chip (the query is
+ *     non-empty. Blurring the input collapses back to the chip (the query is
  *     kept, so a non-empty query returns as the applied chip).
  *
- * CONTROLLED, same contract as the plain search it replaces: `{ value, onChange }`.
- * The route still debounces `value` → URL `?q=`, so there is NO debounce here —
- * every keystroke is reported straight to `onChange`.
+ * Controlled: `{ value, onChange }`. The route debounces `value` → URL `?q=`,
+ * so there is no debounce here — every keystroke is reported straight to
+ * `onChange`.
  *
- * ACCESSIBLE: the collapsed control is a `<button>` carrying `aria-expanded`;
- * expanding moves focus into a labelled input (visually-hidden `<label>`). The
- * native `::-webkit-search-cancel-button` is suppressed so the ✕ is consistent.
+ * Accessibility: the collapsed control is a `<button>` carrying
+ * `aria-expanded`; expanding moves focus into a labelled input
+ * (visually-hidden `<label>`). The native `::-webkit-search-cancel-button` is
+ * suppressed so the ✕ is consistent.
  *
- * FOCUS TIMING (repo-owner mobile feedback — iOS double-tap bug): `expand()`
- * flushes the `setExpanded(true)` state update SYNCHRONOUSLY via `flushSync`
- * before calling `.focus()`, instead of deferring the focus call to a
- * `requestAnimationFrame` callback. iOS Safari only auto-shows the keyboard when
- * `.focus()` runs synchronously within the original user-gesture call stack; a
- * `requestAnimationFrame` (or any other deferral) breaks that chain, so the input
- * mounted but the keyboard never appeared until a SECOND tap. `flushSync` forces
- * React to commit + mount the `<input>` immediately, so the ref is live and
- * `.focus()` still runs inside the same gesture.
+ * Focus timing (iOS): `expand()` flushes the `setExpanded(true)` state update
+ * synchronously via `flushSync` before calling `.focus()`. iOS Safari only
+ * auto-shows the keyboard when `.focus()` runs synchronously within the
+ * original user-gesture call stack; any deferral (e.g.
+ * `requestAnimationFrame`) breaks that chain and the keyboard needs a second
+ * tap. `flushSync` commits + mounts the `<input>` immediately, so the ref is
+ * live and `.focus()` still runs inside the same gesture.
  */
 export function SearchChip({
   value,
@@ -65,7 +63,7 @@ export function SearchChip({
 
   function expand() {
     // Synchronous commit + focus, both still inside the click's user-gesture call
-    // stack — see the FOCUS TIMING doc comment above. `flushSync` mounts the
+    // stack — see the focus-timing doc comment above. `flushSync` mounts the
     // `<input>` immediately so `inputRef.current` is live right after.
     flushSync(() => setExpanded(true));
     inputRef.current?.focus();
@@ -108,7 +106,7 @@ export function SearchChip({
   }
 
   if (applied) {
-    // A chip-styled CONTAINER holding two real buttons: the body reopens the
+    // A chip-styled container holding two real buttons: the body reopens the
     // input; the trailing ✕ clears. A container (not a single <button>) avoids
     // nesting interactive elements, so both actions stay semantic buttons.
     return (
@@ -135,9 +133,9 @@ export function SearchChip({
     );
   }
 
-  // Collapsed + empty: ICON-ONLY (repo-owner mobile feedback) — the accessible
-  // name lives entirely in `aria-label`, so screen readers still announce "Search
-  // restaurants" even though sighted users only see the glyph.
+  // Collapsed + empty: icon-only — the accessible name lives entirely in
+  // `aria-label`, so screen readers still announce "Search restaurants" even
+  // though sighted users only see the glyph.
   return (
     <button
       type="button"

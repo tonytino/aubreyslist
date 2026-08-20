@@ -10,42 +10,29 @@ import type { Listing } from "~/db/schema";
 import { cn } from "~/lib/utils";
 import { placePhotoProxyUrl } from "~/listings/place-photo-url";
 import type { ClaimAttribute } from "~/listings/taxonomy";
-// Type-only: erased at build time, so this never drags `getDb`/the Places key
-// into the browse route's client bundle (same posture as the other `~/server/*`
-// type-only imports already in this app, e.g. `~/server/attestations`).
+// Type-only: erased at build time, so `getDb`/the Places key never enter the client bundle.
 import type { PlacePhoto, PlacePhotoAttribution } from "~/server/places-photos";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
 
 /**
- * Width requested from the `/api/places/photo` media proxy for browse-surface
- * cards (AUB-219) — the list card's photo tile renders at a fixed 158px tall
- * within a grid column, comfortably covered by this ladder rung (`PHOTO_WIDTH_LADDER`
- * in `app/server/routes/places.ts`) even at 2x DPR, well short of the hero's
- * 1280px (`HERO_PHOTO_MAX_WIDTH_PX`, `HeroPhoto.tsx`) since the card is much
- * smaller. Off-ladder asks get quantized server-side regardless.
+ * Width requested from the `/api/places/photo` proxy for browse cards. The tile is 158px
+ * tall, so this rung covers 2x DPR. Off-ladder widths are quantized server-side.
  */
 export const CARD_PHOTO_MAX_WIDTH_PX = 640;
 
 /**
- * The photo-placeholder accent (a decorative pastel gradient, never load-bearing
- * for safety meaning — see docs/agents/design.md). Phase 2 maps real data onto
- * these four options; for now the wrapper derives one deterministically from the
- * listing id so a card's tile colour stays stable across renders.
+ * Photo-placeholder accent. Decorative only — never carries safety meaning
+ * (docs/agents/design.md). Derived from the listing id so the colour is stable across renders.
  */
 export type RestaurantCardAccent = "lavender" | "peach" | "mint" | "sky";
 
 /**
- * The render-ready view-model a {@link RestaurantCard} consumes.
+ * The render-ready view-model a {@link RestaurantCard} consumes. Flat and presentational,
+ * never the raw DB row, so the card stays client-safe and testable.
  *
- * The card is PROP-DRIVEN and CLIENT-SAFE: it takes this flat, presentational
- * view-model rather than the raw DB row, so it never reaches for `db`/server-only
- * modules and stays trivially testable. Phase 2 will map real listing data into
- * this shape; this phase binds it to a fixed view-model.
- *
- * TRUST MODEL (ADR-007): `safetyState` is the ONLY safety verdict. `null` keeps
- * the honest "Not yet attested" chip — never a fabricated verdict, because a
- * celiac could be hurt. `googleRating` is an EXTERNAL Google Places rating,
- * clearly attributed, and MUST NOT be read as a safety/celiac score.
+ * ADR-007: `safetyState` is the only safety verdict. `null` renders the honest
+ * "Not yet attested" chip, never a fabricated verdict. `googleRating` is an external,
+ * attributed Google Places rating and must not read as a safety score.
  */
 export interface RestaurantCardVM {
   id: string;
@@ -57,32 +44,23 @@ export interface RestaurantCardVM {
   /** The headline safety verdict, or `null` for the honest "Not yet attested" chip. */
   safetyState: SafetyState | null;
   /**
-   * True when the listing carries ANY live (unvoted) curator-bot suggestion
-   * (AUB-31/AUB-193, owner nit 7). PROVENANCE, not a verdict: the card shows a
-   * "Suggested by Aubrey's Bot" label in the meta row's freshness slot (owner
-   * nit 8) whenever suggestions are live — including alongside a real
-   * `safetyState`, because the provenance of the suggested labels stays true
-   * regardless of evidence. It never alters the safety verdict itself.
+   * True when the listing carries any live (unvoted) curator-bot suggestion.
+   * Provenance, not a verdict: it drives the "Suggested by Aubrey's Bot" label
+   * and never alters the safety verdict.
    */
   suggestedByBot: boolean;
   /**
-   * The claim attributes the bot suggested that are still live (deduped, in
-   * taxonomy order). Each renders as a shared {@link ClaimBadge} (`suggested`
-   * variant) in the badge row: the attribute's OWN icon, a gradient ring, and an
-   * always-visible "AI" marker after the label (AUB-225) — clearly distinct from
-   * real evidence signals without relying on colour alone or on a hover/focus-only
-   * tooltip (ADR-007: a suggestion must never read as a community-confirmed
-   * verdict, and that distinction must reach touch-only users too).
+   * Live bot-suggested claim attributes (deduped, taxonomy order). Each renders as a
+   * {@link ClaimBadge} `suggested` variant with an always-visible "AI" marker — ADR-007:
+   * a suggestion must never read as a community-confirmed verdict, including for
+   * touch-only users who cannot reach a hover tooltip.
    */
   suggestedAttributes: ClaimAttribute[];
   /**
-   * The NON-headline claim attributes with CONFIRMED positive community
-   * consensus (AUB-226), deduped and in taxonomy order. Each renders as a shared
-   * {@link ClaimBadge} in its NON-suggested (affirmed) variant in the badge row,
-   * BEFORE the suggested ones (evidence before provenance). This gives the browse
-   * card the same confirmed claim badges the listing-detail page shows (e.g.
-   * "Off-menu GF on request"). The headline celiac attribute is excluded — it is
-   * the {@link safetyState} verdict, rendered via {@link SafetySignal}, not a badge.
+   * Non-headline claim attributes with confirmed positive community consensus
+   * (deduped, taxonomy order). Rendered as affirmed {@link ClaimBadge}s before the
+   * suggested ones (evidence before provenance). The headline celiac attribute is
+   * excluded — that is the {@link safetyState} verdict, rendered via {@link SafetySignal}.
    */
   confirmedAttributes: ClaimAttribute[];
   /** A recent "got glutened" report flags the card regardless of confirmations. */
@@ -94,38 +72,30 @@ export interface RestaurantCardVM {
   /** Decorative photo-placeholder gradient (never a safety signal). */
   accent: RestaurantCardAccent;
   /**
-   * OPTIONAL external Google Places rating. Rendered as an ATTRIBUTED pill only
-   * when present — never styled or labelled as a safety/celiac score (ADR-007).
+   * External Google Places rating. Rendered as an attributed pill only when present —
+   * never styled or labelled as a safety score (ADR-007).
    */
   googleRating?: { value: number; count: number } | null;
   /**
-   * OPTIONAL public, user-agnostic count of people who have saved this listing.
-   * Rendered as a compact heart-glyph + number pill only when > 0 (hidden at 0,
-   * matching how `googleRating` hides when absent). The owner explicitly chose
-   * to drop the visible "saves" word (PR #274); the pill's meaning is carried by
-   * the heart glyph + count + an `aria-label` + the ADR-007 tooltip. Like
-   * `googleRating`, it is a community signal, NOT a safety/celiac verdict
-   * (ADR-007) — all safety meaning stays in {@link SafetySignal}, so this pill
-   * NEVER sits in the safety-signal row.
+   * Public count of people who have saved this listing; the pill hides at 0. Meaning is
+   * carried by the heart glyph + count + `aria-label` + tooltip, with no visible "saves"
+   * word. ADR-007: a community signal, never a safety verdict, so it stays out of the
+   * safety-signal row.
    */
   saveCount?: number;
   /** A real food photo when available; otherwise the placeholder tile is shown. */
   photoUrl?: string | null;
   /**
-   * Author credits for {@link photoUrl} (AUB-219), required by Google's
-   * attribution terms when a photo IS shown. Absent/empty when there is no
-   * photo, or the photo carries no attribution data — mirrors the hero's
-   * `PlacePhoto.attributions` (`HeroPhoto.tsx`).
+   * Author credits for {@link photoUrl}, required by Google's attribution terms whenever
+   * a photo is shown. Absent/empty when there is no photo or no attribution data.
    */
   photoAttributions?: PlacePhotoAttribution[];
 }
 
 /**
- * Per-accent Tailwind gradient classes for the photo-placeholder tile.
- *
- * We key a fixed set of Tailwind utility classes off the `accent` value rather
- * than composing an inline `style` gradient (styling.md: no inline styles). The
- * classes are written out in full so Tailwind's Oxide scanner can see them.
+ * Per-accent Tailwind gradient classes for the photo-placeholder tile. Fixed utility
+ * classes, not inline styles (styling.md), written out in full so Tailwind's Oxide
+ * scanner can see them.
  */
 const ACCENT_GRADIENTS: Record<RestaurantCardAccent, string> = {
   lavender: "bg-gradient-to-br from-accent-lavender to-accent-lavender/40",
@@ -142,17 +112,11 @@ const FRESHNESS = {
 } as const;
 
 /**
- * An attributed community pill — the shared shell for the save-count and
- * Google-rating pills, each wrapped in a supplementary ADR-007 tooltip.
- *
- * A real, non-submitting `<button type="button">`: a legitimately-focusable
- * `TooltipTrigger` (fires on hover AND keyboard focus) with proper interactive
- * semantics, rather than a `tabIndex`-hacked `<span>`. Tailwind's preflight already
- * strips native button chrome (transparent background, zero border), so the pill's
- * own utility classes fully define its look. Callers pass the accent `className`
- * plus `data-testid`; the pill stays a NON-safety signal (ADR-007) — its meaning
- * lives in the visible content it wraps plus its accessible name, never in the
- * tooltip alone.
+ * Attributed community pill — the shared shell for the save-count and Google-rating
+ * pills. A real, non-submitting `<button type="button">` so the tooltip trigger is
+ * focusable with proper semantics; Tailwind preflight strips native button chrome.
+ * ADR-007: a non-safety signal — meaning lives in the visible content and accessible
+ * name, never in the tooltip alone.
  */
 function AttributedPill({ className, type = "button", ...props }: ComponentProps<"button">) {
   return (
@@ -168,84 +132,54 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
 }
 
 /**
- * One scannable browse-list card (issue #33, AUB-61 redesign).
+ * One scannable browse-list card, bound to a {@link RestaurantCardVM}. The whole card is
+ * a single {@link Link} to `/listings/$id` — one large, mobile-friendly tap target.
  *
- * A PROP-DRIVEN, CLIENT-SAFE presentational card bound to a {@link RestaurantCardVM}.
- * The whole card is a single {@link Link} to `/listings/$id` so the entire tile is
- * one large, mobile-friendly tap target.
+ * Trust glance (styling.md): the safety state renders via {@link SafetySignal}
+ * (colour + icon + text, never colour alone). `safetyState === null` shows an honest
+ * "Not yet attested" chip, never a fabricated verdict. A recent incident adds the
+ * `incident` signal.
  *
- * ACCESSIBLE TRUST GLANCE (NON-NEGOTIABLE, docs/agents/styling.md): the safety
- * state renders via {@link SafetySignal} (colour + icon + text label — never
- * colour alone). `safetyState === null` shows an honest "Not yet attested" chip
- * (for a non-bot-suggested listing), never a fabricated verdict. A recent
- * incident adds the `incident` signal.
+ * ADR-007: the Google rating pill is external and attributed, not a safety score;
+ * all safety meaning stays in {@link SafetySignal}. Bot suggestions are provenance,
+ * never evidence: a listing with live suggestions shows the "Suggested by Aubrey's Bot"
+ * label in the meta row's freshness slot (a real freshness cue wins the slot) plus one
+ * suggested-variant {@link ClaimBadge} per attribute.
  *
- * TRUST MODEL (ADR-007): the optional Google rating pill is an EXTERNAL Google
- * rating, explicitly attributed ("Google"), and is NOT a safety score — all
- * safety meaning stays in {@link SafetySignal}.
+ * Consistent height: every card in a grid row renders at the same height. The shell is
+ * `h-full flex flex-col` with a `flex-1` body, and the meta row's space is always
+ * reserved — an `invisible` placeholder of the same composition when a VM has no
+ * signal. Reserved space, never a fixed total height, so wrapped text is never clipped.
  *
- * BOT PROVENANCE (AUB-31/AUB-193, owner nits 7+8): a listing with live curator-
- * bot suggestions shows a "Suggested by Aubrey's Bot" label in the meta row's
- * freshness slot (so bot-suggested cards read uniformly with verified ones —
- * when a real freshness cue exists it wins the slot, evidence over provenance)
- * plus one shared {@link ClaimBadge} (`suggested` variant) per suggested
- * attribute in the badge row. Suggestions are provenance, never evidence:
- * structurally distinguishable from {@link SafetySignal} and never read as a
- * community-confirmed verdict.
- *
- * CONSISTENT HEIGHT (AUB-194): every card in a directory grid renders at the
- * same height regardless of which optional attributes its VM carries. Two
- * mechanisms, both Tailwind-only and clip-free:
- *  1. The card shell is `h-full flex flex-col` and the body (a sibling of the
- *     media Link) stretches with `flex-1`, so cards fill their grid cell and
- *     equalize within a row even when a name/address wraps to two lines — the
- *     meta row is pinned to the bottom with an `mt-auto` wrapper.
- *  2. The meta row's space is ALWAYS reserved: when a VM has no freshness cue,
- *     no evidence counts, AND no bot label, the row renders an `invisible`
- *     placeholder line of the same composition (icon + caption text) instead of
- *     collapsing — so every card in a row matches the height of fully-attested
- *     ones. Reserved space, never a fixed total height, so wrapped text is
- *     never clipped.
- *
- * CLIENT-SAFE: imports only pure/client-safe/type-only modules — no
- * `getDb`/server-only import — so it is safe in the browse route's client bundle.
+ * Client-safe: imports only pure/client-safe/type-only modules.
  */
 export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
   const freshness = vm.freshness ? FRESHNESS[vm.freshness.kind] : null;
 
-  // Ephemeral render state, not data fetching (mirrors HeroPhoto.tsx): a broken
-  // image (a stale token, a proxy 503 after the kill switch flips mid-session,
-  // …) falls back to the gradient placeholder. The FAILED SRC is stored (not a
-  // boolean) so the suppression is scoped to the exact image that broke — a VM
-  // update with a different `photoUrl` (a refetch resolving a new photo) is
-  // unaffected.
+  // A broken image (stale token, proxy 503) falls back to the gradient placeholder.
+  // Storing the failed src (not a boolean) scopes the suppression to the exact image
+  // that broke, so a VM update with a different `photoUrl` is unaffected.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const showPhoto = Boolean(vm.photoUrl) && vm.photoUrl !== failedSrc;
 
   return (
-    // Overlay stretched-link pattern: a relatively-positioned card SHELL holds the
-    // Link, whose visible content is only the MEDIA but whose `after:inset-0`
-    // overlay (resolved against the shell) stretches clickability across the WHOLE
-    // card — so the tile stays ONE tap target. The BODY (name, pills, safety, meta)
-    // is a SIBLING of the Link in NORMAL FLOW, not a descendant of the anchor, so
-    // the pills can be real interactive tooltip triggers. Non-interactive text
-    // (name, address) sits BELOW the overlay so clicking it still navigates;
-    // interactive siblings (pills, Heart) are raised above it with `relative z-10`.
-    // No interactive/focusable element is nested inside the <a> — valid HTML.
-    // The shell is also `flex h-full flex-col` (AUB-194) so the card fills its
-    // grid cell and cards equalize within a row.
+    // Stretched-link pattern: the Link wraps only the media, but its `after:inset-0`
+    // overlay (resolved against the relative shell) makes the whole card one tap target.
+    // The body is a sibling of the Link, not a descendant, so pills can be real
+    // interactive tooltip triggers — no focusable element nested inside the <a>.
+    // Non-interactive text sits below the overlay (clicks navigate); interactive
+    // siblings are raised above it with `relative z-10`. The shell is `flex h-full
+    // flex-col` so cards equalize within a grid row.
     <div className="group relative flex h-full flex-col overflow-hidden rounded-card border border-border bg-card text-card-foreground shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand-ring hover:shadow-md focus-within:border-brand-ring">
-      {/* The anchor wraps only the media; the h3 is no longer inside it, so the
-          link takes its accessible name from `aria-label`. */}
+      {/* The anchor wraps only the media, so its accessible name comes from `aria-label`. */}
       <Link
         to="/listings/$id"
         params={{ id: vm.id }}
         aria-label={vm.name}
         className="block shrink-0 after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
       >
-        {/* Photo area — a real <img> when available, else the accent placeholder
-            tile (AUB-194's stable per-listing gradient, unchanged when photos
-            are off/absent — AUB-219 non-negotiable #5). */}
+        {/* Photo area — a real <img> when available, else the stable per-listing
+            accent placeholder tile. */}
         <div className="relative h-[158px] shrink-0 overflow-hidden">
           {showPhoto ? (
             <>
@@ -257,31 +191,13 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
                 onError={() => setFailedSrc(vm.photoUrl ?? null)}
                 className="h-full w-full object-cover"
               />
-              {/* Compact author credit (Google's attribution terms) — plain TEXT,
-                  never a link: this sits INSIDE the stretched-link `<Link>` above
-                  (the whole media tile is one tap target), and an `<a>` nested in
-                  an `<a>` is invalid HTML (the same reason the hero's linked
-                  credit lives OUTSIDE its non-link hero band). Small, AA-contrast
-                  overlay text — same posture as `HeroPhoto.tsx`'s scrim-assisted
-                  credit line, scaled down for the card's shorter media band: a
-                  subtle bottom gradient scrim guarantees the white caption stays
-                  legible on a light photo (text-shadow alone can't). Both layers
-                  are decorative (`aria-hidden` scrim; the credit reads normally).
-                  Softened deliberately (owner: too prominent), one step below
-                  the `text-caption` token (12px) via an arbitrary 11px value.
-                  Text opacity only comes down to /85, not the hero's /80 —
-                  verified against the WORST case (a pure-white photo behind
-                  the scrim): the card's scrim was bumped from/60 to /65 in
-                  lockstep so the combination still clears AA. From-black/65
-                  over white composites to ~rgb(89,89,89) (L ~= 0.101);
-                  white/85 text over that composites to ~rgb(230,230,230)
-                  (L ~= 0.79) — a ~5.6:1 contrast ratio, comfortably above the
-                  4.5:1 AA floor for normal-size text, with the `text-shadow`
-                  below as extra (unmodeled) headroom. (The original /60 scrim
-                  + white/90 pairing left only ~5:1 in this same worst case —
-                  too thin a margin to also fade the text, so the scrim moved
-                  up slightly rather than reducing further.) Weight was
-                  already regular (no bold to step down). */}
+              {/* Author credit (Google's attribution terms) — plain text, never a link:
+                  it sits inside the stretched-link <Link>, and an <a> nested in an <a>
+                  is invalid HTML. The scrim keeps the white caption legible on a light
+                  photo (text-shadow alone cannot). The /65 scrim + white/85 text pairing
+                  clears the 4.5:1 AA floor even over a pure-white photo (~5.6:1);
+                  don't lighten either without re-checking that worst case. Both layers
+                  are decorative (`aria-hidden` scrim; the credit reads normally). */}
               {vm.photoAttributions && vm.photoAttributions.length > 0 ? (
                 <>
                   <div
@@ -311,36 +227,27 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
         </div>
       </Link>
 
-      {/* Body — a SIBLING of the Link (NOT nested in the anchor); `flex-1` so the
-          card fills its grid cell and the meta row below can pin to the bottom via
-          its `mt-auto` wrapper (AUB-194). */}
+      {/* Body — a sibling of the Link, not nested in the anchor; `flex-1` so the card
+          fills its grid cell and the meta row can pin to the bottom via `mt-auto`. */}
       <div className="flex flex-1 flex-col gap-1 px-4 pb-4 pt-3">
-        {/* Title row: name (left, below the overlay so it stays click-to-navigate)
-            + the attributed pills cluster (right). Both live in ONE flex row, so
-            they REFLOW side-by-side and a long name can never slide under the pills
-            (no absolute overlay, no magic offsets). */}
+        {/* Title row: name (left) + attributed pills (right) in one flex row, so a
+            long name can never slide under the pills. */}
         <div className="flex items-start justify-between gap-2">
           <h3 className="min-w-0 break-words font-display text-card-title font-bold text-foreground">
             {vm.name}
           </h3>
 
-          {/* Attributed community pills (save-count + external Google rating). In
-              flow in the title row, but raised above the stretched-link overlay
-              with `relative z-10` so hover/focus reaches them — the ONLY reason
-              they can be real tooltip triggers is that they are NOT descendants of
-              the <a>. ADR-007: EXTERNAL / community signals, explicitly
-              attributed, NEVER a safety verdict — all safety meaning stays in
-              SafetySignal (a separate row below); the tooltips are only
-              supplementary. */}
+          {/* Attributed community pills, raised above the stretched-link overlay with
+              `relative z-10` so hover/focus reaches them; they can be real tooltip
+              triggers only because they are not descendants of the <a>. ADR-007:
+              attributed community signals, never a safety verdict — all safety meaning
+              stays in SafetySignal below. */}
           {(vm.saveCount && vm.saveCount > 0) || vm.googleRating ? (
             <div className="relative z-10 flex shrink-0 items-center gap-1.5">
-              {/* Public save-count — heart glyph + number, hidden at 0. The owner
-                  explicitly chose this compact presentation (PR #274: "just found
-                  the 'saves' text unnecessary"), so there is NO visible "saves"
-                  word; the meaning is carried by the filled-heart glyph + count,
-                  an explicit aria-label ("N saves"), and the ADR-007 tooltip —
-                  never by colour or the tooltip alone (styling.md). A distinct
-                  accent (lavender) from the safety-state colours (ADR-007). */}
+              {/* Public save-count — heart glyph + number, hidden at 0, no visible
+                  "saves" word. Meaning is carried by the glyph + count + aria-label +
+                  tooltip, never colour alone (styling.md). Lavender is distinct from
+                  every safety-state colour (ADR-007). */}
               {vm.saveCount && vm.saveCount > 0 ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -357,7 +264,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
                 </Tooltip>
               ) : null}
 
-              {/* External Google Places rating — ATTRIBUTED, never a safety score (ADR-007). */}
+              {/* External Google Places rating — attributed, never a safety score (ADR-007). */}
               {vm.googleRating ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -379,22 +286,17 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
         </p>
 
-        {/* `relative z-10` (matching AttributedPill/FavoriteButton above): the
-            suggested-attribute ClaimBadge's "AI" tooltip trigger is a real
-            interactive <button>, so this row must be raised above the card's
-            stretched-link overlay (`after:absolute after:inset-0` on the media
-            Link) or that overlay intercepts every pointer event over it —
-            hover/click would silently never reach the button, even though
-            keyboard Tab-focus still works (hit-testing doesn't gate focus). */}
+        {/* `relative z-10`: the suggested ClaimBadge's "AI" tooltip trigger is a real
+            <button>, so this row must be raised above the stretched-link overlay or
+            the overlay intercepts every pointer event — hover/click silently never
+            reaches the button, even though Tab-focus still works. */}
         <div className="relative z-10 mt-2 flex flex-wrap items-center gap-2">
           {vm.safetyState ? (
             <SafetySignal state={vm.safetyState} />
           ) : vm.suggestedByBot ? null : (
-            // Honest empty state: no celiac claim / no attestation evidence yet
-            // AND nothing bot-suggested. Plain text label — meaning never rests
-            // on colour (styling.md). A bot-suggested empty listing instead
-            // shows its suggested-attribute badges below plus the "Suggested by
-            // Aubrey's Bot" label in the meta row (owner nits 7+8).
+            // Honest empty state: no evidence and nothing bot-suggested. Plain text —
+            // meaning never rests on colour (styling.md). A bot-suggested empty listing
+            // instead shows suggested badges plus the bot label in the meta row.
             <Badge
               variant="outline"
               className="border-dashed px-2.5 py-1 text-body-sm font-medium text-muted-foreground"
@@ -406,41 +308,27 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           {/* Recent harm flags the card regardless of older confirmations. */}
           {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
 
-          {/* CONFIRMED non-headline claims (AUB-226): one shared {@link ClaimBadge}
-              in its NON-suggested (affirmed) variant per attribute with positive
-              community consensus — real EVIDENCE, so it reads as confirmed, never
-              the suggested/provenance variant. Rendered BEFORE the suggested badges
-              (evidence before provenance) and in taxonomy order, so the browse card
-              shows the SAME confirmed claim badges as the listing-detail page. */}
+          {/* Confirmed non-headline claims: affirmed ClaimBadges, rendered before the
+              suggested ones (evidence before provenance) in taxonomy order — the same
+              confirmed badges the listing-detail page shows. */}
           {vm.confirmedAttributes.map((attribute) => (
             <ClaimBadge key={attribute} attribute={attribute} />
           ))}
 
-          {/* Curator-bot suggested claims (AUB-31, owner nit 7): one shared
-              {@link ClaimBadge} per live-suggested attribute — PROVENANCE, never
-              evidence (ADR-007). The suggested variant keeps the attribute's OWN
-              icon, wraps a gradient ring, and shows an always-visible "AI" marker
-              after the label (AUB-225) — a real painted text label alongside the
-              icon, never colour/shape alone, and never gated on a hover/focus-only
-              tooltip that touch users could never reach. */}
+          {/* Bot-suggested claims — provenance, never evidence (ADR-007). The suggested
+              variant shows an always-visible "AI" text marker: never colour/shape alone,
+              never gated on a hover-only tooltip touch users cannot reach. */}
           {vm.suggestedAttributes.map((attribute) => (
             <ClaimBadge key={attribute} attribute={attribute} suggested />
           ))}
         </div>
 
-        {/* Meta row — freshness cue (left) + evidence counts (right). The left
-            slot doubles as the bot-provenance slot (owner nit 8): when there is
-            no real freshness cue but live bot suggestions exist, it shows the
-            "Suggested by Aubrey's Bot" label, so bot-suggested cards read
-            uniformly with verified ones. A real freshness cue always WINS the
-            slot (evidence over provenance) — the suggested-attribute badges
-            above still carry the provenance. ALWAYS rendered so every card
-            reserves the same bottom-row height (AUB-194): a VM with no signal at
-            all gets an `invisible` placeholder line of the same composition
-            (icon + caption text) and a transparent divider, so empty cards match
-            the height of fully-attested ones without any content clipping. The
-            `mt-auto` wrapper pins the row to the card bottom when a neighbour's
-            name or address wraps taller. */}
+        {/* Meta row — freshness cue (left) + evidence counts (right). The left slot
+            doubles as the bot-provenance slot; a real freshness cue wins it (evidence
+            over provenance). Always rendered so every card reserves the same bottom-row
+            height: a VM with no signal gets an `invisible` placeholder of the same
+            composition and a transparent divider. `mt-auto` pins the row to the card
+            bottom when a neighbour wraps taller. */}
         <div className="mt-auto">
           {freshness || vm.evidence || vm.suggestedByBot ? (
             <div
@@ -455,9 +343,9 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
                   <span>{vm.freshness.label}</span>
                 </span>
               ) : vm.suggestedByBot ? (
-                // Bot provenance in the freshness slot (owner nit 8). Meaning is
-                // in the text + Sparkles icon, never colour alone (styling.md);
-                // `text-brand` is distinct from every safety-state colour.
+                // Bot provenance in the freshness slot. Meaning is in the text + icon,
+                // never colour alone (styling.md); `text-brand` is distinct from every
+                // safety-state colour.
                 <span
                   data-testid="bot-provenance"
                   className="inline-flex items-center gap-1.5 font-semibold text-brand"
@@ -498,20 +386,17 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
         </div>
       </div>
 
-      {/* Save/heart affordance (F6, AUB-125). A SIBLING of the Link (not a
-          descendant — a <button> inside an <a> is invalid HTML), raised above the
-          stretched-link overlay with `absolute … z-10` so it stays independently
-          focusable/clickable. FavoriteButton reproduces the previous inert heart's
-          exact top-right position/classes and reads `["favorites"]` itself, so the
-          VM stays per-user-free. */}
+      {/* Save/heart affordance. A sibling of the Link (a <button> inside an <a> is
+          invalid HTML), raised above the stretched-link overlay with `absolute … z-10`.
+          FavoriteButton reads `["favorites"]` itself, so the VM stays per-user-free. */}
       <FavoriteButton listingId={vm.id} listingName={vm.name} />
     </div>
   );
 }
 
 /**
- * The stable accent palette, indexed by a hash of the listing id. A fixed 4-tuple
- * so the modulo index below is provably in-range under `noUncheckedIndexedAccess`.
+ * Accent palette, indexed by a hash of the listing id. A fixed 4-tuple so the modulo
+ * index is provably in-range under `noUncheckedIndexedAccess`.
  */
 const ACCENTS = ["lavender", "peach", "mint", "sky"] as const satisfies readonly [
   RestaurantCardAccent,
@@ -521,9 +406,8 @@ const ACCENTS = ["lavender", "peach", "mint", "sky"] as const satisfies readonly
 ];
 
 /**
- * Derive a STABLE accent from a listing id, so a given listing always gets the
- * same photo-placeholder colour. A tiny, dependency-free string hash (djb2) keeps
- * this pure and client-safe.
+ * Derive a stable accent from a listing id, so a listing always gets the same
+ * placeholder colour. A dependency-free djb2 hash keeps this pure and client-safe.
  */
 function accentForId(id: string): RestaurantCardAccent {
   let hash = 5381;
@@ -536,43 +420,31 @@ function accentForId(id: string): RestaurantCardAccent {
 
 interface ListingCardProps {
   listing: Listing;
-  /** The precomputed at-a-glance trust for this listing (#33). */
+  /** The precomputed at-a-glance trust for this listing. */
   glance: ListingTrustGlance;
   /**
-   * A "0.4 mi" distance label, present ONLY when the browse page is
-   * distance-sorted (already derived server-side from the sort's haversine).
-   * Explicitly `| undefined` so the route can forward `card.distanceLabel`
-   * (optional on the server card) directly under `exactOptionalPropertyTypes`.
+   * A "0.4 mi" distance label, present only when the browse page is distance-sorted
+   * (derived server-side). Explicitly `| undefined` so the route can forward an optional
+   * field directly under `exactOptionalPropertyTypes`.
    */
   distanceLabel?: string | undefined;
 }
 
 /**
- * Map the real {@link Listing} + {@link ListingTrustGlance} (+ optional distance
- * label) into the flat, client-safe {@link RestaurantCardVM} the presentational
- * card consumes.
+ * Map a {@link Listing} + {@link ListingTrustGlance} into the client-safe
+ * {@link RestaurantCardVM}.
  *
- * Exported as the SINGLE mapping site so every browse surface (the list card, the
- * map pins, and the map carousel) derives its VM the same way — no duplicated
- * trust/accent logic. The glance already carries the server-derived evidence
- * counts, freshness cue, and bot-suggested attribute set, so this only maps them
- * onto the VM; it never touches `db` or re-derives trust. `accent` is a stable
- * per-listing gradient hashed from `listing.id`; `googleRating` is left
- * undefined until a later phase supplies it.
+ * The single mapping site: every browse surface (list card, map pins, map carousel)
+ * derives its VM here, so trust/accent logic is never duplicated. The glance already
+ * carries the server-derived evidence, freshness, and suggestion data — this never
+ * touches `db` or re-derives trust.
  *
- * `photo` (AUB-219) is the render-time Google photo for this listing, when the
- * caller has one — the browse route threads it in from a client-side batch
- * fetch (`fetchBrowsePhotos`, never the route loader) keyed on the page's
- * visible listing ids; other callers (favorites, the map carousel's own VM
- * derivation) simply omit it and the card renders its existing gradient
- * placeholder, unchanged. This is the ONLY place `photoUrl`/`photoAttributions`
- * are derived, from the raw `PlacePhoto` token, via {@link placePhotoProxyUrl}
- * at {@link CARD_PHOTO_MAX_WIDTH_PX} — so the list card and the map-carousel
- * mini-card (once it renders photos) can never disagree on the URL/width.
+ * `photo` is the render-time Google photo when the caller has one; callers without one
+ * omit it and the card renders its gradient placeholder. This is the only place
+ * `photoUrl`/`photoAttributions` are derived (via {@link placePhotoProxyUrl} at
+ * {@link CARD_PHOTO_MAX_WIDTH_PX}), so surfaces can never disagree on the URL/width.
  *
- * CLIENT-SAFE: imports only pure/client-safe/type-only modules (the `Listing`
- * type, the pure `ListingTrustGlance` type, and the presentational card) — no
- * `getDb`/server-only import — so it is safe in the browse route's client bundle.
+ * Client-safe: imports only pure/client-safe/type-only modules.
  */
 export function listingToCardVM(
   listing: Listing,
@@ -591,22 +463,14 @@ export function listingToCardVM(
     confirmedAttributes: glance.confirmedAttributes,
     hasRecentIncident: glance.hasRecentIncident,
     accent: accentForId(listing.id),
-    // Already-derived on the server (batched query set); mapped straight through.
-    // Each optional field is spread in ONLY when present, so the prop stays
-    // truly absent (not `undefined`) under `exactOptionalPropertyTypes`.
+    // Each optional field is spread in only when present, so the prop stays truly
+    // absent (not `undefined`) under `exactOptionalPropertyTypes`.
     ...(glance.evidence ? { evidence: glance.evidence } : {}),
     ...(glance.freshness ? { freshness: glance.freshness } : {}),
     ...(distanceLabel !== undefined ? { distanceLabel } : {}),
-    // The public save-count is OPTIONAL and trailing so callers that don't have
-    // it (e.g. the map carousel) still compile and simply render no pill. Spread
-    // in only when provided so the prop stays truly absent under
-    // `exactOptionalPropertyTypes`.
     ...(saveCount !== undefined ? { saveCount } : {}),
-    // Photo is OPTIONAL and trailing (AUB-219), same pattern as saveCount: a
-    // caller with no photo for this listing (kill switch off, manual listing,
-    // upstream miss, or a caller that simply hasn't fetched photos at all)
-    // stays truly absent, so the card falls back to its gradient tile exactly
-    // as before this feature existed.
+    // A caller with no photo (kill switch off, manual listing, upstream miss, photos
+    // not fetched) stays truly absent, so the card falls back to its gradient tile.
     ...(photo
       ? {
           photoUrl: placePhotoProxyUrl(photo.photoToken, CARD_PHOTO_MAX_WIDTH_PX),
@@ -617,9 +481,8 @@ export function listingToCardVM(
 }
 
 /**
- * Thin list-item wrapper preserving the browse route's call site
- * (`<ListingCard listing={…} glance={…} distanceLabel={…} />`): it maps the pair
- * through {@link listingToCardVM} and renders the presentational card in an `<li>`.
+ * Thin list-item wrapper: maps the pair through {@link listingToCardVM} and renders
+ * the presentational card in an `<li>`.
  */
 export function ListingCard({ listing, glance, distanceLabel }: ListingCardProps) {
   const vm = listingToCardVM(listing, glance, distanceLabel);

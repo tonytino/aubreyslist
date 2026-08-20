@@ -7,23 +7,23 @@ import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { type SafetyState, safetyLabel } from "~/components/SafetySignal";
 
 /**
- * Shared presentational pieces of the directory Map view (AUB-61 → AUB-111):
- * the safety-pin styling, the pin button, the bottom mini-card carousel, and
- * the recenter FAB. BOTH map paths render these — the real Google map
+ * Shared presentational pieces of the directory Map view: the safety-pin
+ * styling, the pin button, the bottom mini-card carousel, and the recenter
+ * FAB. Both map paths render these — the real Google map
  * (`DirectoryMapLive.tsx`, key present) and the stylized CSS-placeholder
  * fallback (`DirectoryMap.tsx`, key absent) — so the safety-signal visuals and
  * accessible names can never drift between them.
  *
- * SAFETY-CORRECTNESS (from the bundle, NON-NEGOTIABLE): a pin carries a safety
- * signal (colour + icon + label), so a pin must NEVER visually float over a
- * DIFFERENT restaurant's card — a mis-associated safety signal is a real harm
- * (e.g. a red incident pin bleeding onto a celiac-safe card). We enforce this
- * two ways: the carousel sits at `z-10` ABOVE the pins (`z-1`/`z-6` in the
- * placeholder; the Google map canvas is an unpositioned/z-0 sibling in the
- * live path) AND draws an OPAQUE background band, so any low pin hides BEHIND
- * the band instead of over a card.
+ * Safety-correctness invariant: a pin carries a safety signal (colour + icon +
+ * label), so a pin must never visually float over a different restaurant's
+ * card — a mis-associated safety signal is a real harm (e.g. a red incident
+ * pin bleeding onto a celiac-safe card). Enforced two ways: the carousel sits
+ * at `z-10` above the pins (`z-1`/`z-6` in the placeholder; the Google map
+ * canvas is an unpositioned/z-0 sibling in the live path) and draws an opaque
+ * background band, so any low pin hides behind the band instead of over a
+ * card.
  *
- * ACCESSIBILITY: every pin and mini-card is a real `<button>`; the pin's icon
+ * Accessibility: every pin and mini-card is a real `<button>`; the pin's icon
  * is decorative and its accessible name is the restaurant name + its safety
  * state, so the safety meaning is never colour-only. The selected pin/mini-card
  * carry `aria-pressed` in addition to the visual ring/border.
@@ -50,8 +50,8 @@ const PIN_STYLES: Record<
   "gluten-friendly": {
     fill: "bg-gluten-friendly",
     ring: "ring-gluten-friendly/30",
-    // The branded "gluten struck out" glyph — the SAME icon SafetySignal renders
-    // for this state (AUB-133), so the pin's shape matches every other surface.
+    // The branded "gluten struck out" glyph — the same icon SafetySignal
+    // renders for this state, so the pin's shape matches every other surface.
     Icon: WheatStrike,
     label: safetyLabel("gluten-friendly"),
   },
@@ -84,7 +84,7 @@ export function pinStyleFor(state: SafetyState | null) {
 /**
  * The safety pin itself — an accessible `<button>` whose name carries the
  * restaurant + its safety state (never colour alone). Positioning is the
- * CALLER's job: the placeholder projects it with `absolute` + `left`/`top`
+ * caller's job: the placeholder projects it with `absolute` + `left`/`top`
  * percentages; the live map wraps it in an `<AdvancedMarker>` anchored at the
  * true lat/lng (there the marker carries the z-order, so no extra classes).
  */
@@ -128,7 +128,7 @@ export function MapPinButton({
 /**
  * Recenter FAB. In the live map path `onClick` re-fits the camera to the
  * current pins; in the CSS-placeholder fallback it is passed no handler and
- * stays exactly the unwired affordance it was before AUB-111.
+ * stays an unwired affordance.
  */
 export function RecenterFab({ onClick }: { onClick?: () => void }) {
   return (
@@ -147,7 +147,7 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
  * Bottom mini-card carousel, kept in sync with pin selection — identical in
  * both map paths.
  *
- * MUST sit above the pins with an OPAQUE band so a low pin can never bleed
+ * Must sit above the pins with an opaque band so a low pin can never bleed
  * over a mini-card (safety-correctness — see the module comment). The opaque
  * `bg-background` band + top shadow + z-10 enforce it.
  */
@@ -170,9 +170,9 @@ export function MapCarousel({
         const selected = vm.id === selectedId;
         const ChipIcon = style.Icon;
         return (
-          // Positioned wrapper so the heart is a SIBLING overlay of the mini-card
-          // action (F6, AUB-125) — NOT nested inside it. Nesting a <button>
-          // (FavoriteButton) inside the mini-card <button> would be invalid HTML +
+          // Positioned wrapper so the heart is a sibling overlay of the mini-card
+          // action — not nested inside it. Nesting a <button> (FavoriteButton)
+          // inside the mini-card <button> would be invalid HTML + a
           // nested-interactive a11y defect. The wrapper carries the fixed
           // carousel-entry width; the mini-card button fills it, and FavoriteButton
           // is raised over it (`absolute … z-10`). The carousel's own opaque

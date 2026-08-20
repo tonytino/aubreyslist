@@ -4,7 +4,7 @@ import { LINK_KIND_METADATA, LINK_KINDS } from "~/listings/links";
 import { emptyLinkFieldValues, ListingLinksFields } from "./ListingLinksFields";
 
 /**
- * ListingLinksFields tests (AUB-202): the five static per-kind URL inputs the
+ * ListingLinksFields tests: the five static per-kind URL inputs the
  * intake wizard and the edit-links dialog share. Values are controlled by the
  * parent; each field is labeled and carries its hint via aria-describedby.
  */

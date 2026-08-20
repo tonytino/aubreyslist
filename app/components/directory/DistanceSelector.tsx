@@ -2,22 +2,21 @@ import { MapPin } from "lucide-react";
 import { DISTANCE_RADIUS_OPTIONS } from "~/listings/distance";
 
 /**
- * Distance-radius selector (user feedback #7).
+ * Distance-radius selector: narrows the directory to listings within a chosen
+ * radius. The whole control is a single native `<select>` styled as a chip, so
+ * clicking anywhere on it opens the options; the visible text reads "Within
+ * {value} miles". The origin the radius is measured from (the user's location,
+ * or Denver Union Station as a fallback) is applied by the route and
+ * deliberately not shown here. The MapPin is a decorative, click-through
+ * overlay.
  *
- * Sits where the "N places near Denver" count used to be and lets the visitor
- * narrow the directory to listings within a chosen radius. The WHOLE control is a
- * single native `<select>` styled as a chip, so clicking anywhere on it opens the
- * options; the visible text reads simply "Within {value} miles". The origin the
- * radius is measured from (the user's location, or Denver Union Station as a
- * fallback) is applied by the route and deliberately NOT shown here. The MapPin is
- * a decorative, click-through overlay.
+ * Accessible: a real `<select>` with an explicit `aria-label` ("Search
+ * radius") — native keyboard + screen-reader support, never an unlabelled
+ * mystery target.
  *
- * ACCESSIBLE: a real `<select>` with an explicit `aria-label` ("Search radius") —
- * native keyboard + screen-reader support, never an unlabelled mystery target.
- *
- * TRUST MODEL: a GEOGRAPHIC filter, styled with the neutral directory chip
- * language (pin + border + surface) — NOT any `SafetySignal` treatment. Distance
- * is convenience, never a safety signal.
+ * Trust model: a geographic filter, styled with the neutral directory chip
+ * language (pin + border + surface) — never any `SafetySignal` treatment.
+ * Distance is convenience, not a safety signal.
  */
 export function DistanceSelector({
   value,

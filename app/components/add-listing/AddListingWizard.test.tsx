@@ -12,16 +12,15 @@ import type { ReactElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * AddListingWizard end-to-end tests (deck rework AUB-231: the five attest
- * steps are now ONE ClaimCardDeck stage whose fixed Dispute / "Not sure" /
- * Confirm button row is exercised here). The create + vote server functions
- * are mocked. The load-bearing assertions:
+ * AddListingWizard end-to-end tests, exercising the single ClaimCardDeck
+ * attest stage through its fixed Dispute / "Not sure" / Confirm button row.
+ * The create + vote server functions are mocked. Load-bearing assertions:
  *
- *   - Submit creates the listing exactly ONCE.
- *   - `submitVote` fires ONLY for confirm/dispute answers — never for skip or
+ *   - Submit creates the listing exactly once.
+ *   - `submitVote` fires only for confirm/dispute answers — never for skip or
  *     untouched attributes (the "skip writes nothing" non-negotiable).
- *   - An all-skipped flow still creates the listing and fires ZERO votes.
- *   - A ReviewStep row's Edit re-enters the deck AT that card and one answer
+ *   - An all-skipped flow still creates the listing and fires zero votes.
+ *   - A ReviewStep row's Edit re-enters the deck at that card and one answer
  *     returns straight to review (single-card Edit mode).
  */
 const createListingMock = vi.fn((_args: unknown) => Promise.resolve({} as never));
@@ -203,7 +202,7 @@ describe("AddListingWizard", () => {
     await answerDeck(["Not sure", "Not sure", "Not sure", "Not sure", "Not sure"]);
     await screen.findByRole("button", { name: "Submit listing" });
 
-    // Edit the third attribute: the deck reopens AT that card…
+    // Edit the third attribute: the deck reopens at that card…
     fireEvent.click(screen.getByRole("button", { name: "Edit Dedicated GF menu" }));
     await screen.findByRole("heading", { name: "Dedicated GF menu" });
     expect(screen.getByText("Card 3 of 5")).toBeInTheDocument();

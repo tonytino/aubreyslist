@@ -3,7 +3,7 @@ import { forwardRef, useId } from "react";
 
 /**
  * Brand "gluten struck out" glyph — an ear of wheat with a single diagonal strike
- * wiped through it as a CUTOUT (not a drawn line), the same mark as the
+ * wiped through it as a cutout (not a drawn line), the same mark as the
  * {@link ~/components/Wordmark}. The strike is a mask that erases a diagonal band
  * from the wheat, so the gap shows the background through: gluten, struck out.
  *
@@ -13,7 +13,7 @@ import { forwardRef, useId } from "react";
  * 24×24 box as `ShieldCheck` / `Clock` / `TriangleAlert`. Consumers size it with
  * a utility class (e.g. `size-4`), exactly like the lucide state icons.
  *
- * DECORATIVE: safety meaning always lives in the adjacent text label, so the
+ * Decorative: safety meaning always lives in the adjacent text label, so the
  * consumer passes `aria-hidden`. The mask id is per-instance (`useId`) so many
  * chips on one page (e.g. the browse grid) never collide on `url(#…)`.
  */

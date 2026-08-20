@@ -6,19 +6,16 @@ import type { SessionUser } from "~/server/auth/current-user.fn";
 import { FilterChips } from "./FilterChips";
 
 /**
- * Tests for the directory filter chip row (AUB-61, Phase 2b; faceted in AUB-140;
- * extended for the server-side "Saved" filter in AUB-129 / F11; flattened in
- * AUB-198 — the "Filter listings" sheet is retired and the taxonomy filter + sort
- * now live directly in the row). The quick AND taxonomy chips are real <button>s
- * with `aria-pressed`; the component is purely presentational — it renders
- * whichever sets it's handed and reports clicks via `onQuickToggle` /
- * `onToggleAttr` (the quick group-exclusivity rule lives in the parent's
- * `applyQuickToggle` reducer, unit-tested in quick.test.ts; the attrs URL
- * round-trip in browse-params.test.ts). The sort chip is a native labelled
- * <select> (SortSelector) driving the route's `changeSort`. The search leads the
- * row as a {@link SearchChip} (user feedback #5). The "Saved" chip is
- * sign-in-gated: it reads {@link currentUserQuery} (seeded into the QueryClient
- * below), so the whole row renders under a provider.
+ * Tests for the directory filter chip row. The quick and taxonomy chips are
+ * real <button>s with `aria-pressed`; the component is purely presentational —
+ * it renders whichever sets it's handed and reports clicks via
+ * `onQuickToggle` / `onToggleAttr` (the quick group-exclusivity rule lives in
+ * the parent's `applyQuickToggle` reducer, unit-tested in quick.test.ts; the
+ * attrs URL round-trip in browse-params.test.ts). The sort chip is a native
+ * labelled <select> (SortSelector) driving the route's `changeSort`. The
+ * search leads the row as a {@link SearchChip}. The "Saved" chip is
+ * sign-in-gated: it reads {@link currentUserQuery} (seeded into the
+ * QueryClient below), so the whole row renders under a provider.
  */
 
 const SIGNED_IN_USER: SessionUser = {
@@ -84,7 +81,7 @@ describe("FilterChips — quick chips", () => {
     expect(screen.getByRole("button", { name: "Celiac-safe" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Gluten-friendly" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Recently verified" })).toBeInTheDocument();
-    // The sheet entry point is retired; the taxonomy filter renders as chips instead.
+    // The taxonomy filter renders as chips; there is no sheet entry point.
     expect(screen.queryByRole("button", { name: "Filters" })).not.toBeInTheDocument();
   });
 
@@ -105,7 +102,7 @@ describe("FilterChips — quick chips", () => {
   });
 
   it("renders an additive combination (safety + recency) as multiple pressed chips", () => {
-    // The faceted model allows a safety choice AND recently-verified at once — both
+    // The faceted model allows a safety choice and recently-verified at once — both
     // read as pressed, while the unselected safety sibling stays off.
     renderChips({ quick: ["celiac", "recent"] });
     expect(screen.getByRole("button", { name: "Celiac-safe" })).toHaveAttribute(
@@ -177,8 +174,8 @@ describe("FilterChips — taxonomy chips (AUB-198)", () => {
   });
 
   it("BACK-COMPAT: a URL carrying the headline attr renders its chip pressed and toggleable", () => {
-    // An old shared link may carry `?attrs=celiac_safe_vs_gluten_friendly`. The
-    // active filter must stay VISIBLE (an invisible active filter is dishonest)
+    // A shared link may carry `?attrs=celiac_safe_vs_gluten_friendly`. The
+    // active filter must stay visible (an invisible active filter is dishonest)
     // and removable — so the otherwise-hidden headline chip renders, pressed.
     const { onToggleAttr } = renderChips({ attrs: ["celiac_safe_vs_gluten_friendly"] });
     const celiacChips = screen.getAllByRole("button", { name: "Celiac-safe" });
@@ -261,7 +258,7 @@ describe("FilterChips — Saved chip (AUB-129 / F11)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Saved" }));
 
     // A sign-in dialog appears with a Google OAuth link carrying a `?saved=1`
-    // returnTo — and crucially the toggle (the server-side navigation) is NOT
+    // returnTo — and crucially the toggle (the server-side navigation) is not
     // fired, so no `savedOnly` request is ever made for an anonymous viewer.
     const signInLink = await screen.findByRole("link", { name: /sign in/i });
     expect(signInLink).toHaveAttribute(
@@ -289,7 +286,7 @@ describe("FilterChips — Saved chip (AUB-129 / F11)", () => {
   });
 
   it("ANONYMOUS is never pressed even if `saved` is somehow set", () => {
-    // An anonymous viewer can't be in the saved MODE, so the chip stays unpressed
+    // An anonymous viewer can't be in the saved mode, so the chip stays unpressed
     // regardless of the URL param.
     renderChips({ saved: true }, { signedIn: false });
     expect(screen.getByRole("button", { name: "Saved" })).toHaveAttribute("aria-pressed", "false");

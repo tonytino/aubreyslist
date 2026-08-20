@@ -15,7 +15,7 @@ import type { Answer, AnswerMap, WizardPlace } from "./AddListingWizard";
  *   fact confirm/dispute     → a per-attribute icon chip in a neutral, non-safety
  *                              tint (brand-soft "Confirmed" / muted "Disputed") so a
  *                              plain fact never borrows the celiac-safe/GF safety colours
- *   skip / untouched         → a dashed "Not yet attested" pill, for ALL attributes
+ *   skip / untouched         → a dashed "Not yet attested" pill, for all attributes
  *
  * Every row has an Edit that jumps back to its step (the place row → step 0). The
  * footer reiterates that skipped attributes record nothing, tied to the fact that
@@ -138,10 +138,9 @@ export function ReviewStep({
  * headline confirm/dispute → SafetySignal; fact confirm/dispute →
  * {@link FactOutcomeChip}; skip/untouched → the dashed "Not yet attested" pill.
  *
- * EXPORTED so the ClaimCardDeck's end-state summary
- * (`app/components/claims/DeckSummary.tsx`, AUB-231) renders the EXACT same
- * outcome chips as this review step — one implementation, not a look-alike
- * (the AUB-227 one-chip-source rule).
+ * Exported so the ClaimCardDeck's end-state summary
+ * (`app/components/claims/DeckSummary.tsx`) renders the same outcome chips as
+ * this review step — one implementation, not a look-alike.
  */
 export function ReviewOutcome({
   attribute,
@@ -160,21 +159,21 @@ export function ReviewOutcome({
 }
 
 /**
- * A non-headline fact outcome chip. It composes the SAME {@link ClaimChip}
+ * A non-headline fact outcome chip. Composes the same {@link ClaimChip}
  * primitive as the detail-page per-claim
- * {@link import("~/components/listing/ClaimBadge").ClaimBadge} and the interactive
- * vote toggle — one shared chip (attribute glyph + label at {@link
- * import("~/components/badge-size").BADGE_FAMILY_SIZE}), so the add-listing review and the listing detail read in
- * one visual language and cannot drift (AUB-227). Its CONTENT stays distinct on
- * purpose: it carries the confirm/dispute OUTCOME word, not the plain attribute
- * label.
+ * {@link import("~/components/listing/ClaimBadge").ClaimBadge} and the
+ * interactive vote toggle — one shared chip (attribute glyph + label at {@link
+ * import("~/components/badge-size").BADGE_FAMILY_SIZE}), so the add-listing
+ * review and the listing detail read in one visual language and cannot drift.
+ * Its content stays distinct on purpose: it carries the confirm/dispute
+ * outcome word, not the plain attribute label.
  *
- * It DELIBERATELY avoids the celiac-safe green / gluten-friendly amber safety
- * tokens (honesty — a plain fact must never read as a safety verdict). Confirmed
- * uses a neutral-positive brand tint, Disputed a muted/neutral one. Colour + icon
- * + the visible "Confirmed"/"Disputed" word keep the two states distinguishable
- * without resting on colour alone; the icon is `aria-hidden` so meaning lives in
- * the text.
+ * Deliberately avoids the celiac-safe green / gluten-friendly amber safety
+ * tokens — a plain fact must never read as a safety verdict. Confirmed uses a
+ * neutral-positive brand tint, Disputed a muted/neutral one. Colour + icon +
+ * the visible "Confirmed"/"Disputed" word keep the two states distinguishable
+ * without resting on colour alone; the icon is `aria-hidden` so meaning lives
+ * in the text.
  */
 export function FactOutcomeChip({
   attribute,
@@ -185,7 +184,7 @@ export function FactOutcomeChip({
 }) {
   const Icon = CLAIM_ATTRIBUTE_ICONS[attribute];
   // `text-brand-strong` (not `text-brand`) so the chip clears WCAG AA on the
-  // light `brand-soft` fill in BOTH themes (dark `text-brand` on `brand-soft`
+  // light `brand-soft` fill in both themes (dark `text-brand` on `brand-soft`
   // is only 3.78:1); matches how brand-soft is paired elsewhere in the app.
   const tint = confirmed
     ? "border-transparent bg-brand-soft text-brand-strong"

@@ -2,21 +2,19 @@ import { ArrowUpDown } from "lucide-react";
 import { BROWSE_SORT_OPTIONS, type BrowseSort, parseBrowseSort } from "~/listings/sort";
 
 /**
- * Sort selector chip (AUB-198).
+ * Sort selector chip — the server-side sort control in the filter chip row.
+ * Mirrors {@link DistanceSelector} exactly: the whole control is a single
+ * native `<select>` styled as a chip, so clicking anywhere on it opens the
+ * options. The ArrowUpDown glyph is a decorative, click-through overlay.
  *
- * The server-side sort control, surfaced directly in the filter chip row now that
- * the "Filter listings" sheet is retired. Mirrors {@link DistanceSelector} exactly:
- * the WHOLE control is a single native `<select>` styled as a chip, so clicking
- * anywhere on it opens the options. The ArrowUpDown glyph is a decorative,
- * click-through overlay.
+ * Accessible: a real `<select>` with an explicit `aria-label` ("Sort by") —
+ * native keyboard + screen-reader support (`getByLabel("Sort by")` selectors
+ * depend on that name).
  *
- * ACCESSIBLE: a real `<select>` with an explicit `aria-label` ("Sort by") — native
- * keyboard + screen-reader support, and the same accessible name the old sheet's
- * labelled control carried (so `getByLabel("Sort by")` selectors keep working).
- *
- * URL-DRIVEN / PRESENTATIONAL: owns no state. The value comes from `?sort=` via the
- * route and every change reports through `onChange` — the route's `changeSort`
- * handles the URL navigation, including the "Near me" geolocation opt-in flow.
+ * URL-driven and presentational: owns no state. The value comes from `?sort=`
+ * via the route and every change reports through `onChange` — the route's
+ * `changeSort` handles the URL navigation, including the "Near me"
+ * geolocation opt-in flow.
  */
 export function SortSelector({
   value,

@@ -13,7 +13,7 @@ import { type LinkFieldValues, ListingLinksFields } from "./ListingLinksFields";
 /**
  * Step 0 — find the place. Reuses the Places autocomplete search + manual-entry
  * UI of `PlacesIntakeForm` / `ManualIntakeForm`, but instead of calling
- * `submitCreateListing` it COLLECTS the choice into wizard state via `onSelect`.
+ * `submitCreateListing` it collects the choice into wizard state via `onSelect`.
  * The create is deferred to the wizard's final submit.
  *
  * Places is the default surface when it's the active intake mode (ADR-008), with
@@ -75,7 +75,7 @@ function PlacesFinder({ onSelect }: { onSelect: (place: WizardPlace) => void }) 
   const [manual, setManual] = useState(false);
   const [query, setQuery] = useState("");
   // `searchNonce` is part of the query key so a deliberate re-Search re-fetches
-  // even for an unchanged term (mirrors PlacesIntakeForm / issue #98).
+  // even for an unchanged term (mirrors PlacesIntakeForm).
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [searchNonce, setSearchNonce] = useState(0);
 

@@ -3,92 +3,67 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 
 interface SafetySummaryProps {
   /**
-   * The derived headline trust state, once EPIC 4 (#28/#29) computes it from
-   * attestation data. While trust data does not exist, leave this `undefined`
-   * (or `null`) and the component renders an honest "Not yet attested" empty
+   * The derived headline trust state. When trust data does not exist, pass
+   * `undefined`/`null` and the component renders an honest "Not yet attested" empty
    * state instead of a fabricated rating.
    */
   state?: SafetyState | null;
   /**
-   * Visual emphasis. `"default"` is the standalone section; `"hero"` (AUB-131)
-   * places the cue in the listing hero's solid bar below the media, where it
-   * reads as the page's headline verdict. The headline is NO LONGER up-scaled
-   * (AUB-224): it renders at the shared badge-family size, identical to the
-   * per-claim badges, and stays the primary verdict by its solid colour fill +
-   * hero position rather than by size. Both variants keep the accessible region
-   * + heading and the honest empty state — only the fill/position and the
-   * heading's visibility differ.
+   * Visual emphasis. `"default"` is the standalone section; `"hero"` places the cue
+   * in the listing hero's solid bar, where it reads as the page's headline verdict.
+   * The headline renders at the shared badge-family size, identical to the per-claim
+   * badges — it stays the primary verdict by its solid fill + hero position, not by
+   * size. Both variants keep the accessible region + heading and the honest empty
+   * state; only the fill/position and heading visibility differ.
    */
   variant?: "default" | "hero";
   /**
-   * Whether a recent "got glutened" report is on file for this listing (see
-   * `findRecentIncident` in `~/trust/incident-recency.ts`). Independent of
-   * `state` — a listing can have a fresh celiac-safe consensus AND a recent
-   * incident at the same time, so both badges render side by side.
+   * Whether a recent "got glutened" report is on file (see `findRecentIncident` in
+   * `~/trust/incident-recency.ts`). Independent of `state` — a listing can have a
+   * fresh celiac-safe consensus and a recent incident at once, so both badges render
+   * side by side.
    *
-   * Only rendered in the `"hero"` variant — repo-owner feedback was that the
-   * detail page showed the headline safety state TWICE (once here, once in a
-   * standalone `SafetyBadges` row below the hero). This component now owns the
-   * WHOLE badge row for the hero card — the headline badge (or the honest empty
-   * state) plus the incident badge, exactly once, together. Ignored in the
-   * `"default"` variant, which stays a single headline verdict.
+   * Rendered only in the `"hero"` variant: this component owns the whole hero badge
+   * row — headline badge (or honest empty state) plus incident badge, each exactly
+   * once. Ignored in `"default"`, which stays a single headline verdict.
    */
   hasRecentIncident?: boolean;
 }
 
 /**
- * The plain-language guidance for the honest "Not yet attested" empty state —
- * a single constant so the full-box and compact (hero + incident) renders of
- * the empty state can never drift apart in wording.
+ * Plain-language guidance for the honest "Not yet attested" empty state — one
+ * constant so the full-box and compact renders can never drift apart in wording.
  */
 const NOT_YET_ATTESTED_GUIDANCE =
   "No one has confirmed yet whether this restaurant is celiac-safe or only gluten-friendly. " +
   "Verify cross-contamination practices with the restaurant directly.";
 
 /**
- * The prominent, headline celiac-safe vs. gluten-friendly signal for a listing —
- * and, in the `"hero"` variant, the WHOLE safety-badge row for the listing detail
- * page's hero card (repo-owner feedback, nits-detail-badges-once): previously a
- * separate `SafetyBadges` row duplicated this same headline state below the
- * hero. That standalone component is retired; its incident-badge + tooltip +
- * "Safety status" labelled-group behaviour now lives here, folded into the hero
- * presentation, so every applicable badge renders exactly once.
+ * The headline celiac-safe vs. gluten-friendly signal for a listing — and, in the
+ * `"hero"` variant, the whole safety-badge row for the detail page's hero card, so
+ * every applicable badge renders exactly once.
  *
- * This is the most important cue on the page (docs/agents/domain.md → "surface
- * this most prominently"). It is accessible by construction: the populated case
- * delegates to {@link SafetySignal}, which always pairs COLOUR + ICON + TEXT
- * LABEL, and the empty case states "Not yet attested" in plain text so the
- * meaning never depends on colour or styling. In the hero, each badge also
- * carries a supplementary tooltip (the shared {@link SAFETY_TOOLTIP} copy) on a
- * keyboard-focusable trigger, so the extra gloss is reachable without a
- * pointer. The `"default"` variant stays the bare chip — no tooltip wrapper —
- * exactly as before the hero row absorbed the badges.
+ * The most important cue on the page (docs/agents/domain.md). Accessible by
+ * construction: the populated case delegates to {@link SafetySignal} (colour + icon
+ * + text label), and the empty case states "Not yet attested" in plain text, so
+ * meaning never depends on colour or styling. In the hero, each badge carries a
+ * supplementary tooltip ({@link SAFETY_TOOLTIP}) on a keyboard-focusable trigger.
+ * The `"default"` variant stays the bare chip — no tooltip wrapper.
  *
- * IMPORTANT: we deliberately do NOT invent a safety rating — an old or fabricated
- * consensus could put a celiac at real risk. The `state` prop is the single seam
- * EPIC 4 wires up; everything else here already handles the populated render.
+ * Never invent a safety rating — an old or fabricated consensus could put a celiac
+ * at real risk.
  *
- * The `"hero"` variant (AUB-131) renders the SAME headline cue inside the
- * listing hero's solid bar — at the shared badge-family size, not up-scaled
- * (AUB-224) — plus the incident badge when `hasRecentIncident` is true. Both badges (or the badge + the honest empty
- * state) sit in ONE row that scrolls horizontally on overflow instead of
- * wrapping — `overflow-x-auto` with a hidden scrollbar and `shrink-0` chips
- * (the same pattern as the directory's `FilterChips` row) — so the row never
- * pushes the page wider at the 375px minimum width. The scroll container
- * carries compensating `-m-1`/`p-1` so each trigger's `focus-visible` ring
- * draws INSIDE the scrollable area instead of being clipped by `overflow-x-auto`
- * (FilterChips solves the same clipping with its `-mx-gutter`/`px-gutter`
- * bleed). When the row must hold BOTH the empty state and the incident badge,
- * the empty state compacts to a dashed "Not yet attested" chip (its guidance
- * sentence moves into the chip's tooltip) so the incident badge is never pushed
- * off-screen at 375px — recent harm stays visible, never buried (ADR-007). The
- * row is exposed to assistive tech as a labelled "Safety status" group (a
- * chrome-reset `<fieldset>` + sr-only `<legend>`, the repo's `ViewToggle`
- * pattern), distinct from this section's own "Gluten-free safety" region name.
- * The `aria-labelledby` section + its heading are kept in both variants (the
- * heading is visually hidden in `"hero"` since the hero band already reads as
- * the headline), so the accessible "Gluten-free safety" region name is stable
- * across the redesign.
+ * Hero row layout: badges sit in one row that scrolls horizontally on overflow
+ * instead of wrapping (`overflow-x-auto`, hidden scrollbar, `shrink-0` chips — the
+ * `FilterChips` pattern), so the row never pushes the page wider at the 375px
+ * minimum width. Compensating `-m-1`/`p-1` keeps each trigger's focus-visible ring
+ * inside the scroll area instead of clipped. When the row holds both the empty
+ * state and the incident badge, the empty state compacts to a dashed chip (guidance
+ * moves into its tooltip) so recent harm stays visible, never buried (ADR-007). The
+ * row is exposed to assistive tech as a "Safety status" group (chrome-reset
+ * `<fieldset>` + sr-only `<legend>`), distinct from the section's "Gluten-free
+ * safety" region name; the section heading is visually hidden in `"hero"` so the
+ * accessible region name stays stable across variants.
  */
 export function SafetySummary({
   state,
@@ -108,10 +83,9 @@ export function SafetySummary({
       <Tooltip>
         <TooltipTrigger asChild>
           <button type="button" className={tooltipButtonClassName}>
-            {/* No size override (AUB-224): the headline renders at the shared
-                badge-family size, identical to the per-claim badges. It stays
-                the primary verdict by its SOLID colour fill + hero position,
-                never by being bigger. */}
+            {/* No size override: the headline renders at the shared badge-family
+                size and stays the primary verdict by its solid fill + hero
+                position, never by being bigger. */}
             <SafetySignal state={state} variant="solid" />
           </button>
         </TooltipTrigger>
@@ -122,13 +96,11 @@ export function SafetySummary({
       <SafetySignal state={state} variant="solid" className="self-start" />
     )
   ) : isHero && hasRecentIncident ? (
-    // Compact empty state, ONLY when it must share the never-wrapping hero row
-    // with the incident badge: the full two-paragraph box (below) would push
-    // the incident chip off-screen at the 375px minimum width, and recent harm
-    // must stay visible (ADR-007). The honest "Not yet attested" text label
-    // stays visible; the guidance sentence moves into the chip's tooltip
-    // (keyboard-reachable like the other badges, and announced on focus via
-    // the tooltip's aria-describedby wiring).
+    // Compact empty state, only when it must share the never-wrapping hero row with
+    // the incident badge: the full box would push the incident chip off-screen at
+    // 375px, and recent harm must stay visible (ADR-007). The "Not yet attested"
+    // label stays visible; the guidance sentence moves into the chip's tooltip
+    // (keyboard-reachable, announced on focus via aria-describedby).
     <Tooltip>
       <TooltipTrigger asChild>
         <button type="button" className={tooltipButtonClassName}>
@@ -140,16 +112,12 @@ export function SafetySummary({
       <TooltipContent>{NOT_YET_ATTESTED_GUIDANCE}</TooltipContent>
     </Tooltip>
   ) : (
-    // Full empty-state box: the default variant, and the hero WITHOUT an
-    // incident (the row then holds only this box, so there is nothing to push
-    // off-screen). In the hero's overflow row the box is `shrink-0`, so it
-    // needs a width cap — without one a flex item's base size is its
-    // max-content width (the whole guidance sentence unwrapped) and the row
-    // would scroll for no reason at the 375px minimum width. `w-full` BEFORE
-    // the max-w cap resolves the box to the row's content width first (so at
-    // 375px it fits the ~301px row instead of forcing ~19px of needless
-    // horizontal scroll that clipped the dashed edge), while `max-w-xs`/`sm:`
-    // still cap it on wider rows — behaviour at >=394px is unchanged.
+    // Full empty-state box: the default variant, and the hero without an incident.
+    // In the hero's overflow row the box is `shrink-0`, so it needs a width cap —
+    // without one a flex item's base size is its max-content width (the guidance
+    // sentence unwrapped) and the row would scroll for no reason at 375px. `w-full`
+    // before the max-w cap resolves the box to the row's content width first, while
+    // `max-w-xs`/`sm:` still cap it on wider rows.
     <div
       className={`flex shrink-0 flex-col gap-1 rounded-card border border-dashed border-border bg-muted p-gutter${
         isHero ? " w-full max-w-xs sm:max-w-sm" : ""
@@ -189,17 +157,14 @@ export function SafetySummary({
       </h2>
 
       {isHero ? (
-        // Chrome-reset <fieldset> + sr-only <legend> (the repo's ViewToggle
-        // pattern, and what Biome's useSemanticElements rule prefers over
-        // role="group") gives the badge row an exposed group role + accessible
-        // name distinct from the section's own name — an aria-label on a
-        // role-less (generic) div is ignored by most AT. `min-w-0` overrides a
-        // <fieldset>'s UA-stylesheet auto min-width so the row can actually
-        // shrink and hand overflow to `overflow-x-auto` instead of forcing the
-        // hero wider than the viewport at the 375px minimum width. The `p-1`
-        // padding (compensated by `-m-1` so the layout doesn't shift) keeps
-        // each trigger's 2px focus-visible ring inside the scroll container —
-        // without it, `overflow-x-auto` clips the ring's box-shadow.
+        // Chrome-reset <fieldset> + sr-only <legend> (what Biome's
+        // useSemanticElements prefers over role="group") gives the badge row an
+        // exposed group role + accessible name — an aria-label on a generic div is
+        // ignored by most AT. `min-w-0` overrides the <fieldset> UA-stylesheet auto
+        // min-width so the row can shrink and hand overflow to `overflow-x-auto`
+        // instead of forcing the hero wider at 375px. The `p-1` (compensated by
+        // `-m-1`) keeps each trigger's focus-visible ring inside the scroll
+        // container — without it, `overflow-x-auto` clips the ring's box-shadow.
         <fieldset className="-m-1 flex min-w-0 items-center gap-2 overflow-x-auto border-0 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <legend className="sr-only">Safety status</legend>
           {headlineBadge}
