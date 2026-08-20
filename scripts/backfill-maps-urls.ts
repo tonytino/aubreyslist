@@ -26,6 +26,7 @@
 import { eq, like } from "drizzle-orm";
 import { getDb } from "~/db/client";
 import { listings } from "~/db/schema";
+import { errorMessage, runWhenInvokedDirectly } from "./cli";
 
 /** The real Drizzle client type, injected so tests can pass a structural mock. */
 type BackfillDb = ReturnType<typeof getDb>;
@@ -126,20 +127,11 @@ export async function runCli(
     );
     return 0;
   } catch (error) {
-    log.error(error instanceof Error ? error.message : String(error));
+    log.error(errorMessage(error));
     return 1;
   }
 }
 
 // Run when invoked directly (not when imported by tests). `getDb()`/`getEnv()` —
 // and thus DATABASE_URL validation — are only touched on this path.
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runCli()
-    .then((code) => {
-      process.exitCode = code;
-    })
-    .catch((error: unknown) => {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    });
-}
+runWhenInvokedDirectly(import.meta.url, () => runCli());
