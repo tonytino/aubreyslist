@@ -1,15 +1,16 @@
-# Issue & Epic Organization
+# Issue & Epic Organization (GitHub — historical)
+
+> **Superseded by ADR-012.** Planning and epics live in **Linear**
+> (`docs/agents/linear.md`). This doc remains for the seed GitHub epics (`#8`,
+> `#9`) and any in-flight GitHub-native work. **New epics start in Linear, not
+> as `type:epic` issues.**
 
 > **Decision rule:** Claim **work items** (the `status:ready` + `safe:agent`
 > units in the default issue list). **Never claim an epic.** An epic is a parent
-> grouping carrying the `type:epic` label; you work an epic by working its
-> sub-issues, not the epic itself.
+> grouping carrying the `type:epic` label; work an epic by working its
+> sub-issues.
 
-Tasks are tracked as **GitHub Issues** (see `docs/agents/tasks.md` for the
-claim/execution protocol). This doc covers how those issues are organized into
-epics and work items.
-
----
+The claim/execution protocol is in `docs/agents/tasks.md`.
 
 ## Two kinds of issue
 
@@ -18,17 +19,9 @@ epics and work items.
 | **Epic**      | `type:epic`  | No — work its sub-issues instead    | No (filtered out)        |
 | **Work item** | `type:*` (bug/feature/chore/docs) | Yes, when `status:ready` + `safe:agent` | Yes |
 
-- **Epics** are parent groupings (e.g. "EPIC 7 — Deploy & launch"). They carry
-  `type:epic` and link their work items via **native GitHub sub-issues**. An
-  epic is done when its sub-issues are done; it holds no directly executable
-  scope of its own.
-- **Work items** are the scoped, single-session units an agent actually claims.
-  These are what the default discovery query surfaces.
-
-The `type:epic` label is what keeps epics out of the claimable list, so agents
-discovering work see only real, executable units.
-
----
+Epics link their work items via native GitHub sub-issues and hold no directly
+executable scope; an epic is done when its sub-issues are done. The `type:epic`
+label keeps epics out of the claimable list.
 
 ## Viewing & filtering
 
@@ -43,15 +36,13 @@ gh issue list -- -label:type:epic
 gh issue list --label "type:epic"
 ```
 
-GitHub's native sub-issue search qualifiers also work in the issues UI and API:
+Native sub-issue search qualifiers (issues UI and API):
 
 - `-has:parent` — top-level issues only (epics and standalone items).
-- `has:parent` — only issues that are a sub-issue of some epic.
+- `has:parent` — only sub-issues of some epic.
 
-Web sessions use the GitHub MCP tools (`mcp__github__*`); the filters are the
-same, expressed as search queries.
-
----
+Web sessions use the GitHub MCP tools (`mcp__github__*`) with the same filters
+as search queries.
 
 ## Working an epic
 
@@ -62,20 +53,6 @@ same, expressed as search queries.
 3. Do not relabel or close the epic yourself. It closes when its sub-issues are
    resolved.
 
-> The two seed epics (`#8`, `#9`) predate this convention: they carry
-> `type:epic` but still list their children as a checklist in the epic **body**
-> rather than as native sub-issue links. Back-linking them as native sub-issues
-> is a tracked follow-up; new epics should use native sub-issues from the start.
-
----
-
-## Why no GitHub Projects board
-
-A full **GitHub Projects board was deliberately not adopted**: agents in this
-environment can't create or interact with a Projects board, so epics +
-`type:epic` + native sub-issues were the organizing mechanism instead.
-
-> **Superseded by ADR-012.** Planning and epics now live in **Linear**, which
-> agents *can* manipulate (see `docs/agents/linear.md`). This doc is retained for
-> the seed GitHub epics (`#8`, `#9`) and any in-flight GitHub-native work until
-> they're ported. **New epics start in Linear, not as `type:epic` issues.**
+> The two seed epics (`#8`, `#9`) list their children as a body checklist rather
+> than native sub-issue links; back-linking them is a tracked follow-up. New
+> epics use native sub-issues from the start.

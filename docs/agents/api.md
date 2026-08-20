@@ -1,6 +1,6 @@
 # API Layer
 
-This repo uses two complementary backend patterns. Choosing correctly matters.
+Two complementary backend patterns. Choose correctly.
 
 ## Decision Rule
 
@@ -16,15 +16,15 @@ This repo uses two complementary backend patterns. Choosing correctly matters.
 Server functions and Hono routes are *how* data is produced. **TanStack Query**
 is *how the client caches, shares, and refetches it.* They compose:
 
-- **Plain server function in a loader** (e.g. `getWelcome`) — one-shot route data
-  you don't need to cache, dedupe, or refetch. Simplest; no Query involved.
-- **TanStack Query** — data you want cached across components/navigations,
-  refetched on demand, or kept fresh (`staleTime`, invalidation, mutations).
-  The `queryFn` can be a server function, so you keep the no-fetch ergonomics.
+- **Plain server function in a loader** (e.g. `getWelcome`) — one-shot route
+  data with no caching/dedupe/refetch needs. Simplest; no Query involved.
+- **TanStack Query** — data cached across components/navigations, refetched on
+  demand, or kept fresh (`staleTime`, invalidation, mutations). The `queryFn`
+  can be a server function.
 
 Query is wired SSR-aware (see `app/router.tsx` — `routerWithQueryClient` + a
-`QueryClient` in router context). Prefetch in a loader so data is dehydrated into
-the HTML and hydrated on the client with no loading flash:
+`QueryClient` in router context). Prefetch in a loader so data is dehydrated
+into the HTML and hydrated on the client with no loading flash:
 
 ```ts
 const itemsQuery = queryOptions({ queryKey: ["items"], queryFn: () => getItems() });
@@ -40,19 +40,16 @@ export const Route = createFileRoute("/")({
 });
 ```
 
-`app/routes/index.tsx` is the live example (it uses both `getWelcome` and a
-prefetched `itemsQuery` side by side).
+`app/routes/index.tsx` is the live example (both `getWelcome` and a prefetched
+`itemsQuery` side by side).
 
 ## Layer 1 — Server Functions
 
-For data tightly coupled to a single route or component.  Server functions run
+For data tightly coupled to a single route or component. Server functions run
 only on the server but are called like normal async functions from loaders or
-components — no endpoint URL, no fetch, no client wiring needed.
+components — no endpoint URL, no fetch, no client wiring.
 
-### Live example
-
-`app/routes/index.tsx` contains a working server function (`getWelcome`).  Refer
-to it as the canonical pattern.
+Live example: `getWelcome` in `app/routes/index.tsx` — the canonical pattern.
 
 ### Minimal pattern
 
@@ -93,19 +90,15 @@ const getItem = createServerFn()
 
 ## Layer 2 — Hono Routes
 
-For portable endpoints: webhooks, CRUD, anything consumable outside this frontend.
+For portable endpoints: webhooks, CRUD, anything consumable outside this
+frontend.
 
-### Live example
+Live example: the `GET /api/health` liveness route
+(`app/server/routes/health.ts`).
 
-The app mounts a `GET /api/health` liveness route
-(`app/server/routes/health.ts`). For the canonical route-group pattern, see
-**Adding a new Hono route group** below.
-
-> **Request validation:** `@hono/zod-validator` **is a dependency** (added with
-> the first validated endpoint — the `GET /api/places/photo` media proxy,
-> AUB-215, which validates its query params). It is the standard validator for
-> this layer: use it for request bodies AND typed query params, per the snippet
-> below and the "Do Not" rules at the bottom of this doc.
+> **Request validation:** `@hono/zod-validator` is the standard validator for
+> this layer — use it for request bodies AND typed query params, per the snippet
+> below and the "Do Not" rules at the bottom.
 
 ### Adding a new Hono route group
 
@@ -134,9 +127,11 @@ Always validate request bodies with `zValidator` from `@hono/zod-validator`.
 The Hono app (`app/server/index.ts`) centralizes both:
 
 - Unmatched routes return JSON `{ "error": "Not Found" }` with status 404.
-- Unhandled exceptions are logged and return `{ "error": "Internal Server Error" }` with status 500 — no stack traces leak.
+- Unhandled exceptions are logged and return
+  `{ "error": "Internal Server Error" }` with status 500 — no stack traces leak.
 
-To return a specific status from a route, throw an `HTTPException` (it is passed through verbatim) rather than crafting an ad-hoc error response:
+To return a specific status, throw an `HTTPException` (passed through verbatim)
+rather than crafting an ad-hoc error response:
 
 ```ts
 import { HTTPException } from "hono/http-exception";
@@ -144,11 +139,16 @@ import { HTTPException } from "hono/http-exception";
 if (!item) throw new HTTPException(404, { message: "Item not found" });
 ```
 
-The catch-all in `app/routes/api.$.ts` forwards every method — including `OPTIONS` (CORS preflight) and `HEAD` — to Hono, so add CORS middleware there if you need it. It is a TanStack Start **Server Route** (`createFileRoute("/api/$")({ server: { handlers: { GET, POST, … } } })`, each handler calling `app.fetch(request)`) — the post-vinxi replacement for the old `createAPIFileRoute` / `app/api.ts` router (ADR-012).
+The catch-all in `app/routes/api.$.ts` forwards every method — including
+`OPTIONS` (CORS preflight) and `HEAD` — to Hono, so add CORS middleware there if
+needed. It is a TanStack Start **Server Route**
+(`createFileRoute("/api/$")({ server: { handlers: { GET, POST, … } } })`, each
+handler calling `app.fetch(request)`).
 
 ## RPC Client — Frontend Consuming Hono
 
-Never use raw `fetch` against Hono routes from the frontend. Use the typed RPC client:
+Never use raw `fetch` against Hono routes from the frontend. Use the typed RPC
+client:
 
 ```ts
 import { hc } from "hono/client";
