@@ -43,4 +43,7 @@ owner runs many parallel orchestrator sessions and misses inline questions. An
 unresponsive human is busy, not a broken tool: keep the session alive, re-ask,
 and never silently assume an answer to a blocking question.
 
+Session replies are TL;DR-first and terse per `docs/agents/writing.md` — 1-3
+sentences, detail only when the human asks for it.
+
 Full playbook: `/orchestrate`. Full repo rules: `AGENTS.md`.

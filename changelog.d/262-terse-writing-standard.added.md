@@ -1,0 +1,1 @@
+- `[manual]` Added `docs/agents/writing.md`, the terse writing standard for all repo prose, wired into the Hard Rules, review dimensions, and PR template.

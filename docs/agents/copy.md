@@ -3,7 +3,7 @@
 > **If a visitor can read it, it must be brief, plain, and human. When in
 > doubt, cut.** This governs all rendered text: headings, body copy, empty
 > states, tooltips, toasts, aria-labels, meta titles/descriptions, the
-> webmanifest. Agent docs and code comments are out of scope.
+> webmanifest. Agent docs and code comments follow `docs/agents/writing.md`.
 
 ## Brevity
 

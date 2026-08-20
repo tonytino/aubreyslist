@@ -55,4 +55,6 @@ items (escalated after 2-round cap)" block) from the loop in docs/agents/orchest
 then apply the `review:adversarial-passed` label. For a trivial or human-only change,
 apply the `skip-review` label instead and leave this empty. -->
 
+- [ ] Prose terseness: comments, docs, and this PR body follow docs/agents/writing.md
+
 -

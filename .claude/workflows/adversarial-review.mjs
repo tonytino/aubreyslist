@@ -77,7 +77,8 @@ const spec = (item) =>
 const HOUSE_RULES =
   `Honor the repo's conventions: read AGENTS.md (Hard Rules) and the relevant docs/agents/*.md ` +
   `before changing code. No new dependencies without justification, no \`any\`, no \`process.env\` ` +
-  `outside app/env.ts, tests for new behavior, and \`pnpm preflight\` must stay green.`
+  `outside app/env.ts, tests for new behavior, and \`pnpm preflight\` must stay green. All prose ` +
+  `(comments, docs, PR bodies) follows docs/agents/writing.md.`
 
 const workerPrompt = (item) =>
   `You are a WORKER subagent. Implement the following in the repo working tree. ` +
@@ -98,7 +99,8 @@ const reviewerPrompt = (item, round) =>
   `- Test honesty: no skipped/weakened/missing tests for new code; \`pnpm preflight\` must pass (run it if in doubt).\n` +
   `- Scope creep: unrequested changes, gold-plating, drive-by edits.\n` +
   `- Documentation drift: docs that no longer match the changed behavior.\n` +
-  `- URL-state hygiene: shareable UI state (filters/sort/search/page/tab) kept in useState instead of the URL; defaults leaking into the querystring; a client-only param wrongly added to loaderDeps or a server param not resetting page (docs/agents/url-state.md).\n\n` +
+  `- URL-state hygiene: shareable UI state (filters/sort/search/page/tab) kept in useState instead of the URL; defaults leaking into the querystring; a client-only param wrongly added to loaderDeps or a server param not resetting page (docs/agents/url-state.md).\n` +
+  `- Prose terseness: history narration, ticket IDs in comments, comments restating the code, bloated docs or PR bodies (docs/agents/writing.md).\n\n` +
   `Return the structured verdict. Set overall=SHIP ONLY when no blocker/major finding stands ` +
   `CONFIRMED or PLAUSIBLE; otherwise CHANGES_REQUESTED. Default to skepticism: if a real risk is ` +
   `plausible but unproven, mark it PLAUSIBLE rather than dropping it.`

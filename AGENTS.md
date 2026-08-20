@@ -37,6 +37,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Tests (unit, component, E2E)                  | `docs/agents/testing.md`      |
 | Visual identity, design language, briefing Claude Design | `docs/agents/design.md` |
 | User-facing copy, voice, microcopy            | `docs/agents/copy.md`         |
+| Writing anything: comments, docs, PR bodies   | `docs/agents/writing.md`      |
 | Styling, Tailwind, CSS                        | `docs/agents/styling.md`      |
 | Environment variables                         | `docs/agents/environment.md`  |
 | Secrets for manual local commands (1Password) | `docs/agents/local-secrets.md` |
@@ -125,6 +126,9 @@ These apply everywhere, always, with no exceptions.
 - **Agents never merge (or enable auto-merge on) a `safe:human` PR** — a human
   always clicks merge for those. More broadly, never take an action-as-a-human the
   human would disapprove of.
+- **All repo prose follows `docs/agents/writing.md`.** Comments state only what
+  code cannot; comments, docs, PR bodies, commit messages, and session replies
+  stay terse and current-state-only.
 - **pnpm only.** Never use npm or yarn.
 - **Run `pnpm preflight` before declaring work complete.** This single command runs lint, typecheck, and tests. See `docs/agents/tooling.md` for when to use `check` vs `preflight` vs the pre-commit hook.
 
