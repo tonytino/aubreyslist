@@ -3,10 +3,10 @@ import { createRouter as createTanStackRouter } from "@tanstack/react-router";
 import { routerWithQueryClient } from "@tanstack/react-router-with-query";
 import { routeTree } from "./routeTree.gen";
 
-// TanStack Start's Vite plugin (post-vinxi) auto-imports `getRouter` from this
-// file via the `#tanstack-router-entry` virtual module — both the client
-// hydration path (hydrateStart) and the SSR handler call it. The name and
-// signature are the framework contract; do not rename to `createRouter`.
+// TanStack Start's Vite plugin imports `getRouter` from this file via the
+// `#tanstack-router-entry` virtual module; client hydration and the SSR
+// handler both call it. The name and signature are the framework contract —
+// do not rename.
 export function getRouter() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -16,9 +16,8 @@ export function getRouter() {
     },
   });
 
-  // routerWithQueryClient wires the QueryClient into the router so query data
-  // prefetched in a route loader (via context.queryClient) is dehydrated on the
-  // server and hydrated on the client automatically — no manual hydration setup.
+  // routerWithQueryClient dehydrates loader-prefetched query data on the
+  // server and hydrates it on the client — no manual hydration setup.
   return routerWithQueryClient(
     createTanStackRouter({
       routeTree,

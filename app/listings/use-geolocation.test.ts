@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useGeolocation } from "./use-geolocation";
 
 /**
- * Tests for the "near me" geolocation hook (#37): the grant / deny / unavailable
- * fallback behaviour the distance sort depends on. We mock `navigator.geolocation`
- * so the grant and deny paths are deterministic (no real browser permission).
+ * The grant / deny / unavailable fallback behaviour the distance sort depends
+ * on. `navigator.geolocation` is mocked so the grant and deny paths are
+ * deterministic.
  */
 
 type SuccessCb = (position: GeolocationPosition) => void;

@@ -7,11 +7,6 @@ import {
   parseBrowseSort,
 } from "./sort";
 
-/**
- * Tests for the browse sort registry (#36) — the small, extensible source of
- * truth shared by the route control and the loader.
- */
-
 describe("browse sort registry", () => {
   it("defaults to alphabetical (the first, stable option)", () => {
     expect(DEFAULT_BROWSE_SORT).toBe("alpha");
@@ -35,7 +30,7 @@ describe("isBrowseSort", () => {
     expect(isBrowseSort("alpha")).toBe(true);
     expect(isBrowseSort("trust")).toBe(true);
     expect(isBrowseSort("recency")).toBe(true);
-    expect(isBrowseSort("distance")).toBe(true); // added in #37 ("near me")
+    expect(isBrowseSort("distance")).toBe(true);
   });
 
   it("rejects unknown / non-string values", () => {

@@ -1,42 +1,34 @@
 /**
- * Client-safe duplicate-listing error boundary (issues #25, #141).
+ * Client-safe pieces of the manual-entry dedup error contract: the message
+ * marker, the {@link DuplicateListingError} class, and the
+ * {@link parseDuplicateListingError} client parser. Type-imports `Listing`
+ * (erased at build); no `~/db` / drizzle / neon value import.
  *
- * CLIENT-SAFE: this module holds ONLY the pure, db-free pieces of the manual-entry
- * dedup error contract — the message marker, the {@link DuplicateListingError}
- * marker class, and the {@link parseDuplicateListingError} client parser. It
- * type-imports `Listing` (erased at build) and has NO `~/db` / drizzle / neon
- * value import, mirroring `app/listings/taxonomy.ts` (#126).
- *
- * The add-listing intake forms render the blocked-duplicate error and link to the
- * existing listing, so they import {@link parseDuplicateListingError} from HERE
- * rather than from `~/server/listings/dedup` — whose neighbouring db-touching
- * graph (`create.ts` → drizzle/neon) would otherwise be dragged into the
- * `listings.new` client chunk. The server dedup module (`dedup.ts`) re-exports
- * these so server code and existing tests keep one import surface.
+ * The intake forms import {@link parseDuplicateListingError} from here rather
+ * than from `~/server/listings/dedup`, whose db-touching graph would drag
+ * drizzle/neon into the `listings.new` client chunk. The server dedup module
+ * re-exports these so server code keeps one import surface.
  */
 
 import type { Listing } from "~/db/schema";
 
 /**
- * Machine-readable marker appended to {@link DuplicateListingError.message}. The
- * structured `existingListing*` fields are authoritative server-side and in
- * tests, but TanStack Start serializes a thrown error across the server-fn RPC
- * boundary down to a plain `Error` — custom subclass fields do NOT survive to the
+ * Machine-readable marker appended to {@link DuplicateListingError.message}.
+ * TanStack Start serializes a thrown error across the server-fn RPC boundary
+ * down to a plain `Error` — custom subclass fields do not survive to the
  * client. So the existing-listing id is also embedded in the message via this
- * marker, and {@link parseDuplicateListingError} re-extracts it client-side to
- * build a link. The marker is intentionally terse and id-only (the name is
- * already human-readable in the leading sentence) and is stripped from the
- * displayed text by the parser.
+ * marker, and {@link parseDuplicateListingError} re-extracts it client-side.
+ * The parser strips the marker from the displayed text.
  */
 const DUPLICATE_MARKER_PREFIX = "[[existing-listing:";
 const DUPLICATE_MARKER_SUFFIX = "]]";
 
 /**
- * Thrown when a manual-entry submission is blocked as a likely duplicate. Carries
- * the existing listing's id and name as structured fields (authoritative
- * server-side) AND embeds the id in `message` via a marker so the client — which
- * only receives `error.message` across the RPC boundary — can still link to the
- * listing that already exists (see {@link parseDuplicateListingError}).
+ * Thrown when a manual-entry submission is blocked as a likely duplicate.
+ * Carries the existing listing's id and name as structured fields and embeds
+ * the id in `message` via the marker, so the client — which only receives
+ * `error.message` across the RPC boundary — can still link to the existing
+ * listing.
  */
 export class DuplicateListingError extends Error {
   readonly existingListingId: string;
@@ -54,14 +46,12 @@ export class DuplicateListingError extends Error {
 }
 
 /**
- * Client-safe parse of an arbitrary error into the structured duplicate-listing
- * shape, recovering the existing listing's id from the message marker that
- * survives the server-fn RPC boundary (custom error fields do not). Returns the
- * human-readable message with the marker stripped, plus `existingListingId` when
- * present so the UI can render a link.
+ * Parse an arbitrary error into the structured duplicate-listing shape,
+ * recovering the existing listing's id from the message marker. Returns the
+ * message with the marker stripped, plus `existingListingId` when present.
  *
- * Returns `null` for any error that is not a blocked-duplicate error, so callers
- * fall back to their generic error rendering.
+ * Returns `null` for any error that is not a blocked-duplicate error, so
+ * callers fall back to their generic error rendering.
  */
 export function parseDuplicateListingError(
   error: unknown

@@ -1,23 +1,18 @@
 /**
- * Site-wide SEO / social-share metadata.
- *
- * Centralises the canonical origin, the default title/description, and the
- * Open Graph + Twitter Card tags so a shared link (iMessage, Slack, Discord,
- * X/Twitter, Facebook) unfurls with the brand mark, a title, and a description
- * instead of a bare URL. The root route spreads `defaultSeoMeta()` into its
- * head; individual routes can override `title` / `description` (TanStack Router
- * dedupes meta by `title` / `name` / `property`, descendant wins).
+ * Site-wide SEO / social-share metadata: the canonical origin, default
+ * title/description, and Open Graph + Twitter Card tags. The root route
+ * spreads `defaultSeoMeta()` into its head; routes override `title` /
+ * `description` (TanStack Router dedupes meta by `title` / `name` /
+ * `property`, descendant wins).
  */
 
 /**
- * Canonical production origin — used to build ABSOLUTE URLs for `og:image` and
- * `og:url`, which social scrapers (notably Apple/iMessage) require; relative
- * paths are unreliable. Update this single constant if the domain changes.
+ * Canonical production origin, for building absolute `og:image` and `og:url`
+ * URLs — social scrapers (notably Apple/iMessage) require absolute paths.
  *
- * The live custom domain is the HYPHENATED `www.aubreys-list.com` — that is
- * the host Google indexes (per Search results) and the one attached to the
- * Vercel project. The unhyphenated `aubreyslist.com` (the repo's name) is NOT
- * our domain; do not "fix" the spelling back.
+ * The live custom domain is the hyphenated `www.aubreys-list.com`. The
+ * unhyphenated `aubreyslist.com` (the repo's name) is not our domain; do not
+ * "fix" the spelling.
  */
 export const SITE_URL = "https://www.aubreys-list.com";
 
@@ -40,9 +35,9 @@ export const SITE_DESCRIPTION =
 export const OG_IMAGE_PATH = "/og-image.png";
 
 /**
- * A real square brand logo that ships in `public/` — used as the
- * `Organization` logo in the site JSON-LD (a square mark reads better there than
- * the wide OG card). Must stay in sync with an asset that actually exists.
+ * Square brand logo used as the `Organization` logo in the site JSON-LD (a
+ * square mark reads better there than the wide OG card). Must reference an
+ * asset that actually exists in `public/`.
  */
 export const LOGO_PATH = "/icon-512.png";
 
@@ -61,12 +56,10 @@ type MetaTag =
 export type CanonicalLink = { rel: "canonical"; href: string };
 
 /**
- * The per-page meta a specific route should OVERRIDE on top of the root
- * defaults: document `title` + `description`, and the matching Open Graph /
- * Twitter Card tags. TanStack Router dedupes meta by `title` / `name` /
- * `property` (descendant wins), so spreading this into a route's `head().meta`
- * cleanly overrides the root's defaults. `og:url` is ABSOLUTE (via
- * {@link absoluteUrl}) because social scrapers require it.
+ * Per-page meta that overrides the root defaults: document `title` +
+ * `description` and the matching Open Graph / Twitter Card tags. Spread into a
+ * route's `head().meta`; router meta-dedupe makes the descendant win.
+ * `og:url` is absolute because social scrapers require it.
  */
 export function pageSeoMeta({
   title,
@@ -98,11 +91,10 @@ export function canonicalLink(path: string): CanonicalLink {
 }
 
 /**
- * Serialize a JSON-LD payload to a string safe to embed inside a
- * `<script type="application/ld+json">` block. Escaping `<` as its `<`
- * unicode form means a `<` in any string value (e.g. a restaurant name) can
- * never open a `</script>` sequence and break out of the tag — the single XSS
- * risk with inlined structured data. `JSON.stringify` already escapes quotes.
+ * Serialize a JSON-LD payload for embedding in a
+ * `<script type="application/ld+json">` block. `<` is escaped in unicode form
+ * so a string value can never open a `</script>` sequence and break out of
+ * the tag — the one XSS risk with inlined structured data.
  */
 export function serializeJsonLd(data: unknown): string {
   return JSON.stringify(data).replace(/</g, "\\u003c");
@@ -118,9 +110,8 @@ export function jsonLdScript(data: unknown): {
 
 /**
  * Site-level structured data injected once at the root: a `WebSite` (with a
- * `SearchAction` pointing at the directory's `?q=` search) and an
- * `Organization` (name, url, square logo). Only honest, site-wide facts — no
- * per-page or invented data.
+ * `SearchAction` targeting the directory's `?q=` search) and an
+ * `Organization`. Only honest, site-wide facts — no invented data.
  */
 export function siteJsonLd(): Record<string, unknown> {
   return {
@@ -152,10 +143,9 @@ export function siteJsonLd(): Record<string, unknown> {
 }
 
 /**
- * A `BreadcrumbList` JSON-LD payload for a page's location in the site
- * hierarchy (e.g. Home → a restaurant). Search engines use it to render the
- * breadcrumb trail under a result instead of the raw URL path. Items are
- * ordered root-first; each `path` is resolved to an absolute URL.
+ * `BreadcrumbList` JSON-LD for a page's place in the site hierarchy. Search
+ * engines render it as the breadcrumb trail under a result instead of the raw
+ * URL path. Items are root-first; each `path` resolves to an absolute URL.
  */
 export function breadcrumbJsonLd(
   items: Array<{ name: string; path: string }>
@@ -173,9 +163,8 @@ export function breadcrumbJsonLd(
 }
 
 /**
- * The default document + social meta tags for the whole site. Spread into the
- * root route's `head().meta`. Routes may append/override their own `title` and
- * `description`.
+ * Default document + social meta tags for the whole site, spread into the
+ * root route's `head().meta`. Routes may override `title` and `description`.
  */
 export function defaultSeoMeta(): MetaTag[] {
   const ogImage = absoluteUrl(OG_IMAGE_PATH);

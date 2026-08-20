@@ -9,21 +9,20 @@ import { viewerFavoritesQuery } from "~/favorites/viewer-favorites-query";
 import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 
 /**
- * `/favorites` — the signed-in viewer's saved spots (issue AUB-127 / F9).
+ * `/favorites` — the signed-in viewer's saved spots.
  *
- * DATA PATTERN (repo convention): the loader prefetches the viewer's favorites
- * (`viewerFavoritesQuery`) AND the favorited-id set (`favoriteIdsQuery`, which the
- * cards' heart buttons read) via `ensureQueryData`, so the page dehydrates into
- * the SSR HTML and hydrates with no loading flash. The current-user query is
- * already prefetched at the root, so it is read straight from cache.
+ * The loader prefetches the viewer's favorites and the favorited-id set the
+ * cards' heart buttons read, so the page dehydrates into the SSR HTML and
+ * hydrates with no loading flash. The current-user query is prefetched at the
+ * root and read from cache.
  *
  * Three states, decided by the prefetched auth + favorites:
- *  - ANONYMOUS → an empty state inviting sign-in (a full-page OAuth anchor whose
- *    `returnTo` brings the diner back here after login).
- *  - SIGNED-IN, EMPTY → a "nothing saved yet" nudge back to the directory.
- *  - SIGNED-IN, POPULATED → the shared {@link DirectoryList} of cards, each mapped
- *    via `listingToCardVM` with NO distance (favorites have no origin) but WITH
- *    the public save-count so the pill renders exactly as it does on browse.
+ *  - anonymous → an empty state inviting sign-in (a full-page OAuth anchor
+ *    whose `returnTo` brings the diner back here after login);
+ *  - signed-in, empty → a "nothing saved yet" nudge back to the directory;
+ *  - signed-in, populated → the shared {@link DirectoryList} of cards, mapped
+ *    via `listingToCardVM` with no distance (favorites have no origin) but
+ *    with the public save-count so the pill renders exactly as on browse.
  */
 export const Route = createFileRoute("/favorites")({
   head: () => ({
@@ -39,9 +38,9 @@ export const Route = createFileRoute("/favorites")({
     links: [canonicalLink("/favorites")],
   }),
   loader: async ({ context }) => {
-    // Prefetch the viewer's favorites AND the favorited-id set the cards' heart
-    // buttons read, so the page hydrates fully marked with no client round-trip
-    // (anonymous viewers short-circuit both to `[]`, no DB hit).
+    // Prefetch the viewer's favorites and the favorited-id set the cards'
+    // heart buttons read, so the page hydrates fully marked with no client
+    // round-trip (anonymous viewers short-circuit both to `[]`, no DB hit).
     await Promise.all([
       context.queryClient.ensureQueryData(viewerFavoritesQuery),
       context.queryClient.ensureQueryData(favoriteIdsQuery),
@@ -96,8 +95,8 @@ export function FavoritesPage() {
         ) : (
           <DirectoryList
             cards={favorites.map((card) =>
-              // No distance origin for favorites (distance stays absent); pass the
-              // save-count so the pill renders exactly as on browse.
+              // No distance origin for favorites; pass the save-count so the
+              // pill renders exactly as on browse.
               listingToCardVM(card.listing, card.glance, undefined, card.favoriteCount)
             )}
           />

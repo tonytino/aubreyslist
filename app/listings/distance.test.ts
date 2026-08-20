@@ -11,12 +11,6 @@ import {
   UNION_STATION,
 } from "./distance";
 
-/**
- * Tests for the client-safe distance helpers (#37) — the shared, explainable
- * definition of a valid coordinate and the haversine distance the "near me" sort
- * ranks by.
- */
-
 const DENVER: Coords = { lat: 39.7392, lng: -104.9903 };
 const BOULDER: Coords = { lat: 40.015, lng: -105.2705 };
 const NYC: Coords = { lat: 40.7128, lng: -74.006 };
@@ -73,7 +67,7 @@ describe("haversineKm", () => {
   });
 });
 
-// --- distance-radius filter helpers (user feedback #7) ---------------------
+// --- distance-radius filter helpers ----------------------------------------
 
 describe("UNION_STATION", () => {
   it("is a valid coordinate near downtown Denver (the default browse origin)", () => {

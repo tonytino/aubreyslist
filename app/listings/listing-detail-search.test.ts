@@ -7,9 +7,9 @@ import {
 
 describe("listingDetailSearchSchema", () => {
   it("defaults an empty search to the DEFAULTS map (no drift with stripSearchParams)", () => {
-    // The schema's parse-of-empty MUST equal the DEFAULTS map that the route's
-    // stripSearchParams() compares against, or a default-valued param would leak
-    // into the URL. See docs/agents/url-state.md.
+    // The schema's parse-of-empty must equal the defaults map the route's
+    // stripSearchParams() compares against, or a default-valued param would
+    // leak into the URL. See docs/agents/url-state.md.
     expect(listingDetailSearchSchema.parse({})).toEqual(LISTING_DETAIL_SEARCH_DEFAULTS);
   });
 

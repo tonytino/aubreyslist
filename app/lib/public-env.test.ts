@@ -3,8 +3,8 @@ import { googleMapsBrowserKey } from "./public-env";
 
 /**
  * The accessor's contract is the graceful-degradation seam for the directory
- * map (AUB-111): absent/blank → `null`, so callers MUST handle the
- * unprovisioned case (CI/E2E run keyless and rely on the fallback path).
+ * map: absent/blank → `null`, so callers must handle the unprovisioned case
+ * (CI/E2E run keyless and rely on the fallback path).
  */
 describe("googleMapsBrowserKey", () => {
   afterEach(() => {

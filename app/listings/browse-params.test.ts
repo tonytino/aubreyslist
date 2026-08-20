@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { coordsFromSearch, parseAttrs, serializeAttrs } from "./browse-params";
 
-/**
- * Tests for the client-safe browse URL-param helpers (#33–#37) — the shared
- * source of truth for how `?attrs=`/`?lat=`/`?lng=` are parsed and serialized.
- */
-
 describe("parseAttrs", () => {
   it("splits a comma-separated list into valid attributes", () => {
     expect(parseAttrs("dedicated_fryer,dedicated_gf_menu")).toEqual([

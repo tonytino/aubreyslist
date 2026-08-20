@@ -10,10 +10,8 @@ import {
 } from "./links";
 
 /**
- * Unit tests for the CLIENT-SAFE typed-link taxonomy + schemas (AUB-202). The
- * URL rules must match the intake guard they supersede (#90): http(s) only, so
- * a dangerous-scheme URL can never be persisted and later rendered into an
- * anchor `href`.
+ * The URL rules are http(s) only, so a dangerous-scheme URL can never be
+ * persisted and later rendered into an anchor `href`.
  */
 
 describe("LINK_KINDS taxonomy", () => {

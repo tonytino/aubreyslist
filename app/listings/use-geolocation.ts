@@ -2,24 +2,22 @@ import { useCallback, useState } from "react";
 import { type Coords, coordsSchema } from "~/listings/distance";
 
 /**
- * One-shot browser geolocation request for the "near me" distance sort (#37).
+ * One-shot browser geolocation request for the "near me" distance sort.
  *
- * CLIENT-ONLY hook (uses `navigator.geolocation` + React state). It is the single
- * place the distance flow asks for the user's location, with a GRACEFUL FALLBACK
- * contract the route relies on:
+ * Client-only hook — the single place the distance flow asks for the user's
+ * location, with a graceful-fallback contract the route relies on:
  *
- *  - We DO NOT request location on mount — only when the caller invokes
- *    {@link GeolocationState.request} (i.e. the user opted into the distance
- *    sort). No surprise permission prompt on page load.
- *  - If geolocation is unavailable (no `navigator.geolocation`, e.g. SSR or an
- *    old browser), denied, errored, or times out, we resolve to an
- *    `{ status: "error" }` with an accessible message — never throw, never hang —
- *    so the caller can fall back to the default sort.
- *  - On success we resolve to validated {@link Coords} (WGS84-range-checked via
- *    the shared `coordsSchema`), so a bogus reading can't reach the distance sort.
+ *  - Never requests location on mount — only when the caller invokes
+ *    {@link GeolocationState.request}. No surprise permission prompt.
+ *  - Unavailable (no `navigator.geolocation`, e.g. SSR or an old browser),
+ *    denied, errored, or timed out resolves to `{ status: "error" }` with an
+ *    accessible message — never throws, never hangs — so the caller can fall
+ *    back to the default sort.
+ *  - Success resolves to validated {@link Coords} (WGS84-range-checked via
+ *    the shared `coordsSchema`), so a bogus reading can't reach the sort.
  *
- * The hook resolves the returned promise to the outcome so the caller can act
- * (navigate to `sort=distance` with coords, or revert) without wiring effects.
+ * The returned promise resolves to the outcome so the caller can act
+ * (navigate with coords, or revert) without wiring effects.
  */
 
 /** The current state of the geolocation request. */

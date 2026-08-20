@@ -5,10 +5,10 @@ import { Button } from "~/components/ui/button";
 import { fetchAdminView } from "~/server/admin/admin-view.fn";
 
 /**
- * Admin panel shell (issue #38).
+ * Admin panel shell.
  *
- * Access is gated SERVER-SIDE in the loader via {@link fetchAdminView} (which
- * reads the authoritative `users` row) — ADR-010 requires server-side
+ * Access is gated server-side in the loader via {@link fetchAdminView}, which
+ * reads the authoritative `users` row — ADR-010 requires server-side
  * enforcement, never UI-only checks. The loader maps the server's `access`
  * verdict to one of three outcomes:
  *
@@ -17,11 +17,10 @@ import { fetchAdminView } from "~/server/admin/admin-view.fn";
  * - `granted` → render the shell; {@link AdminPanel} then shows only the
  *   sections the role may see (admin: everything; moderator: the queue).
  *
- * Both moderators and admins see the moderation queue (#40), so when access is
- * granted the loader prefetches it into the dehydrated TanStack Query cache —
- * the queue's own server fn re-runs the SAME server-side moderator+ guard, so
- * this prefetch is a render-time convenience, never the access control. Role
- * management (#16) and app-settings write/toggle (#24) also live in this shell.
+ * When access is granted the loader prefetches the moderation queue into the
+ * dehydrated TanStack Query cache. The queue's own server fn re-runs the same
+ * moderator+ guard, so the prefetch is a render-time convenience, never the
+ * access control.
  */
 export const Route = createFileRoute("/admin")({
   head: () => ({

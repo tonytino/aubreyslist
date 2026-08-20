@@ -18,14 +18,13 @@ import type { ListingTrustGlance } from "~/trust/browse-glance";
 import { FavoritesPage, Route } from "./favorites";
 
 /**
- * Route smoke test for `/favorites` (AUB-127 / F9). `FavoritesPage` reads three
- * suspense queries (current-user, viewer-favorites, and — via the cards' heart
- * buttons — the favorited-id set), so we seed the QueryClient cache directly and
- * suspense resolves synchronously with no server fn called. It renders TanStack
- * Router `<Link>`s, so link targets must exist in the mounted tree.
+ * Route smoke test for `/favorites`. `FavoritesPage` reads three suspense
+ * queries, so the QueryClient cache is seeded directly and suspense resolves
+ * synchronously with no server fn called. It renders TanStack Router
+ * `<Link>`s, so link targets must exist in the mounted tree.
  *
- * Radix (used deep in the card's FavoriteButton dialog) needs the jsdom pointer
- * stubs the other dropdown/menu tests use.
+ * Radix (used in the card's FavoriteButton dialog) needs the jsdom pointer
+ * stubs.
  */
 beforeAll(() => {
   if (!Element.prototype.hasPointerCapture) {
@@ -92,8 +91,8 @@ function renderFavorites(opts: {
     routeTree: rootRoute.addChildren(children),
     history: createMemoryHistory({ initialEntries: ["/favorites"] }),
   });
-  // Test-only structural mismatch between the concrete router and the provider's
-  // generic default — safe to assert through unknown (mirrors SiteHeader.test).
+  // Test-only structural mismatch between the concrete router and the
+  // provider's generic default — safe to assert through unknown.
   render(<RouterProvider router={router as unknown as never} />);
 }
 
@@ -116,8 +115,8 @@ describe("FavoritesPage — three states", () => {
     renderFavorites({ currentUser: user, favorites: [makeCard("listing-1", "Blue Sparrow")] });
 
     expect(await screen.findByText("Blue Sparrow")).toBeInTheDocument();
-    // The save-count pill (F10) rides along from `favoriteCount` — heart + count
-    // only, no visible "saves" word (owner, PR #274).
+    // The save-count pill rides along from `favoriteCount` — heart + count
+    // only, no visible "saves" word.
     const pill = screen.getByTestId("save-count");
     expect(pill).toHaveTextContent("3");
     expect(pill).not.toHaveTextContent("saves");

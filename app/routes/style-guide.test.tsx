@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { Route } from "./style-guide";
 
 /**
- * Test for /style-guide route head() meta tags (AUB-163).
- *
- * Verifies that the noindex,nofollow robots meta tag is present in the route's
- * head() output, preventing search engine indexing of the internal style guide.
+ * The noindex,nofollow robots meta tag must be present in the route's head()
+ * output so search engines never index the internal style guide.
  */
 describe("StyleGuide route — head() meta tags (AUB-163)", () => {
   it("includes noindex,nofollow robots meta tag in head", async () => {

@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPlacesApiKey, parseEnv } from "./env";
 
-// `getEnv()` (which `isProductionEnvironment` calls) memoizes the first parse
-// of `process.env` for the lifetime of the module. To get deterministic
-// control of `VERCEL_ENV` per test, reset the module registry and dynamically
-// import a fresh copy of `./env` for each case (same technique as
-// `app/server/auth/session.test.ts`).
+// `getEnv()` memoizes its first parse of `process.env` for the module's
+// lifetime, so each case resets the module registry and imports a fresh
+// `./env` for deterministic `VERCEL_ENV` control.
 type EnvModule = typeof import("./env");
 
 async function loadEnv(vercelEnv: string | undefined): Promise<EnvModule> {
@@ -206,10 +204,9 @@ describe("isProductionEnvironment (AUB-170)", () => {
     expect(env.isProductionEnvironment()).toBe(true);
   });
 
-  // Regression guard: a Vercel PREVIEW deployment is still built in
-  // `production` mode (`import.meta.env.PROD` would be `true` there), which is
-  // exactly the distinction `VERCEL_ENV` — not `import.meta.env.PROD` — must
-  // make. Getting this wrong means the root error boundary would wrongly
+  // A Vercel preview deployment is still built in production mode
+  // (`import.meta.env.PROD` is true there) — exactly the distinction
+  // `VERCEL_ENV` must make. Getting this wrong makes the root error boundary
   // sanitize errors on preview.
   it("is false when VERCEL_ENV=preview (must NOT be treated as production)", async () => {
     const env = await loadEnv("preview");
