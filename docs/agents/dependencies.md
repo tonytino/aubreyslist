@@ -12,6 +12,60 @@ Rules for adding, updating, and pinning packages in this repo.
 
 Default to `^` for new dependencies. Switch to `~` if you encounter or have reason to expect breaking changes in minor releases.
 
+> **Where overrides live.** Dependency `overrides` (and the rest of the pnpm
+> settings) are in **`pnpm-workspace.yaml`**, not the `pnpm.overrides` field in
+> `package.json` — pnpm 11 no longer reads the latter. References to a
+> `pnpm.overrides` block below are historical.
+
+## Security advisories vs. the release-age quarantine
+
+Two rules in this repo pull in opposite directions, and the resolution is
+automated so you should rarely have to think about it:
+
+- **`minimumReleaseAge: 10080`** in `pnpm-workspace.yaml` (mirrored by
+  `cooldown: default-days: 7` in `.github/dependabot.yml`) stops pnpm installing
+  any version less than 7 days old, transitive deps included. A compromised
+  release is usually caught within days of publish, so the quarantine is the
+  main defence against a publish-then-attack supply-chain compromise.
+- **The `Dependency vulns (osv-scanner)` CI gate** wants every known advisory
+  fixed *now*.
+
+When an advisory lands, its fix is brand new — so for up to a week CI would
+demand an upgrade pnpm is configured to refuse. **`.github/scripts/check-osv.mjs`
+reconciles the two.** For each finding it looks up when the fixed version was
+published and asks whether pnpm could install it yet:
+
+| Situation | What CI does |
+| --- | --- |
+| Fix is still inside the 7-day quarantine | `::warning::`, **build stays green**, job summary records the unblock date |
+| Quarantine has lapsed | `::error::`, build fails — the fix is installable, so install it |
+| No fixed version published at all | `::error::` — there is nothing to wait for |
+| CVSS **Critical** (≥ 9.0) | `::error::` regardless of the quarantine |
+
+The deferral is self-expiring: nobody has to remember to come back, because the
+gate turns red on its own the day the quarantine lapses. **A deferred warning is
+not a to-do** — just let it age out and take the bump when it goes red.
+
+**When you do have to intervene:**
+
+- *A Critical, or something you need before the quarantine lapses* — fast-track
+  that one version with a `minimumReleaseAgeExclude` entry in
+  `pnpm-workspace.yaml`. Follow the shape of the existing entry: name the exact
+  `package@version`, the CVE, the publish and window-clear dates, who approved
+  it, and a Linear issue tracking its **removal**. This is deliberately
+  high-friction — it is the exact hole the quarantine exists to close.
+- *No fix exists, or the advisory doesn't apply to us* — add a reviewed waiver to
+  **`osv-scanner.toml`** with an `ignoreUntil` expiry and a written reason. See
+  that file's header.
+
+Both files are owner-gated (`.github/CODEOWNERS`), so either route is a
+`safe:human` PR — accepting or fast-tracking a vulnerability is the owner's call.
+
+**Bumping a package that a security floor pins.** Several `overrides` entries in
+`pnpm-workspace.yaml` are security floors. A floor written as `^x.y.z` does *not*
+pull a new patch on its own — pnpm keeps the existing lockfile resolution — so
+clearing an advisory usually means raising the floor itself, then re-resolving.
+
 ## TanStack packages (de-pinned — post-vinxi)
 
 The `@tanstack/*` packages are on plain `^` ranges — there is **no

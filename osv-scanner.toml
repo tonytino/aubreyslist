@@ -1,0 +1,44 @@
+# osv-scanner waivers — reviewed, deliberately-accepted advisories.
+#
+# Read this together with .github/scripts/check-osv.mjs. The two mechanisms
+# handle DIFFERENT things and must not be confused:
+#
+#   check-osv.mjs  — "the fix exists but pnpm can't install it yet."
+#                    Automatic, self-expiring, needs no entry here. A finding
+#                    whose fixed version is still inside the `minimumReleaseAge`
+#                    quarantine in pnpm-workspace.yaml is deferred with a
+#                    warning and turns into a hard failure by itself the day the
+#                    quarantine lapses. You do NOT need a waiver for these.
+#
+#   this file      — "we looked at it and accepted it." The wrapper cannot
+#                    express that judgement, and deliberately so. Use an entry
+#                    here only when there is nothing to wait for:
+#                      * no fixed version is published at all, or
+#                      * the advisory genuinely does not apply to how we use the
+#                        package (e.g. a server-side sink we never reach).
+#
+# osv-scanner applies these BEFORE emitting JSON, so a waived advisory never
+# reaches the wrapper at all.
+#
+# ── How to add a waiver ──────────────────────────────────────────────────────
+# Every entry needs all three fields. `ignoreUntil` is not optional here as a
+# matter of repo policy: an unbounded waiver is how a known vulnerability
+# quietly becomes permanent. Pick a date you are willing to be reminded on —
+# when it passes the advisory reappears and fails the build.
+#
+#   [[IgnoredVulns]]
+#   id = "GHSA-xxxx-xxxx-xxxx"
+#   ignoreUntil = 2026-09-01
+#   reason = "Why this does not apply to us, who decided, and what changes on
+#             the expiry date."
+#
+# Note `ignoreUntil` is a bare TOML date (no quotes). Also note that ignoring an
+# id ignores its aliases too, so one entry covers the GHSA and its CVE.
+#
+# This surface is owner-gated (/.github/ and the supply-chain paths in
+# .github/CODEOWNERS): accepting a vulnerability is the owner's call, so any PR
+# adding an entry here is `safe:human`.
+#
+# ── Current waivers ──────────────────────────────────────────────────────────
+# None. The file exists so the mechanism is discoverable the moment it is first
+# needed, rather than being invented under time pressure during an incident.

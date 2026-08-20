@@ -80,7 +80,24 @@ export function HeroPhoto({ listingId }: { listingId: string }) {
         // Above the scrim (z-20, like the name/address block) so the credit
         // stays AA-legible on the darkest part of the photo. Bottom-right,
         // single line, truncated — it may never crowd the name/address at 375px.
-        <p className="absolute bottom-1.5 right-3 z-20 max-w-[70%] truncate text-caption text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.8)]">
+        //
+        // Softened deliberately (owner: the credit read as too prominent,
+        // especially since Google's authorAttributions is often just the
+        // business's own name) — one step below the `text-caption` token
+        // (12px, the smallest in the type scale) via an arbitrary 11px value,
+        // and text-white/90 -> /80. Google's Places attribution requirement
+        // ("must display and be legible") and the repo's AA-contrast rule
+        // (styling.md) are both still met with real margin: this line sits at
+        // the bottom edge of the parent hero band's scrim
+        // (`from-black/75 via-black/25 to-transparent`, listings.$id.tsx),
+        // right at the near-opaque `from` stop. Worst case — a pure-white
+        // photo behind a 75%-opaque black scrim — yields an effective
+        // background of ~rgb(64,64,64) (L ~= 0.051); white/80 text over that
+        // composites to ~rgb(217,217,217) (L ~= 0.69), a contrast ratio of
+        // ~7.3:1 — well clear of the 4.5:1 AA floor for normal-size text, with
+        // the `text-shadow` below as extra (unmodeled) headroom on top. Weight
+        // was already regular (no bold to step down).
+        <p className="absolute bottom-1.5 right-3 z-20 max-w-[70%] truncate text-[11px] text-white/80 [text-shadow:0_1px_8px_rgba(0,0,0,0.8)]">
           Photo:{" "}
           {photo.attributions.map((attribution, index) => (
             // Content-derived key: an author is identified by profile link +
