@@ -25,6 +25,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "~/db/client";
 import { type User, users } from "~/db/schema";
+import { errorMessage, runWhenInvokedDirectly } from "./cli";
 
 /** Minimal DB surface {@link seedAdmin} needs — lets tests inject a mock. */
 export interface SeedAdminDb {
@@ -162,22 +163,12 @@ export async function runCli(
       log.error(USAGE);
       return 2;
     }
-    log.error(error instanceof Error ? error.message : String(error));
+    log.error(errorMessage(error));
     return 1;
   }
 }
 
 // Run when invoked directly (not when imported by tests). `getDb()` — and thus
 // `getEnv()`/DATABASE_URL validation — is only touched on this path.
-if (import.meta.url === `file://${process.argv[1]}`) {
-  // `argv[2]` is the first user-supplied arg after `node <script>`.
-  runCli(process.argv.slice(2))
-    .then((code) => {
-      process.exitCode = code;
-    })
-    .catch((error: unknown) => {
-      // Last-resort guard; runCli already handles expected failures.
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    });
-}
+// `argv[2]` is the first user-supplied arg after `node <script>`.
+runWhenInvokedDirectly(import.meta.url, () => runCli(process.argv.slice(2)));

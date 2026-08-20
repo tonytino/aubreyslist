@@ -86,6 +86,10 @@ export function ClaimDeckSection({
     }
     setAnswers(seededAnswers);
     setVotes(seededVotes);
+    // Every open starts with a clean undo slot: the summary's Done closes via
+    // `onDone` without passing through onOpenChange, so the previous session's
+    // "Vote recorded · Undo" row must be cleared here.
+    setLastWrite(null);
     setOpen(true);
   };
 
@@ -203,24 +207,27 @@ export function ClaimDeckSection({
             />
             {/* Inline mis-swipe recovery: the sheet is modal, so a toast action would
                 sit outside the focus trap and behind Radix's body pointer-events
-                lock — this row is inside both. It reflects only the latest write. */}
-            {lastWrite !== null ? (
-              <div
-                role="status"
-                className="flex items-center justify-between gap-2 rounded-card border border-border bg-muted/40 py-1.5 pr-1.5 pl-3"
-              >
-                <span className="text-body-sm text-muted-foreground">Vote recorded</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={undoLastWrite}
-                  className="min-h-11"
-                >
-                  Undo
-                </Button>
-              </div>
-            ) : null}
+                lock — this row is inside both. It reflects only the latest write.
+                The slot always renders at the row's exact height so its first
+                appearance never shifts the deck under the user's thumb. Not a
+                live region: the deck's aria-live announcer already says
+                "Recorded: …". */}
+            <div className="min-h-14">
+              {lastWrite !== null ? (
+                <div className="flex min-h-14 items-center justify-between gap-2 rounded-card border border-border bg-muted/40 pr-1.5 pl-3">
+                  <span className="text-body-sm text-muted-foreground">Vote recorded</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={undoLastWrite}
+                    className="min-h-11"
+                  >
+                    Undo
+                  </Button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </SheetContent>
       </Sheet>
