@@ -1,8 +1,10 @@
 import workerThreads from "node:worker_threads";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  editIncidentInputSchema,
   findRecentIncident,
   isRecentIncident,
+  parseCalendarDay,
   RECENT_INCIDENT_WINDOW_DAYS,
   reportIncidentInputSchema,
   toCalendarDayString,
@@ -12,6 +14,42 @@ import {
  * Tests for the pure, client-safe incident recency + validation helpers (#30).
  * No DB mocks needed — this module imports no database client.
  */
+
+describe("parseCalendarDay — the calendar-date contract", () => {
+  it("returns the UTC midnight of a real calendar day", () => {
+    expect(parseCalendarDay("2026-06-28")).toBe(Date.UTC(2026, 5, 28));
+  });
+
+  it("rejects a value with anything around the date (a timestamp is not a calendar day)", () => {
+    // The contract is a BARE YYYY-MM-DD, anchored at both ends. Matching a
+    // prefix or suffix would let an ISO timestamp through the report validator
+    // into the `date` column, and would stop `toCalendarDayString` from
+    // normalising one at the read boundary (#45).
+    expect(parseCalendarDay("2026-06-28T00:00:00.000Z")).toBeNull();
+    expect(parseCalendarDay("2026-06-2899")).toBeNull();
+    expect(parseCalendarDay("on 2026-06-28")).toBeNull();
+  });
+
+  it("rejects a day JS would silently roll forward into the next month", () => {
+    expect(parseCalendarDay("2026-02-31")).toBeNull(); // -> Mar 3
+    expect(parseCalendarDay("2026-04-31")).toBeNull(); // -> May 1
+    expect(parseCalendarDay("2026-01-00")).toBeNull(); // -> Dec 31 2025
+  });
+
+  it("rejects an out-of-range month", () => {
+    expect(parseCalendarDay("2026-13-05")).toBeNull();
+    expect(parseCalendarDay("2026-00-05")).toBeNull();
+  });
+
+  it("rejects a pre-1000 year that Date.UTC would reinterpret as 19xx", () => {
+    // `Date.UTC(99, 0, 1)` is 1999-01-01, not 0099-01-01 — the legacy two-digit
+    // year mapping. Without the YEAR half of the round-trip check this parses to
+    // an instant ~1900 years off the input, which the no-future rule then
+    // happily accepts and stores.
+    expect(parseCalendarDay("0099-01-01")).toBeNull();
+    expect(parseCalendarDay("0001-01-01")).toBeNull();
+  });
+});
 
 describe("reportIncidentInputSchema — validation", () => {
   it("requires occurredOn (date is required)", () => {
@@ -85,6 +123,21 @@ describe("reportIncidentInputSchema — validation", () => {
     }
   });
 
+  it("explains an impossible date as an impossible date, not as a future one", () => {
+    // `IncidentReports` renders the failed mutation's message verbatim, so the
+    // reason a report bounced has to match what the reporter actually typed —
+    // telling someone who entered Feb 31 that their date "cannot be in the
+    // future" is unactionable.
+    const result = reportIncidentInputSchema.safeParse({
+      listingId: "listing-1",
+      occurredOn: "2026-02-31",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => /real YYYY-MM-DD date/.test(i.message))).toBe(true);
+    }
+  });
+
   it("accepts today's date (boundary of the no-future rule)", () => {
     const today = new Date().toISOString().slice(0, 10);
     const result = reportIncidentInputSchema.safeParse({
@@ -92,6 +145,46 @@ describe("reportIncidentInputSchema — validation", () => {
       occurredOn: today,
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("editIncidentInputSchema — the edit path re-validates the date (#32)", () => {
+  it("accepts an id with a real, past occurredOn", () => {
+    const result = editIncidentInputSchema.safeParse({
+      id: "incident-1",
+      occurredOn: "2026-06-01",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts today's date (boundary of the no-future rule)", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const result = editIncidentInputSchema.safeParse({ id: "incident-1", occurredOn: today });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an edit to a future date (an edit cannot sneak past the report rules)", () => {
+    // Without this, editing an incident's date forward would pin the recent-
+    // incident banner on the listing indefinitely.
+    const result = editIncidentInputSchema.safeParse({
+      id: "incident-1",
+      occurredOn: "2099-01-01",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => /future/i.test(i.message))).toBe(true);
+    }
+  });
+
+  it("rejects an edit to an impossible calendar date, and says which problem it is", () => {
+    const result = editIncidentInputSchema.safeParse({
+      id: "incident-1",
+      occurredOn: "2026-02-31",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => /real YYYY-MM-DD date/.test(i.message))).toBe(true);
+    }
   });
 });
 
@@ -137,6 +230,21 @@ describe("findRecentIncident — picks the most recent within the window", () =>
     expect(result?.id).toBe("fresh");
   });
 
+  it("returns the NEWEST in-window incident whatever order the list arrives in", () => {
+    // The banner has to describe the freshest report: it scans for the maximum
+    // itself rather than trusting the caller's ordering, so an unsorted list
+    // (or one ordered oldest-first) must not surface a stale incident.
+    const result = findRecentIncident(
+      [
+        { occurredOn: "2026-06-10", id: "middle" },
+        { occurredOn: "2026-06-25", id: "newest" },
+        { occurredOn: "2026-05-01", id: "oldest" },
+      ],
+      now
+    );
+    expect(result?.id).toBe("newest");
+  });
+
   it("returns null when every incident is outside the window", () => {
     const result = findRecentIncident([{ occurredOn: "2025-01-01", id: "ancient" }], now);
     expect(result).toBeNull();
@@ -167,6 +275,16 @@ describe("toCalendarDayString — driver date normalization (issue #45)", () => 
     const now = new Date("2026-06-28T12:00:00Z");
     const normalized = toCalendarDayString(new Date(2026, 5, 28));
     expect(isRecentIncident(normalized, now)).toBe(true);
+  });
+
+  it("reduces a full ISO timestamp string to its calendar day (never passes one through)", () => {
+    // A Date that has been through a JSON/RPC round-trip arrives here as an ISO
+    // timestamp string. It must be normalised to the bare calendar day the rest
+    // of the app contracts on — handing the timestamp back verbatim makes every
+    // downstream `parseCalendarDay` return null, which is exactly the #45 bug
+    // (the recent-incident banner silently never renders). Noon UTC so the
+    // local-getter read lands on the same day in any runtime TZ.
+    expect(toCalendarDayString("2026-06-28T12:00:00.000Z")).toBe("2026-06-28");
   });
 
   it("returns a genuinely unparseable value coerced to string rather than fabricating a date", () => {

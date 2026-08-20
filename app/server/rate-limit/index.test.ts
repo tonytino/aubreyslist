@@ -90,6 +90,19 @@ describe("InMemoryRateLimiter.enforce", () => {
     }
   });
 
+  it("carries a friendly, non-empty message (the 429 body the caller sees)", () => {
+    // `app.onError` returns the HTTPException verbatim, and its response body IS
+    // this message — an empty/missing one would ship a blank 429 to the user.
+    const limiter = new InMemoryRateLimiter({ limit: 1, windowMs: 1000 }, () => 0);
+    limiter.enforce("u1");
+    try {
+      limiter.enforce("u1");
+      expect.unreachable("expected a 429");
+    } catch (err) {
+      expect((err as HTTPException).message).toContain("too fast");
+    }
+  });
+
   it("allows again after the window resets", () => {
     const clock = fakeClock();
     const limiter = new InMemoryRateLimiter({ limit: 1, windowMs: 1000 }, clock.now);
@@ -172,5 +185,25 @@ describe("enforceWriteLimit (server-fn convenience)", () => {
   it("is a no-op when no user can be resolved (auth guard owns anonymous rejection)", async () => {
     getCurrentUser.mockResolvedValue(null);
     await expect(enforceWriteLimit()).resolves.toBeUndefined();
+  });
+
+  it("actually enforces the cap for the ambient user (not just a pass-through)", async () => {
+    const id = `ambient-cap-${Math.random()}`;
+    getCurrentUser.mockResolvedValue({ id });
+    for (let i = 0; i < DEFAULT_WRITE_RATE_LIMIT.limit; i++) {
+      await expect(enforceWriteLimit()).resolves.toBeUndefined();
+    }
+    await expect(enforceWriteLimit()).rejects.toThrow(HTTPException);
+  });
+
+  it("never meters an anonymous caller, even over a sustained burst", async () => {
+    // Anonymous writes are rejected by the auth guard (401), never by this
+    // limiter. If the missing key fell through, every anonymous caller in the
+    // process would share one bucket and start 429ing each other — the wrong
+    // status, from the wrong layer, for a request the auth guard should own.
+    getCurrentUser.mockResolvedValue(null);
+    for (let i = 0; i < DEFAULT_WRITE_RATE_LIMIT.limit + 5; i++) {
+      await expect(enforceWriteLimit()).resolves.toBeUndefined();
+    }
   });
 });

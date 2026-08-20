@@ -131,6 +131,17 @@ describe("formatRelativeTime", () => {
     expect(formatRelativeTime(ago(1 * MONTH), NOW)).toBe("1 month ago");
     expect(formatRelativeTime(ago(2 * YEAR), NOW)).toBe("2 years ago");
   });
+
+  it("promotes to the coarser unit exactly AT each bucket edge (never '60 minutes ago')", () => {
+    // Every bucket is a strict `<`, so an age landing exactly on a boundary
+    // belongs to the NEXT unit up. Getting this wrong is user-visible nonsense
+    // on the "last confirmed …" cue: "60 minutes ago", "24 hours ago", a
+    // two-day-old confirmation described as "yesterday", or "12 months ago".
+    expect(formatRelativeTime(ago(HOUR), NOW)).toBe("1 hour ago");
+    expect(formatRelativeTime(ago(DAY), NOW)).toBe("yesterday");
+    expect(formatRelativeTime(ago(2 * DAY), NOW)).toBe("2 days ago");
+    expect(formatRelativeTime(ago(YEAR), NOW)).toBe("1 year ago");
+  });
 });
 
 describe("formatLastConfirmed", () => {

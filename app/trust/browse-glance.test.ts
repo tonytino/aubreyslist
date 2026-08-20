@@ -21,6 +21,18 @@ describe("deriveListingTrustGlance", () => {
     expect(glance.suggestedAttributes).toEqual([]);
   });
 
+  it("treats an UNDEFINED aggregate exactly like a null one (missing map entry)", () => {
+    // `buildBrowseCards` looks the celiac aggregate up per listing, so a listing
+    // with no celiac claim row yields `undefined`, not `null` — the signature
+    // accepts both. It must produce the same honest empty state rather than
+    // throwing on the missing row.
+    const glance = deriveListingTrustGlance(undefined, 0, null, NOW);
+    expect(glance.safetyState).toBeNull();
+    expect(glance.evidence).toBeNull();
+    expect(glance.hasRecentIncident).toBe(false);
+    expect(glance.suggestedByBot).toBe(false);
+  });
+
   it("returns null safetyState AND null evidence when the celiac claim has no votes", () => {
     const glance = deriveListingTrustGlance(
       { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null },

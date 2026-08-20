@@ -105,6 +105,24 @@ describe("findDuplicateListing", () => {
     expect(findDuplicateListing({ name: "Corner Cafe", address: " " }, [listingRow()])).toBeNull();
   });
 
+  it("never blocks an entry as a duplicate just because BOTH names normalize to empty", () => {
+    // A punctuation-only name survives the schema's non-empty check but
+    // normalizes to "". Without the blank guard, two unrelated places whose
+    // names both normalize away (and share an address, e.g. a food hall or a
+    // mall) would read as duplicates and the second one could never be added.
+    const existing = listingRow({ id: "punct-name", name: "!!!", address: "1 Main St, Denver" });
+    expect(
+      findDuplicateListing({ name: "???", address: "1 Main St Denver" }, [existing])
+    ).toBeNull();
+  });
+
+  it("never blocks an entry as a duplicate just because BOTH addresses normalize to empty", () => {
+    // Same hazard on the other field: a blank/punctuation-only address must not
+    // collapse two same-named branches (a chain) into a false duplicate.
+    const existing = listingRow({ id: "punct-address", name: "Corner Cafe", address: "--,. " });
+    expect(findDuplicateListing({ name: "Corner Cafe", address: "  " }, [existing])).toBeNull();
+  });
+
   it("returns the first match when several exist", () => {
     const first = listingRow({ id: "first" });
     const second = listingRow({ id: "second" });
