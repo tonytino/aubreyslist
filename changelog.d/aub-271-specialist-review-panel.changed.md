@@ -1,0 +1,1 @@
+- `[manual]` Replaced the generalist adversarial-review loop with a specialist review panel: 9 lenses (4 always-on, 5 routed by changed-file globs), parallel panel review, targeted re-check, 2-review cap per lens, and a per-lens PR-body record enforced by CI.

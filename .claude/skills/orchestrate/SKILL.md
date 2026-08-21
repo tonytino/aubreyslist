@@ -24,9 +24,9 @@ ship per PR conventions (`skip-review` is the sanctioned bypass).
    acceptance criteria.
 3. **Dispatch workers.** Deliberately pick each subagent's model tier — the
    table lives in `docs/agents/orchestration.md`.
-4. **Review.** Run the `review-loop` skill on every worker output — fresh
-   Reviewer each round, 2-round cap; escalate unresolved items in the PR
-   description.
+4. **Review.** Run the `review-loop` skill on every worker output — the
+   specialist review panel, fresh reviewer per lens, 2 reviews per lens;
+   escalate unresolved items in the PR description.
 5. **Ship the PR.** Conventional-Commit title; one each of `type:*` / `size:*`
    / `safe:*`; `## TL;DR`; `## Adversarial review` block +
    `review:adversarial-passed` (or `skip-review`); `changelog.d/` fragment (or
@@ -53,6 +53,6 @@ never fabricate an answer to a blocking question.
 
 - A Reviewer is never the Worker — fresh, adversarial subagent every round.
 - Never merge (or enable auto-merge on) a `safe:human` PR.
-- Never skip the review loop outside the tiny-task exception.
+- Never skip the review panel outside the tiny-task exception.
 - Never create a duplicate Linear issue.
 - Owner-gated ⇒ `safe:human`, no exceptions.

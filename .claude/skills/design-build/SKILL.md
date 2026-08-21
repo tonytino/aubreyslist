@@ -1,6 +1,6 @@
 ---
 name: design-build
-description: Part B of a page redesign — pick up Linear issues the human has approved (Design + design:approved), implement them to match the Claude Design artifact via a coding subagent, run the adversarial review loop, and open a safe:human PR. Use when the user asks to build / ship an approved design, or run /design-build. Design PRs are always safe:human — drive CI green but never self-merge.
+description: Part B of a page redesign — pick up Linear issues the human has approved (Design + design:approved), implement them to match the Claude Design artifact via a coding subagent, run the specialist review panel, and open a safe:human PR. Use when the user asks to build / ship an approved design, or run /design-build. Design PRs are always safe:human — drive CI green but never self-merge.
 ---
 
 # Design Build (Part B)
@@ -32,9 +32,9 @@ of truth); this skill routes you.
    artifact + change list + acceptance criteria as its spec. Constraints: Tailwind
    utilities only (no inline styles / `@apply`), the repo **Hard Rules**, and
    `docs/agents/styling.md`. It writes code + tests.
-5. **Adversarial review loop.** Run the **`review-loop`** skill / the
-   `adversarial-review` workflow — fresh Reviewer each round, 2-round cap. Beyond
-   the standard dimensions, the Reviewer attacks: safety signals still pair
+5. **Specialist review panel.** Run the **`review-loop`** skill / the
+   `adversarial-review` workflow — fresh reviewer per lens, 2 reviews per lens.
+   Beyond the standard lenses, the panel attacks: safety signals still pair
    **color + icon + label**, **WCAG AA** holds, **mobile-first** survives, and the
    result **matches the artifact**. Then **`pnpm preflight`**.
 6. **Open the PR** with `Fixes AUB-<n>`, **`safe:human`** + required `type:*` /

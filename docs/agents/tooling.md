@@ -102,7 +102,7 @@ marked. The tree reports 0 clones today, so any clone the gate reports is new.
 `jscpd` catches **textual** clones only — repeated source text. It cannot catch a
 component re-implemented from scratch with different names and structure. That
 **semantic** case (duplicate logic under different code) is covered by the
-"Reuse / duplication" dimension in the adversarial review loop
+**conventions** lens of the specialist review panel
 (`docs/agents/orchestration.md`).
 
 ### Handling an accepted clone

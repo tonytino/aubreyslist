@@ -73,8 +73,8 @@ The backstop is asymmetric:
 - **Mitigation:** when you add a new outbound tracker, a new user-facing safety
   claim, or raw destructive SQL, classify honestly as `safe:human` even if CI
   is green — the gate is a floor, not a ceiling. Reviewers: treat the
-  **Trust-model invariants**, **Security**, and data-collection dimensions of
-  the adversarial-review loop as the human backstop for these categories.
+  **security** lens of the review panel (trust-model invariants included) as
+  the human backstop for these categories.
 - **Credentials, not code, are the ultimate boundary.** No GitHub setting can
   tell the owner apart from an agent holding the owner's approve-capable token —
   see the merge norm.
@@ -110,7 +110,7 @@ of.** Concretely:
    for the *work*, only the *merge* (see `docs/agents/tasks.md`).
 3. If it passes, label `safe:agent` and proceed as normal.
 
-The adversarial-review loop (`docs/agents/orchestration.md`) already probes
+The specialist review panel (`docs/agents/orchestration.md`) already probes
 **Trust-model invariants** and **Security**; the owner-review gate is the
 merge-time backstop that makes those the owner's call.
 

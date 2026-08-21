@@ -10,8 +10,8 @@ source of truth for this repo — read it before changing anything.
 - Dispatch worker subagents at deliberately chosen model tiers — smallest for
   mechanical work, mid for routine well-specified tasks, most capable for
   judgment/copy/review — per `docs/agents/orchestration.md`.
-- Every worker output goes through the adversarial review loop (`review-loop`
-  skill, 2-round cap).
+- Every worker output goes through the specialist review panel (`review-loop`
+  skill, 2 reviews per lens).
 - Ship via PR: exactly one each of `type:*` / `size:*` / `safe:*` labels, a
   `## TL;DR` section, an `## Adversarial review` block, and a `changelog.d/`
   fragment.

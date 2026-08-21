@@ -149,11 +149,11 @@ Per `docs/agents/linear.md`'s claim→branch→PR flow:
    the acceptance criteria as its spec. Constraints it must obey: Tailwind
    utilities only (no inline styles, no `@apply`), the repo **Hard Rules**
    (`AGENTS.md`), and `docs/agents/styling.md`. It writes code + tests.
-4. **Run the adversarial review loop** on the Worker's output — the
-   **`review-loop`** skill / `.claude/workflows/adversarial-review.mjs`, hard
-   2-round cap, a **fresh Reviewer each round**
+4. **Run the specialist review panel** on the Worker's output — the
+   **`review-loop`** skill / `.claude/workflows/adversarial-review.mjs`, a
+   **fresh reviewer per lens**, 2 reviews per lens
    (`docs/agents/orchestration.md`). Design-specific attack surface, on top of
-   the standard dimensions: **safety signals still pair color + icon + label**,
+   the standard lenses: **safety signals still pair color + icon + label**,
    **WCAG AA contrast holds**, **mobile-first survives**, and the result
    **actually matches the artifact**.
 5. **`pnpm preflight`** must pass before the PR.
@@ -164,7 +164,7 @@ Per `docs/agents/linear.md`'s claim→branch→PR flow:
    `changelog.d/` fragment, the required `type:*` / `size:*` PR labels, and
    **`safe:human`** — always. Put **`Fixes AUB-<n>`** in the body so merge
    transitions the issue to **Done**. Include the **`## Adversarial review`**
-   section (verdict or escalation block) so the CI `adversarial-review` gate
+   section (panel record or escalation block) so the CI `adversarial-review` gate
    passes (`docs/agents/orchestration.md`).
 2. **Move the issue to `In Review`** (`save_issue`). The merged PR closes it —
    never set `Done` by hand.
@@ -183,7 +183,7 @@ Per `docs/agents/linear.md`'s claim→branch→PR flow:
 - **Design pass produces nothing actionable** (Part A) → report back; don't file
   an empty issue.
 - **No `design:approved` issues** (Part B) → nothing to do; report and stop.
-- **Review loop hits the 2-round cap with contested items** → ship with the
+- **Review panel hits the per-lens cap with contested items** → ship with the
   **escalation block** in the PR body; the human gate already applies.
 - **CI stays red after repeated re-kicks on a real, out-of-scope failure** →
   reply with the diagnosis and where it's stuck; don't loop forever.
