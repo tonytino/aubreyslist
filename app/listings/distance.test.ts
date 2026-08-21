@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type Coords,
+  coarsenCoords,
   coordsSchema,
   DEFAULT_RADIUS_MILES,
   DISTANCE_RADIUS_OPTIONS,
@@ -104,5 +105,28 @@ describe("parseRadiusMiles", () => {
   it("uses the widest option (25 mi) as the default", () => {
     expect(DEFAULT_RADIUS_MILES).toBe(25);
     expect(DISTANCE_RADIUS_OPTIONS).toContain(DEFAULT_RADIUS_MILES);
+  });
+});
+
+describe("coarsenCoords", () => {
+  it("rounds a reading to about a kilometre before it leaves the browser", () => {
+    expect(coarsenCoords({ lat: 39.73925123, lng: -104.99031987 })).toEqual({
+      lat: 39.74,
+      lng: -104.99,
+    });
+  });
+
+  it("rounds rather than truncates, in both hemispheres", () => {
+    // Truncation would bias every reading toward the equator and the
+    // meridian; rounding keeps the error symmetric.
+    expect(coarsenCoords({ lat: -12.3456, lng: 130.789 })).toEqual({ lat: -12.35, lng: 130.79 });
+  });
+
+  it("leaves an already-coarse reading untouched", () => {
+    expect(coarsenCoords({ lat: 39.74, lng: -104.99 })).toEqual({ lat: 39.74, lng: -104.99 });
+  });
+
+  it("keeps the result a valid coordinate", () => {
+    expect(coordsSchema.safeParse(coarsenCoords({ lat: 89.999, lng: 179.999 })).success).toBe(true);
   });
 });

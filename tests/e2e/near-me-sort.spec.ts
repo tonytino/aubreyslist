@@ -3,20 +3,22 @@ import { expect, test } from "@playwright/test";
 import { waitForBrowseReady } from "./helpers";
 
 /**
- * "Near me" distance sort. Choosing the distance sort requests browser
- * geolocation; on grant the view sorts by distance and the URL carries the
- * coords, on denial it falls back gracefully to alphabetical with an
- * accessible message. We use Playwright's geolocation mocking (context
- * permissions + coordinates) for the grant path and an injected error callback
- * for the deny path — no real permission prompt.
+ * The "near me" distance sort, which is the directory's default order.
  *
- * The sort control is the labelled select chip directly in the filter row, so
- * there is no sheet to open or close; the results content is always visible
- * below the sticky filter bar.
+ * Three contracts, in order of importance:
  *
- * Every interaction waits for {@link waitForBrowseReady} first: until
- * hydration settles, the <select>'s onChange isn't wired and a selection gets
- * clobbered. See helpers.ts.
+ *  1. The visitor's coordinates NEVER reach the URL. They are route state for
+ *     the life of the tab, so history, referrers and shared links stay clean.
+ *  2. A bare visit sorts by distance when the browser grants location, and
+ *     asks for it when the browser has not answered.
+ *  3. With no location at all the page degrades to the recently-confirmed
+ *     order and says so, rather than pretending to sort by distance.
+ *
+ * Playwright's geolocation mocking (context permissions + coordinates) drives
+ * the granted path; an injected error callback drives the refused one, so
+ * neither depends on a real permission prompt. Every interaction waits for
+ * {@link waitForBrowseReady}: until hydration settles the `<select>`'s
+ * onChange isn't wired and a selection gets clobbered. See helpers.ts.
  */
 
 const DENVER = { latitude: 39.7392, longitude: -104.9903 };
@@ -24,34 +26,58 @@ const DENVER = { latitude: 39.7392, longitude: -104.9903 };
 test.describe("near me — geolocation granted", () => {
   test.use({ geolocation: DENVER, permissions: ["geolocation"] });
 
-  test("sorting by distance with permission granted puts coords in the URL", async ({ page }) => {
+  test("a bare visit sorts by distance and keeps coordinates out of the URL", async ({ page }) => {
     await page.goto("/");
     await waitForBrowseReady(page);
 
-    const sort = page.getByLabel("Sort by");
-    await expect(sort).toBeVisible();
+    // "Near me" is the default, so it is selected with no interaction and
+    // `?sort=` stays stripped from a clean URL.
+    await expect(page.getByLabel("Sort by")).toHaveValue("distance");
+    await expect(page).toHaveURL(/^[^?]*\/$/);
 
-    await sort.selectOption("distance");
+    // The reading reached the server as a server-function argument only.
+    await expect(page).not.toHaveURL(/lat=|lng=|39\.7|104\.9/);
 
-    // On grant the route navigates to sort=distance with the user's coords.
-    await expect(page).toHaveURL(/sort=distance/);
-    await expect(page).toHaveURL(/lat=39\.7392/);
-    await expect(page).toHaveURL(/lng=-104\.9903/);
-
-    // Confirm the results content actually renders under the distance sort —
-    // either a results list or an honest empty/no-results heading. Distance sort
-    // never crashes.
     const resultsList = page.getByRole("list");
     const emptyState = page.getByRole("heading", {
       name: /Let's find your safe table|No spots match/,
     });
     await expect(resultsList.or(emptyState).first()).toBeVisible();
   });
+
+  test("switching away and back never puts coordinates in the URL", async ({ page }) => {
+    await page.goto("/");
+    await waitForBrowseReady(page);
+
+    const sort = page.getByLabel("Sort by");
+    await sort.selectOption("trust");
+    await expect(page).toHaveURL(/sort=trust/);
+
+    await sort.selectOption("distance");
+    // Back to the default: `?sort=` strips, and still no coordinates.
+    await expect(page).not.toHaveURL(/sort=/);
+    await expect(page).not.toHaveURL(/lat=|lng=/);
+  });
+
+  test("a distance-sorted view shares as a bare link", async ({ page, context }) => {
+    await page.goto("/");
+    await waitForBrowseReady(page);
+    const shared = page.url();
+    expect(shared).not.toMatch(/lat=|lng=/);
+
+    // The recipient loads the same link and is anchored by their own browser,
+    // not by the sender's coordinates.
+    const recipient = await context.newPage();
+    await recipient.goto(shared);
+    await waitForBrowseReady(recipient);
+    await expect(recipient.getByLabel("Sort by")).toHaveValue("distance");
+    await recipient.close();
+  });
 });
 
-test.describe("near me — geolocation denied", () => {
-  // No `permissions: ["geolocation"]`. We also force the error callback so the
-  // deny path is deterministic regardless of the headless default.
+test.describe("near me — geolocation refused", () => {
+  // No `permissions: ["geolocation"]`. The error callback is forced so the
+  // refusal is deterministic regardless of the headless default.
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       const denied = {
@@ -69,108 +95,36 @@ test.describe("near me — geolocation denied", () => {
     });
   });
 
-  test("denied geolocation falls back to alphabetical with an accessible message", async ({
+  test("a refused reading keeps the selection and explains the fallback order", async ({
     page,
   }) => {
     await page.goto("/");
     await waitForBrowseReady(page);
 
-    const sort = page.getByLabel("Sort by");
-    await expect(sort).toBeVisible();
-
-    await sort.selectOption("distance");
-
-    // Graceful fallback: the sort reverts to the alphabetical default — which
-    // stripSearchParams drops from the URL — so `sort` disappears entirely (no
-    // `sort=distance`, no coords), and an accessible alert rendered under the
-    // chip row explains why. Never a crash or hang.
-    await expect(page).not.toHaveURL(/sort=/);
-    await expect(page).not.toHaveURL(/lat=/);
-    await expect(page.getByRole("alert")).toContainText(/denied/i);
-
-    // Confirm the results content renders under the fallback order — a results
-    // list or an honest empty/no-results heading.
-    const resultsList = page.getByRole("list");
-    const emptyState = page.getByRole("heading", {
-      name: /Let's find your safe table|No spots match/,
-    });
-    await expect(resultsList.or(emptyState).first()).toBeVisible();
-  });
-});
-
-test.describe("near me — remembered opt-in", () => {
-  test.use({ geolocation: DENVER, permissions: ["geolocation"] });
-
-  test("a granted device restores the distance sort on a bare visit", async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("near-me-sort", "true");
-    });
-
-    await page.goto("/");
-    await waitForBrowseReady(page);
-
-    // The restore runs off the stored flag plus an existing grant, so a bare
-    // `/` lands on the distance sort with coords, with no interaction.
-    await expect(page).toHaveURL(/sort=distance/);
-    await expect(page).toHaveURL(/lat=39\.7392/);
+    // The control stays where the default put it — the page does not silently
+    // swap the visitor's sort — and an accessible alert names what it is
+    // showing instead. Local runs have no coarse request anchor either, so
+    // this is the no-location-at-all path.
     await expect(page.getByLabel("Sort by")).toHaveValue("distance");
-  });
+    await expect(page.getByRole("alert")).toContainText(/recently confirmed/i);
 
-  test("an explicit sort in the URL wins over the remembered opt-in", async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("near-me-sort", "true");
-    });
-
-    await page.goto("/?sort=trust");
-    await waitForBrowseReady(page);
-
-    await expect(page).toHaveURL(/sort=trust/);
-    await expect(page).not.toHaveURL(/sort=distance/);
-  });
-
-  test("choosing another sort forgets the opt-in", async ({ page }) => {
-    // Seeded through the page, not `addInitScript`: an init script re-runs on
-    // every navigation and would rewrite the flag this test needs cleared.
-    await page.goto("/");
-    await page.evaluate(() => {
-      localStorage.setItem("near-me-sort", "true");
-    });
-    await page.reload();
-    await waitForBrowseReady(page);
-    await expect(page).toHaveURL(/sort=distance/);
-
-    await page.getByLabel("Sort by").selectOption("trust");
-    await expect(page).toHaveURL(/sort=trust/);
-    expect(await page.evaluate(() => localStorage.getItem("near-me-sort"))).toBeNull();
-
-    await page.goto("/");
-    await waitForBrowseReady(page);
-    await expect(page.getByLabel("Sort by")).toHaveValue("alpha");
-    await expect(page).not.toHaveURL(/sort=distance/);
-  });
-});
-
-test.describe("near me — remembered opt-in without a grant", () => {
-  // No `permissions: ["geolocation"]`: the stored flag alone must never open a
-  // permission prompt or hijack the default order.
-  test("a stored opt-in is ignored until the browser grants location", async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("near-me-sort", "true");
-    });
-
-    await page.goto("/");
-    await waitForBrowseReady(page);
-    // Settle on rendered results before the negative assertions, so "no
-    // restore happened" isn't just "the restore hadn't run yet".
+    // Still no coordinates anywhere in the URL, and still a rendered page.
+    await expect(page).not.toHaveURL(/lat=|lng=/);
     const resultsList = page.getByRole("list");
     const emptyState = page.getByRole("heading", {
       name: /Let's find your safe table|No spots match/,
     });
     await expect(resultsList.or(emptyState).first()).toBeVisible();
+  });
 
-    await expect(page).not.toHaveURL(/sort=distance/);
-    await expect(page.getByLabel("Sort by")).toHaveValue("alpha");
-    // The flag survives: an ungranted browser is not a denial to forget.
-    expect(await page.evaluate(() => localStorage.getItem("near-me-sort"))).toBe("true");
+  test("choosing another sort clears the location alert", async ({ page }) => {
+    await page.goto("/");
+    await waitForBrowseReady(page);
+    await expect(page.getByRole("alert")).toBeVisible();
+
+    await page.getByLabel("Sort by").selectOption("alpha");
+    await expect(page).toHaveURL(/sort=alpha/);
+    // A sort that needs no location has nothing to explain.
+    await expect(page.getByRole("alert")).toHaveCount(0);
   });
 });

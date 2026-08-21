@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coordsFromSearch, parseAttrs, serializeAttrs } from "./browse-params";
+import { parseAttrs, serializeAttrs } from "./browse-params";
 
 describe("parseAttrs", () => {
   it("splits a comma-separated list into valid attributes", () => {
@@ -49,27 +49,5 @@ describe("serializeAttrs", () => {
   it("round-trips through parseAttrs", () => {
     const attrs = ["dedicated_fryer", "dedicated_gf_menu", "gf_substitutes"] as const;
     expect(parseAttrs(serializeAttrs(attrs))).toEqual([...attrs]);
-  });
-});
-
-describe("coordsFromSearch", () => {
-  it("returns a coord pair when both lat and lng are present", () => {
-    expect(coordsFromSearch(39.7392, -104.9903)).toEqual({ lat: 39.7392, lng: -104.9903 });
-  });
-
-  it("returns undefined when only lat is present", () => {
-    expect(coordsFromSearch(39.7392, undefined)).toBeUndefined();
-  });
-
-  it("returns undefined when only lng is present", () => {
-    expect(coordsFromSearch(undefined, -104.9903)).toBeUndefined();
-  });
-
-  it("returns undefined when both are undefined", () => {
-    expect(coordsFromSearch(undefined, undefined)).toBeUndefined();
-  });
-
-  it("treats a 0/0 pair as a complete pair (the falsy-zero edge)", () => {
-    expect(coordsFromSearch(0, 0)).toEqual({ lat: 0, lng: 0 });
   });
 });

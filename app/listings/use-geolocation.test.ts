@@ -127,7 +127,7 @@ describe("useGeolocation", () => {
     expect(result.current.status).toBe("error");
     expect(result.current.error).toMatch(/denied/i);
     // The accessible message names the fallback so the user understands the result.
-    expect(result.current.error).toMatch(/alphabetically/i);
+    expect(result.current.error).toMatch(/recently confirmed/i);
   });
 
   it("falls back with a generic message on a non-permission error (timeout/unavailable)", async () => {

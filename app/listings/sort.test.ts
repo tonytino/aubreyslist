@@ -3,18 +3,27 @@ import {
   BROWSE_SORT_OPTIONS,
   BROWSE_SORT_VALUES,
   DEFAULT_BROWSE_SORT,
+  DISTANCE_FALLBACK_SORT,
   isBrowseSort,
   parseBrowseSort,
 } from "./sort";
 
 describe("browse sort registry", () => {
-  it("defaults to alphabetical (the first, stable option)", () => {
-    expect(DEFAULT_BROWSE_SORT).toBe("alpha");
-    expect(BROWSE_SORT_OPTIONS[0].value).toBe("alpha");
+  it("defaults to near me (the first option)", () => {
+    expect(DEFAULT_BROWSE_SORT).toBe("distance");
+    expect(BROWSE_SORT_OPTIONS[0].value).toBe("distance");
   });
 
-  it("exposes the expected v1 options in display order", () => {
-    expect(BROWSE_SORT_VALUES).toEqual(["alpha", "trust", "recency", "distance"]);
+  it("exposes the expected options in display order", () => {
+    expect(BROWSE_SORT_VALUES).toEqual(["distance", "alpha", "trust", "recency"]);
+  });
+
+  it("degrades the distance sort to a real, non-distance option", () => {
+    // The fallback has to be orderable without any location, so it can never
+    // be the distance sort itself.
+    expect(DISTANCE_FALLBACK_SORT).toBe("recency");
+    expect(BROWSE_SORT_VALUES).toContain(DISTANCE_FALLBACK_SORT);
+    expect(DISTANCE_FALLBACK_SORT).not.toBe("distance");
   });
 
   it("gives every option a label and a help description", () => {
@@ -47,9 +56,9 @@ describe("parseBrowseSort", () => {
     expect(parseBrowseSort("recency")).toBe("recency");
   });
 
-  it("degrades unknown tokens to the stable default (alphabetical)", () => {
-    expect(parseBrowseSort("nonsense")).toBe("alpha");
-    expect(parseBrowseSort(undefined)).toBe("alpha");
-    expect(parseBrowseSort(null)).toBe("alpha");
+  it("degrades unknown tokens to the default sort", () => {
+    expect(parseBrowseSort("nonsense")).toBe(DEFAULT_BROWSE_SORT);
+    expect(parseBrowseSort(undefined)).toBe(DEFAULT_BROWSE_SORT);
+    expect(parseBrowseSort(null)).toBe(DEFAULT_BROWSE_SORT);
   });
 });

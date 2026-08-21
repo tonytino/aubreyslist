@@ -139,10 +139,14 @@ test("browse sort control is labeled and drives the URL", async ({ page }) => {
   await sort.selectOption("recency");
   await expect(page).toHaveURL(/sort=recency/);
 
-  // Back to the default returns the list to alphabetical order and strips `sort`
-  // from the URL entirely (stripSearchParams drops any param equal to its default),
-  // so the bar reads as a clean `/` rather than carrying redundant `?sort=alpha`.
+  // Alphabetical is a real choice now, not the default, so it stays in the URL.
   await sort.selectOption("alpha");
+  await expect(page).toHaveURL(/sort=alpha/);
+
+  // Back to the default ("Near me") strips `sort` from the URL entirely
+  // (stripSearchParams drops any param equal to its default), so the bar reads
+  // as a clean `/` rather than carrying redundant `?sort=distance`.
+  await sort.selectOption("distance");
   await expect(page).not.toHaveURL(/sort=/);
 });
 

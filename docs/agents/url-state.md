@@ -74,23 +74,36 @@ hits the URL, and the mirror reconciles when `?q=` changes from a link /
 back-forward / clear-all. A discrete control (a chip, a `<select>`, a pagination
 link) has no such need — navigate directly; do not add a mirror.
 
-## Device preferences: `localStorage`, not the URL
+## Sensitive inputs: neither the URL nor storage
 
-A *per-device preference* is not shareable view state. It belongs in
-`localStorage` (theme: `app/components/ThemeToggle.tsx`; the "Near me" opt-in:
-`app/listings/near-me-preference.ts`), under two rules:
+Some state drives the query without being a view worth sharing. The visitor's
+coordinates are the case to copy (`app/routes/index.tsx`): they live in route
+`useState` for the life of the tab, are rounded (`coarsenCoords`) before they
+leave the browser, and travel only as server-function arguments.
 
-1. **Restore into the URL.** The preference only decides what to `navigate()`
-   to on mount; the restored state itself still lives in the URL, so a refresh
-   or a shared link behaves identically for everyone. Use `replace: true` so
-   Back leaves the page instead of undoing the restore.
-2. **An explicit param wins.** Restore only when the param is at its default.
-   A pasted `?sort=trust` must never be overwritten by a stored preference.
+Decide with one question: **would you be comfortable seeing this value in a
+pasted link?** A sort token, yes. A filter, yes. Someone's position, no — in
+the URL it rides into history, referrer headers, screenshots, and any link they
+share.
 
-Guard every access (`try`/`catch`): storage throws in some privacy modes, and a
-preference that cannot be read is just an unset preference. Store the smallest
-flag that works, never the underlying data (the near-me flag is a boolean; the
-coordinates are re-read from the browser).
+Keeping it out of the URL costs the SSR pass, which has no reading yet. Cover
+that on the server instead: the browse handler anchors the distance sort on the
+request's coarse IP location (`app/server/listings/request-geo.ts`), and
+degrades to a location-free sort when it has neither. The client refetches with
+the real reading once the browser answers, inside a `startTransition` so
+`useSuspenseQuery` swaps the results without dropping to a fallback.
+
+Report what actually happened. The browse response carries `effectiveSort` and
+`locationSource` so the page can say it fell back, rather than showing one
+order under another order's name.
+
+## Device preferences: `localStorage`
+
+A *per-device preference* that is not sensitive belongs in `localStorage` —
+the theme toggle (`app/components/ThemeToggle.tsx`) is the example. Guard every
+access (`try`/`catch`): storage throws in some privacy modes, and a preference
+that cannot be read is just an unset preference. Store the smallest flag that
+works, never the underlying data.
 
 ## Reusable helpers
 

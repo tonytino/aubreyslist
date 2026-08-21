@@ -131,4 +131,7 @@ cost/degradation rules). Deep-linking to Google Maps is the fallback whenever
 the browser Maps key is absent. Supports: **text search** (name/cuisine),
 **filters** by the taxonomy above (the killer feature — "celiac-safe + dedicated
 fryer"), **sort** by trust/recency or alphabetical, and **"near me"** distance
-sort using listing lat/lng + browser geolocation.
+sort using listing lat/lng + browser geolocation. "Near me" is the default
+order: it anchors on the browser reading when granted, else the coarse
+request location, and degrades to "recently confirmed" with neither. The
+visitor's coordinates never enter the URL.

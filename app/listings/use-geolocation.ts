@@ -52,14 +52,14 @@ export interface GeolocationState {
 }
 
 const UNAVAILABLE_MESSAGE =
-  "Location isn’t available in this browser. Showing listings alphabetically instead.";
+  "Location isn’t available in this browser. Showing recently confirmed listings instead.";
 const DENIED_MESSAGE =
-  "Location access was denied. Showing listings alphabetically instead. " +
-  "Enable location in your browser to sort by distance.";
+  "Location access was denied, so we can’t sort by distance. " +
+  "Showing recently confirmed listings instead.";
 const BLOCKED_MESSAGE =
   "Your browser blocks location for this site, so no prompt appeared. " +
-  "Showing listings alphabetically. Allow location in your browser settings, then pick Near me again.";
-const GENERIC_MESSAGE = "Couldn’t get your location. Showing listings alphabetically instead.";
+  "Showing recently confirmed listings. Allow location in your browser settings to sort by distance.";
+const GENERIC_MESSAGE = "Couldn’t get your location. Showing recently confirmed listings instead.";
 
 /**
  * The browser's stored geolocation grant, or `"unknown"` when it can't be read

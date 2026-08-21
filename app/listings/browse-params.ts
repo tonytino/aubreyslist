@@ -1,7 +1,7 @@
 /**
  * Browse URL-param helpers + page-size constants, shared so the browse route's
  * client search-param handling and the browse server validator use one
- * definition of `?attrs=`/`?lat=`/`?lng=` parsing and page sizing.
+ * definition of `?attrs=` parsing and page sizing.
  *
  * Client-safe: pure data + tiny parsers. Keep it free of db-client and
  * server-only imports.
@@ -42,12 +42,4 @@ export function serializeAttrs(attrs: readonly ClaimAttribute[]): string {
 export interface UserCoords {
   lat: number;
   lng: number;
-}
-
-/** Build a complete coord pair from the search params, or undefined if incomplete. */
-export function coordsFromSearch(
-  lat: number | undefined,
-  lng: number | undefined
-): UserCoords | undefined {
-  return lat !== undefined && lng !== undefined ? { lat, lng } : undefined;
 }

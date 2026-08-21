@@ -1,0 +1,1 @@
+- `[manual]` Removed the remembered "Near me" opt-in (`app/listings/near-me-preference.ts`) and its `localStorage` flag. With near-me as the default order for everyone, there is no opt-in left to remember, and the flag would have been a second, weaker source of truth for a choice the URL already carries.

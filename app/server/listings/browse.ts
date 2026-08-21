@@ -11,9 +11,14 @@ import {
   listings,
 } from "~/db/schema";
 import { BROWSE_PAGE_SIZE, MAX_PAGE_SIZE } from "~/listings/browse-params";
-import { type Coords, EARTH_RADIUS_KM, milesToKm } from "~/listings/distance";
+import { type Coords, EARTH_RADIUS_KM, milesToKm, UNION_STATION } from "~/listings/distance";
 import { QUICK_FILTER_VALUES, type QuickFilterValue } from "~/listings/quick";
-import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
+import {
+  BROWSE_SORT_VALUES,
+  type BrowseSort,
+  DEFAULT_BROWSE_SORT,
+  DISTANCE_FALLBACK_SORT,
+} from "~/listings/sort";
 import type { ClaimAggregate } from "~/server/attestations";
 import { getFavoriteCounts, getViewerFavoriteIds } from "~/server/favorites/index";
 import { formatDistanceLabel } from "~/trust/browse-card-format";
@@ -70,19 +75,22 @@ export const browseListingsInputSchema = z.object({
   attrs: z.array(z.enum(claimAttributes)).default([]),
   /**
    * Sort order. One of the {@link BrowseSort} tokens; an unknown token
-   * degrades to the stable {@link DEFAULT_BROWSE_SORT} (alphabetical) rather
-   * than erroring. Combines with search + filters — sort only changes
+   * degrades to {@link DEFAULT_BROWSE_SORT} ("near me") rather than
+   * erroring. Combines with search + filters — sort only changes
    * `ORDER BY`, never the `WHERE`, so the filtered total and pagination stay
    * correct.
    */
   sort: z.enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]]).catch(DEFAULT_BROWSE_SORT),
   /**
-   * The user's location for the "near me" distance sort. Optional and
+   * The visitor's location for the "near me" distance sort. Optional and
    * validated to WGS84 ranges; used only as a complete pair when
-   * `sort=distance`. When `sort=distance` but coords are absent (geolocation
-   * denied/unavailable, or SSR before the browser grants permission), the
-   * loader falls back to alphabetical order rather than erroring — the sort
-   * never crashes the page. Coords are ignored for any non-distance sort.
+   * `sort=distance`. Rounded client-side before it is sent
+   * (`coarsenCoords`), so the precise fix never reaches the server.
+   *
+   * Absent when the browser has not answered (or refused). The handler then
+   * falls back to the request's coarse IP location, and with neither the
+   * ORDER BY degrades to {@link DISTANCE_FALLBACK_SORT} rather than erroring.
+   * Coords are ignored for any non-distance sort.
    */
   userLat: z.number().finite().min(-90).max(90).optional(),
   userLng: z.number().finite().min(-180).max(180).optional(),
@@ -90,14 +98,17 @@ export const browseListingsInputSchema = z.object({
    * Distance-radius filter: keep only listings within `radiusMiles` of the
    * origin (`originLat`/`originLng`). Optional. Independent of
    * `userLat`/`userLng` above — those drive the "near me" sort order; these
-   * constrain the result set. Kept separate because the origin defaults to
-   * Denver Union Station when geolocation is unavailable, whereas the
-   * near-me sort degrades to alphabetical instead.
+   * constrain the result set. Kept separate because the origin falls
+   * back through the coarse request location to Denver Union Station, whereas
+   * the near-me sort degrades to {@link DISTANCE_FALLBACK_SORT} instead of
+   * anchoring on a landmark.
    *
-   * The predicate applies only when the complete triple is present:
-   * `radiusMiles` plus both origin coordinates. Otherwise there is no radius
-   * constraint. The origin is validated to the same WGS84 ranges as the
-   * coords schema so a garbage value can never reach the SQL.
+   * The predicate applies whenever `radiusMiles` is set: an absent or
+   * half-supplied origin falls back to whatever located the sort, then to
+   * Union Station, so a "Within N mi" chip always filters by N miles of
+   * somewhere rather than silently by nothing. The origin is validated to the
+   * same WGS84 ranges as the coords schema so a garbage value can never reach
+   * the SQL.
    */
   radiusMiles: z.number().finite().positive().optional(),
   originLat: z.number().finite().min(-90).max(90).optional(),
@@ -179,12 +190,27 @@ export interface BrowseListingCard extends BrowseListingCardCore {
 }
 
 /** A page of browse cards plus the cursor info the UI needs to paginate. */
+/**
+ * Which anchor the distance sort actually used. The UI explains itself from
+ * this rather than guessing from permission state, which cannot see the
+ * request-header fallback at all.
+ */
+export type BrowseLocationSource = "precise" | "coarse" | "none";
+
 export interface BrowseListingsPage {
   cards: BrowseListingCard[];
   page: number;
   pageSize: number;
-  /** The sort applied to this page (echoed back so the UI can reflect state). */
+  /** The sort requested for this page (echoed back so the UI can reflect state). */
   sort: BrowseSort;
+  /**
+   * The order actually applied. Equals `sort` except when "near me" ran with
+   * no location at all, where it is {@link DISTANCE_FALLBACK_SORT} — so the
+   * page never claims an order it did not use.
+   */
+  effectiveSort: BrowseSort;
+  /** Which location anchored the distance sort, if any. */
+  locationSource: BrowseLocationSource;
   /** Total listing count (after search/filters) for "showing X of Y" + paging. */
   total: number;
   /** Whether a further page exists after this one. */
@@ -197,15 +223,36 @@ export interface BrowseListingsPage {
  * `now` and `stalenessMonths` are injectable so the route can resolve "now"
  * once server-side (matching the listing-detail page) and thread the
  * admin-tunable staleness window through; both default sensibly for direct use.
+ *
+ * `coarseOrigin` is the request's approximate location (`request-geo.ts`),
+ * passed by the server fn rather than taken from `input` because it is
+ * derived from the request, not from anything the client may assert.
  */
 export async function getBrowseListings(
   input: BrowseListingsInput,
   now: Date = new Date(),
-  stalenessMonths?: number
+  stalenessMonths?: number,
+  coarseOrigin?: Coords
 ): Promise<BrowseListingsPage> {
   const db = getDb();
   const { page, pageSize, sort } = input;
   const offset = (page - 1) * pageSize;
+
+  // The distance anchor, best available first: the browser's reading (already
+  // rounded client-side), else the coarse location on the request. Both the
+  // ORDER BY and the response's explanation derive from this one resolution,
+  // so the page can never describe an anchor it did not use.
+  const preciseCoords: Coords | undefined =
+    input.userLat !== undefined && input.userLng !== undefined
+      ? { lat: input.userLat, lng: input.userLng }
+      : undefined;
+  const coords = preciseCoords ?? coarseOrigin;
+  const locationSource: BrowseLocationSource = preciseCoords
+    ? "precise"
+    : coords
+      ? "coarse"
+      : "none";
+  const effectiveSort = resolveEffectiveSort(sort, coords);
 
   // Compose the WHERE from the text search and the GF taxonomy filter,
   // AND-combined. The same predicate constrains both the page query and the
@@ -227,7 +274,18 @@ export async function getBrowseListings(
   // queries: a "Within 5 mi" filter can never report a count that includes
   // out-of-range listings. Independent of `userLat`/`userLng` (those only
   // drive the sort ORDER BY).
-  const radiusPredicate = buildRadiusPredicate(input.radiusMiles, input.originLat, input.originLng);
+  // The radius anchor falls back where the sort degrades: an explicit origin,
+  // else whatever located the sort, else Union Station — so "Within N mi"
+  // stays meaningful for a visitor the browser never located.
+  const radiusOrigin =
+    input.originLat !== undefined && input.originLng !== undefined
+      ? { lat: input.originLat, lng: input.originLng }
+      : (coords ?? UNION_STATION);
+  const radiusPredicate = buildRadiusPredicate(
+    input.radiusMiles,
+    radiusOrigin.lat,
+    radiusOrigin.lng
+  );
 
   // Server-side "Saved" filter. When `savedOnly` is set, resolve the viewer's
   // visible favorite ids and constrain to `listings.id IN (…)` — folded into
@@ -241,7 +299,16 @@ export async function getBrowseListings(
   if (input.savedOnly) {
     const favoriteIds = await getViewerFavoriteIds();
     if (favoriteIds.length === 0) {
-      return { cards: [], page, pageSize, sort, total: 0, hasMore: false };
+      return {
+        cards: [],
+        page,
+        pageSize,
+        sort,
+        effectiveSort,
+        locationSource,
+        total: 0,
+        hasMore: false,
+      };
     }
     savedPredicate = inArray(listings.id, favoriteIds);
   }
@@ -276,20 +343,16 @@ export async function getBrowseListings(
   // tier (confirm/dispute counts + `lastConfirmedAt` staleness) — a roll-up
   // of visible evidence, not an opaque score (ADR-007).
   const trust = celiacTrustSubquery();
-  // Distance sort needs a complete coordinate pair; with a half-pair (or
-  // none) distance can't be computed, so `buildOrderBy` falls back to the
-  // default order.
-  const coords: Coords | undefined =
-    input.userLat !== undefined && input.userLng !== undefined
-      ? { lat: input.userLat, lng: input.userLng }
-      : undefined;
-  const orderBy = buildOrderBy(sort, trust, now, resolvedStalenessMonths, coords);
+  const orderBy = buildOrderBy(effectiveSort, trust, now, resolvedStalenessMonths, coords);
 
-  // Compute a distance value only when distance-sorting with a complete coord
-  // pair — the label is shown solely then. Reuses the same haversine the
-  // ordering derives from (`distanceKmExpr`), so the label and the sort never
-  // disagree, and no distance is computed for other sorts.
-  const distanceKm = sort === "distance" && coords ? distanceKmExpr(coords) : null;
+  // Per-card distance labels need the browser's own reading: a city-level
+  // request anchor can be kilometres off, and "0.4 mi" from it would be a
+  // precise-looking number the data cannot support. A coarse anchor still
+  // ORDERs the list (roughly right, and better than no distance sort at all)
+  // but earns no label. Reuses the same haversine the ordering derives from,
+  // so a shown label and the sort never disagree.
+  const distanceKm =
+    effectiveSort === "distance" && preciseCoords ? distanceKmExpr(preciseCoords) : null;
 
   // 1. The page of listings under the current search + filter + sort, plus
   //    the matching total (same `WHERE`) so the UI can render "X of Y" +
@@ -313,7 +376,16 @@ export async function getBrowseListings(
   // No listings on this page: return early rather than running the batched
   // signal queries with an empty `IN ()`.
   if (pageListings.length === 0) {
-    return { cards: [], page, pageSize, sort, total, hasMore: false };
+    return {
+      cards: [],
+      page,
+      pageSize,
+      sort,
+      effectiveSort,
+      locationSource,
+      total,
+      hasMore: false,
+    };
   }
 
   const pageRows = pageListings.map((row) => row.listing);
@@ -360,7 +432,16 @@ export async function getBrowseListings(
       : { ...card, favoriteCount };
   });
 
-  return { cards, page, pageSize, sort, total, hasMore: offset + pageRows.length < total };
+  return {
+    cards,
+    page,
+    pageSize,
+    sort,
+    effectiveSort,
+    locationSource,
+    total,
+    hasMore: offset + pageRows.length < total,
+  };
 }
 
 /**
@@ -501,6 +582,15 @@ type CeliacTrustSubquery = ReturnType<typeof celiacTrustSubquery>;
  * Every sort ends with `name ASC` as a stable tiebreaker, so the order is
  * deterministic (no row shuffling between requests).
  */
+/**
+ * The order actually applied: "near me" with no anchor at all degrades to
+ * {@link DISTANCE_FALLBACK_SORT}. One rule, read by both the ORDER BY and the
+ * response, so the results and the UI's explanation cannot disagree.
+ */
+function resolveEffectiveSort(sort: BrowseSort, coords: Coords | undefined): BrowseSort {
+  return sort === "distance" && !coords ? DISTANCE_FALLBACK_SORT : sort;
+}
+
 function buildOrderBy(
   sort: BrowseSort,
   trust: CeliacTrustSubquery,
@@ -550,11 +640,12 @@ function buildOrderBy(
       // re-verified", a different question than "what is safest".
       return [sql`${recency} desc nulls last`, desc(netConfirms), nameTiebreak];
     case "distance": {
-      // Without a complete user coordinate pair (geolocation denied or SSR
-      // before permission) distance can't be computed, so fall back to the
-      // stable alphabetical order rather than erroring.
+      // No anchor at all: neither a browser reading nor a coarse request
+      // location. Distance is uncomputable, so degrade to the fallback sort
+      // rather than erroring — and to the SAME order the UI names in its
+      // explanation, which reads `DISTANCE_FALLBACK_SORT` from the registry.
       if (!coords) {
-        return [nameTiebreak];
+        return buildOrderBy(DISTANCE_FALLBACK_SORT, trust, now, stalenessMonths);
       }
       // Closest first: great-circle distance from the user's coords to each
       // listing's stored lat/lng — the same haversine the pure `haversineKm`
