@@ -98,4 +98,13 @@ describe("DirectoryList", () => {
     const list = screen.getByRole("list");
     expect(list).toHaveClass("md:grid-cols-2", "xl:grid-cols-3", "2xl:grid-cols-4");
   });
+
+  it("leaves the space below the grid to the enclosing page", async () => {
+    renderInRouter(<DirectoryList cards={vms} />);
+    await screen.findByRole("heading", { name: "Acme Gluten-Free" });
+    // Both consumers (browse, favorites) own their own bottom spacing. Padding
+    // here too would stack with theirs and strand whatever follows the grid.
+    const list = screen.getByRole("list");
+    expect([...list.classList].some((c) => /^(pb|py)-/.test(c))).toBe(false);
+  });
 });

@@ -47,7 +47,7 @@ export function DirectoryPager({
   const hasNext = page < pageCount;
 
   return (
-    <nav aria-label="Pagination" className="mt-6 flex items-center justify-between gap-3">
+    <nav aria-label="Pagination" className="mt-section flex items-center justify-between gap-3">
       {hasPrev ? (
         <Button variant="outline" asChild>
           <Link to="/" search={(prev) => ({ ...prev, page: page - 1 })}>

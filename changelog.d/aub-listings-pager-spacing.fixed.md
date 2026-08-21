@@ -1,0 +1,1 @@
+- `[manual]` Fixed the empty gap around the browse pager: "Page N of M" now sits directly under the last listing, with matching space below it. The saved-spots page gets the same tightened bottom spacing.

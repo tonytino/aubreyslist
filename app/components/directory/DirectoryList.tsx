@@ -2,8 +2,9 @@ import { RestaurantCard, type RestaurantCardVM } from "~/components/listing/List
 
 /**
  * The List view: a responsive grid of {@link RestaurantCard}s built from the
- * real per-listing view-models. Bottom padding clears the floating "Add
- * listing" FAB.
+ * real per-listing view-models.
+ *
+ * Vertical space below the grid belongs to the enclosing page.
  *
  * The directory shell spans the full viewport, so the grid scales up to four
  * columns on very wide screens (`md:grid-cols-2 xl:grid-cols-3
@@ -16,7 +17,7 @@ import { RestaurantCard, type RestaurantCardVM } from "~/components/listing/List
  */
 export function DirectoryList({ cards }: { cards: readonly RestaurantCardVM[] }) {
   return (
-    <ul className="grid grid-cols-1 gap-3.5 pb-24 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+    <ul className="grid grid-cols-1 gap-3.5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {cards.map((vm) => (
         <li key={vm.id}>
           <RestaurantCard vm={vm} />

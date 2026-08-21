@@ -56,7 +56,7 @@ export function FavoritesPage() {
   const { data: favorites } = useSuspenseQuery(viewerFavoritesQuery);
 
   return (
-    <div className="mx-auto w-full max-w-[96rem] px-gutter py-8">
+    <div className="mx-auto w-full max-w-[96rem] px-gutter pb-section pt-8">
       <header className="flex flex-col gap-2">
         <h1 className="text-headline font-bold tracking-tight text-foreground">Saved spots</h1>
         <p className="text-lead text-muted-foreground">
