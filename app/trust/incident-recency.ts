@@ -141,19 +141,31 @@ export function todayUtcMidnight(now: Date = new Date()): number {
  * real calendar date (rejecting `2026-02-31` et al. before they reach the
  * Postgres `date` column) that is not in the future. Declared once so an edit
  * can never sneak a future or impossible date past the report path.
+ *
+ * One `superRefine`, not chained `.refine()`s: every chained refine runs, so an
+ * impossible date would also collect "cannot be in the future". The incident
+ * form renders the issue message verbatim, so a value that is not a date must
+ * raise only the actionable issue. The early return enforces that.
+ *
+ * `todayUtcMidnight()` must be called here, at validation time. Hoisting it to
+ * module scope freezes the no-future ceiling at import.
  */
-const occurredOnSchema = z
-  .string()
-  .refine((value) => parseCalendarDay(value) !== null, {
-    message: "occurredOn must be a real YYYY-MM-DD date",
-  })
-  .refine(
-    (value) => {
-      const day = parseCalendarDay(value);
-      return day !== null && day <= todayUtcMidnight();
-    },
-    { message: "occurredOn cannot be in the future" }
-  );
+const occurredOnSchema = z.string().superRefine((value, ctx) => {
+  const day = parseCalendarDay(value);
+  if (day === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "occurredOn must be a real YYYY-MM-DD date",
+    });
+    return;
+  }
+  if (day > todayUtcMidnight()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "occurredOn cannot be in the future",
+    });
+  }
+});
 
 /**
  * The optional free-text note shared by the report and edit schemas. An empty

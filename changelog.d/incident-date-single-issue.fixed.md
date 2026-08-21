@@ -1,0 +1,1 @@
+- `[manual]` An impossible incident date (e.g. `2026-02-31`) now reports only "occurredOn must be a real YYYY-MM-DD date" instead of also claiming the date "cannot be in the future".

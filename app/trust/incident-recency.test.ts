@@ -123,20 +123,35 @@ describe("reportIncidentInputSchema — validation", () => {
     }
   });
 
-  it("surfaces an impossible-date issue for Feb 31", () => {
-    // `IncidentReports` renders the failed mutation's message verbatim, so the
-    // reason a report bounced has to be present for the reporter. NOTE: both
-    // refines run, so an impossible date currently yields the "cannot be in the
-    // future" issue TOO. This asserts only that the impossible-date issue is
-    // present — it deliberately does not pin the spurious second one, which is
-    // a real UX wart tracked separately.
+  it("surfaces only the impossible-date issue for Feb 31", () => {
+    // `IncidentReports` renders the issue message verbatim, so the issue set is
+    // the user-facing contract, not just its contents: a value that is not a
+    // date must never also be told it "cannot be in the future". Asserted as an
+    // exact list so an extra issue fails here.
     const result = reportIncidentInputSchema.safeParse({
       listingId: "listing-1",
       occurredOn: "2026-02-31",
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues.some((i) => /real YYYY-MM-DD date/.test(i.message))).toBe(true);
+      expect(result.error.issues.map((i) => i.message)).toEqual([
+        "occurredOn must be a real YYYY-MM-DD date",
+      ]);
+    }
+  });
+
+  it("surfaces only the no-future issue for a real future date", () => {
+    // The other half of the pairing above: a real date that is merely future
+    // must not also claim it isn't a real date.
+    const result = reportIncidentInputSchema.safeParse({
+      listingId: "listing-1",
+      occurredOn: "2099-01-01",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.message)).toEqual([
+        "occurredOn cannot be in the future",
+      ]);
     }
   });
 
@@ -178,14 +193,31 @@ describe("editIncidentInputSchema — the edit path re-validates the date (#32)"
     }
   });
 
-  it("rejects an edit to an impossible calendar date, surfacing the impossible-date issue", () => {
+  it("rejects an edit to an impossible calendar date with only the impossible-date issue", () => {
+    // Same user-facing contract as the report path: an impossible date must not
+    // also be told it "cannot be in the future".
     const result = editIncidentInputSchema.safeParse({
       id: "incident-1",
       occurredOn: "2026-02-31",
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues.some((i) => /real YYYY-MM-DD date/.test(i.message))).toBe(true);
+      expect(result.error.issues.map((i) => i.message)).toEqual([
+        "occurredOn must be a real YYYY-MM-DD date",
+      ]);
+    }
+  });
+
+  it("rejects an edit to a future date with only the no-future issue", () => {
+    const result = editIncidentInputSchema.safeParse({
+      id: "incident-1",
+      occurredOn: "2099-01-01",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.message)).toEqual([
+        "occurredOn cannot be in the future",
+      ]);
     }
   });
 });
