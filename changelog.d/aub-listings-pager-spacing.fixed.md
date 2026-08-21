@@ -1,1 +1,1 @@
-- `[manual]` Tightened the vertical spacing around the browse pager: the shared listings grid no longer carries its own bottom padding (it stacked with the content area's, leaving a ~120px void above "Page N of M"), and the content area's bottom padding is trimmed to just clear the "Add listing" FAB.
+- `[manual]` Fixed the empty gap around the browse pager: "Page N of M" now sits directly under the last listing, with matching space below it. The saved-spots page gets the same tightened bottom spacing.

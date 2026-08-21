@@ -4,10 +4,7 @@ import { RestaurantCard, type RestaurantCardVM } from "~/components/listing/List
  * The List view: a responsive grid of {@link RestaurantCard}s built from the
  * real per-listing view-models.
  *
- * The grid owns no bottom padding: on browse it is followed by the
- * `DirectoryPager`, and clearing the floating "Add listing" FAB is the
- * enclosing content area's job (`app/routes/index.tsx`). Padding here as well
- * stacked into a ~120px gap between the last card and the pager.
+ * Vertical space below the grid belongs to the enclosing page.
  *
  * The directory shell spans the full viewport, so the grid scales up to four
  * columns on very wide screens (`md:grid-cols-2 xl:grid-cols-3
