@@ -642,10 +642,12 @@ function BrowseListings() {
       </div>
 
       {/* Content area — renders exactly one state. The page scrolls (no inner
-          scroll region), so this is a plain block with generous bottom
-          padding so the last card clears the viewport-fixed FAB. `relative`
-          anchors the map's absolutely-positioned backdrop + pins. */}
-      <div className="relative bg-background px-gutter pb-28 pt-4">
+          scroll region), so this is a plain block whose bottom padding is the
+          single spacer below the results: enough that the last row clears the
+          viewport-fixed FAB (`bottom-6` + a ~48px pill ≈ 72px), not so much
+          that the pager floats in a void. `relative` anchors the map's
+          absolutely-positioned backdrop + pins. */}
+      <div className="relative bg-background px-gutter pb-24 pt-4">
         {vms.length === 0 ? (
           anyFilterActive ? (
             <DirectoryNoResults onClearAll={clearAll} />

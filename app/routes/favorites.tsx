@@ -56,7 +56,10 @@ export function FavoritesPage() {
   const { data: favorites } = useSuspenseQuery(viewerFavoritesQuery);
 
   return (
-    <div className="mx-auto w-full max-w-[96rem] px-gutter py-8">
+    // `pb-16` because the shared `DirectoryList` grid carries no bottom
+    // padding of its own; this page has no FAB to clear, so it only needs
+    // breathing room between the last card and the footer.
+    <div className="mx-auto w-full max-w-[96rem] px-gutter pb-16 pt-8">
       <header className="flex flex-col gap-2">
         <h1 className="text-headline font-bold tracking-tight text-foreground">Saved spots</h1>
         <p className="text-lead text-muted-foreground">
