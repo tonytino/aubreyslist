@@ -37,15 +37,10 @@ describe("DistanceSelector", () => {
   });
 
   it("sizes the chip to the selected radius, not the longest option", () => {
-    const { container, rerender } = render(<DistanceSelector value={5} onChange={() => {}} />);
+    render(<DistanceSelector value={5} onChange={() => {}} />);
 
-    const sizer = container.querySelector("span[aria-hidden='true']");
-    expect(sizer?.textContent).toBe("Within 5 miles");
-    expect(sizer?.className).toContain("invisible");
-
-    rerender(<DistanceSelector value={25} onChange={() => {}} />);
-    expect(container.querySelector("span[aria-hidden='true']")?.textContent).toBe(
-      "Within 25 miles"
+    expect(screen.getByRole("combobox", { name: "Search radius" }).className).toContain(
+      "[field-sizing:content]"
     );
   });
 });
