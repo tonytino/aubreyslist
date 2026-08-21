@@ -22,9 +22,18 @@
  */
 export const BROWSE_SORT_OPTIONS = [
   {
+    value: "distance",
+    label: "Near me",
+    help:
+      "Closest first, by great-circle (haversine) distance from your location " +
+      "to each listing's coordinates, then name. The default. Anchors on your " +
+      "browser location when granted, else the coarse location of your " +
+      "network; with neither it degrades to DISTANCE_FALLBACK_SORT.",
+  },
+  {
     value: "alpha",
     label: "Alphabetical (A–Z)",
-    help: "Restaurant name, A to Z. The stable, scannable default.",
+    help: "Restaurant name, A to Z. Stable and scannable.",
   },
   {
     value: "trust",
@@ -41,21 +50,24 @@ export const BROWSE_SORT_OPTIONS = [
       "Most-recently-confirmed headline celiac-safe claim first, then by net " +
       "confirm count, then name. Listings never confirmed sort last.",
   },
-  {
-    value: "distance",
-    label: "Near me",
-    help:
-      "Closest first, by great-circle (haversine) distance from your location " +
-      "to each listing's coordinates, then name. Requires your browser location; " +
-      "if it's denied or unavailable the list falls back to alphabetical.",
-  },
 ] as const;
 
 /** The union of valid `?sort=` tokens, derived from the registry. */
 export type BrowseSort = (typeof BROWSE_SORT_OPTIONS)[number]["value"];
 
-/** The stable default sort — alphabetical, the first registry entry. */
+/** The default sort — "Near me", the first registry entry. */
 export const DEFAULT_BROWSE_SORT: BrowseSort = BROWSE_SORT_OPTIONS[0].value;
+
+/**
+ * The order the distance sort degrades to when no location is available at
+ * all: most recently confirmed. Shared by the server's `ORDER BY` and the
+ * client's copy, so the results and the explanation can never disagree.
+ *
+ * Deliberately not alphabetical: a visitor who cannot be located is better
+ * served by what the community just re-verified than by everything starting
+ * with "A".
+ */
+export const DISTANCE_FALLBACK_SORT: BrowseSort = "recency";
 
 /** All valid sort tokens, in display order. */
 export const BROWSE_SORT_VALUES: readonly BrowseSort[] = BROWSE_SORT_OPTIONS.map(

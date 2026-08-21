@@ -33,4 +33,15 @@ describe("SortSelector", () => {
 
     expect(onChange).toHaveBeenCalledWith("distance");
   });
+
+  it("sizes the chip to the selected option, not the longest one", () => {
+    // A native <select> is as wide as its widest <option>, so "Near me" would
+    // otherwise sit in a chip sized for "Alphabetical (A–Z)". `field-sizing`
+    // is what fixes that; jsdom computes no layout, so assert the mechanism.
+    render(<SortSelector value="distance" onChange={() => {}} />);
+
+    expect(screen.getByRole("combobox", { name: "Sort by" }).className).toContain(
+      "[field-sizing:content]"
+    );
+  });
 });

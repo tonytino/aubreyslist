@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { getSetting } from "~/server/settings";
 import { type BrowseListingsPage, browseListingsInputSchema, getBrowseListings } from "./browse";
+import { coarseCoordsFromHeaders } from "./request-geo";
 
 /**
  * Client-callable browse-list server function — the only part of the browse
@@ -13,6 +15,11 @@ import { type BrowseListingsPage, browseListingsInputSchema, getBrowseListings }
  * `staleness_months` setting (ADR-007), then threads both into the pure trust
  * derivation so the headline glance matches the listing-detail page exactly
  * (no SSR/client drift, no hard-coded window).
+ *
+ * It also resolves the request's coarse location, which anchors the default
+ * "near me" sort before (or without) a browser reading. Taken from the request
+ * headers, never from `data`: an anchor the client could assert would let any
+ * caller claim to be anywhere.
  *
  * Server-only at runtime; safe to import from client modules.
  *
@@ -30,5 +37,6 @@ export const fetchBrowseListings = createServerFn({ method: "GET" })
   .validator(browseListingsInputSchema)
   .handler(async ({ data }): Promise<BrowseListingsPage> => {
     const stalenessMonths = await getSetting("staleness_months");
-    return getBrowseListings(data, new Date(), stalenessMonths);
+    const coarseOrigin = coarseCoordsFromHeaders(getRequest().headers);
+    return getBrowseListings(data, new Date(), stalenessMonths, coarseOrigin);
   });

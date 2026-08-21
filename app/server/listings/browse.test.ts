@@ -205,6 +205,7 @@ vi.mock("~/server/favorites/index", () => ({
   getViewerFavoriteIds: () => Promise.resolve(h.state.viewerFavoriteIds),
 }));
 
+import { UNION_STATION } from "~/listings/distance";
 import { formatFreshness } from "~/trust/browse-card-format";
 import {
   DEFAULT_STALENESS_MONTHS,
@@ -560,38 +561,125 @@ describe("getBrowseListings", () => {
     expect(tiebreak).toContain('"name"');
   });
 
-  it("falls back to alphabetical for distance sort when NO coords are supplied", async () => {
+  it("degrades distance sort to recency when NO location is available at all", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
 
-    // sort=distance but the user denied/unavailable geolocation (no coords).
+    // sort=distance, no browser reading and no coarse request anchor.
     await getBrowseListings({ ...baseInput, sort: "distance" }, NOW);
 
-    // Degrades to the stable single-term alphabetical order rather than erroring.
-    expect(state.orderByArgs).toHaveLength(1);
-    expect(renderArg(state.orderByArgs[0])).toContain('"name"');
-    expect(renderArg(state.orderByArgs[0])).toContain("asc");
+    // The recency ORDER BY: last-confirmed first, then net consensus, then
+    // name — not the single-term alphabetical order.
+    expect(state.orderByArgs).toHaveLength(3);
+    expect(renderArg(state.orderByArgs[0])).toContain("desc");
+    expect(renderArg(state.orderByArgs[2])).toContain('"name"');
   });
 
-  it("falls back to alphabetical when only HALF a coordinate pair is supplied", async () => {
+  it("degrades distance sort when only HALF a coordinate pair is supplied", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
 
     // A lone lat (no lng) is meaningless for distance → fall back, don't error.
     await getBrowseListings({ ...baseInput, sort: "distance", userLat: 39.7392 }, NOW);
 
-    expect(state.orderByArgs).toHaveLength(1);
-    expect(renderArg(state.orderByArgs[0])).toContain('"name"');
+    expect(state.orderByArgs).toHaveLength(3);
+    expect(renderArg(state.orderByArgs[2])).toContain('"name"');
   });
 
-  it("echoes distance back as the applied sort even when it fell back to alpha order", async () => {
+  it("anchors the distance sort on the coarse request location when the browser sent none", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
 
+    await getBrowseListings({ ...baseInput, sort: "distance" }, NOW, undefined, {
+      lat: 39.7392,
+      lng: -104.9903,
+    });
+
+    // A real distance ORDER BY, from the request anchor.
+    expect(state.orderByArgs).toHaveLength(2);
+    const params = dialect.sqlToQuery(state.orderByArgs[0] as SQL).params;
+    expect(params).toContain(39.7392);
+    expect(params).toContain(-104.9903);
+  });
+
+  it("prefers the browser reading over the coarse request location", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings(
+      { ...baseInput, sort: "distance", userLat: 40.5, userLng: -105.5 },
+      NOW,
+      undefined,
+      { lat: 39.7392, lng: -104.9903 }
+    );
+
+    const params = dialect.sqlToQuery(state.orderByArgs[0] as SQL).params;
+    expect(params).toContain(40.5);
+    expect(params).not.toContain(39.7392);
+  });
+
+  it("reports a browser reading as the precise anchor", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    const result = await getBrowseListings(
+      { ...baseInput, sort: "distance", userLat: 39.7392, userLng: -104.9903 },
+      NOW
+    );
+    expect(result).toMatchObject({
+      sort: "distance",
+      effectiveSort: "distance",
+      locationSource: "precise",
+    });
+  });
+
+  it("labels no distance when only the coarse request anchor is available", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    const result = await getBrowseListings({ ...baseInput, sort: "distance" }, NOW, undefined, {
+      lat: 39.74,
+      lng: -104.99,
+    });
+
+    // The list is ordered from the coarse anchor, but no card claims a
+    // precise "0.4 mi" the anchor cannot support.
+    expect(state.orderByArgs).toHaveLength(2);
+    expect(result.cards[0]?.distanceLabel).toBeUndefined();
+  });
+
+  it("reports a request-header anchor as coarse", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    const result = await getBrowseListings({ ...baseInput, sort: "distance" }, NOW, undefined, {
+      lat: 39.74,
+      lng: -104.99,
+    });
+    expect(result).toMatchObject({ effectiveSort: "distance", locationSource: "coarse" });
+  });
+
+  it("keeps the requested sort but reports the order it really used", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    // Nothing to anchor on: the response still echoes the visitor's selection,
+    // so the control stays where they put it, while `effectiveSort` tells the
+    // page what it is actually showing.
     const result = await getBrowseListings({ ...baseInput, sort: "distance" }, NOW);
-    // The applied sort token is still "distance" (the UI reflects the user's
-    // selection); only the ORDER BY degraded.
-    expect(result.sort).toBe("distance");
+    expect(result).toMatchObject({
+      sort: "distance",
+      effectiveSort: "recency",
+      locationSource: "none",
+    });
+  });
+
+  it("reports no location source for a sort that never needed one", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    const result = await getBrowseListings({ ...baseInput, sort: "trust" }, NOW);
+    expect(result).toMatchObject({ sort: "trust", effectiveSort: "trust", locationSource: "none" });
   });
 
   it("combines distance sort with search + filters (shared WHERE, distance ORDER BY)", async () => {
@@ -950,16 +1038,43 @@ describe("getBrowseListings", () => {
     expect(sql).toContain("moderation_status");
   });
 
-  it("applies NO radius constraint when the origin is incomplete (half a pair)", async () => {
+  it("anchors the radius on the fallback when the origin is incomplete (half a pair)", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "a" }];
     state.total = 1;
 
-    // A radius with only originLat (no originLng) is meaningless → no filter.
+    // A radius with only originLat (no originLng) can't anchor itself, so it
+    // falls back like a missing origin — a "Within 5 mi" chip always filters
+    // by 5 miles of somewhere, never silently by nothing.
     await getBrowseListings({ ...baseInput, radiusMiles: 5, originLat: 39.7539 }, NOW);
 
     const sql = renderArg(state.pageWhere);
-    expect(sql).not.toContain("radians");
+    expect(sql).toContain("radians");
     expect(sql).toContain("moderation_status");
+  });
+
+  it("anchors the radius on Union Station when no origin and no location are known", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, radiusMiles: 5 }, NOW);
+
+    const params = dialect.sqlToQuery(state.pageWhere as SQL).params;
+    expect(params).toContain(UNION_STATION.lat);
+    expect(params).toContain(UNION_STATION.lng);
+  });
+
+  it("anchors the radius on the coarse request location before Union Station", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "a" }];
+    state.total = 1;
+
+    await getBrowseListings({ ...baseInput, radiusMiles: 5 }, NOW, undefined, {
+      lat: 40.015,
+      lng: -105.27,
+    });
+
+    const params = dialect.sqlToQuery(state.pageWhere as SQL).params;
+    expect(params).toContain(40.015);
+    expect(params).not.toContain(UNION_STATION.lat);
   });
 
   it("keeps the radius filter INDEPENDENT of the near-me sort coords", async () => {

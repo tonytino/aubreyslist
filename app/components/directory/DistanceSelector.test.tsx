@@ -35,4 +35,12 @@ describe("DistanceSelector", () => {
 
     expect(onChange).toHaveBeenCalledWith(5);
   });
+
+  it("sizes the chip to the selected radius, not the longest option", () => {
+    render(<DistanceSelector value={5} onChange={() => {}} />);
+
+    expect(screen.getByRole("combobox", { name: "Search radius" }).className).toContain(
+      "[field-sizing:content]"
+    );
+  });
 });

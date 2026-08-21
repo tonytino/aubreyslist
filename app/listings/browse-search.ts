@@ -60,8 +60,7 @@ export const BROWSE_SEARCH_DEFAULTS = {
 
 /**
  * The raw browse search values relevant to "is anything off its default" —
- * one field per {@link BROWSE_SEARCH_DEFAULTS} entry, plus the always-optional
- * near-me coordinate pair (absent by default, so no defaults entry).
+ * one field per {@link BROWSE_SEARCH_DEFAULTS} entry.
  */
 export interface BrowseSearchLike {
   page: number;
@@ -72,8 +71,6 @@ export interface BrowseSearchLike {
   quick: string;
   saved: boolean;
   bot: boolean;
-  lat?: number | undefined;
-  lng?: number | undefined;
 }
 // `view` (the List/Map toggle) is deliberately not part of this interface or
 // `isAnyBrowseFilterActive`. It's a content-view choice, not a filter/sort
@@ -89,8 +86,8 @@ export interface BrowseSearchLike {
  *
  * Compared field-by-field against {@link BROWSE_SEARCH_DEFAULTS} — the same
  * map `stripSearchParams` strips the URL against — so this can never drift
- * from what counts as "at rest". A set `lat`/`lng` pair means the visitor
- * opted into "near me", so it counts as active too.
+ * from what counts as "at rest". The visitor's location is not a search param
+ * at all (it lives in memory for the tab), so it never lights the chip.
  */
 export function isAnyBrowseFilterActive(search: BrowseSearchLike): boolean {
   return (
@@ -101,9 +98,7 @@ export function isAnyBrowseFilterActive(search: BrowseSearchLike): boolean {
     search.radius !== BROWSE_SEARCH_DEFAULTS.radius ||
     search.quick !== BROWSE_SEARCH_DEFAULTS.quick ||
     search.saved !== BROWSE_SEARCH_DEFAULTS.saved ||
-    search.bot !== BROWSE_SEARCH_DEFAULTS.bot ||
-    search.lat !== undefined ||
-    search.lng !== undefined
+    search.bot !== BROWSE_SEARCH_DEFAULTS.bot
   );
 }
 
@@ -127,20 +122,22 @@ export const browseSearchSchema = z.object({
   q: z.string().max(256).catch(BROWSE_SEARCH_DEFAULTS.q).default(BROWSE_SEARCH_DEFAULTS.q),
   // A plain enum, not a `.transform()`, so the value round-trips cleanly when
   // the router re-serializes search state on navigation. Unknown tokens
-  // degrade to the stable alphabetical default via `.catch`.
+  // degrade to the "near me" default via `.catch`.
   sort: z
     .enum(BROWSE_SORT_VALUES as [BrowseSort, ...BrowseSort[]])
     .catch(BROWSE_SEARCH_DEFAULTS.sort)
     .default(BROWSE_SEARCH_DEFAULTS.sort),
-  // The user's location for the "near me" distance sort, kept in the URL so a
-  // distance-sorted view is linkable and back/forward-correct.
-  lat: z.number().finite().min(-90).max(90).optional().catch(undefined),
-  lng: z.number().finite().min(-180).max(180).optional().catch(undefined),
+  // The visitor's coordinates are deliberately NOT search params. Location is
+  // an input to the query, not a view to share: in the URL it would ride into
+  // browser history, referrers, and any pasted link. It lives in route state
+  // for the life of the tab and reaches the server only as a rounded
+  // server-function argument. `?sort=` alone makes the view linkable, and the
+  // recipient is anchored by their own location.
+  //
   // Distance-radius filter. `parseRadiusMiles` coerces any value to a valid
   // DISTANCE_RADIUS_OPTIONS option, so it always round-trips as a real radius.
-  // The origin is not in the URL — it's derived at render time from the user's
-  // live coords (or Union Station), so a shared link re-anchors to the
-  // recipient's location.
+  // The origin is not in the URL either: the server anchors it on whatever
+  // located the sort, falling back to Union Station.
   radius: z
     .number()
     .transform((value) => parseRadiusMiles(value))

@@ -10,6 +10,9 @@ import { DISTANCE_RADIUS_OPTIONS } from "~/listings/distance";
  * deliberately not shown here. The MapPin is a decorative, click-through
  * overlay.
  *
+ * Sized to the selected option by `field-sizing: content`, like
+ * {@link SortSelector} — see the note there.
+ *
  * Accessible: a real `<select>` with an explicit `aria-label` ("Search
  * radius") — native keyboard + screen-reader support, never an unlabelled
  * mystery target.
@@ -38,7 +41,7 @@ export function DistanceSelector({
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
         aria-label="Search radius"
-        className="cursor-pointer appearance-none rounded-chip border border-border bg-surface py-2 pl-9 pr-3 text-body-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+        className="cursor-pointer appearance-none rounded-chip border border-border bg-surface py-2 pl-9 pr-3 text-body-sm font-semibold text-foreground [field-sizing:content] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
       >
         {DISTANCE_RADIUS_OPTIONS.map((miles) => (
           <option key={miles} value={miles}>

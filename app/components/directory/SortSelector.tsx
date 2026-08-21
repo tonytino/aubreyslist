@@ -7,6 +7,16 @@ import { BROWSE_SORT_OPTIONS, type BrowseSort, parseBrowseSort } from "~/listing
  * native `<select>` styled as a chip, so clicking anywhere on it opens the
  * options. The ArrowUpDown glyph is a decorative, click-through overlay.
  *
+ * `field-sizing: content` sizes the chip to the SELECTED option. A native
+ * `<select>` is otherwise as wide as its longest `<option>`, which left "Near
+ * me" sitting in a chip wide enough for "Alphabetical (A–Z)". Baseline since
+ * June 2026 (Chrome 123+, Safari 26.2+, Firefox 152+); an older browser
+ * degrades to the widest-option width, which is only cosmetic.
+ *
+ * Do not reach for a sizer element instead: an auto grid column takes the
+ * max-content of every item in it, and a select's max-content is its widest
+ * option, so the column stays wide no matter what shares the cell.
+ *
  * Accessible: a real `<select>` with an explicit `aria-label` ("Sort by") —
  * native keyboard + screen-reader support (`getByLabel("Sort by")` selectors
  * depend on that name).
@@ -36,7 +46,7 @@ export function SortSelector({
         value={value}
         onChange={(event) => onChange(parseBrowseSort(event.target.value))}
         aria-label="Sort by"
-        className="cursor-pointer appearance-none rounded-chip border border-border bg-surface py-2 pl-9 pr-3 text-body-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+        className="cursor-pointer appearance-none rounded-chip border border-border bg-surface py-2 pl-9 pr-3 text-body-sm font-semibold text-foreground [field-sizing:content] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
       >
         {BROWSE_SORT_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>

@@ -37,8 +37,7 @@ describe("browseSearchSchema", () => {
     // drifts from what the schema fills for a bare visit, the URL either
     // leaks a default or strips a real value. `lat`/`lng` have no default
     // (always-optional), so they are excluded from the strip map by design.
-    const { lat: _lat, lng: _lng, ...parsedDefaults } = browseSearchSchema.parse({});
-    expect(parsedDefaults).toEqual(BROWSE_SEARCH_DEFAULTS);
+    expect(browseSearchSchema.parse({})).toEqual(BROWSE_SEARCH_DEFAULTS);
   });
 
   it("passes a fully-specified, valid search through unchanged", () => {
@@ -48,8 +47,6 @@ describe("browseSearchSchema", () => {
         attrs: "celiac_safe_vs_gluten_friendly",
         q: "pizza",
         sort: "trust",
-        lat: 39.7392,
-        lng: -104.9903,
         radius: 10,
         quick: "celiac,recent",
         saved: true,
@@ -61,8 +58,6 @@ describe("browseSearchSchema", () => {
       attrs: "celiac_safe_vs_gluten_friendly",
       q: "pizza",
       sort: "trust",
-      lat: 39.7392,
-      lng: -104.9903,
       radius: 10,
       quick: "celiac,recent",
       saved: true,
@@ -93,14 +88,12 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({ sort: 42 }).sort).toBe(DEFAULT_BROWSE_SORT);
   });
 
-  it("keeps a valid coordinate pair but drops out-of-range or garbage lat/lng", () => {
-    const valid = browseSearchSchema.parse({ lat: -12.5, lng: 130.25 });
-    expect(valid.lat).toBe(-12.5);
-    expect(valid.lng).toBe(130.25);
-
-    const bad = browseSearchSchema.parse({ lat: 999, lng: "west" });
-    expect(bad.lat).toBeUndefined();
-    expect(bad.lng).toBeUndefined();
+  it("does not accept coordinates as search params at all", () => {
+    // Location is route state, not a shareable view: it must never round-trip
+    // through the URL, browser history, or a pasted link.
+    const parsed = browseSearchSchema.parse({ lat: -12.5, lng: 130.25 });
+    expect(parsed).not.toHaveProperty("lat");
+    expect(parsed).not.toHaveProperty("lng");
   });
 
   it("truncates nothing but rejects an over-long free-text query to empty", () => {
@@ -164,10 +157,6 @@ describe("isAnyBrowseFilterActive", () => {
     expect(isAnyBrowseFilterActive(AT_DEFAULT)).toBe(false);
   });
 
-  it("is false when lat/lng are explicitly undefined (the always-optional default)", () => {
-    expect(isAnyBrowseFilterActive({ ...AT_DEFAULT, lat: undefined, lng: undefined })).toBe(false);
-  });
-
   it.each<[string, Partial<BrowseSearchLike>]>([
     ["page", { page: 2 }],
     ["attrs", { attrs: "celiac_safe_vs_gluten_friendly" }],
@@ -177,7 +166,6 @@ describe("isAnyBrowseFilterActive", () => {
     ["quick", { quick: "celiac" }],
     ["saved", { saved: true }],
     ["bot (hide bot suggestions)", { bot: false }],
-    ["a near-me coordinate pair", { lat: 39.7392, lng: -104.9903 }],
   ])("is true when only %s is off its default", (_label, override) => {
     expect(isAnyBrowseFilterActive({ ...AT_DEFAULT, ...override })).toBe(true);
   });

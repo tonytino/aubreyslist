@@ -1,6 +1,6 @@
 import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddSpotFab } from "~/components/directory/AddSpotFab";
 import { DirectoryList } from "~/components/directory/DirectoryList";
 import { DirectoryMap, type DirectoryMapEntry } from "~/components/directory/DirectoryMap";
@@ -13,7 +13,6 @@ import { listingToCardVM } from "~/components/listing/ListingCard";
 import { canonicalLink, pageSeoMeta } from "~/lib/seo";
 import {
   BROWSE_PAGE_SIZE,
-  coordsFromSearch,
   parseAttrs,
   serializeAttrs,
   type UserCoords,
@@ -23,21 +22,16 @@ import {
   browseSearchSchema,
   isAnyBrowseFilterActive,
 } from "~/listings/browse-search";
-import { UNION_STATION } from "~/listings/distance";
-import {
-  forgetsNearMe,
-  readNearMePreference,
-  writeNearMePreference,
-} from "~/listings/near-me-preference";
+import { coarsenCoords } from "~/listings/distance";
 import {
   applyQuickToggle,
   parseQuick,
   type QuickFilterValue,
   serializeQuick,
 } from "~/listings/quick";
-import { type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
+import type { BrowseSort } from "~/listings/sort";
 import type { ClaimAttribute } from "~/listings/taxonomy";
-import { geolocationPermission, useGeolocation } from "~/listings/use-geolocation";
+import { useGeolocation } from "~/listings/use-geolocation";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
 import { fetchBrowsePhotos } from "~/server/places-photos.fn";
 
@@ -80,23 +74,22 @@ function browseQueryOptions(
   coords: UserCoords | undefined,
   q: string,
   radius: number,
-  origin: UserCoords,
   saved: boolean,
   quick: QuickFilterValue[],
   bot: boolean
 ) {
   // Only thread coords to the server when actually distance-sorting; without
-  // them the server falls back to the alphabetical default. Coords in the key
-  // keep separate-location results cached independently.
+  // them the server anchors on the request's coarse location or degrades to
+  // the fallback order. Coords in the key cache each location independently.
   const userLat = sort === "distance" ? coords?.lat : undefined;
   const userLng = sort === "distance" ? coords?.lng : undefined;
   // Normalize the free-text query for the cache key so `""` and whitespace share
   // one cache entry (the server treats a blank query as "no text constraint").
   const trimmedQ = q.trim();
   return queryOptions({
-    // The radius filter + its origin change the result set + honest total, so
-    // both are part of a page's identity — a shared link and a live-located
-    // visitor cache their radius views independently.
+    // The radius filter changes the result set + honest total, so it is part
+    // of a page's identity. Its origin is resolved server-side from the same
+    // coords already in this key.
     queryKey: [
       "browse-listings",
       page,
@@ -106,8 +99,6 @@ function browseQueryOptions(
       userLng ?? null,
       trimmedQ,
       radius,
-      origin.lat,
-      origin.lng,
       // The saved filter changes the result set and makes the response
       // viewer-specific, so it's part of a page's identity — the saved and
       // unsaved views cache independently.
@@ -133,8 +124,6 @@ function browseQueryOptions(
           // Distance-radius filter: keep only listings within `radius` mi of
           // the origin. Independent of userLat/userLng (the sort).
           radiusMiles: radius,
-          originLat: origin.lat,
-          originLng: origin.lng,
           // Server-side "Saved" filter: when set, the server constrains to
           // the viewer's favorites before paginating (honest total/hasMore).
           savedOnly: saved,
@@ -169,34 +158,29 @@ export const Route = createFileRoute("/")({
   search: {
     middlewares: [stripSearchParams(BROWSE_SEARCH_DEFAULTS)],
   },
-  loaderDeps: ({ search: { page, attrs, sort, lat, lng, q, radius, saved, quick, bot } }) => ({
+  loaderDeps: ({ search: { page, attrs, sort, q, radius, saved, quick, bot } }) => ({
     page,
     attrs,
     sort,
-    lat,
-    lng,
     q,
     radius,
     saved,
     quick,
     bot,
   }),
-  loader: async ({
-    context,
-    deps: { page, attrs, sort, lat, lng, q, radius, saved, quick, bot },
-  }) => {
-    // SSR has no live geolocation, so the radius origin is Denver Union
-    // Station. The client re-anchors to the visitor's real coords once
-    // granted, which refetches under a new query key.
+  loader: async ({ context, deps: { page, attrs, sort, q, radius, saved, quick, bot } }) => {
+    // SSR has no browser reading, so this prefetch carries no coords: the
+    // server anchors the default "near me" sort on the request's coarse
+    // location, or degrades to the fallback order. Once the browser answers,
+    // the client refetches under a new query key.
     await context.queryClient.ensureQueryData(
       browseQueryOptions(
         page,
         parseAttrs(attrs),
         sort,
-        coordsFromSearch(lat, lng),
+        undefined,
         q,
         radius,
-        UNION_STATION,
         saved,
         parseQuick(quick),
         bot
@@ -214,8 +198,6 @@ function BrowseListings() {
     page,
     attrs: attrsParam,
     sort,
-    lat,
-    lng,
     q: qParam,
     radius,
     saved,
@@ -225,53 +207,59 @@ function BrowseListings() {
   } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
-  const coords = coordsFromSearch(lat, lng);
+  // The visitor's location: route state, never a search param. It lives for
+  // the life of the tab, is rounded before it is set (`coarsenCoords`), and
+  // reaches the server only as a server-function argument — so it never
+  // enters the URL, browser history, a referrer, or a shared link. A refresh
+  // simply asks the browser again, which is silent once permission is
+  // granted. The distance-sorted view stays linkable through `?sort=` alone;
+  // the recipient is anchored by their own location, not the sender's.
+  const [coords, setCoords] = useState<UserCoords | undefined>(undefined);
+  // Rounded on the way in, and inside a transition: the new coords change the
+  // query key, and `useSuspenseQuery` suspends on a key change. Without the
+  // transition the whole directory would drop to its fallback for the length
+  // of one fetch; with it the current results stay on screen until the
+  // distance-sorted page is ready.
+  const locate = useCallback((reading: UserCoords) => {
+    startTransition(() => setCoords(coarsenCoords(reading)));
+  }, []);
   // The active quick-filter set is derived straight from the URL, not held in
   // local state — refresh / back-forward / a shared link all restore it by
   // construction. `parseQuick` validates, de-dupes, and collapses the
   // mutually-exclusive safety group.
   const quick = parseQuick(quickParam);
-  // Radius-filter origin: the visitor's own coords when the URL carries the
-  // pair, else Denver Union Station — a stable anchor so a non-located
-  // visitor still gets a meaningful "within N mi" filter.
-  const origin: UserCoords = coords ?? UNION_STATION;
   const { data } = useSuspenseQuery(
-    browseQueryOptions(page, attrs, sort, coords, qParam, radius, origin, saved, quick, bot)
+    browseQueryOptions(page, attrs, sort, coords, qParam, radius, saved, quick, bot)
   );
   const geo = useGeolocation();
 
-  // Restore this device's "Near me" opt-in on load. Gated on an existing
-  // grant: a stored preference never opens a permission prompt, so a visitor
-  // who blocked or never granted location just gets the default order. Runs
-  // once per mount, and only from the default sort with no coords in the URL,
-  // so a link carrying a non-default `?sort=` or coords always wins. The first paint is
-  // the SSR'd alphabetical order; the distance sort lands right after, via a
-  // `replace` so Back leaves the page instead of undoing the restore.
-  const nearMeRestored = useRef(false);
-  useEffect(() => {
-    if (nearMeRestored.current) return;
-    nearMeRestored.current = true;
-    if (sort !== DEFAULT_BROWSE_SORT || coords || !readNearMePreference()) return;
-    void geolocationPermission().then((state) => {
-      if (state !== "granted") return;
-      void geo.request().then((result) => {
-        if (result.status !== "success") {
-          if (forgetsNearMe(result.reason)) writeNearMePreference(false);
-          return;
-        }
-        navigate({
-          replace: true,
-          search: (prev) => ({
-            ...prev,
-            page: 1,
-            sort: "distance",
-            lat: result.coords.lat,
-            lng: result.coords.lng,
-          }),
-        });
-      });
+  // Ask the browser for a reading. The in-flight guard is a ref rather than
+  // `geo.status`, which the caller cannot observe until the next render — two
+  // callers in one tick would otherwise both fire.
+  const locating = useRef(false);
+  const requestLocation = useCallback(() => {
+    if (locating.current) return;
+    locating.current = true;
+    void geo.request().then((result) => {
+      locating.current = false;
+      if (result.status === "success") locate(result.coords);
     });
-  }, [sort, coords, geo, navigate]);
+  }, [geo, locate]);
+
+  // Locate whenever the distance sort is showing without a reading, including
+  // on a first visit — "near me" is the default, so the page asks for what it
+  // needs (owner decision).
+  //
+  // `request()` reads the stored grant first, so this prompts only a visitor
+  // who has not answered: a granted browser resolves silently, a blocked one
+  // resolves straight to the message the alert renders. The `idle` guard is
+  // what stops it re-asking after any answer — and what lets the Reset chip,
+  // which returns the geolocation state to idle along with the sort, ask
+  // again.
+  useEffect(() => {
+    if (coords || sort !== "distance" || geo.status !== "idle") return;
+    requestLocation();
+  }, [sort, coords, geo.status, requestLocation]);
 
   // Post-hydration marker for this route's Suspense boundary (companion to
   // the root `data-hydrated` stamp). React hydrates a server-rendered
@@ -439,46 +427,22 @@ function BrowseListings() {
   }
 
   /**
-   * Change the server-side sort, resetting to page 1. "Near me" is special:
-   * it requests geolocation only on opt-in and falls back to the default
-   * order on denial/unavailable — never a surprise prompt, never a crash. A
-   * granted opt-in is remembered per device (`near-me-preference`) and picked
-   * back up by the restore effect above; any other sort forgets it.
+   * Change the server-side sort, resetting to page 1. The chosen sort lands in
+   * the URL immediately; picking "Near me" without a reading also asks the
+   * browser for one, and the answer arrives as route state, never as a param.
+   *
+   * A refused or failed reading no longer flips the control back: the server
+   * degrades "near me" to the fallback sort (`DISTANCE_FALLBACK_SORT` in
+   * `sort.ts`) and the page says so, which beats silently swapping the
+   * selection the visitor just made.
    */
   function changeSort(next: BrowseSort) {
+    navigate({ search: (prev) => ({ ...prev, page: 1, sort: next }) });
     if (next !== "distance") {
       geo.reset();
-      writeNearMePreference(false);
-      navigate({
-        search: (prev) => ({ ...prev, page: 1, sort: next, lat: undefined, lng: undefined }),
-      });
       return;
     }
-    void geo.request().then((result) => {
-      if (result.status === "success") {
-        writeNearMePreference(true);
-        navigate({
-          search: (prev) => ({
-            ...prev,
-            page: 1,
-            sort: "distance",
-            lat: result.coords.lat,
-            lng: result.coords.lng,
-          }),
-        });
-      } else {
-        if (forgetsNearMe(result.reason)) writeNearMePreference(false);
-        navigate({
-          search: (prev) => ({
-            ...prev,
-            page: 1,
-            sort: DEFAULT_BROWSE_SORT,
-            lat: undefined,
-            lng: undefined,
-          }),
-        });
-      }
-    });
+    if (!coords) requestLocation();
   }
 
   /**
@@ -525,22 +489,21 @@ function BrowseListings() {
   /**
    * Reset every browse search param to its default in one navigation. Unlike
    * `clearAll` (scoped to "filters" only), this backs all the way out —
-   * search, quick chips, taxonomy attrs, saved mode, sort, radius, page, any
-   * near-me coordinate pair, and the client-only List/Map `?view=`.
+   * search, quick chips, taxonomy attrs, saved mode, sort, radius, page, and
+   * the client-only List/Map `?view=`.
    * `search: () => ({})` is a deliberate full replace: every param goes away,
    * `validateSearch` refills `BROWSE_SEARCH_DEFAULTS`, and `stripSearchParams`
    * keeps the URL bare — exactly like a fresh `/` visit. That fresh-visit
    * semantic is why `view` resets too, even though `view` alone never lights
-   * the Reset chip (see the note in browse-search.ts). `geo.reset()` plus
-   * clearing the remembered "Near me" opt-in mirrors `changeSort`'s
-   * non-distance branch, so neither a stale prompt/error state nor a restored
-   * distance sort survives the reset.
+   * the Reset chip (see the note in browse-search.ts). `geo.reset()` mirrors
+   * `changeSort`'s non-distance branch so a stale prompt/error state doesn't
+   * linger. The visitor's location survives: they have not moved, and a fresh
+   * visit would only ask the browser for it again.
    */
   function resetAll() {
     setSearchInput("");
     lastPushedQ.current = "";
     geo.reset();
-    writeNearMePreference(false);
     navigate({ search: () => ({}) });
   }
 
@@ -550,8 +513,8 @@ function BrowseListings() {
 
   // Whether any browse search param is off its default — gates the "Reset"
   // chip. Broader than `anyFilterActive` above: this also covers the saved
-  // mode, sort, radius, page, and a near-me coordinate pair, none of which
-  // affect whether results are showing. Delegates to the shared
+  // mode, sort, radius and page, none of which affect whether results are
+  // showing. Delegates to the shared
   // `isAnyBrowseFilterActive` so this can never drift from what
   // `stripSearchParams` considers "at rest".
   const isAnyFilterActive = isAnyBrowseFilterActive({
@@ -563,9 +526,20 @@ function BrowseListings() {
     quick: quickParam,
     saved,
     bot,
-    lat,
-    lng,
   });
+
+  // What the page says about location, taken from what the server actually
+  // did rather than from the browser's permission state — only the response
+  // knows whether the coarse request anchor stood in for a reading.
+  //
+  // Anchored on the request's approximate location: distances are real but
+  // measured from the area, so say so instead of implying a precise fix.
+  const coarselyAnchored = data.locationSource === "coarse" && data.effectiveSort === "distance";
+  // No anchor at all: the results are the fallback order, and `geo.error`
+  // carries the reason (refused, blocked, unavailable). Suppressed while a
+  // coarse anchor is carrying the sort, where that reason would misdescribe
+  // what the visitor is looking at.
+  const locationAlert = sort === "distance" && data.locationSource === "none" ? geo.error : null;
 
   // Distance is a neutral geo convenience — never a safety signal — so the
   // selector uses plain chip styling and shows only "Within X miles".
@@ -609,9 +583,13 @@ function BrowseListings() {
               separate, conditionally-rendered `role="alert"` — alerts
               announce on insertion by design. */}
           <output className="text-body-sm text-muted-foreground empty:sr-only">
-            {geo.status === "prompting" ? "Finding your location…" : null}
+            {geo.status === "prompting"
+              ? "Finding your location…"
+              : coarselyAnchored
+                ? "Sorted from your general area. Turn on location for exact distances."
+                : null}
           </output>
-          {geo.error ? (
+          {locationAlert ? (
             // Text is `text-stale` on `bg-stale-soft` — the exact pairing the
             // SafetySignal `soft` variant uses. The `-soft` fills stay light
             // in dark mode (styling.md) while `text-foreground` flips
@@ -622,7 +600,7 @@ function BrowseListings() {
               role="alert"
               className="rounded-card border border-stale bg-stale-soft px-3 py-2 text-body-sm font-medium text-stale"
             >
-              {geo.error}
+              {locationAlert}
             </p>
           ) : null}
           <div className="flex items-center justify-between gap-3">

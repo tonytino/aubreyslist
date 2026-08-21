@@ -17,7 +17,7 @@ export const EARTH_RADIUS_KM = 6371;
 
 /**
  * A user coordinate: a finite latitude/longitude in valid WGS84 ranges.
- * Shared by the route's `?lat=`/`?lng=` params and the browse server-fn
+ * Shared by the route's in-memory location state and the browse server-fn
  * validator, so an out-of-range or garbage value can never reach the distance
  * ORDER BY.
  *
@@ -52,6 +52,29 @@ export type RadiusMiles = (typeof DISTANCE_RADIUS_OPTIONS)[number];
 
 /** The default search radius (miles) when none is chosen — the widest option. */
 export const DEFAULT_RADIUS_MILES: RadiusMiles = 25;
+
+/**
+ * Decimal places kept when a browser reading leaves the device: 2, about 1.1
+ * km of latitude. Enough to rank a metro's restaurants by distance, far too
+ * coarse to place someone at an address.
+ */
+export const COARSE_COORD_DECIMALS = 2;
+
+/**
+ * Round a reading to {@link COARSE_COORD_DECIMALS} before it leaves the
+ * browser. The precise fix never goes to the server, into a query key, or
+ * anywhere else it could be logged.
+ *
+ * Rounding, not truncation, so the error stays symmetric (at most half a step
+ * in each axis) instead of always pulling toward the equator and the meridian.
+ */
+export function coarsenCoords({ lat, lng }: Coords): Coords {
+  const factor = 10 ** COARSE_COORD_DECIMALS;
+  return {
+    lat: Math.round(lat * factor) / factor,
+    lng: Math.round(lng * factor) / factor,
+  };
+}
 
 /** Statute miles → kilometres (1 mile = 1.609344 km, exact). */
 export function milesToKm(miles: number): number {
