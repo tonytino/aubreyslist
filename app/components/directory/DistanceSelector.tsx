@@ -10,6 +10,10 @@ import { DISTANCE_RADIUS_OPTIONS } from "~/listings/distance";
  * deliberately not shown here. The MapPin is a decorative, click-through
  * overlay.
  *
+ * Sized to the selected option by the same sizer-span trick as
+ * {@link SortSelector} — see the note there for why a native `<select>`
+ * cannot size itself this way.
+ *
  * Accessible: a real `<select>` with an explicit `aria-label` ("Search
  * radius") — native keyboard + screen-reader support, never an unlabelled
  * mystery target.
@@ -28,7 +32,7 @@ export function DistanceSelector({
   onChange: (miles: number) => void;
 }) {
   return (
-    <div className="relative inline-flex items-center">
+    <div className="relative inline-grid items-center">
       <MapPin
         className="pointer-events-none absolute left-3 size-4 text-brand"
         strokeWidth={2.25}
@@ -38,7 +42,7 @@ export function DistanceSelector({
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
         aria-label="Search radius"
-        className="cursor-pointer appearance-none rounded-chip border border-border bg-surface py-2 pl-9 pr-3 text-body-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+        className="col-start-1 row-start-1 w-full min-w-0 cursor-pointer appearance-none rounded-chip border border-border bg-surface py-2 pl-9 pr-3 text-body-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
       >
         {DISTANCE_RADIUS_OPTIONS.map((miles) => (
           <option key={miles} value={miles}>
@@ -46,6 +50,14 @@ export function DistanceSelector({
           </option>
         ))}
       </select>
+      {/* Width sizer only: hidden from the accessibility tree, and `invisible`
+          rather than `hidden` so it still occupies the grid cell. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none invisible col-start-1 row-start-1 whitespace-nowrap border border-transparent py-2 pl-9 pr-3 text-body-sm font-semibold"
+      >
+        Within {value} miles
+      </span>
     </div>
   );
 }
