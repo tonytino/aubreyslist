@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
@@ -67,12 +67,13 @@ function renderMap(selectedId: string | null = "a") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(favoriteIdsQuery.queryKey, []);
   queryClient.setQueryData(currentUserQuery.queryKey, null);
-  render(
+  const ui = (sel: string | null) => (
     <QueryClientProvider client={queryClient}>
-      <DirectoryMap entries={entries} selectedId={selectedId} onSelect={onSelect} />
+      <DirectoryMap entries={entries} selectedId={sel} onSelect={onSelect} />
     </QueryClientProvider>
   );
-  return { onSelect };
+  const view = render(ui(selectedId));
+  return { onSelect, rerenderWith: (sel: string | null) => view.rerender(ui(sel)) };
 }
 
 describe("DirectoryMap — key-absent fallback (AUB-111)", () => {
@@ -139,6 +140,58 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
     const rootCard = within(carousel).getByRole("button", { name: "Root & Rye, Celiac-safe" });
     expect(within(rootCard).getByText("Celiac-safe")).toBeInTheDocument();
     expect(within(rootCard).queryByText("Recent incident")).not.toBeInTheDocument();
+  });
+});
+
+describe("DirectoryMap — carousel scrolls the selected card into view (AUB-274)", () => {
+  // jsdom doesn't implement scrollIntoView; the spy doubles as the polyfill so
+  // the tests can assert both the target element and the scroll options.
+  const scrollIntoView = vi.fn();
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = scrollIntoView;
+  });
+  afterEach(() => {
+    scrollIntoView.mockClear();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not scroll on mount, nor when the initial auto-select lands post-mount", () => {
+    const { rerenderWith } = renderMap(null);
+    // The route's auto-select-first arrives right after mount — still the
+    // initial selection, so nothing animates.
+    rerenderWith("a");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("smooth-scrolls the newly selected card into view without scrolling the page", () => {
+    const { rerenderWith } = renderMap("a");
+    rerenderWith("b");
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    // inline centering only; block "nearest" so the page itself never jumps.
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    });
+    // The scrolled element is the selected entry's own card wrapper.
+    const target = scrollIntoView.mock.contexts[0] as HTMLElement;
+    expect(
+      within(target).getByRole("button", { name: "Lucia Trattoria, Recent incident" })
+    ).toBeInTheDocument();
+  });
+
+  it("scrolls instantly (behavior 'auto') under prefers-reduced-motion", () => {
+    const { rerenderWith } = renderMap("a");
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({ matches: true } as unknown as MediaQueryList)
+    );
+    rerenderWith("b");
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "auto",
+      inline: "center",
+      block: "nearest",
+    });
   });
 });
 

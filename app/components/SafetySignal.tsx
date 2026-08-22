@@ -153,3 +153,12 @@ export const SAFETY_STATES: readonly SafetyState[] = [
 export function safetyLabel(state: SafetyState): string {
   return STATES[state].label;
 }
+
+/**
+ * The state's distinct glyph — the single icon source for every surface that
+ * draws a safety state (this chip, the map pins), so the shape mapping can
+ * never drift between them.
+ */
+export function safetyIcon(state: SafetyState): LucideIcon {
+  return STATES[state].icon;
+}
