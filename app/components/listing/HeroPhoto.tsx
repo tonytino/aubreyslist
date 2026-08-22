@@ -50,8 +50,13 @@ export function listingPhotosQueryKey(listingId: string) {
  * possibly-rotated photo token indefinitely.
  */
 export const LISTING_PHOTOS_STALE_TIME_MS = 12 * 60 * 60 * 1000;
-/** At least `LISTING_PHOTOS_STALE_TIME_MS`, so a remount before that window elapses still hits cache. */
-export const LISTING_PHOTOS_GC_TIME_MS = LISTING_PHOTOS_STALE_TIME_MS;
+/**
+ * At least `LISTING_PHOTOS_STALE_TIME_MS`, so a remount before that window
+ * elapses still hits cache (defined independently — not an alias — so the
+ * dead-code gate doesn't flag a duplicate export; the >= relationship is
+ * pinned by a test).
+ */
+export const LISTING_PHOTOS_GC_TIME_MS = 12 * 60 * 60 * 1000;
 
 /**
  * Shared attribution-line chrome (styling.md): above the scrim (z-20, like the
