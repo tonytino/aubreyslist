@@ -3,8 +3,7 @@ import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucid
 import { type ComponentProps, useState } from "react";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
-import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
-import { Badge } from "~/components/ui/badge";
+import { SafetySignal, type SafetyState, UnattestedBadge } from "~/components/SafetySignal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
 import { cn } from "~/lib/utils";
@@ -329,12 +328,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             // Honest empty state: no evidence and nothing bot-suggested. Plain text —
             // meaning never rests on colour (styling.md). A bot-suggested empty listing
             // instead shows suggested badges plus the bot label in the meta row.
-            <Badge
-              variant="outline"
-              className="border-dashed px-2.5 py-1 text-body-sm font-medium text-muted-foreground"
-            >
-              Not yet attested
-            </Badge>
+            <UnattestedBadge />
           )}
 
           {/* Recent harm flags the card regardless of older confirmations. */}

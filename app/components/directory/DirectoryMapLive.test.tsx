@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { DirectoryMapLive } from "./DirectoryMapLive";
-import type { DirectoryMapEntry } from "./map-ui";
+import { CAROUSEL_BAND_PX, type DirectoryMapEntry } from "./map-ui";
 
 /**
  * Tests for the real map path. Real Google tiles can't render in jsdom/CI, so
@@ -17,6 +17,8 @@ import type { DirectoryMapEntry } from "./map-ui";
 const mapMock = vi.hoisted(() => ({
   fitBounds: vi.fn(),
   moveCamera: vi.fn(),
+  panTo: vi.fn(),
+  panBy: vi.fn(),
   getDiv: () => ({ clientWidth: 800, clientHeight: 600 }),
 }));
 
@@ -110,6 +112,34 @@ describe("DirectoryMapLive — markers", () => {
     ).toBeInTheDocument();
   });
 
+  it("folds a recent incident into the pin's accessible name (shared construction with the fallback path)", () => {
+    const withIncident: DirectoryMapEntry[] = [
+      {
+        vm: vm({
+          id: "d",
+          name: "Harvest Table",
+          safetyState: "celiac-safe",
+          hasRecentIncident: true,
+        }),
+        lat: 39.72,
+        lng: -104.95,
+      },
+    ];
+    render(
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={withIncident}
+        selectedId="d"
+        onSelect={vi.fn()}
+      />
+    );
+    // aria-label overrides button content, so the incident must live in the
+    // name itself — AT hears the same safety picture sighted users see.
+    expect(
+      screen.getByRole("button", { name: "Harvest Table, Celiac-safe, Recent incident" })
+    ).toBeInTheDocument();
+  });
+
   it("marks the selected pin (aria-pressed) and raises its marker zIndex", () => {
     renderLive("b");
     expect(
@@ -196,6 +226,87 @@ describe("DirectoryMapLive — camera fitting", () => {
       <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
     );
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(2);
+  });
+
+  it("pans to a newly selected entry at the current zoom (no fit, no zoom write)", () => {
+    const onSelect = vi.fn();
+    const { rerender } = render(
+      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+    );
+    // Mount: bounds fit only — the initial selection must never pan.
+    expect(mapMock.panTo).not.toHaveBeenCalled();
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
+
+    // The user selects the other pin/mini-card → the camera pans to it, then
+    // shifts down half the carousel band so the pin centres in the visible
+    // canvas above the band instead of the raw canvas.
+    rerender(
+      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="b" onSelect={onSelect} />
+    );
+    expect(mapMock.panTo).toHaveBeenCalledTimes(1);
+    expect(mapMock.panTo).toHaveBeenCalledWith({ lat: 39.7, lng: -104.9 });
+    expect(mapMock.panBy).toHaveBeenCalledTimes(1);
+    expect(mapMock.panBy).toHaveBeenCalledWith(0, CAROUSEL_BAND_PX / 2);
+    // A pan is never a re-fit and never a zoom change.
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
+    expect(mapMock.moveCamera).not.toHaveBeenCalled();
+  });
+
+  it("does NOT pan on the route's validity reassign, and the pan never disarms refit-on-filter-change", () => {
+    const onSelect = vi.fn();
+    const { rerender } = render(
+      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+    );
+    // A real user selection pans…
+    rerender(
+      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="b" onSelect={onSelect} />
+    );
+    expect(mapMock.panTo).toHaveBeenCalledTimes(1);
+
+    // …then a filter change drops the selected entry and the route reassigns
+    // the selection to the first survivor. That's not a user selection: the
+    // refit frames the new result set (the pan must not snatch the camera),
+    // and the earlier pan must not have flipped the user-moved flag.
+    const fewer = entries.slice(0, 1);
+    rerender(
+      <DirectoryMapLive apiKey="test-key" entries={fewer} selectedId="a" onSelect={onSelect} />
+    );
+    expect(mapMock.panTo).toHaveBeenCalledTimes(1);
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(2);
+  });
+
+  it("does NOT pan when the first selection arrives after mount (initial auto-select)", () => {
+    const onSelect = vi.fn();
+    const { rerender } = render(
+      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId={null} onSelect={onSelect} />
+    );
+    // The route's auto-select-first lands post-mount — still the initial
+    // selection, so the bounds fit stands and no pan fires.
+    rerender(
+      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+    );
+    expect(mapMock.panTo).not.toHaveBeenCalled();
+  });
+
+  it("pans with an INSTANT moveCamera (center only, zoom untouched) under prefers-reduced-motion", () => {
+    const onSelect = vi.fn();
+    const { rerender } = render(
+      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+    );
+    mapMock.moveCamera.mockClear();
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({ matches: true } as unknown as MediaQueryList)
+    );
+
+    rerender(
+      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="b" onSelect={onSelect} />
+    );
+    expect(mapMock.panTo).not.toHaveBeenCalled();
+    expect(mapMock.panBy).not.toHaveBeenCalled();
+    // Center-only camera write: the selection pan never changes zoom.
+    expect(mapMock.moveCamera).toHaveBeenCalledTimes(1);
+    expect(mapMock.moveCamera).toHaveBeenCalledWith({ center: { lat: 39.7, lng: -104.9 } });
   });
 
   it("recenters with an INSTANT moveCamera (never-animated) under prefers-reduced-motion", () => {

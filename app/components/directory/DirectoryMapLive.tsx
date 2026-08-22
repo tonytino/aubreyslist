@@ -12,7 +12,14 @@ import {
   type MapBounds,
   type MapPadding,
 } from "~/components/directory/map-camera";
-import { type DirectoryMapEntry, MapPinButton, RecenterFab } from "~/components/directory/map-ui";
+import {
+  CAROUSEL_BAND_PX,
+  type DirectoryMapEntry,
+  MapPinButton,
+  RecenterFab,
+  useUserSelectionChange,
+} from "~/components/directory/map-ui";
+import { prefersReducedMotion } from "~/lib/motion";
 
 /**
  * The real directory map: Google Maps via `@vis.gl/react-google-maps`
@@ -29,11 +36,16 @@ import { type DirectoryMapEntry, MapPinButton, RecenterFab } from "~/components/
  *   (`defaultBounds` + padding so pins clear the opaque carousel band); when
  *   the filtered set changes the camera re-fits only if the visitor hasn't
  *   moved it themselves (drag / non-programmatic zoom sets a "user moved"
- *   flag). The recenter FAB re-fits on demand and clears that flag.
- * - **Reduced motion**: every programmatic fit checks
+ *   flag). The recenter FAB re-fits on demand and clears that flag. Selecting
+ *   a pin/mini-card pans the camera to that entry at the current zoom
+ *   (`PanToSelection`) — never on mount or when the route's validity guard
+ *   reassigns the selection after a filter change, so the pan never fights
+ *   the refit-unless-user-moved logic.
+ * - **Reduced motion**: every programmatic fit or pan checks
  *   `prefers-reduced-motion`; when reduced, the camera jumps via the
  *   never-animated `map.moveCamera` (camera computed by the pure
- *   `cameraForBounds`) instead of `fitBounds`, which may animate.
+ *   `cameraForBounds`, or the entry's centre for a selection pan) instead of
+ *   `fitBounds`/`panTo`, which may animate.
  * - **Z-order safety invariant** (see `map-ui.tsx`): everything here renders
  *   below the opaque `z-10` carousel band that `DirectoryMap` stacks after it.
  *   Never rely on Google's internal `z-index: 0` on `.gm-style`: the map
@@ -51,20 +63,11 @@ import { type DirectoryMapEntry, MapPinButton, RecenterFab } from "~/components/
 const DIRECTORY_MAP_ID = "DEMO_MAP_ID";
 
 /**
- * Pixel padding for every bounds fit: enough on the bottom that pins clear the
- * opaque mini-card carousel band (~150px tall) instead of hiding behind it,
- * and breathing room elsewhere so edge pins aren't glued to the viewport.
+ * Pixel padding for every bounds fit: on the bottom, the opaque mini-card
+ * carousel band plus headroom so pins clear it instead of hiding behind it;
+ * breathing room elsewhere so edge pins aren't glued to the viewport.
  */
-const FIT_PADDING: MapPadding = { top: 48, right: 48, bottom: 200, left: 48 };
-
-/** `true` when the visitor asks for reduced motion (client-only; SSR → false). */
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
+const FIT_PADDING: MapPadding = { top: 48, right: 48, bottom: CAROUSEL_BAND_PX + 44, left: 48 };
 
 /**
  * Fit the camera to `bounds`, honouring reduced motion: `fitBounds` (may
@@ -189,6 +192,7 @@ export function DirectoryMapLive({
           userMoved={userMoved}
           programmaticMove={programmaticMove}
         />
+        <PanToSelection entries={entries} selectedId={selectedId} />
       </GoogleMap>
       <LiveRecenterFab bounds={bounds} userMoved={userMoved} programmaticMove={programmaticMove} />
     </APIProvider>
@@ -214,6 +218,49 @@ function RefitOnEntriesChange({
     if (!map || !bounds || userMoved.current) return;
     fitMapToBounds(map, bounds, programmaticMove);
   }, [map, bounds, userMoved, programmaticMove]);
+  return null;
+}
+
+/**
+ * Pan the camera to a user-selected entry (pin or mini-card tap) at the
+ * current zoom — never a zoom change. Which selection changes count as a user
+ * tap is the shared `useUserSelectionChange` discriminator (`map-ui.tsx`) —
+ * the same one the carousel's scroll-into-view uses — so a mount/auto-select
+ * or the route's post-filter validity reassign never pans, and the pan can't
+ * fight `RefitOnEntriesChange`'s refit-unless-user-moved contract. The hook's
+ * `ready` gate is the map instance itself: a selection made before the map
+ * exists counts as initial (nothing to pan yet), not replayed later.
+ *
+ * The pan target is offset by half the carousel band so the pin lands centred
+ * in the VISIBLE canvas above the band (`panBy` moves the camera down by
+ * `+y` px, putting the pin that many px above centre). Under reduced motion
+ * the camera jumps via the never-animated `moveCamera` to the raw centre —
+ * the band offset needs a pixel→lat projection at the live zoom, and the pin
+ * stays well clear of the band without it (canvas min-height ≫ 2× band).
+ *
+ * Leaves `userMoved` alone: the pan answers an explicit tap and fires no zoom
+ * event, so the user-moved heuristic and the next filter-change refit behave
+ * per `RefitOnEntriesChange`'s contract.
+ */
+function PanToSelection({
+  entries,
+  selectedId,
+}: {
+  entries: readonly DirectoryMapEntry[];
+  selectedId: string | null;
+}) {
+  const map = useMap();
+  useUserSelectionChange(map !== null, entries, selectedId, (id) => {
+    const entry = entries.find((candidate) => candidate.vm.id === id);
+    if (!map || !entry) return;
+    const center = { lat: entry.lat, lng: entry.lng };
+    if (prefersReducedMotion()) {
+      map.moveCamera({ center });
+    } else {
+      map.panTo(center);
+      map.panBy(0, CAROUSEL_BAND_PX / 2);
+    }
+  });
   return null;
 }
 
