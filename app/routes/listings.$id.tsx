@@ -22,6 +22,7 @@ import {
   type ListingDetailTab,
   listingDetailSearchSchema,
 } from "~/listings/listing-detail-search";
+import { useListingPreview } from "~/listings/photo-preview-state";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
@@ -196,6 +197,7 @@ function ListingDetail() {
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
   const { data: claims } = useSuspenseQuery(claimsQueryOptions(listing.id));
   const { data: linksData } = useSuspenseQuery(listingLinksQueryOptions(listing.id));
+  const preview = useListingPreview();
   const now = new Date(nowMs);
   const isSignedIn = viewerId !== null;
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
@@ -290,8 +292,10 @@ function ListingDetail() {
               gradient layers and the scrim so overlaid text stays legible.
               Keyed by listing id so client-side navigation between listings
               remounts it — a broken image on listing A must never suppress
-              listing B's photo. */}
-          <HeroPhoto key={listing.id} listingId={listing.id} />
+              listing B's photo. `preview` (consumed once from router state —
+              absent on a direct visit/refresh) lets the hero blur-up from the
+              card's already-cached photo instead of starting blank. */}
+          <HeroPhoto key={listing.id} listingId={listing.id} preview={preview} />
           {/* Bottom scrim for text contrast. */}
           <div
             aria-hidden="true"

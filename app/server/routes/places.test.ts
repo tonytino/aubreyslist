@@ -67,7 +67,7 @@ describe("GET /api/places/photo", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(PHOTO_URI);
-    expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=21600");
 
     // Upstream call: media endpoint for the token, skipHttpRedirect, key in a
     // header — never in the URL (it must not be leakable via redirects/logs).
