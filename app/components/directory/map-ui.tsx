@@ -29,12 +29,21 @@ import { prefersReducedMotion } from "~/lib/motion";
  * background band, so any low pin hides behind the band instead of over a
  * card.
  *
- * Accessibility: every pin and mini-card is a real `<button>`; the pin's icon
- * is decorative and its accessible name is the restaurant name + its safety
- * state — with a recent incident folded in (`pinAccessibleName`), since
- * `aria-label` hides button content from AT — so the safety meaning is never
- * colour-only and never sighted-only. The selected pin/mini-card carry
+ * Accessibility: every pin and mini-card is a real `<button>`; the pin's
+ * visible content is decorative and its accessible name is the restaurant name
+ * + its safety state — with a recent incident folded in (`pinAccessibleName`),
+ * since `aria-label` hides button content from AT — so the safety meaning is
+ * never colour-only and never sighted-only. The selected pin/mini-card carry
  * `aria-pressed` in addition to the visual ring/border.
+ *
+ * AUB-275 preview variant (numbered pins ↔ numbered cards): the pin dot shows
+ * the entry's 1-based index in the current `entries` order instead of the
+ * safety icon, and each mini-card leads its name row with the matching index
+ * chip — a sighted correlation aid between a pin and its card. The number is
+ * VISUAL ONLY: it never enters an accessible name (indices reshuffle on every
+ * filter/sort, so a spoken number would be meaningless to AT), and the safety
+ * icon still reaches sighted users via the card's `SafetySignal` chip row —
+ * losing the icon inside the dot is this variant's deliberate tradeoff.
  */
 
 /** One map entry: the presentational VM plus the real coordinates to place. */
@@ -121,7 +130,21 @@ const UNATTESTED_PIN = {
 
 export function pinStyleFor(state: SafetyState | null) {
   if (!state) return UNATTESTED_PIN;
+  // `Icon` stays in the style object even though the numbered-pin variant
+  // (AUB-275) doesn't draw it inside the dot — it keeps the state → shape
+  // mapping wired so reverting to icon pins is a one-line change in
+  // `MapPinButton`.
   return { fill: PIN_FILLS[state], Icon: safetyIcon(state), label: safetyLabel(state) };
+}
+
+/**
+ * Typography for the pin/card index number — ONE source for both surfaces so
+ * they always read as the same number. `tabular-nums` keeps digit widths
+ * stable; two-digit indices drop to 10px so "12" still fits the 24px dot's
+ * ~20px interior (and the mini-card's matching 20px chip).
+ */
+function indexNumberClass(index: number): string {
+  return `font-bold leading-none tabular-nums ${index > 9 ? "text-[10px]" : "text-xs"}`;
 }
 
 /**
@@ -142,9 +165,12 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
 /**
  * The safety pin itself — an accessible `<button>` whose name carries the
  * restaurant + its safety state (never colour alone). The visible pin is a
- * 24px micro-dot (colour fill + distinct icon shape), centred inside a 44px
- * transparent button so the tap target stays finger-sized (WCAG 2.5.5 / the
- * same `size-11` the recenter FAB uses) while the map reads uncluttered.
+ * 24px micro-dot (safety-state colour fill + the entry's 1-based index number,
+ * AUB-275 variant), centred inside a 44px transparent button so the tap target
+ * stays finger-sized (WCAG 2.5.5 / the same `size-11` the recenter FAB uses)
+ * while the map reads uncluttered. The number replaces the icon glyph in the
+ * same colour role (the per-state `*-foreground` token on the fill), so
+ * number-on-fill contrast stays token-managed exactly as icon-on-fill was.
  *
  * The halo is `border-white` on purpose, not `border-surface`: its job is
  * dot-vs-tile separation, so it must stay light over dark-mode map tiles
@@ -160,12 +186,19 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
  */
 export function MapPinButton({
   vm,
+  index,
   selected,
   onSelect,
   className,
   style,
 }: {
   vm: RestaurantCardVM;
+  /**
+   * 1-based position in the CURRENT entries order — the visible pin ↔ card
+   * correlation number (AUB-275). Visual only; never part of the accessible
+   * name.
+   */
+  index: number;
   selected: boolean;
   onSelect: (id: string) => void;
   /** Positioning/stacking utilities appended by the caller (may be empty). */
@@ -174,7 +207,6 @@ export function MapPinButton({
   style?: CSSProperties;
 }) {
   const pin = pinStyleFor(vm.safetyState);
-  const PinIcon = pin.Icon;
   return (
     <button
       type="button"
@@ -196,7 +228,11 @@ export function MapPinButton({
           pin.fill
         }${selected ? " scale-125 ring-4 ring-brand/50" : ""}`}
       >
-        <PinIcon className="size-4" strokeWidth={2} aria-hidden="true" />
+        {/* The correlation number (visual only — `aria-label` on the button
+            already hides content from AT; aria-hidden makes that explicit). */}
+        <span aria-hidden="true" className={indexNumberClass(index)}>
+          {index}
+        </span>
       </span>
     </button>
   );
@@ -224,7 +260,12 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
 
 /**
  * Bottom mini-card carousel, kept in sync with pin selection — identical in
- * both map paths. Text-dense slim cards: name, address · distance, and the
+ * both map paths. Each card leads its name row with the entry's index chip —
+ * the same 1-based number, on the same safety fill, as the entry's pin
+ * (AUB-275) — purely a sighted correlation aid: it is `aria-hidden`, the
+ * card's accessible name stays `pinAccessibleName` untouched, and safety
+ * meaning still comes from the chip row below (colour + icon + label).
+ * Text-dense slim cards: name, address · distance, and the
  * same trust row rules as the browse list card (`ListingCard`): headline
  * `SafetySignal` (or the shared dashed `UnattestedBadge` when there is no
  * verdict and nothing bot-suggested), plus the incident add-on chip whenever
@@ -261,8 +302,9 @@ export function MapCarousel({
       data-testid="map-carousel"
       className="absolute inset-x-0 bottom-0 z-10 flex gap-3 overflow-x-auto bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      {entries.map(({ vm }) => {
+      {entries.map(({ vm }, entryIndex) => {
         const selected = vm.id === selectedId;
+        const index = entryIndex + 1;
         return (
           // Positioned wrapper so the heart is a sibling overlay of the mini-card
           // action — not nested inside it. Nesting a <button> (FavoriteButton)
@@ -291,9 +333,21 @@ export function MapCarousel({
             >
               {/* pr-14 keeps the two text rows clear of the overlaid heart
                   (right-3 + size-9 = 48px) with breathing room; the chip row
-                  sits below the heart, full width. */}
-              <span className="block truncate pr-14 font-display text-body-sm font-bold text-foreground">
-                {vm.name}
+                  sits below the heart, full width. The leading index chip
+                  reuses the pin's exact fill + number typography, so pin N and
+                  card N read as the same object at a glance. */}
+              <span className="flex items-center gap-1.5 pr-14">
+                <span
+                  aria-hidden="true"
+                  className={`flex size-5 shrink-0 items-center justify-center rounded-full ${
+                    pinStyleFor(vm.safetyState).fill
+                  } ${indexNumberClass(index)}`}
+                >
+                  {index}
+                </span>
+                <span className="truncate font-display text-body-sm font-bold text-foreground">
+                  {vm.name}
+                </span>
               </span>
               <span className="mt-0.5 block truncate pr-14 text-caption text-muted-foreground">
                 {vm.address}
