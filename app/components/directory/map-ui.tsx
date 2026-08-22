@@ -224,7 +224,16 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
 
 /**
  * Bottom mini-card carousel, kept in sync with pin selection — identical in
- * both map paths. Text-dense slim cards: name, address · distance, and the
+ * both map paths. Each card leads with a 1-based index badge in the current
+ * entries order — a scan aid for pairing cards against the map, DECORATIVE
+ * for AT (`aria-hidden`, and the button's `aria-label` already excludes it):
+ * the safety meaning stays in the name + safety-state accessible name, never
+ * in a number. The selected card's badge flips to the solid purple fill with
+ * the same `ring-brand/50` halo the selected pin's dot carries, so the
+ * pin ↔ card pairing reads as one matching brand treatment without numbering
+ * the pins (fill is `bg-primary`, not `bg-brand`: primary is pinned dark in
+ * `.dark` so its white text keeps AA — see docs/agents/styling.md).
+ * Text-dense slim cards: name, address · distance, and the
  * same trust row rules as the browse list card (`ListingCard`): headline
  * `SafetySignal` (or the shared dashed `UnattestedBadge` when there is no
  * verdict and nothing bot-suggested), plus the incident add-on chip whenever
@@ -261,7 +270,7 @@ export function MapCarousel({
       data-testid="map-carousel"
       className="absolute inset-x-0 bottom-0 z-10 flex gap-3 overflow-x-auto bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      {entries.map(({ vm }) => {
+      {entries.map(({ vm }, index) => {
         const selected = vm.id === selectedId;
         return (
           // Positioned wrapper so the heart is a sibling overlay of the mini-card
@@ -292,8 +301,28 @@ export function MapCarousel({
               {/* pr-14 keeps the two text rows clear of the overlaid heart
                   (right-3 + size-9 = 48px) with breathing room; the chip row
                   sits below the heart, full width. */}
-              <span className="block truncate pr-14 font-display text-body-sm font-bold text-foreground">
-                {vm.name}
+              <span className="flex items-center gap-1.5 pr-14">
+                {/* Index badge — decorative scan aid (see the component
+                    comment). `h-5` matches the name row's line height so the
+                    card height (CAROUSEL_BAND_PX) is untouched; `min-w-5` +
+                    `px-1` lets 2+ digits widen into a pill; tabular-nums keeps
+                    digit widths even across cards. When selected it mirrors
+                    the pin dot's `ring-brand/50` halo on a solid primary
+                    fill (AA in both themes). */}
+                <span
+                  aria-hidden="true"
+                  data-testid="map-card-index"
+                  className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1 text-caption font-bold tabular-nums ${
+                    selected
+                      ? "bg-primary text-primary-foreground ring-4 ring-brand/50"
+                      : "bg-brand-soft text-brand-strong"
+                  }`}
+                >
+                  {index + 1}
+                </span>
+                <span className="min-w-0 truncate font-display text-body-sm font-bold text-foreground">
+                  {vm.name}
+                </span>
               </span>
               <span className="mt-0.5 block truncate pr-14 text-caption text-muted-foreground">
                 {vm.address}

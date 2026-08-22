@@ -235,6 +235,62 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
   });
 });
 
+describe("DirectoryMap — carousel index badges (AUB-276 variant preview)", () => {
+  // The badges live in the ONE shared MapCarousel that DirectoryMap renders
+  // outside its key-present/key-absent branch, so both render paths (live
+  // Google map and CSS placeholder) get identical numbering by construction.
+  it("numbers the cards 1..N in the current entries order", () => {
+    renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    const badges = within(carousel).getAllByTestId("map-card-index");
+    expect(badges.map((badge) => badge.textContent)).toEqual(["1", "2", "3", "4", "5"]);
+    // Badge 1 belongs to entry 1's card, badge 5 to entry 5's — order is the
+    // entries order, not selection or alphabetical order.
+    expect(
+      within(carousel).getByRole("button", { name: "Root & Rye, Celiac-safe" })
+    ).toContainElement(badges[0] as HTMLElement);
+    expect(
+      within(carousel).getByRole("button", { name: "Bot Bistro, Not yet attested" })
+    ).toContainElement(badges[4] as HTMLElement);
+  });
+
+  it("keeps the number OUT of every accessible name (decorative for AT)", () => {
+    renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    for (const badge of within(carousel).getAllByTestId("map-card-index")) {
+      expect(badge).toHaveAttribute("aria-hidden", "true");
+    }
+    // Every mini-card and heart name stays digit-free: the name + safety state
+    // (asserted exactly elsewhere) is the whole accessible name.
+    for (const button of within(carousel).getAllByRole("button")) {
+      expect(button.getAttribute("aria-label")).not.toMatch(/\d/);
+    }
+  });
+
+  it("gives the selected card's badge the pin dot's matching brand halo + solid fill", () => {
+    renderMap("b");
+    const carousel = screen.getByTestId("map-carousel");
+    const badgeOf = (name: string) =>
+      within(within(carousel).getByRole("button", { name })).getByTestId("map-card-index");
+    // The selected pin's dot carries `ring-4 ring-brand/50`; the selected
+    // card's badge mirrors it exactly, on the AA-safe solid primary fill —
+    // one matching treatment on both halves of the pairing.
+    const selectedBadge = badgeOf("Lucia Trattoria, Recent incident");
+    expect(selectedBadge.className).toContain("ring-4 ring-brand/50");
+    expect(selectedBadge.className).toContain("bg-primary text-primary-foreground");
+    const selectedPin = screen
+      .getAllByRole("button", { name: "Lucia Trattoria, Recent incident" })
+      .find((el) => el.className.includes("size-11")) as HTMLElement;
+    expect((selectedPin.querySelector("span") as HTMLElement).className).toContain(
+      "ring-4 ring-brand/50"
+    );
+    // Unselected badges stay on the soft tint, halo-free.
+    const idleBadge = badgeOf("Root & Rye, Celiac-safe");
+    expect(idleBadge.className).not.toContain("ring-brand/50");
+    expect(idleBadge.className).toContain("bg-brand-soft text-brand-strong");
+  });
+});
+
 describe("DirectoryMap — carousel scrolls the selected card into view (AUB-274)", () => {
   // jsdom doesn't implement scrollIntoView; the spy doubles as the polyfill so
   // the tests can assert both the target element and the scroll options.
