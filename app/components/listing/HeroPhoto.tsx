@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { cn } from "~/lib/utils";
+import type { ListingPreview } from "~/listings/photo-preview-state";
 import { placePhotoProxyUrl } from "~/listings/place-photo-url";
 import { fetchListingPhotos } from "~/server/places-photos.fn";
 
@@ -18,14 +19,15 @@ import { fetchListingPhotos } from "~/server/places-photos.fn";
  * persisted and no key ships to the client (ADR-014).
  *
  * Attribution: Google photos require author credit, so a real photo renders a small
- * "Photo: {author}" line over the scrim, only when a photo is actually shown.
+ * "Photo: {author}" line over the scrim whenever one is shown — including during the
+ * preview-only phase below, from the card's own attribution names.
  *
- * BLUR-UP `previewSrc`: when a viewer arrives from a browse card already showing this
- * listing's photo, `previewSrc` carries that browser-cached 640px URL (router `state`,
- * never the URL — `~/listings/photo-preview-state`). It renders as a blurred underlay
- * the instant the hero mounts, and the sharp 1280px photo fades in over it on load. A
- * direct visit/refresh carries no `previewSrc`, so every branch below collapses to the
- * pre-existing behavior byte-for-byte.
+ * BLUR-UP `preview`: when a viewer arrives from a browse card already showing this
+ * listing's photo, `preview` carries that browser-cached 640px URL and its
+ * attribution names (consumed once from router state — `~/listings/photo-preview-state`).
+ * It renders as a blurred underlay (credit included) the instant it is available, and
+ * the sharp 1280px photo fades in over it on load. A direct visit/refresh carries no
+ * `preview`, so every branch below collapses to the pre-existing behavior byte-for-byte.
  */
 
 /**
@@ -51,12 +53,25 @@ export const LISTING_PHOTOS_STALE_TIME_MS = 12 * 60 * 60 * 1000;
 /** At least `LISTING_PHOTOS_STALE_TIME_MS`, so a remount before that window elapses still hits cache. */
 export const LISTING_PHOTOS_GC_TIME_MS = LISTING_PHOTOS_STALE_TIME_MS;
 
+/**
+ * Shared attribution-line chrome (styling.md): above the scrim (z-20, like the
+ * name/address block) so the credit stays AA-legible on the darkest part of the
+ * photo. Bottom-right, single line, truncated — it may never crowd the name/
+ * address at 375px. Google's Places attribution requirement ("must display and be
+ * legible") and the AA-contrast rule both hold: the line sits at the near-opaque
+ * stop of the hero scrim, and even over a pure-white photo the /75 scrim +
+ * white/80 text clears ~7.3:1 — don't lighten either without re-checking that
+ * worst case.
+ */
+const PHOTO_CREDIT_CLASS =
+  "absolute bottom-1.5 right-3 z-20 max-w-[70%] truncate text-[11px] text-white/80 [text-shadow:0_1px_8px_rgba(0,0,0,0.8)]";
+
 export function HeroPhoto({
   listingId,
-  previewSrc,
+  preview,
 }: {
   listingId: string;
-  previewSrc?: string | undefined;
+  preview?: ListingPreview | undefined;
 }) {
   // A broken image (e.g. the proxy 503s after the kill switch flips mid-session)
   // falls back to the gradient. Storing the failed src (not a boolean) scopes the
@@ -82,7 +97,7 @@ export function HeroPhoto({
   // errored and exhausted its retry) — distinct from still loading, where the
   // preview should keep standing in.
   const settledWithNoPhoto = !isPending && !photo;
-  const showPreview = previewSrc !== undefined && !fullResFailed && !settledWithNoPhoto;
+  const showPreview = preview !== undefined && !fullResFailed && !settledWithNoPhoto;
 
   // A failed full-res load falls back to the pre-existing "nothing" state, never
   // the stale preview. Absent a preview, this is exactly the original `!photo`
@@ -91,13 +106,13 @@ export function HeroPhoto({
 
   return (
     <>
-      {showPreview ? (
+      {showPreview && preview ? (
         // Underlay: blurred/slightly scaled up (hides the blur's soft edges) so
         // the sharp photo can fade in over it without a visible seam. Stays
         // mounted through the fade — once the full-res `<img>` reaches opacity
         // 100 it fully covers this layer.
         <img
-          src={previewSrc}
+          src={preview.src}
           alt=""
           className="absolute inset-0 z-0 h-full w-full scale-105 object-cover blur-[2px]"
         />
@@ -114,7 +129,7 @@ export function HeroPhoto({
           onLoad={() => setFullResLoaded(true)}
           onError={() => setFailedSrc(src)}
           className={
-            previewSrc !== undefined
+            preview !== undefined
               ? cn(
                   "absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-500 motion-reduce:transition-none",
                   fullResLoaded ? "opacity-100" : "opacity-0"
@@ -124,14 +139,7 @@ export function HeroPhoto({
         />
       ) : null}
       {photo && photo.attributions.length > 0 ? (
-        // Above the scrim (z-20, like the name/address block) so the credit stays
-        // AA-legible on the darkest part of the photo. Bottom-right, single line,
-        // truncated — it may never crowd the name/address at 375px. Google's Places
-        // attribution requirement ("must display and be legible") and the AA-contrast
-        // rule (styling.md) both hold: the line sits at the near-opaque stop of the
-        // hero scrim, and even over a pure-white photo the /75 scrim + white/80 text
-        // clears ~7.3:1 — don't lighten either without re-checking that worst case.
-        <p className="absolute bottom-1.5 right-3 z-20 max-w-[70%] truncate text-[11px] text-white/80 [text-shadow:0_1px_8px_rgba(0,0,0,0.8)]">
+        <p className={PHOTO_CREDIT_CLASS}>
           Photo:{" "}
           {photo.attributions.map((attribution, index) => (
             // Content-derived key: an author is identified by profile link +
@@ -153,6 +161,13 @@ export function HeroPhoto({
             </Fragment>
           ))}
         </p>
+      ) : !photo && showPreview && preview && preview.attributionNames.length > 0 ? (
+        // Preview-only phase: the query hasn't resolved the real photo (with its
+        // own attribution data) yet, so credit the card's photo from the names it
+        // carried over — plain text (no profile links; the card doesn't have
+        // them either). The real block above takes over the instant `photo`
+        // resolves, dropping this one.
+        <p className={PHOTO_CREDIT_CLASS}>Photo: {preview.attributionNames.join(", ")}</p>
       ) : null}
     </>
   );

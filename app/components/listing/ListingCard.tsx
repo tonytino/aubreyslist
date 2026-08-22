@@ -176,16 +176,22 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
     // flex-col` so cards equalize within a grid row.
     <div className="group relative flex h-full flex-col overflow-hidden rounded-card border border-border bg-card text-card-foreground shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand-ring hover:shadow-md focus-within:border-brand-ring">
       {/* The anchor wraps only the media, so its accessible name comes from `aria-label`.
-          When the card is showing a photo, its (browser-cached) URL rides along as
-          router `state` — never the URL (url-state.md) — so the hero can blur-up
-          from it instead of starting blank. Spread in only when present: `Link`'s
-          `state` prop rejects an explicit `undefined` under `exactOptionalPropertyTypes`. */}
+          When the card is showing a photo, its (browser-cached) URL and attribution
+          names ride along as router `state` — never the URL (url-state.md) — so the
+          hero can blur-up from it, credit already attached, instead of starting
+          blank. Spread in only when present: `Link`'s `state` prop rejects an
+          explicit `undefined` under `exactOptionalPropertyTypes`. */}
       <Link
         to="/listings/$id"
         params={{ id: vm.id }}
         aria-label={vm.name}
         className="block shrink-0 after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
-        {...(showPhoto && vm.photoUrl ? listingPreviewLinkState(vm.photoUrl) : {})}
+        {...(showPhoto && vm.photoUrl
+          ? listingPreviewLinkState(
+              vm.photoUrl,
+              (vm.photoAttributions ?? []).map((attribution) => attribution.displayName)
+            )
+          : {})}
       >
         {/* Photo area — a real <img> when available, else the stable per-listing
             accent placeholder tile. */}

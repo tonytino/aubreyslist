@@ -647,6 +647,35 @@ describe("RestaurantCard", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/listings/listing-1"));
     expect(router.state.location.state.listingPreviewSrc).toBeUndefined();
   });
+
+  it("hands the shown photo's attribution names along with the preview src (for credit during the preview-only phase)", async () => {
+    const router = renderCard({
+      photoUrl: "https://cdn.example.com/root-and-rye.jpg",
+      photoAttributions: [{ displayName: "A Diner" }, { displayName: "B Baker" }],
+    });
+    const link = await screen.findByRole("link");
+
+    fireEvent.click(link);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/listings/listing-1"));
+    expect(router.state.location.state.listingPreviewAttributionNames).toEqual([
+      "A Diner",
+      "B Baker",
+    ]);
+  });
+
+  it("omits the attribution-names key when the shown photo carries no attributions", async () => {
+    const router = renderCard({
+      photoUrl: "https://cdn.example.com/root-and-rye.jpg",
+      photoAttributions: [],
+    });
+    const link = await screen.findByRole("link");
+
+    fireEvent.click(link);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/listings/listing-1"));
+    expect(router.state.location.state.listingPreviewAttributionNames).toBeUndefined();
+  });
 });
 
 describe("ListingCard (mapping wrapper)", () => {

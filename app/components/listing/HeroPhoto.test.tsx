@@ -17,6 +17,7 @@ import {
   LISTING_PHOTOS_GC_TIME_MS,
   LISTING_PHOTOS_STALE_TIME_MS,
 } from "~/components/listing/HeroPhoto";
+import type { ListingPreview } from "~/listings/photo-preview-state";
 import type { PlacePhoto } from "~/server/places-photos";
 import { HERO_PHOTO_MAX_WIDTH_PX, HeroPhoto } from "./HeroPhoto";
 
@@ -30,17 +31,17 @@ const PHOTO: PlacePhoto = {
 const PREVIEW_SRC =
   "/api/places/photo?name=places%2FChIJ_place%2Fphotos%2Fresource-1&maxWidthPx=640";
 
-function renderHero(listingId = "listing-1", previewSrc?: string) {
+function renderHero(listingId = "listing-1", preview?: ListingPreview) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <HeroPhoto listingId={listingId} previewSrc={previewSrc} />
+      <HeroPhoto listingId={listingId} preview={preview} />
     </QueryClientProvider>
   );
   const rerenderHero = (nextListingId: string) =>
     view.rerender(
       <QueryClientProvider client={queryClient}>
-        <HeroPhoto listingId={nextListingId} previewSrc={previewSrc} />
+        <HeroPhoto listingId={nextListingId} preview={preview} />
       </QueryClientProvider>
     );
   return { ...view, rerenderHero };
@@ -191,12 +192,13 @@ describe("HeroPhoto", () => {
   });
 });
 
-describe("HeroPhoto — blur-up preview (previewSrc)", () => {
+describe("HeroPhoto — blur-up preview", () => {
   const FULL_SRC = `/api/places/photo?name=${encodeURIComponent(PHOTO.photoToken)}&maxWidthPx=${HERO_PHOTO_MAX_WIDTH_PX}`;
+  const PREVIEW: ListingPreview = { src: PREVIEW_SRC, attributionNames: [] };
 
   it("renders the preview underlay immediately, before the photos query resolves", async () => {
     fetchListingPhotosMock.mockImplementation(() => new Promise(() => {}));
-    const { container } = renderHero("listing-1", PREVIEW_SRC);
+    const { container } = renderHero("listing-1", PREVIEW);
 
     const preview = queryImgBySrc(container, PREVIEW_SRC);
     expect(preview).not.toBeNull();
@@ -204,9 +206,33 @@ describe("HeroPhoto — blur-up preview (previewSrc)", () => {
     expect(preview?.className).toContain("scale-105");
   });
 
+  it("credits the preview from the card's attribution names while the query is still pending", async () => {
+    fetchListingPhotosMock.mockImplementation(() => new Promise(() => {}));
+    renderHero("listing-1", { src: PREVIEW_SRC, attributionNames: ["A Diner", "B Baker"] });
+
+    expect(await screen.findByText("Photo: A Diner, B Baker")).toBeInTheDocument();
+  });
+
+  it("renders no credit line during the preview phase when the card carried no attribution names", async () => {
+    fetchListingPhotosMock.mockImplementation(() => new Promise(() => {}));
+    renderHero("listing-1", PREVIEW);
+
+    expect(screen.queryByText(/photo:/i)).not.toBeInTheDocument();
+  });
+
+  it("hands attribution off to the REAL photo's credit once the query resolves, dropping the preview-phase text", async () => {
+    fetchListingPhotosMock.mockResolvedValue([PHOTO]);
+    renderHero("listing-1", { src: PREVIEW_SRC, attributionNames: ["Stale Preview Author"] });
+
+    // The real photo's own attribution ("A Diner") wins — the preview-phase
+    // stand-in credit never lingers once real data is in hand.
+    expect(await screen.findByText(/A Diner/)).toBeInTheDocument();
+    expect(screen.queryByText(/Stale Preview Author/)).not.toBeInTheDocument();
+  });
+
   it("fades the full-res photo in over the preview on load, keeping the preview mounted underneath", async () => {
     fetchListingPhotosMock.mockResolvedValue([PHOTO]);
-    const { container } = renderHero("listing-1", PREVIEW_SRC);
+    const { container } = renderHero("listing-1", PREVIEW);
 
     expect(queryImgBySrc(container, PREVIEW_SRC)).not.toBeNull();
     const fullRes = await waitFor(() => {
@@ -228,7 +254,7 @@ describe("HeroPhoto — blur-up preview (previewSrc)", () => {
 
   it("falls back to nothing — not the stale preview — when the full-res image fails", async () => {
     fetchListingPhotosMock.mockResolvedValue([PHOTO]);
-    const { container } = renderHero("listing-1", PREVIEW_SRC);
+    const { container } = renderHero("listing-1", PREVIEW);
 
     const fullRes = await waitFor(() => {
       const node = queryImgBySrc(container, FULL_SRC);
@@ -243,7 +269,7 @@ describe("HeroPhoto — blur-up preview (previewSrc)", () => {
 
   it("drops the preview once the query settles with no real photo", async () => {
     fetchListingPhotosMock.mockResolvedValue([]);
-    const { container } = renderHero("listing-1", PREVIEW_SRC);
+    const { container } = renderHero("listing-1", PREVIEW);
 
     expect(queryImgBySrc(container, PREVIEW_SRC)).not.toBeNull();
     await waitFor(() => expect(queryImg(container)).toBeNull());

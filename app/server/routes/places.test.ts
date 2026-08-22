@@ -155,7 +155,7 @@ describe("GET /api/places/photo", () => {
     const res = await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}`);
 
     expect(res.status).toBe(503);
-    expect(res.headers.get("retry-after")).toBe("21600");
+    expect(res.headers.get("retry-after")).toBe("3600");
     expect(await res.json()).toEqual({ error: "Place photos are currently unavailable" });
     expect(getSettingMock).toHaveBeenCalledWith("place_photos_enabled");
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -169,7 +169,7 @@ describe("GET /api/places/photo", () => {
     const res = await photoRequest(`name=${encodeURIComponent(PHOTO_NAME)}`);
 
     expect(res.status).toBe(503);
-    expect(res.headers.get("retry-after")).toBe("21600");
+    expect(res.headers.get("retry-after")).toBe("3600");
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
