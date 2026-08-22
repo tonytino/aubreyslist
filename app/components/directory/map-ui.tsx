@@ -31,8 +31,10 @@ import { prefersReducedMotion } from "~/lib/motion";
  *
  * Accessibility: every pin and mini-card is a real `<button>`; the pin's icon
  * is decorative and its accessible name is the restaurant name + its safety
- * state, so the safety meaning is never colour-only. The selected pin/mini-card
- * carry `aria-pressed` in addition to the visual ring/border.
+ * state — with a recent incident folded in (`pinAccessibleName`), since
+ * `aria-label` hides button content from AT — so the safety meaning is never
+ * colour-only and never sighted-only. The selected pin/mini-card carry
+ * `aria-pressed` in addition to the visual ring/border.
  */
 
 /** One map entry: the presentational VM plus the real coordinates to place. */
@@ -123,6 +125,21 @@ export function pinStyleFor(state: SafetyState | null) {
 }
 
 /**
+ * The ONE accessible-name construction for both the pin and the mini-card
+ * (`aria-label` overrides button content, so anything visual-only inside —
+ * like the incident add-on chip — is invisible to AT unless folded in here).
+ * A recent incident is appended whenever the headline state isn't already
+ * "incident": what sighted users see (headline chip + red incident chip) is
+ * exactly what screen readers hear.
+ */
+function pinAccessibleName(vm: RestaurantCardVM): string {
+  const base = `${vm.name}, ${pinStyleFor(vm.safetyState).label}`;
+  return vm.hasRecentIncident && vm.safetyState !== "incident"
+    ? `${base}, ${safetyLabel("incident")}`
+    : base;
+}
+
+/**
  * The safety pin itself — an accessible `<button>` whose name carries the
  * restaurant + its safety state (never colour alone). The visible pin is a
  * 24px micro-dot (colour fill + distinct icon shape), centred inside a 44px
@@ -162,7 +179,7 @@ export function MapPinButton({
     <button
       type="button"
       aria-pressed={selected}
-      aria-label={`${vm.name}, ${pin.label}`}
+      aria-label={pinAccessibleName(vm)}
       onClick={() => onSelect(vm.id)}
       // Runtime-computed left/top from the projection — the sanctioned
       // inline-style exception (dynamic positioning). Undefined on the live map.
@@ -245,7 +262,6 @@ export function MapCarousel({
       className="absolute inset-x-0 bottom-0 z-10 flex gap-3 overflow-x-auto bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {entries.map(({ vm }) => {
-        const pin = pinStyleFor(vm.safetyState);
         const selected = vm.id === selectedId;
         return (
           // Positioned wrapper so the heart is a sibling overlay of the mini-card
@@ -267,7 +283,7 @@ export function MapCarousel({
             <button
               type="button"
               aria-pressed={selected}
-              aria-label={`${vm.name}, ${pin.label}`}
+              aria-label={pinAccessibleName(vm)}
               onClick={() => onSelect(vm.id)}
               className={`block w-full rounded-card bg-surface px-3 py-2 text-left shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
                 selected ? "border-2 border-brand" : "border border-border"

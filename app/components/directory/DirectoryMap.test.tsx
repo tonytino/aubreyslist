@@ -53,7 +53,9 @@ function vm(overrides: Partial<RestaurantCardVM>): RestaurantCardVM {
 const entries: DirectoryMapEntry[] = [
   { vm: vm({ id: "a", name: "Root & Rye", safetyState: "celiac-safe" }), lat: 39.76, lng: -104.98 },
   {
-    vm: vm({ id: "b", name: "Lucia Trattoria", safetyState: "incident" }),
+    // hasRecentIncident alongside the "incident" headline: the accessible name
+    // must not double up "Recent incident" (guard in pinAccessibleName).
+    vm: vm({ id: "b", name: "Lucia Trattoria", safetyState: "incident", hasRecentIncident: true }),
     lat: 39.7,
     lng: -104.9,
   },
@@ -199,9 +201,25 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
     const carousel = screen.getByTestId("map-carousel");
     // Recent harm must never read clean on the map: the card keeps its
     // headline chip AND flags the incident, exactly like the browse card.
-    const card = within(carousel).getByRole("button", { name: "Harvest Table, Celiac-safe" });
+    const card = within(carousel).getByRole("button", {
+      name: "Harvest Table, Celiac-safe, Recent incident",
+    });
     expect(within(card).getByText("Celiac-safe")).toBeInTheDocument();
     expect(within(card).getByText("Recent incident")).toBeInTheDocument();
+  });
+
+  it("folds the incident into the ACCESSIBLE name of both the pin and the mini-card", () => {
+    renderMap();
+    // aria-label overrides button content, so the visual incident chip alone
+    // would be sighted-only. The shared name construction appends it: what
+    // sighted users see is what screen readers hear — on the pin AND the card.
+    expect(
+      screen.getAllByRole("button", { name: "Harvest Table, Celiac-safe, Recent incident" })
+    ).toHaveLength(2);
+    // Never doubled when the headline already IS the incident state.
+    expect(
+      screen.getAllByRole("button", { name: "Lucia Trattoria, Recent incident" })
+    ).toHaveLength(2);
   });
 
   it("suppresses the dashed empty-state chip for a bot-suggested listing with no verdict", () => {

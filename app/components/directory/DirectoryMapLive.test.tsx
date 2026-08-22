@@ -112,6 +112,34 @@ describe("DirectoryMapLive — markers", () => {
     ).toBeInTheDocument();
   });
 
+  it("folds a recent incident into the pin's accessible name (shared construction with the fallback path)", () => {
+    const withIncident: DirectoryMapEntry[] = [
+      {
+        vm: vm({
+          id: "d",
+          name: "Harvest Table",
+          safetyState: "celiac-safe",
+          hasRecentIncident: true,
+        }),
+        lat: 39.72,
+        lng: -104.95,
+      },
+    ];
+    render(
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={withIncident}
+        selectedId="d"
+        onSelect={vi.fn()}
+      />
+    );
+    // aria-label overrides button content, so the incident must live in the
+    // name itself — AT hears the same safety picture sighted users see.
+    expect(
+      screen.getByRole("button", { name: "Harvest Table, Celiac-safe, Recent incident" })
+    ).toBeInTheDocument();
+  });
+
   it("marks the selected pin (aria-pressed) and raises its marker zIndex", () => {
     renderLive("b");
     expect(
