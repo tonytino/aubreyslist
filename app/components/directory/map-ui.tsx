@@ -36,14 +36,14 @@ import { prefersReducedMotion } from "~/lib/motion";
  * never colour-only and never sighted-only. The selected pin/mini-card carry
  * `aria-pressed` in addition to the visual ring/border.
  *
- * AUB-275 preview variant (numbered pins ↔ numbered cards): the pin dot shows
- * the entry's 1-based index in the current `entries` order instead of the
- * safety icon, and each mini-card leads its name row with the matching index
- * chip — a sighted correlation aid between a pin and its card. The number is
- * VISUAL ONLY: it never enters an accessible name (indices reshuffle on every
- * filter/sort, so a spoken number would be meaningless to AT), and the safety
- * icon still reaches sighted users via the card's `SafetySignal` chip row —
- * losing the icon inside the dot is this variant's deliberate tradeoff.
+ * Numbered-pins preview variant (numbered pins ↔ numbered cards): the pin dot
+ * shows the entry's 1-based index in the current `entries` order, and each
+ * mini-card leads its name row with the matching index chip — a sighted
+ * correlation aid between a pin and its card. The number is visual only: it
+ * never enters an accessible name (indices reshuffle on every filter/sort, so
+ * a spoken number would be meaningless to AT), and the safety icon reaches
+ * sighted users via the card's `SafetySignal` chip row — the icon not living
+ * inside the dot is this variant's deliberate tradeoff.
  */
 
 /** One map entry: the presentational VM plus the real coordinates to place. */
@@ -130,21 +130,20 @@ const UNATTESTED_PIN = {
 
 export function pinStyleFor(state: SafetyState | null) {
   if (!state) return UNATTESTED_PIN;
-  // `Icon` stays in the style object even though the numbered-pin variant
-  // (AUB-275) doesn't draw it inside the dot — it keeps the state → shape
-  // mapping wired so reverting to icon pins is a one-line change in
-  // `MapPinButton`.
+  // `Icon` stays in the style object even though the pin dot draws the index
+  // number, not the icon — it keeps the state → shape mapping wired for
+  // icon-pin rendering.
   return { fill: PIN_FILLS[state], Icon: safetyIcon(state), label: safetyLabel(state) };
 }
 
 /**
- * Typography for the pin/card index number — ONE source for both surfaces so
+ * Typography for the pin/card index number — one source for both surfaces so
  * they always read as the same number. `tabular-nums` keeps digit widths
  * stable; two-digit indices drop to 10px so "12" still fits the 24px dot's
  * ~20px interior (and the mini-card's matching 20px chip).
  */
 function indexNumberClass(index: number): string {
-  return `font-bold leading-none tabular-nums ${index > 9 ? "text-[10px]" : "text-xs"}`;
+  return `font-bold leading-none tabular-nums ${index > 9 ? "text-[10px]" : "text-caption"}`;
 }
 
 /**
@@ -165,12 +164,12 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
 /**
  * The safety pin itself — an accessible `<button>` whose name carries the
  * restaurant + its safety state (never colour alone). The visible pin is a
- * 24px micro-dot (safety-state colour fill + the entry's 1-based index number,
- * AUB-275 variant), centred inside a 44px transparent button so the tap target
- * stays finger-sized (WCAG 2.5.5 / the same `size-11` the recenter FAB uses)
- * while the map reads uncluttered. The number replaces the icon glyph in the
- * same colour role (the per-state `*-foreground` token on the fill), so
- * number-on-fill contrast stays token-managed exactly as icon-on-fill was.
+ * 24px micro-dot (safety-state colour fill + the entry's 1-based index
+ * number), centred inside a 44px transparent button so the tap target stays
+ * finger-sized (WCAG 2.5.5 / the same `size-11` the recenter FAB uses) while
+ * the map reads uncluttered. The number renders in the per-state
+ * `*-foreground` token on the fill, so number-on-fill contrast stays
+ * token-managed.
  *
  * The halo is `border-white` on purpose, not `border-surface`: its job is
  * dot-vs-tile separation, so it must stay light over dark-mode map tiles
@@ -194,9 +193,8 @@ export function MapPinButton({
 }: {
   vm: RestaurantCardVM;
   /**
-   * 1-based position in the CURRENT entries order — the visible pin ↔ card
-   * correlation number (AUB-275). Visual only; never part of the accessible
-   * name.
+   * 1-based position in the current entries order — the visible pin ↔ card
+   * correlation number. Visual only; never part of the accessible name.
    */
   index: number;
   selected: boolean;
@@ -261,10 +259,11 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
 /**
  * Bottom mini-card carousel, kept in sync with pin selection — identical in
  * both map paths. Each card leads its name row with the entry's index chip —
- * the same 1-based number, on the same safety fill, as the entry's pin
- * (AUB-275) — purely a sighted correlation aid: it is `aria-hidden`, the
- * card's accessible name stays `pinAccessibleName` untouched, and safety
- * meaning still comes from the chip row below (colour + icon + label).
+ * the same 1-based number as its pin, on the neutral `secondary` fill so the
+ * safety colours stay unique to the pin and the chip row — purely a sighted
+ * correlation aid: it is `aria-hidden`, the card's accessible name stays
+ * `pinAccessibleName` untouched, and safety meaning still comes from the chip
+ * row below (colour + icon + label).
  * Text-dense slim cards: name, address · distance, and the
  * same trust row rules as the browse list card (`ListingCard`): headline
  * `SafetySignal` (or the shared dashed `UnattestedBadge` when there is no
@@ -334,14 +333,15 @@ export function MapCarousel({
               {/* pr-14 keeps the two text rows clear of the overlaid heart
                   (right-3 + size-9 = 48px) with breathing room; the chip row
                   sits below the heart, full width. The leading index chip
-                  reuses the pin's exact fill + number typography, so pin N and
-                  card N read as the same object at a glance. */}
+                  shares the pin's number typography but sits on the neutral
+                  `secondary` fill: correlation rides on the number alone, so
+                  the solid safety colours stay unique to the pin and the
+                  `SafetySignal` row keeps the loudest safety voice on the
+                  card. */}
               <span className="flex items-center gap-1.5 pr-14">
                 <span
                   aria-hidden="true"
-                  className={`flex size-5 shrink-0 items-center justify-center rounded-full ${
-                    pinStyleFor(vm.safetyState).fill
-                  } ${indexNumberClass(index)}`}
+                  className={`flex size-5 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground ${indexNumberClass(index)}`}
                 >
                   {index}
                 </span>

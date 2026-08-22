@@ -29,7 +29,7 @@ import { prefersReducedMotion } from "~/lib/motion";
  *
  * - **Pins** are `<AdvancedMarker>`s at each listing's true lat/lng, rendering
  *   the same `MapPinButton` as the placeholder (safety colour + the
- *   entries-order index number of the AUB-275 variant + an accessible
+ *   entries-order index number of the numbered-pins variant + an accessible
  *   "name, safety state" label; keyboard-focusable real `<button>`;
  *   selected ring + `aria-pressed`) — the safety-signal contract is shared,
  *   not duplicated. The selected pin gets a higher marker `zIndex`.
@@ -186,7 +186,7 @@ export function DirectoryMapLive({
                 colour + entries-order index number + "name, safety state"
                 label, selected ring. Clicking selects (existing selectedId
                 flow). The 1-based index matches the carousel card's chip
-                because both map over the same `entries` array (AUB-275). */}
+                because both map over the same `entries` array. */}
             <MapPinButton
               vm={vm}
               index={entryIndex + 1}

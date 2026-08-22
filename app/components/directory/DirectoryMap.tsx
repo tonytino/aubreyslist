@@ -34,10 +34,10 @@ import { googleMapsBrowserKey } from "~/lib/public-env";
  * band instead of over a card.
  *
  * Accessibility: every pin and mini-card is a real `<button>`; the pin's
- * visible content (the AUB-275 index number) is decorative and its accessible
- * name is the restaurant name + its safety state, so the safety meaning is
- * never colour-only. The selected pin/mini-card carry `aria-pressed` in
- * addition to the visual ring/border.
+ * visible content (the numbered-pins variant's index number) is decorative
+ * and its accessible name is the restaurant name + its safety state, so the
+ * safety meaning is never colour-only. The selected pin/mini-card carry
+ * `aria-pressed` in addition to the visual ring/border.
  */
 
 export type { DirectoryMapEntry };
@@ -112,7 +112,7 @@ function PlaceholderMap({
               <MapPinButton
                 vm={vm}
                 // 1-based entries-order index — matches the carousel card's
-                // chip because both map over the same `entries` array (AUB-275).
+                // chip because both map over the same `entries` array.
                 index={entryIndex + 1}
                 selected={selected}
                 onSelect={onSelect}

@@ -148,8 +148,8 @@ describe("DirectoryMap — pins", () => {
 
   it("shows the index number in the dot instead of the safety icon (AUB-275 variant)", () => {
     renderMap();
-    // The number replaces the icon glyph — the variant's deliberate tradeoff;
-    // the safety icon still reaches sighted users on the card's chip row.
+    // The dot's only content is the number; the safety icon reaches sighted
+    // users on the card's chip row (the variant's deliberate tradeoff).
     const pin = pinOf("Root & Rye, Celiac-safe");
     expect(pin.textContent).toBe("1");
     expect(pin.querySelector("svg")).not.toBeInTheDocument();
@@ -181,7 +181,7 @@ describe("DirectoryMap — pins", () => {
 
 describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview variant)", () => {
   // The five fixture entries' accessible names, in `entries` order — index i
-  // must render the visible number i + 1 on BOTH the pin and the card.
+  // must render the visible number i + 1 on both the pin and the card.
   const names = [
     "Root & Rye, Celiac-safe",
     "Lucia Trattoria, Recent incident",
@@ -190,7 +190,7 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
     "Bot Bistro, Not yet attested",
   ];
 
-  it("shows the SAME 1-based number on pin N and card N, following the entries order", () => {
+  it("shows the same 1-based number on pin N and card N, following the entries order", () => {
     renderMap();
     names.forEach((name, i) => {
       const number = String(i + 1);
@@ -209,7 +209,7 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
     expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-muted-foreground");
   });
 
-  it("keeps the number OUT of every accessible name — a visual correlation aid only", () => {
+  it("keeps the number out of every accessible name — a visual correlation aid only", () => {
     renderMap();
     names.forEach((name) => {
       // Exactly the shared pinAccessibleName on both buttons (getAllByRole with
@@ -240,10 +240,10 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
     const twelfth = pinOf("Spot L, Celiac-safe");
     expect(first.textContent).toBe("1");
     expect(twelfth.textContent).toBe("12");
-    // Single digits render at text-xs; two digits shrink so "12" fits the
-    // dot's ~20px interior. Both stay tabular so widths are stable.
+    // Single digits render at text-caption; two digits shrink so "12" fits
+    // the dot's ~20px interior. Both stay tabular so widths are stable.
     const numberSpanOf = (pin: HTMLElement) => pin.querySelector("span > span") as HTMLElement;
-    expect(numberSpanOf(first).className).toContain("text-xs");
+    expect(numberSpanOf(first).className).toContain("text-caption");
     expect(numberSpanOf(twelfth).className).toContain("text-[10px]");
     expect(numberSpanOf(twelfth).className).toContain("tabular-nums");
     // The card mirrors the two-digit number.
