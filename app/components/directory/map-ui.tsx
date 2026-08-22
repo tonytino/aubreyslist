@@ -146,15 +146,15 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
  * transparent button so the tap target stays finger-sized (WCAG 2.5.5 / the
  * same `size-11` the recenter FAB uses) while the map reads uncluttered.
  *
- * Selected treatment (AUB-277 pill variant): the dot expands sideways into a
- * pill — same fill/halo, icon + the truncated restaurant name (`max-w-[160px]`)
- * — with the brand ring as the selected affordance. The pill stays 24px tall
- * (h-6, ≤ the previous scale-125 footprint) and grows only horizontally from
- * the same centre, so the coordinate anchor stays honest and the carousel-band
- * clearance math (`CAROUSEL_BAND_PX`/FIT_PADDING) is untouched. Pill CONTENT is
- * state, not motion: the name is present unconditionally when selected and only
- * the expansion transition is motion-gated, so reduced-motion users get the
- * pill instantly. The name text is `aria-hidden` — it duplicates the button's
+ * Selected treatment (pill variant): the dot expands sideways into a pill —
+ * same fill/halo, icon + the truncated restaurant name (`max-w-[10rem]`) —
+ * with the brand ring as the selected affordance. The pill stays 24px tall
+ * (h-6), inside the 44px tap target, and grows only horizontally from the
+ * same centre, so the coordinate anchor and the carousel-band clearance math
+ * (`CAROUSEL_BAND_PX`/FIT_PADDING) both hold. Pill content is state, not
+ * motion: the name is present unconditionally when selected and only the
+ * expansion transition is motion-gated, so reduced-motion users get the pill
+ * instantly. The name text is `aria-hidden` — it duplicates the button's
  * accessible name (`pinAccessibleName`), which would otherwise announce twice.
  *
  * The halo is `border-white` on purpose, not `border-surface`: its job is
@@ -202,10 +202,13 @@ export function MapPinButton({
       {/* The visual micro-dot / selected pill. `min-w-6` keeps the unselected
           dot exactly 24px (the zero-width name span adds nothing); selecting
           adds padding + the name, so the pill grows sideways from the same
-          centre. Only the transitions are motion-gated — the expanded state
-          itself is unconditional. */}
+          centre. `shrink-0` is the overflow-on-purpose contract: the pill must
+          overflow its 44px flex-centred button symmetrically (that centring is
+          the coordinate anchor), never be squeezed to fit it. Only the
+          transitions are motion-gated — the expanded state itself is
+          unconditional. */}
       <span
-        className={`flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white shadow-md motion-safe:transition-[padding] ${
+        className={`flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border-2 border-white shadow-md motion-safe:transition-[padding] ${
           pin.fill
         }${selected ? " px-1 ring-4 ring-brand/50" : ""}`}
       >
@@ -214,8 +217,8 @@ export function MapPinButton({
             as content too would double-speak (aria-label wins anyway). */}
         <span
           aria-hidden="true"
-          className={`truncate text-caption font-semibold motion-safe:transition-[max-width,opacity] ${
-            selected ? "max-w-[160px] pl-1 opacity-100" : "max-w-0 opacity-0"
+          className={`truncate text-caption font-semibold motion-safe:transition-[max-width,opacity,padding] ${
+            selected ? "max-w-[10rem] pl-1 opacity-100" : "max-w-0 opacity-0"
           }`}
         >
           {vm.name}

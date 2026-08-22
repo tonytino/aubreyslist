@@ -156,15 +156,15 @@ describe("DirectoryMap — pins", () => {
       screen
         .getAllByRole("button", { name })
         .find((el) => el.className.includes("size-11")) as HTMLElement;
-    // The selected pill shows the truncated name; the ring (not scale) is the
-    // selected affordance now.
+    // The selected pill shows the truncated name; the ring is the selected
+    // affordance.
     const selectedName = within(pinOf("Lucia Trattoria, Recent incident")).getByText(
       "Lucia Trattoria"
     );
-    expect(selectedName.className).toContain("max-w-[160px]");
+    expect(selectedName.className).toContain("max-w-[10rem]");
     expect(selectedName.className).toContain("truncate");
     // An unselected pin keeps its name span collapsed + invisible (zero-width
-    // dot), and never carries the old selected scale.
+    // dot) and never scales.
     const unselectedName = within(pinOf("Root & Rye, Celiac-safe")).getByText("Root & Rye");
     expect(unselectedName.className).toContain("max-w-0");
     expect(unselectedName.className).toContain("opacity-0");
@@ -191,11 +191,11 @@ describe("DirectoryMap — pins", () => {
     const name = within(pin).getByText("Lucia Trattoria");
     // Reduced-motion users must still get the full pill (name + padding),
     // instantly: the expanded state carries no motion-safe prefix…
-    expect(name.className).toContain("max-w-[160px]");
-    expect(name.className).not.toContain("motion-safe:max-w-[160px]");
-    // …while every animated property IS motion-safe-gated, so nothing
+    expect(name.className).toContain("max-w-[10rem]");
+    expect(name.className).not.toContain("motion-safe:max-w-[10rem]");
+    // …while every animated property is motion-safe-gated, so nothing
     // transitions under prefers-reduced-motion.
-    expect(name.className).toContain("motion-safe:transition-[max-width,opacity]");
+    expect(name.className).toContain("motion-safe:transition-[max-width,opacity,padding]");
     expect(dot.className).toContain("motion-safe:transition-[padding]");
     expect(dot.className).not.toMatch(/(^|\s)transition/);
   });

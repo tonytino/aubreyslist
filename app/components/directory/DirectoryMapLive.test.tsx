@@ -148,7 +148,7 @@ describe("DirectoryMapLive — markers", () => {
     const selected = screen.getByRole("button", { name: "Lucia Trattoria, Recent incident" });
     const selectedName = within(selected).getByText("Lucia Trattoria");
     expect(selectedName).toHaveAttribute("aria-hidden", "true");
-    expect(selectedName.className).toContain("max-w-[160px]");
+    expect(selectedName.className).toContain("max-w-[10rem]");
     const unselected = screen.getByRole("button", { name: "Root & Rye, Celiac-safe" });
     expect(within(unselected).getByText("Root & Rye").className).toContain("max-w-0");
   });
