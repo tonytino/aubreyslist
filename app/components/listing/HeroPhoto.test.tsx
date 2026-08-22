@@ -204,6 +204,9 @@ describe("HeroPhoto — blur-up preview", () => {
     expect(preview).not.toBeNull();
     expect(preview?.className).toContain("blur-[2px]");
     expect(preview?.className).toContain("scale-105");
+    // The scale-105 spill must be clipped by the underlay's own wrapper — the
+    // hero band doesn't clip, so without this the blur paints outside the box.
+    expect(preview?.parentElement?.className).toContain("overflow-hidden");
   });
 
   it("credits the preview from the card's attribution names while the query is still pending", async () => {

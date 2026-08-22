@@ -115,12 +115,17 @@ export function HeroPhoto({
         // Underlay: blurred/slightly scaled up (hides the blur's soft edges) so
         // the sharp photo can fade in over it without a visible seam. Stays
         // mounted through the fade — once the full-res `<img>` reaches opacity
-        // 100 it fully covers this layer.
-        <img
-          src={preview.src}
-          alt=""
-          className="absolute inset-0 z-0 h-full w-full scale-105 object-cover blur-[2px]"
-        />
+        // 100 it fully covers this layer. The `overflow-hidden` wrapper clips
+        // the scale-105 spill — the hero band itself doesn't clip, so without
+        // it the blurred edges paint outside the box (a visible strip below
+        // the hero on card→detail navigation).
+        <div aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden">
+          <img
+            src={preview.src}
+            alt=""
+            className="h-full w-full scale-105 object-cover blur-[2px]"
+          />
+        </div>
       ) : null}
       {photo && src ? (
         // Decorative (alt="") — the listing name/address live in the overlaid
