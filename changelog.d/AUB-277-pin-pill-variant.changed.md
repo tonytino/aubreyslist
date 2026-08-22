@@ -1,0 +1,1 @@
+- `[manual]` Preview variant V3 (AUB-277, one of three for side-by-side comparison — not meant to merge): the selected map pin expands sideways into a name pill (safety fill + icon + truncated restaurant name, brand ring, still 24px tall) instead of scaling up, on both map render paths.

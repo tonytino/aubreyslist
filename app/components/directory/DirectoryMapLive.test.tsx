@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
@@ -138,6 +138,19 @@ describe("DirectoryMapLive — markers", () => {
     expect(
       screen.getByRole("button", { name: "Harvest Table, Celiac-safe, Recent incident" })
     ).toBeInTheDocument();
+  });
+
+  it("expands the selected pin into an aria-hidden name pill in the live path too", () => {
+    renderLive("b");
+    // The shared MapPinButton renders the pill on this path as well: the
+    // selected pin shows the (AT-hidden — aria-label already carries it)
+    // truncated name, unselected pins keep theirs collapsed.
+    const selected = screen.getByRole("button", { name: "Lucia Trattoria, Recent incident" });
+    const selectedName = within(selected).getByText("Lucia Trattoria");
+    expect(selectedName).toHaveAttribute("aria-hidden", "true");
+    expect(selectedName.className).toContain("max-w-[160px]");
+    const unselected = screen.getByRole("button", { name: "Root & Rye, Celiac-safe" });
+    expect(within(unselected).getByText("Root & Rye").className).toContain("max-w-0");
   });
 
   it("marks the selected pin (aria-pressed) and raises its marker zIndex", () => {

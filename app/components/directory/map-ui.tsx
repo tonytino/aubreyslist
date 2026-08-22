@@ -146,6 +146,17 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
  * transparent button so the tap target stays finger-sized (WCAG 2.5.5 / the
  * same `size-11` the recenter FAB uses) while the map reads uncluttered.
  *
+ * Selected treatment (AUB-277 pill variant): the dot expands sideways into a
+ * pill — same fill/halo, icon + the truncated restaurant name (`max-w-[160px]`)
+ * — with the brand ring as the selected affordance. The pill stays 24px tall
+ * (h-6, ≤ the previous scale-125 footprint) and grows only horizontally from
+ * the same centre, so the coordinate anchor stays honest and the carousel-band
+ * clearance math (`CAROUSEL_BAND_PX`/FIT_PADDING) is untouched. Pill CONTENT is
+ * state, not motion: the name is present unconditionally when selected and only
+ * the expansion transition is motion-gated, so reduced-motion users get the
+ * pill instantly. The name text is `aria-hidden` — it duplicates the button's
+ * accessible name (`pinAccessibleName`), which would otherwise announce twice.
+ *
  * The halo is `border-white` on purpose, not `border-surface`: its job is
  * dot-vs-tile separation, so it must stay light over dark-mode map tiles
  * (where `surface` goes near-black and would vanish). In light mode the
@@ -188,15 +199,27 @@ export function MapPinButton({
         className ? ` ${className}` : ""
       }`}
     >
-      {/* The visual micro-dot. Selected SIZE is state, not motion — the scale
-          is unconditional and only the transition is motion-gated, so
-          reduced-motion users still see a clearly larger selected dot. */}
+      {/* The visual micro-dot / selected pill. `min-w-6` keeps the unselected
+          dot exactly 24px (the zero-width name span adds nothing); selecting
+          adds padding + the name, so the pill grows sideways from the same
+          centre. Only the transitions are motion-gated — the expanded state
+          itself is unconditional. */}
       <span
-        className={`flex size-6 items-center justify-center rounded-full border-2 border-white shadow-md motion-safe:transition-transform ${
+        className={`flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white shadow-md motion-safe:transition-[padding] ${
           pin.fill
-        }${selected ? " scale-125 ring-4 ring-brand/50" : ""}`}
+        }${selected ? " px-1 ring-4 ring-brand/50" : ""}`}
       >
-        <PinIcon className="size-4" strokeWidth={2} aria-hidden="true" />
+        <PinIcon className="size-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+        {/* aria-hidden: duplicates the button's accessible name — announcing it
+            as content too would double-speak (aria-label wins anyway). */}
+        <span
+          aria-hidden="true"
+          className={`truncate text-caption font-semibold motion-safe:transition-[max-width,opacity] ${
+            selected ? "max-w-[160px] pl-1 opacity-100" : "max-w-0 opacity-0"
+          }`}
+        >
+          {vm.name}
+        </span>
       </span>
     </button>
   );

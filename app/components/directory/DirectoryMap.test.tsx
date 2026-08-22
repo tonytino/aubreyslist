@@ -150,17 +150,54 @@ describe("DirectoryMap — pins", () => {
     ).toBeInTheDocument();
   });
 
-  it("grows the selected dot unconditionally — size is state, only the transition is motion-gated", () => {
+  it("expands only the selected pin into a name pill — unselected pins stay nameless dots", () => {
+    renderMap("b");
+    const pinOf = (name: string) =>
+      screen
+        .getAllByRole("button", { name })
+        .find((el) => el.className.includes("size-11")) as HTMLElement;
+    // The selected pill shows the truncated name; the ring (not scale) is the
+    // selected affordance now.
+    const selectedName = within(pinOf("Lucia Trattoria, Recent incident")).getByText(
+      "Lucia Trattoria"
+    );
+    expect(selectedName.className).toContain("max-w-[160px]");
+    expect(selectedName.className).toContain("truncate");
+    // An unselected pin keeps its name span collapsed + invisible (zero-width
+    // dot), and never carries the old selected scale.
+    const unselectedName = within(pinOf("Root & Rye, Celiac-safe")).getByText("Root & Rye");
+    expect(unselectedName.className).toContain("max-w-0");
+    expect(unselectedName.className).toContain("opacity-0");
+    const unselectedDot = pinOf("Root & Rye, Celiac-safe").querySelector("span") as HTMLElement;
+    expect(unselectedDot.className).not.toContain("scale-125");
+  });
+
+  it("hides the pill's visible name from AT — it duplicates the accessible name", () => {
+    renderMap("b");
+    const pin = screen
+      .getAllByRole("button", { name: "Lucia Trattoria, Recent incident" })
+      .find((el) => el.className.includes("size-11")) as HTMLElement;
+    // aria-label already carries name + safety state; content text would
+    // double-announce, so the pill text is aria-hidden.
+    expect(within(pin).getByText("Lucia Trattoria")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("shows the pill unconditionally when selected — only the expansion transition is motion-gated", () => {
     renderMap("b");
     const pin = screen
       .getAllByRole("button", { name: "Lucia Trattoria, Recent incident" })
       .find((el) => el.className.includes("size-11")) as HTMLElement;
     const dot = pin.querySelector("span") as HTMLElement;
-    // Reduced-motion users must still SEE the larger selected dot; only the
-    // animation between states is motion-gated.
-    expect(dot.className).toContain("scale-125");
-    expect(dot.className).not.toContain("motion-safe:scale-125");
-    expect(dot.className).toContain("motion-safe:transition-transform");
+    const name = within(pin).getByText("Lucia Trattoria");
+    // Reduced-motion users must still get the full pill (name + padding),
+    // instantly: the expanded state carries no motion-safe prefix…
+    expect(name.className).toContain("max-w-[160px]");
+    expect(name.className).not.toContain("motion-safe:max-w-[160px]");
+    // …while every animated property IS motion-safe-gated, so nothing
+    // transitions under prefers-reduced-motion.
+    expect(name.className).toContain("motion-safe:transition-[max-width,opacity]");
+    expect(dot.className).toContain("motion-safe:transition-[padding]");
+    expect(dot.className).not.toMatch(/(^|\s)transition/);
   });
 
   it("selects the same restaurant whether its pin or its mini-card is tapped", () => {

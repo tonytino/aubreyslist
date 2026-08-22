@@ -30,8 +30,10 @@ import { prefersReducedMotion } from "~/lib/motion";
  * - **Pins** are `<AdvancedMarker>`s at each listing's true lat/lng, rendering
  *   the same `MapPinButton` as the placeholder (colour + distinct icon shape +
  *   accessible "name, safety state" label; keyboard-focusable real `<button>`;
- *   selected ring + `aria-pressed`) — the safety-signal contract is shared,
- *   not duplicated. The selected pin gets a higher marker `zIndex`.
+ *   the selected pin expands into a ringed name pill + `aria-pressed`) — the
+ *   safety-signal contract is shared, not duplicated. The selected pin gets a
+ *   higher marker `zIndex`, so its pill overlaps neighbouring markers' 44px
+ *   buttons instead of hiding under them.
  * - **Camera**: initial view fits the bounds of the current result pins
  *   (`defaultBounds` + padding so pins clear the opaque carousel band); when
  *   the filtered set changes the camera re-fits only if the visitor hasn't
@@ -182,8 +184,10 @@ export function DirectoryMapLive({
             zIndex={vm.id === selectedId ? 2 : 1}
           >
             {/* The same accessible pin as the fallback path: real <button>,
-                colour + icon shape + "name, safety state" label, selected
-                ring. Clicking selects (existing selectedId flow). */}
+                colour + icon shape + "name, safety state" label; the selected
+                pin expands into a ringed name pill (its raised marker zIndex
+                above keeps the pill over neighbouring pins' hit areas).
+                Clicking selects (existing selectedId flow). */}
             <MapPinButton vm={vm} selected={vm.id === selectedId} onSelect={onSelect} />
           </AdvancedMarker>
         ))}
