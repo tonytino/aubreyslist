@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
+import { cn } from "~/lib/utils";
 import { placePhotoProxyUrl } from "~/listings/place-photo-url";
 import { fetchListingPhotos } from "~/server/places-photos.fn";
 
@@ -18,6 +19,13 @@ import { fetchListingPhotos } from "~/server/places-photos.fn";
  *
  * Attribution: Google photos require author credit, so a real photo renders a small
  * "Photo: {author}" line over the scrim, only when a photo is actually shown.
+ *
+ * BLUR-UP `previewSrc`: when a viewer arrives from a browse card already showing this
+ * listing's photo, `previewSrc` carries that browser-cached 640px URL (router `state`,
+ * never the URL — `~/listings/photo-preview-state`). It renders as a blurred underlay
+ * the instant the hero mounts, and the sharp 1280px photo fades in over it on load. A
+ * direct visit/refresh carries no `previewSrc`, so every branch below collapses to the
+ * pre-existing behavior byte-for-byte.
  */
 
 /**
@@ -33,44 +41,89 @@ export function listingPhotosQueryKey(listingId: string) {
   return ["listing-photos", listingId] as const;
 }
 
-export function HeroPhoto({ listingId }: { listingId: string }) {
+/**
+ * Client freshness window for the hero photos query, matching the server-side
+ * per-Place-ID cache TTL (`PLACE_PHOTOS_CACHE_TTL_MS`, `~/server/places-photos`)
+ * so a tab left open past that window revalidates instead of holding a
+ * possibly-rotated photo token indefinitely.
+ */
+export const LISTING_PHOTOS_STALE_TIME_MS = 12 * 60 * 60 * 1000;
+/** At least `LISTING_PHOTOS_STALE_TIME_MS`, so a remount before that window elapses still hits cache. */
+export const LISTING_PHOTOS_GC_TIME_MS = LISTING_PHOTOS_STALE_TIME_MS;
+
+export function HeroPhoto({
+  listingId,
+  previewSrc,
+}: {
+  listingId: string;
+  previewSrc?: string | undefined;
+}) {
   // A broken image (e.g. the proxy 503s after the kill switch flips mid-session)
   // falls back to the gradient. Storing the failed src (not a boolean) scopes the
   // suppression to the exact image that broke: when navigation reuses this instance
   // for another listing, the new src does not match and the photo renders again.
   // The call site additionally keys the component by listing id.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [fullResLoaded, setFullResLoaded] = useState(false);
 
-  const { data: photos } = useQuery({
+  const { data: photos, isPending } = useQuery({
     queryKey: listingPhotosQueryKey(listingId),
     queryFn: () => fetchListingPhotos({ data: { listingId } }),
-    // Server-side metadata is cached ~12h per place; within a session there is
-    // nothing to refetch for a decorative image.
-    staleTime: Infinity,
+    staleTime: LISTING_PHOTOS_STALE_TIME_MS,
+    gcTime: LISTING_PHOTOS_GC_TIME_MS,
     retry: 1,
   });
 
   // Hero shows the first photo only; errors surface as `data: undefined`.
   const photo = photos?.[0];
-  if (!photo) return null;
+  const src = photo ? placePhotoProxyUrl(photo.photoToken, HERO_PHOTO_MAX_WIDTH_PX) : null;
+  const fullResFailed = src !== null && failedSrc === src;
+  // The query has settled with no usable photo (empty result, or the query
+  // errored and exhausted its retry) — distinct from still loading, where the
+  // preview should keep standing in.
+  const settledWithNoPhoto = !isPending && !photo;
+  const showPreview = previewSrc !== undefined && !fullResFailed && !settledWithNoPhoto;
 
-  const src = placePhotoProxyUrl(photo.photoToken, HERO_PHOTO_MAX_WIDTH_PX);
-  if (failedSrc === src) return null;
+  // A failed full-res load falls back to the pre-existing "nothing" state, never
+  // the stale preview. Absent a preview, this is exactly the original `!photo`
+  // early return.
+  if (fullResFailed || (!showPreview && !photo)) return null;
 
   return (
     <>
-      {/* Decorative (alt="") — the listing name/address live in the overlaid
-          text. Lazy so the document render never waits on Google. z-0 keeps it
-          above the gradient/blob/placeholder layers (earlier siblings) and
-          below the scrim + z-20/z-30 text/action layers. */}
-      <img
-        src={src}
-        alt=""
-        loading="lazy"
-        onError={() => setFailedSrc(src)}
-        className="absolute inset-0 z-0 h-full w-full object-cover"
-      />
-      {photo.attributions.length > 0 ? (
+      {showPreview ? (
+        // Underlay: blurred/slightly scaled up (hides the blur's soft edges) so
+        // the sharp photo can fade in over it without a visible seam. Stays
+        // mounted through the fade — once the full-res `<img>` reaches opacity
+        // 100 it fully covers this layer.
+        <img
+          src={previewSrc}
+          alt=""
+          className="absolute inset-0 z-0 h-full w-full scale-105 object-cover blur-[2px]"
+        />
+      ) : null}
+      {photo && src ? (
+        // Decorative (alt="") — the listing name/address live in the overlaid
+        // text. Lazy so the document render never waits on Google. z-0 keeps it
+        // above the gradient/blob/placeholder layers (earlier siblings) and
+        // below the scrim + z-20/z-30 text/action layers.
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          onLoad={() => setFullResLoaded(true)}
+          onError={() => setFailedSrc(src)}
+          className={
+            previewSrc !== undefined
+              ? cn(
+                  "absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-500 motion-reduce:transition-none",
+                  fullResLoaded ? "opacity-100" : "opacity-0"
+                )
+              : "absolute inset-0 z-0 h-full w-full object-cover"
+          }
+        />
+      ) : null}
+      {photo && photo.attributions.length > 0 ? (
         // Above the scrim (z-20, like the name/address block) so the credit stays
         // AA-legible on the darkest part of the photo. Bottom-right, single line,
         // truncated — it may never crowd the name/address at 375px. Google's Places

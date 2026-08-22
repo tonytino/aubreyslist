@@ -8,6 +8,7 @@ import { Badge } from "~/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
 import { cn } from "~/lib/utils";
+import { listingPreviewLinkState } from "~/listings/photo-preview-state";
 import { placePhotoProxyUrl } from "~/listings/place-photo-url";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 // Type-only: erased at build time, so `getDb`/the Places key never enter the client bundle.
@@ -174,12 +175,17 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
     // siblings are raised above it with `relative z-10`. The shell is `flex h-full
     // flex-col` so cards equalize within a grid row.
     <div className="group relative flex h-full flex-col overflow-hidden rounded-card border border-border bg-card text-card-foreground shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand-ring hover:shadow-md focus-within:border-brand-ring">
-      {/* The anchor wraps only the media, so its accessible name comes from `aria-label`. */}
+      {/* The anchor wraps only the media, so its accessible name comes from `aria-label`.
+          When the card is showing a photo, its (browser-cached) URL rides along as
+          router `state` — never the URL (url-state.md) — so the hero can blur-up
+          from it instead of starting blank. Spread in only when present: `Link`'s
+          `state` prop rejects an explicit `undefined` under `exactOptionalPropertyTypes`. */}
       <Link
         to="/listings/$id"
         params={{ id: vm.id }}
         aria-label={vm.name}
         className="block shrink-0 after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+        {...(showPhoto && vm.photoUrl ? listingPreviewLinkState(vm.photoUrl) : {})}
       >
         {/* Photo area — a real <img> when available, else the stable per-listing
             accent placeholder tile. */}

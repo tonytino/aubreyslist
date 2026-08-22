@@ -13,6 +13,10 @@ vi.mock("~/server/places-photos.fn", () => ({
   fetchListingPhotos: (args: unknown) => fetchListingPhotosMock(args),
 }));
 
+import {
+  LISTING_PHOTOS_GC_TIME_MS,
+  LISTING_PHOTOS_STALE_TIME_MS,
+} from "~/components/listing/HeroPhoto";
 import type { PlacePhoto } from "~/server/places-photos";
 import { HERO_PHOTO_MAX_WIDTH_PX, HeroPhoto } from "./HeroPhoto";
 
@@ -23,17 +27,20 @@ const PHOTO: PlacePhoto = {
   attributions: [{ displayName: "A Diner", uri: "https://maps.google.com/maps/contrib/123" }],
 };
 
-function renderHero(listingId = "listing-1") {
+const PREVIEW_SRC =
+  "/api/places/photo?name=places%2FChIJ_place%2Fphotos%2Fresource-1&maxWidthPx=640";
+
+function renderHero(listingId = "listing-1", previewSrc?: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <HeroPhoto listingId={listingId} />
+      <HeroPhoto listingId={listingId} previewSrc={previewSrc} />
     </QueryClientProvider>
   );
   const rerenderHero = (nextListingId: string) =>
     view.rerender(
       <QueryClientProvider client={queryClient}>
-        <HeroPhoto listingId={nextListingId} />
+        <HeroPhoto listingId={nextListingId} previewSrc={previewSrc} />
       </QueryClientProvider>
     );
   return { ...view, rerenderHero };
@@ -42,6 +49,11 @@ function renderHero(listingId = "listing-1") {
 /** The photo is decorative (alt=""), so it has no img role — query the node. */
 function queryImg(container: HTMLElement) {
   return container.querySelector("img");
+}
+
+/** Both layers (preview underlay + full-res) render with alt="", so query by src. */
+function queryImgBySrc(container: HTMLElement, src: string) {
+  return container.querySelector(`img[src="${src}"]`);
 }
 
 afterEach(() => {
@@ -176,5 +188,86 @@ describe("HeroPhoto", () => {
     // And navigating back to the broken listing stays suppressed (same src).
     rerenderHero("listing-1");
     await waitFor(() => expect(queryImg(container)).toBeNull());
+  });
+});
+
+describe("HeroPhoto — blur-up preview (previewSrc)", () => {
+  const FULL_SRC = `/api/places/photo?name=${encodeURIComponent(PHOTO.photoToken)}&maxWidthPx=${HERO_PHOTO_MAX_WIDTH_PX}`;
+
+  it("renders the preview underlay immediately, before the photos query resolves", async () => {
+    fetchListingPhotosMock.mockImplementation(() => new Promise(() => {}));
+    const { container } = renderHero("listing-1", PREVIEW_SRC);
+
+    const preview = queryImgBySrc(container, PREVIEW_SRC);
+    expect(preview).not.toBeNull();
+    expect(preview?.className).toContain("blur-[2px]");
+    expect(preview?.className).toContain("scale-105");
+  });
+
+  it("fades the full-res photo in over the preview on load, keeping the preview mounted underneath", async () => {
+    fetchListingPhotosMock.mockResolvedValue([PHOTO]);
+    const { container } = renderHero("listing-1", PREVIEW_SRC);
+
+    expect(queryImgBySrc(container, PREVIEW_SRC)).not.toBeNull();
+    const fullRes = await waitFor(() => {
+      const node = queryImgBySrc(container, FULL_SRC);
+      expect(node).not.toBeNull();
+      return node as HTMLImageElement;
+    });
+    expect(fullRes.className).toContain("opacity-0");
+    expect(fullRes.className).toContain("transition-opacity");
+
+    fireEvent.load(fullRes);
+
+    await waitFor(() => expect(fullRes.className).toContain("opacity-100"));
+    expect(fullRes.className).not.toContain("opacity-0");
+    // The preview stays mounted (now fully covered) — no gap between the blur
+    // fading out and the sharp photo fading in.
+    expect(queryImgBySrc(container, PREVIEW_SRC)).not.toBeNull();
+  });
+
+  it("falls back to nothing — not the stale preview — when the full-res image fails", async () => {
+    fetchListingPhotosMock.mockResolvedValue([PHOTO]);
+    const { container } = renderHero("listing-1", PREVIEW_SRC);
+
+    const fullRes = await waitFor(() => {
+      const node = queryImgBySrc(container, FULL_SRC);
+      expect(node).not.toBeNull();
+      return node as HTMLImageElement;
+    });
+
+    fireEvent.error(fullRes);
+
+    await waitFor(() => expect(queryImg(container)).toBeNull());
+  });
+
+  it("drops the preview once the query settles with no real photo", async () => {
+    fetchListingPhotosMock.mockResolvedValue([]);
+    const { container } = renderHero("listing-1", PREVIEW_SRC);
+
+    expect(queryImgBySrc(container, PREVIEW_SRC)).not.toBeNull();
+    await waitFor(() => expect(queryImg(container)).toBeNull());
+  });
+
+  it("renders unchanged (no preview layer, no transition classes) on a direct visit/refresh", async () => {
+    fetchListingPhotosMock.mockResolvedValue([PHOTO]);
+    const { container } = renderHero("listing-1");
+
+    const img = await waitFor(() => {
+      const node = queryImg(container);
+      expect(node).not.toBeNull();
+      return node as HTMLImageElement;
+    });
+    expect(container.querySelectorAll("img")).toHaveLength(1);
+    expect(img.className).not.toContain("opacity-0");
+    expect(img.className).not.toContain("transition-opacity");
+  });
+});
+
+describe("HeroPhoto — photo-ref query freshness", () => {
+  it("pins the client staleTime/gcTime to the server-side 12h photo cache TTL", () => {
+    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+    expect(LISTING_PHOTOS_STALE_TIME_MS).toBe(TWELVE_HOURS_MS);
+    expect(LISTING_PHOTOS_GC_TIME_MS).toBeGreaterThanOrEqual(LISTING_PHOTOS_STALE_TIME_MS);
   });
 });

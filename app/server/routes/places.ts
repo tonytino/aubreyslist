@@ -65,11 +65,14 @@ function snapToWidthLadder(requested: number): number {
 
 /**
  * How long browsers/CDNs may reuse the 302 (and clients should wait after a
- * 503). Kept short — one hour, well under the in-process TTL — because the
- * redirect target is a short-lived googleusercontent URL and because a
- * flipped kill switch must take effect quickly (ADR-014).
+ * 503). Six hours — under the 12h in-process metadata TTL
+ * (`PLACE_PHOTOS_CACHE_TTL_MS`, `~/server/places-photos`) and still short
+ * enough for the short-lived googleusercontent redirect target to stay valid
+ * across the window. A flipped `place_photos_enabled` kill switch may take up
+ * to this long to reach a browser holding a cached redirect — an accepted
+ * tradeoff against fewer redirect round-trips on repeat photo views.
  */
-const PHOTO_REDIRECT_MAX_AGE_SECONDS = 3600;
+const PHOTO_REDIRECT_MAX_AGE_SECONDS = 21_600;
 
 /**
  * Negative-cache TTL for upstream failures, per (name, ladder-width). Long
