@@ -396,6 +396,13 @@ function BrowseListings() {
 
   // Default the map selection to the first visible entry, and keep the selection
   // valid as the filtered set changes (so a pin never points at a hidden card).
+  //
+  // Contract: this effect reassigns `selectedId` ONLY when the current
+  // selection is missing from `mapEntries` (or on the initial null). The map's
+  // selection-sync surfaces depend on that to tell a user tap from a
+  // reassign — `useUserSelectionChange` in `map-ui.tsx` (the carousel's
+  // scroll-into-view and the live map's pan) treats a change whose previous
+  // selection vanished from the entries as this effect's doing, not a tap.
   useEffect(() => {
     if (mapEntries.length === 0) {
       if (selectedId !== null) setSelectedId(null);

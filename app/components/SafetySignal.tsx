@@ -3,6 +3,7 @@ import type * as React from "react";
 import { cn } from "~/lib/utils";
 import { BADGE_FAMILY_SIZE } from "./badge-size";
 import { WheatStrike } from "./icons/WheatStrike";
+import { Badge } from "./ui/badge";
 
 /**
  * The four safety/trust states surfaced across the app. See
@@ -161,4 +162,26 @@ export function safetyLabel(state: SafetyState): string {
  */
 export function safetyIcon(state: SafetyState): LucideIcon {
   return STATES[state].icon;
+}
+
+/**
+ * The honest empty-state chip for a `null` safety verdict — dashed, neutral,
+ * plain text, never a fabricated signal. The ONE implementation both the
+ * browse list card (`ListingCard`) and the map mini-card (`map-ui`) render, so
+ * the empty state can't drift between surfaces. Callers apply the same
+ * `suggestedByBot` gate `ListingCard` documents: a bot-suggested listing with
+ * no verdict shows provenance instead of this chip.
+ */
+export function UnattestedBadge({ className }: { className?: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "border-dashed px-2.5 py-1 text-body-sm font-medium text-muted-foreground",
+        className
+      )}
+    >
+      Not yet attested
+    </Badge>
+  );
 }

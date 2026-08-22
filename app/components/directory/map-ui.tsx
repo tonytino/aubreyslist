@@ -1,10 +1,16 @@
-import { LocateFixed, ShieldCheck } from "lucide-react";
+import { CircleDashed, LocateFixed } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useRef } from "react";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
-import { SafetySignal, type SafetyState, safetyIcon, safetyLabel } from "~/components/SafetySignal";
-import { Badge } from "~/components/ui/badge";
+import {
+  SafetySignal,
+  type SafetyState,
+  safetyIcon,
+  safetyLabel,
+  UnattestedBadge,
+} from "~/components/SafetySignal";
+import { prefersReducedMotion } from "~/lib/motion";
 
 /**
  * Shared presentational pieces of the directory Map view: the safety-pin
@@ -37,34 +43,77 @@ export interface DirectoryMapEntry {
 }
 
 /**
- * `true` when the visitor asks for reduced motion (client-only; SSR → false).
- * Shared by every map-view motion gate: the live camera fits/pans
- * (`DirectoryMapLive.tsx`) and the carousel's scroll-into-view below.
+ * Approximate rendered height of the opaque carousel band in px — the ONE
+ * retune point when the mini-cards change size: `pt-3` (12) + card (~92: `py-2`
+ * + name + address + 30px chip row + border) + `pb-3` (12). Derived from it:
+ * the live map's `FIT_PADDING.bottom` and selection-pan offset
+ * (`DirectoryMapLive.tsx`) and the recenter FAB's `bottom-[128px]` (band + a
+ * 12px gap — Tailwind can't interpolate a JS constant into a class, so that
+ * one is restated below).
  */
-export function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+export const CAROUSEL_BAND_PX = 116;
+
+/**
+ * Invoke `onUserSelect` exactly when a selection change was caused by a user
+ * tap on a pin/mini-card — the ONE discriminator shared by both selection-sync
+ * surfaces (the carousel's scroll-into-view and the live map's pan), so their
+ * notion of "user selection" can never drift. `selectedId` itself carries no
+ * cause, so the cause is inferred from the transition; skipped by design:
+ *
+ * - the first selection seen while `ready` — mount, and the route's
+ *   auto-select-first that lands right after (the selection effect in
+ *   `app/routes/index.tsx` names this hook as a dependent);
+ * - any change while `!ready` (the live map instance not created yet): nothing
+ *   is recorded, so when `ready` flips the pending selection counts as
+ *   initial, never replayed;
+ * - a change whose PREVIOUS selection is no longer in `entries`: that is the
+ *   route's validity guard reassigning after a filter change, not a tap — the
+ *   camera/scroll must not chase it.
+ */
+export function useUserSelectionChange(
+  ready: boolean,
+  entries: readonly DirectoryMapEntry[],
+  selectedId: string | null,
+  onUserSelect: (id: string) => void
+): void {
+  const prevSelected = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const prev = prevSelected.current;
+    prevSelected.current = selectedId;
+    if (!selectedId || prev === null || prev === selectedId) return;
+    if (!entries.some((entry) => entry.vm.id === prev)) return;
+    onUserSelect(selectedId);
+  }, [ready, entries, selectedId, onUserSelect]);
 }
 
 /**
- * Pin-local solid fills per safety state. Only the fill lives here — the icon
- * and label come from `SafetySignal`'s state config (`safetyIcon` /
- * `safetyLabel`), the one source of the state → shape + wording mapping.
+ * Pin-local dot classes per safety state: the solid fill plus its
+ * `*-foreground` icon colour (the same pairing `SafetySignal`'s solid variant
+ * uses, so icon-on-fill contrast is token-managed, never hardcoded white).
+ * Only these live here — the icon shape and label come from `SafetySignal`'s
+ * state config (`safetyIcon` / `safetyLabel`), the one source of the
+ * state → shape + wording mapping.
  */
 const PIN_FILLS: Record<SafetyState, string> = {
-  "celiac-safe": "bg-celiac-safe",
-  "gluten-friendly": "bg-gluten-friendly",
-  stale: "bg-stale",
-  incident: "bg-incident",
+  "celiac-safe": "bg-celiac-safe text-celiac-safe-foreground",
+  "gluten-friendly": "bg-gluten-friendly text-gluten-friendly-foreground",
+  stale: "bg-stale text-stale-foreground",
+  incident: "bg-incident text-incident-foreground",
 };
 
-/** The "Not yet attested" pin — neutral, still labelled, never a fake verdict. */
+/**
+ * The "Not yet attested" pin — neutral, still labelled, never a fake verdict.
+ * `CircleDashed` (an "unknown" ring) is deliberately unshareable with any
+ * verdict glyph: at dot size a shield outline reads celiac-safe under
+ * greyscale/CVD, so this state must not borrow `ShieldCheck`. `text-background`
+ * keeps the icon legible on the fill in BOTH themes: near-white on the mid-grey
+ * light fill, near-black on the lightened `.dark` `muted-foreground` (where
+ * white would drop to ~2.5:1).
+ */
 const UNATTESTED_PIN = {
-  fill: "bg-muted-foreground",
-  Icon: ShieldCheck,
+  fill: "bg-muted-foreground text-background",
+  Icon: CircleDashed,
   label: "Not yet attested",
 } as const;
 
@@ -79,6 +128,13 @@ export function pinStyleFor(state: SafetyState | null) {
  * 24px micro-dot (colour fill + distinct icon shape), centred inside a 44px
  * transparent button so the tap target stays finger-sized (WCAG 2.5.5 / the
  * same `size-11` the recenter FAB uses) while the map reads uncluttered.
+ *
+ * The halo is `border-white` on purpose, not `border-surface`: its job is
+ * dot-vs-tile separation, so it must stay light over dark-mode map tiles
+ * (where `surface` goes near-black and would vanish). In light mode the
+ * strong fill separates the dot from light tiles; in dark mode the white halo
+ * does (white vs Google's dark tiles ≫ 3:1).
+ *
  * Positioning is the caller's job: the placeholder projects the button with
  * `absolute` + `left`/`top` percentages; the live map wraps it in an
  * `<AdvancedMarker>` anchored at the true lat/lng (there the marker carries
@@ -115,15 +171,15 @@ export function MapPinButton({
         className ? ` ${className}` : ""
       }`}
     >
-      {/* The visual micro-dot. Selection grows it (animated only under
-          motion-safe) and adds the brand ring; the surrounding hit area never
-          changes size. */}
+      {/* The visual micro-dot. Selected SIZE is state, not motion — the scale
+          is unconditional and only the transition is motion-gated, so
+          reduced-motion users still see a clearly larger selected dot. */}
       <span
-        className={`flex size-6 items-center justify-center rounded-full border-2 border-surface text-white shadow-md motion-safe:transition-transform ${
+        className={`flex size-6 items-center justify-center rounded-full border-2 border-white shadow-md motion-safe:transition-transform ${
           pin.fill
-        }${selected ? " scale-110 ring-4 ring-brand/30 motion-safe:scale-125" : ""}`}
+        }${selected ? " scale-125 ring-4 ring-brand/50" : ""}`}
       >
-        <PinIcon className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
+        <PinIcon className="size-4" strokeWidth={2} aria-hidden="true" />
       </span>
     </button>
   );
@@ -132,8 +188,9 @@ export function MapPinButton({
 /**
  * Recenter FAB. In the live map path `onClick` re-fits the camera to the
  * current pins; in the CSS-placeholder fallback it is passed no handler and
- * stays an unwired affordance. `bottom-[128px]` seats it just above the
- * ~116px carousel band below — retune both together.
+ * stays an unwired affordance. `bottom-[128px]` = {@link CAROUSEL_BAND_PX} +
+ * a 12px gap, restated as a literal because Tailwind arbitrary values can't
+ * interpolate a JS constant.
  */
 export function RecenterFab({ onClick }: { onClick?: () => void }) {
   return (
@@ -151,11 +208,14 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
 /**
  * Bottom mini-card carousel, kept in sync with pin selection — identical in
  * both map paths. Text-dense slim cards: name, address · distance, and the
- * safety chip (the shared `SafetySignal`, so the chip is the same one the
- * list view renders). When the selection changes (a pin tap), the selected
- * card scrolls into view — `inline: "center"`, `block: "nearest"` so the page
- * itself never jumps, smooth only under motion-safe, and skipped for the
- * initial auto-select so mount never animates.
+ * same trust row rules as the browse list card (`ListingCard`): headline
+ * `SafetySignal` (or the shared dashed `UnattestedBadge` when there is no
+ * verdict and nothing bot-suggested), plus the incident add-on chip whenever
+ * `hasRecentIncident` — recent harm must flag the mini-card no matter the
+ * headline verdict. On a user selection (the shared
+ * `useUserSelectionChange` discriminator), the selected card scrolls into
+ * view — `inline: "center"`, `block: "nearest"` so the page itself never
+ * jumps, smooth only when motion is allowed.
  *
  * Must sit above the pins with an opaque band so a low pin can never bleed
  * over a mini-card (safety-correctness — see the module comment). The opaque
@@ -171,20 +231,13 @@ export function MapCarousel({
   onSelect: (id: string) => void;
 }) {
   const cardEls = useRef(new Map<string, HTMLDivElement>());
-  const prevSelected = useRef<string | null>(null);
-  useEffect(() => {
-    const prev = prevSelected.current;
-    prevSelected.current = selectedId;
-    // Skip the first selection (mount, or the route's auto-select-first
-    // arriving right after mount): only a *change* from one entry to another
-    // — a real pin tap — scrolls, so initial render never animates.
-    if (!selectedId || prev === null || prev === selectedId) return;
-    cardEls.current.get(selectedId)?.scrollIntoView({
+  useUserSelectionChange(true, entries, selectedId, (id) => {
+    cardEls.current.get(id)?.scrollIntoView({
       behavior: prefersReducedMotion() ? "auto" : "smooth",
       inline: "center",
       block: "nearest",
     });
-  }, [selectedId]);
+  });
 
   return (
     <div
@@ -220,28 +273,31 @@ export function MapCarousel({
                 selected ? "border-2 border-brand" : "border border-border"
               }`}
             >
-              {/* pr-12 keeps the two text rows clear of the overlaid heart
-                  (right-3 + size-9); the chip row sits below it, full width. */}
-              <span className="block truncate pr-12 font-display text-body-sm font-bold text-foreground">
+              {/* pr-14 keeps the two text rows clear of the overlaid heart
+                  (right-3 + size-9 = 48px) with breathing room; the chip row
+                  sits below the heart, full width. */}
+              <span className="block truncate pr-14 font-display text-body-sm font-bold text-foreground">
                 {vm.name}
               </span>
-              <span className="mt-0.5 block truncate pr-12 text-caption text-muted-foreground">
+              <span className="mt-0.5 block truncate pr-14 text-caption text-muted-foreground">
                 {vm.address}
                 {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
               </span>
-              <span className="mt-1.5 block">
+              {/* Trust row — the same rules as ListingCard's claim row.
+                  `min-h-[30px]` reserves the badge family's rendered height
+                  (py-1 + text-body-sm line + border) so the one chip-less case
+                  (bot-suggested, no verdict) keeps every card the same height;
+                  overflow scrolls sideways like ListingCard's row. */}
+              <span className="mt-1.5 flex min-h-[30px] items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {vm.safetyState ? (
                   <SafetySignal state={vm.safetyState} />
-                ) : (
-                  // The same honest dashed empty-state chip the browse list
-                  // card renders for a null verdict (ListingCard.tsx).
-                  <Badge
-                    variant="outline"
-                    className="border-dashed px-2.5 py-1 text-body-sm font-medium text-muted-foreground"
-                  >
-                    Not yet attested
-                  </Badge>
+                ) : vm.suggestedByBot ? null : (
+                  <UnattestedBadge />
                 )}
+                {/* Recent harm flags the mini-card regardless of the headline
+                    verdict (mirrors ListingCard) — an incident must never read
+                    clean on the map. */}
+                {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
               </span>
             </button>
 

@@ -58,6 +58,23 @@ const entries: DirectoryMapEntry[] = [
     lng: -104.9,
   },
   { vm: vm({ id: "c", name: "New Spot", safetyState: null }), lat: 39.8, lng: -105.0 },
+  // A recent incident on top of a positive headline verdict — the add-on chip case.
+  {
+    vm: vm({
+      id: "d",
+      name: "Harvest Table",
+      safetyState: "celiac-safe",
+      hasRecentIncident: true,
+    }),
+    lat: 39.72,
+    lng: -104.95,
+  },
+  // No verdict but bot-suggested — the dashed empty-state chip is suppressed.
+  {
+    vm: vm({ id: "e", name: "Bot Bistro", safetyState: null, suggestedByBot: true }),
+    lat: 39.74,
+    lng: -104.93,
+  },
 ];
 
 function renderMap(selectedId: string | null = "a") {
@@ -67,13 +84,17 @@ function renderMap(selectedId: string | null = "a") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(favoriteIdsQuery.queryKey, []);
   queryClient.setQueryData(currentUserQuery.queryKey, null);
-  const ui = (sel: string | null) => (
+  const ui = (sel: string | null, ents: readonly DirectoryMapEntry[]) => (
     <QueryClientProvider client={queryClient}>
-      <DirectoryMap entries={entries} selectedId={sel} onSelect={onSelect} />
+      <DirectoryMap entries={ents} selectedId={sel} onSelect={onSelect} />
     </QueryClientProvider>
   );
-  const view = render(ui(selectedId));
-  return { onSelect, rerenderWith: (sel: string | null) => view.rerender(ui(sel)) };
+  const view = render(ui(selectedId, entries));
+  return {
+    onSelect,
+    rerenderWith: (sel: string | null, ents: readonly DirectoryMapEntry[] = entries) =>
+      view.rerender(ui(sel, ents)),
+  };
 }
 
 describe("DirectoryMap — key-absent fallback (AUB-111)", () => {
@@ -111,6 +132,35 @@ describe("DirectoryMap — pins", () => {
     expect(pressed).toHaveLength(2);
   });
 
+  it("gives the unattested pin a glyph distinct from the celiac-safe shield (greyscale-survivable)", () => {
+    renderMap();
+    const pinOf = (name: string) =>
+      screen
+        .getAllByRole("button", { name })
+        .find((el) => el.className.includes("size-11")) as HTMLElement;
+    // A shield outline at dot size would read celiac-safe under greyscale/CVD;
+    // the unattested pin must carry the dashed "unknown" ring instead.
+    const unattested = pinOf("New Spot, Not yet attested");
+    expect(unattested.querySelector("svg.lucide-circle-dashed")).toBeInTheDocument();
+    expect(unattested.querySelector("svg.lucide-shield-check")).not.toBeInTheDocument();
+    expect(
+      pinOf("Root & Rye, Celiac-safe").querySelector("svg.lucide-shield-check")
+    ).toBeInTheDocument();
+  });
+
+  it("grows the selected dot unconditionally — size is state, only the transition is motion-gated", () => {
+    renderMap("b");
+    const pin = screen
+      .getAllByRole("button", { name: "Lucia Trattoria, Recent incident" })
+      .find((el) => el.className.includes("size-11")) as HTMLElement;
+    const dot = pin.querySelector("span") as HTMLElement;
+    // Reduced-motion users must still SEE the larger selected dot; only the
+    // animation between states is motion-gated.
+    expect(dot.className).toContain("scale-125");
+    expect(dot.className).not.toContain("motion-safe:scale-125");
+    expect(dot.className).toContain("motion-safe:transition-transform");
+  });
+
   it("selects the same restaurant whether its pin or its mini-card is tapped", () => {
     const { onSelect } = renderMap("a");
     const targets = screen.getAllByRole("button", { name: "Lucia Trattoria, Recent incident" });
@@ -140,6 +190,30 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
     const rootCard = within(carousel).getByRole("button", { name: "Root & Rye, Celiac-safe" });
     expect(within(rootCard).getByText("Celiac-safe")).toBeInTheDocument();
     expect(within(rootCard).queryByText("Recent incident")).not.toBeInTheDocument();
+  });
+});
+
+describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", () => {
+  it("adds the incident chip alongside the headline verdict when hasRecentIncident", () => {
+    renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    // Recent harm must never read clean on the map: the card keeps its
+    // headline chip AND flags the incident, exactly like the browse card.
+    const card = within(carousel).getByRole("button", { name: "Harvest Table, Celiac-safe" });
+    expect(within(card).getByText("Celiac-safe")).toBeInTheDocument();
+    expect(within(card).getByText("Recent incident")).toBeInTheDocument();
+  });
+
+  it("suppresses the dashed empty-state chip for a bot-suggested listing with no verdict", () => {
+    renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    // Same gate as ListingCard: bot-suggested + null verdict shows no
+    // fabricated-looking empty-state chip (provenance lives elsewhere)…
+    const botCard = within(carousel).getByRole("button", { name: "Bot Bistro, Not yet attested" });
+    expect(within(botCard).queryByText("Not yet attested")).not.toBeInTheDocument();
+    // …while a plain unattested listing still shows the honest dashed chip.
+    const plainCard = within(carousel).getByRole("button", { name: "New Spot, Not yet attested" });
+    expect(within(plainCard).getByText("Not yet attested")).toBeInTheDocument();
   });
 });
 
@@ -178,6 +252,18 @@ describe("DirectoryMap — carousel scrolls the selected card into view (AUB-274
     expect(
       within(target).getByRole("button", { name: "Lucia Trattoria, Recent incident" })
     ).toBeInTheDocument();
+  });
+
+  it("does not scroll when the previous selection was filtered away (validity reassign, not a tap)", () => {
+    const { rerenderWith } = renderMap("a");
+    // A real tap first, so the discriminator is past its initial-selection skip.
+    rerenderWith("b");
+    scrollIntoView.mockClear();
+    // Filter change drops "b"; the route reassigns to the first survivor —
+    // the shared discriminator must read that as a reassign, not a tap.
+    const withoutB = entries.filter((entry) => entry.vm.id !== "b");
+    rerenderWith("a", withoutB);
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it("scrolls instantly (behavior 'auto') under prefers-reduced-motion", () => {

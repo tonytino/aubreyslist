@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { DirectoryMapLive } from "./DirectoryMapLive";
-import type { DirectoryMapEntry } from "./map-ui";
+import { CAROUSEL_BAND_PX, type DirectoryMapEntry } from "./map-ui";
 
 /**
  * Tests for the real map path. Real Google tiles can't render in jsdom/CI, so
@@ -18,6 +18,7 @@ const mapMock = vi.hoisted(() => ({
   fitBounds: vi.fn(),
   moveCamera: vi.fn(),
   panTo: vi.fn(),
+  panBy: vi.fn(),
   getDiv: () => ({ clientWidth: 800, clientHeight: 600 }),
 }));
 
@@ -208,12 +209,16 @@ describe("DirectoryMapLive — camera fitting", () => {
     expect(mapMock.panTo).not.toHaveBeenCalled();
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
 
-    // The user selects the other pin/mini-card → the camera pans to it.
+    // The user selects the other pin/mini-card → the camera pans to it, then
+    // shifts down half the carousel band so the pin centres in the visible
+    // canvas above the band instead of the raw canvas.
     rerender(
       <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="b" onSelect={onSelect} />
     );
     expect(mapMock.panTo).toHaveBeenCalledTimes(1);
     expect(mapMock.panTo).toHaveBeenCalledWith({ lat: 39.7, lng: -104.9 });
+    expect(mapMock.panBy).toHaveBeenCalledTimes(1);
+    expect(mapMock.panBy).toHaveBeenCalledWith(0, CAROUSEL_BAND_PX / 2);
     // A pan is never a re-fit and never a zoom change.
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
     expect(mapMock.moveCamera).not.toHaveBeenCalled();
@@ -270,6 +275,7 @@ describe("DirectoryMapLive — camera fitting", () => {
       <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="b" onSelect={onSelect} />
     );
     expect(mapMock.panTo).not.toHaveBeenCalled();
+    expect(mapMock.panBy).not.toHaveBeenCalled();
     // Center-only camera write: the selection pan never changes zoom.
     expect(mapMock.moveCamera).toHaveBeenCalledTimes(1);
     expect(mapMock.moveCamera).toHaveBeenCalledWith({ center: { lat: 39.7, lng: -104.9 } });

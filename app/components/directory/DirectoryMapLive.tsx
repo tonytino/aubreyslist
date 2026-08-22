@@ -13,11 +13,13 @@ import {
   type MapPadding,
 } from "~/components/directory/map-camera";
 import {
+  CAROUSEL_BAND_PX,
   type DirectoryMapEntry,
   MapPinButton,
-  prefersReducedMotion,
   RecenterFab,
+  useUserSelectionChange,
 } from "~/components/directory/map-ui";
+import { prefersReducedMotion } from "~/lib/motion";
 
 /**
  * The real directory map: Google Maps via `@vis.gl/react-google-maps`
@@ -61,12 +63,11 @@ import {
 const DIRECTORY_MAP_ID = "DEMO_MAP_ID";
 
 /**
- * Pixel padding for every bounds fit: enough on the bottom that pins clear the
- * opaque mini-card carousel band (~116px tall since the slim text-dense cards)
- * instead of hiding behind it, and breathing room elsewhere so edge pins
- * aren't glued to the viewport.
+ * Pixel padding for every bounds fit: on the bottom, the opaque mini-card
+ * carousel band plus headroom so pins clear it instead of hiding behind it;
+ * breathing room elsewhere so edge pins aren't glued to the viewport.
  */
-const FIT_PADDING: MapPadding = { top: 48, right: 48, bottom: 160, left: 48 };
+const FIT_PADDING: MapPadding = { top: 48, right: 48, bottom: CAROUSEL_BAND_PX + 44, left: 48 };
 
 /**
  * Fit the camera to `bounds`, honouring reduced motion: `fitBounds` (may
@@ -221,21 +222,25 @@ function RefitOnEntriesChange({
 }
 
 /**
- * Pan the camera to a newly selected entry (pin or mini-card tap) at the
- * current zoom — never a zoom change, and via the never-animated
- * `map.moveCamera` under reduced motion (`panTo` may animate).
+ * Pan the camera to a user-selected entry (pin or mini-card tap) at the
+ * current zoom — never a zoom change. Which selection changes count as a user
+ * tap is the shared `useUserSelectionChange` discriminator (`map-ui.tsx`) —
+ * the same one the carousel's scroll-into-view uses — so a mount/auto-select
+ * or the route's post-filter validity reassign never pans, and the pan can't
+ * fight `RefitOnEntriesChange`'s refit-unless-user-moved contract. The hook's
+ * `ready` gate is the map instance itself: a selection made before the map
+ * exists counts as initial (nothing to pan yet), not replayed later.
  *
- * Deliberately narrow, so it can't fight `RefitOnEntriesChange`'s
- * refit-unless-user-moved contract:
- * - Skips the first selection (mount, and the route's auto-select-first that
- *   lands right after) — the initial camera is the bounds fit, not a pan.
- * - Skips when the previously selected entry is no longer in `entries`: that
- *   change is the route's validity guard reassigning after a filter change,
- *   where the refit (if the user hasn't taken the camera) already frames the
- *   new result set — a pan there would snatch the camera.
- * - Leaves `userMoved` alone: a selection pan responds to an explicit tap, and
- *   panning changes no zoom (so it can't trip the zoom-based user-moved
- *   heuristic); the next filter change still refits exactly as before.
+ * The pan target is offset by half the carousel band so the pin lands centred
+ * in the VISIBLE canvas above the band (`panBy` moves the camera down by
+ * `+y` px, putting the pin that many px above centre). Under reduced motion
+ * the camera jumps via the never-animated `moveCamera` to the raw centre —
+ * the band offset needs a pixel→lat projection at the live zoom, and the pin
+ * stays well clear of the band without it (canvas min-height ≫ 2× band).
+ *
+ * Leaves `userMoved` alone: the pan answers an explicit tap and fires no zoom
+ * event, so the user-moved heuristic and the next filter-change refit behave
+ * per `RefitOnEntriesChange`'s contract.
  */
 function PanToSelection({
   entries,
@@ -245,21 +250,17 @@ function PanToSelection({
   selectedId: string | null;
 }) {
   const map = useMap();
-  const prevSelected = useRef<string | null>(null);
-  useEffect(() => {
-    const prev = prevSelected.current;
-    prevSelected.current = selectedId;
-    if (!map || !selectedId || prev === null || prev === selectedId) return;
-    if (!entries.some((entry) => entry.vm.id === prev)) return;
-    const entry = entries.find((candidate) => candidate.vm.id === selectedId);
-    if (!entry) return;
+  useUserSelectionChange(map !== null, entries, selectedId, (id) => {
+    const entry = entries.find((candidate) => candidate.vm.id === id);
+    if (!map || !entry) return;
     const center = { lat: entry.lat, lng: entry.lng };
     if (prefersReducedMotion()) {
       map.moveCamera({ center });
     } else {
       map.panTo(center);
+      map.panBy(0, CAROUSEL_BAND_PX / 2);
     }
-  }, [map, entries, selectedId]);
+  });
   return null;
 }
 
