@@ -1,0 +1,1 @@
+- `[manual]` Listing-detail hero now blurs up from the browse card's cached photo instead of starting blank, and the photo pipeline's cache windows are tuned for fewer repeat-view round-trips (a 12h client staleTime tied to the server's photo-metadata TTL, and a 6h media-proxy redirect cache).

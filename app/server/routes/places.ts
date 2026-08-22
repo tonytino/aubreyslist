@@ -64,12 +64,27 @@ function snapToWidthLadder(requested: number): number {
 }
 
 /**
- * How long browsers/CDNs may reuse the 302 (and clients should wait after a
- * 503). Kept short — one hour, well under the in-process TTL — because the
- * redirect target is a short-lived googleusercontent URL and because a
- * flipped kill switch must take effect quickly (ADR-014).
+ * How long browsers/CDNs may reuse the 302. Six hours — under the 12h
+ * in-process metadata TTL (`PLACE_PHOTOS_CACHE_TTL_MS`, `~/server/places-photos`)
+ * and still short enough for the short-lived googleusercontent redirect
+ * target to stay valid across the window. A flipped `place_photos_enabled`
+ * kill switch may take up to this long to reach a browser holding a cached
+ * redirect — an accepted tradeoff against fewer redirect round-trips on
+ * repeat photo views. Deliberately separate from
+ * {@link PHOTO_UNAVAILABLE_RETRY_AFTER_SECONDS}: this only governs a
+ * SUCCESSFUL redirect's cache lifetime, never a 503's retry hint, so a longer
+ * redirect cache can't also delay how soon a client retries after the kill
+ * switch flips back ON.
  */
-const PHOTO_REDIRECT_MAX_AGE_SECONDS = 3600;
+const PHOTO_REDIRECT_MAX_AGE_SECONDS = 21_600;
+
+/**
+ * `Retry-After` hint on a 503 (kill switch off / key unset). One hour — short
+ * enough that a client notices soon after the kill switch is RE-ENABLED,
+ * independent of {@link PHOTO_REDIRECT_MAX_AGE_SECONDS}'s longer redirect
+ * cache window.
+ */
+const PHOTO_UNAVAILABLE_RETRY_AFTER_SECONDS = 3600;
 
 /**
  * Negative-cache TTL for upstream failures, per (name, ladder-width). Long
@@ -162,7 +177,7 @@ export const placesRoutes = new Hono().get(
     }
     const apiKey = getEnv().GOOGLE_PLACES_API_KEY;
     if (!enabled || !apiKey) {
-      c.header("Retry-After", String(PHOTO_REDIRECT_MAX_AGE_SECONDS));
+      c.header("Retry-After", String(PHOTO_UNAVAILABLE_RETRY_AFTER_SECONDS));
       return c.json({ error: "Place photos are currently unavailable" }, 503);
     }
 

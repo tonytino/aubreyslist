@@ -6,7 +6,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
@@ -100,10 +100,11 @@ function renderInRouter(element: ReactNode) {
       <RouterProvider router={router as unknown as never} />
     </QueryClientProvider>
   );
+  return router;
 }
 
 function renderCard(overrides: Partial<RestaurantCardVM> = {}) {
-  renderInRouter(<RestaurantCard vm={{ ...baseVm, ...overrides }} />);
+  return renderInRouter(<RestaurantCard vm={{ ...baseVm, ...overrides }} />);
 }
 
 describe("RestaurantCard", () => {
@@ -622,6 +623,58 @@ describe("RestaurantCard", () => {
     await screen.findByTestId("food-photo");
     expect(screen.queryByTestId("food-photo-attribution")).not.toBeInTheDocument();
     expect(screen.queryByTestId("food-photo-attribution-scrim")).not.toBeInTheDocument();
+  });
+
+  it("hands the shown photo to the hero as router state on navigation, never the URL", async () => {
+    const router = renderCard({ photoUrl: "https://cdn.example.com/root-and-rye.jpg" });
+    const link = await screen.findByRole("link");
+
+    fireEvent.click(link);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/listings/listing-1"));
+    expect(router.state.location.search).toEqual({});
+    expect(router.state.location.state.listingPreviewSrc).toBe(
+      "https://cdn.example.com/root-and-rye.jpg"
+    );
+  });
+
+  it("carries no preview state when the card has no photo (placeholder tile)", async () => {
+    const router = renderCard({ photoUrl: null });
+    const link = await screen.findByRole("link");
+
+    fireEvent.click(link);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/listings/listing-1"));
+    expect(router.state.location.state.listingPreviewSrc).toBeUndefined();
+  });
+
+  it("hands the shown photo's attribution names along with the preview src (for credit during the preview-only phase)", async () => {
+    const router = renderCard({
+      photoUrl: "https://cdn.example.com/root-and-rye.jpg",
+      photoAttributions: [{ displayName: "A Diner" }, { displayName: "B Baker" }],
+    });
+    const link = await screen.findByRole("link");
+
+    fireEvent.click(link);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/listings/listing-1"));
+    expect(router.state.location.state.listingPreviewAttributionNames).toEqual([
+      "A Diner",
+      "B Baker",
+    ]);
+  });
+
+  it("omits the attribution-names key when the shown photo carries no attributions", async () => {
+    const router = renderCard({
+      photoUrl: "https://cdn.example.com/root-and-rye.jpg",
+      photoAttributions: [],
+    });
+    const link = await screen.findByRole("link");
+
+    fireEvent.click(link);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/listings/listing-1"));
+    expect(router.state.location.state.listingPreviewAttributionNames).toBeUndefined();
   });
 });
 
