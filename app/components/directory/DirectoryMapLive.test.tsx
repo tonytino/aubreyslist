@@ -162,6 +162,20 @@ describe("DirectoryMapLive — markers", () => {
     ).toBeInTheDocument();
   });
 
+  it("numbers each pin by its 1-based entries order, keeping the number out of the accessible name (AUB-275)", () => {
+    renderLive();
+    // Same numbered-dot contract as the placeholder path (shared MapPinButton):
+    // the visible content is the entries-order index, nothing else.
+    const first = screen.getByRole("button", { name: "Root & Rye, Celiac-safe" });
+    const second = screen.getByRole("button", { name: "Lucia Trattoria, Recent incident" });
+    expect(first.textContent).toBe("1");
+    expect(second.textContent).toBe("2");
+    // The exact-name queries above already prove the label; assert it verbatim
+    // anyway — the number is a visual correlation aid, never spoken to AT.
+    expect(first.getAttribute("aria-label")).toBe("Root & Rye, Celiac-safe");
+    expect(second.getAttribute("aria-label")).toBe("Lucia Trattoria, Recent incident");
+  });
+
   it("marks the selected pin (aria-pressed) and raises its marker zIndex", () => {
     renderLive("b");
     expect(

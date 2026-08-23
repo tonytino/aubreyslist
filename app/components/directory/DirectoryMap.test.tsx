@@ -126,6 +126,18 @@ function renderMap(selectedId: string | null = "a") {
   };
 }
 
+/** The map pin among the two buttons sharing an accessible name (pin + card). */
+function pinOf(name: string): HTMLElement {
+  return screen
+    .getAllByRole("button", { name })
+    .find((el) => el.className.includes("size-11")) as HTMLElement;
+}
+
+/** The carousel mini-card among the two buttons sharing an accessible name. */
+function cardOf(name: string): HTMLElement {
+  return within(screen.getByTestId("map-carousel")).getByRole("button", { name });
+}
+
 describe("DirectoryMap — key-absent fallback (AUB-111)", () => {
   it("renders the stylized CSS placeholder when no browser key is provisioned", () => {
     renderMap();
@@ -161,20 +173,13 @@ describe("DirectoryMap — pins", () => {
     expect(pressed).toHaveLength(2);
   });
 
-  it("gives the unattested pin a glyph distinct from the celiac-safe shield (greyscale-survivable)", () => {
+  it("shows the index number in the dot instead of the safety icon (AUB-275 variant)", () => {
     renderMap();
-    const pinOf = (name: string) =>
-      screen
-        .getAllByRole("button", { name })
-        .find((el) => el.className.includes("size-11")) as HTMLElement;
-    // A shield outline at dot size would read celiac-safe under greyscale/CVD;
-    // the unattested pin must carry the dashed "unknown" ring instead.
-    const unattested = pinOf("New Spot, Not yet attested");
-    expect(unattested.querySelector("svg.lucide-circle-dashed")).toBeInTheDocument();
-    expect(unattested.querySelector("svg.lucide-shield-check")).not.toBeInTheDocument();
-    expect(
-      pinOf("Root & Rye, Celiac-safe").querySelector("svg.lucide-shield-check")
-    ).toBeInTheDocument();
+    // The dot's only content is the number; the safety icon reaches sighted
+    // users on the card's chip row (the variant's deliberate tradeoff).
+    const pin = pinOf("Root & Rye, Celiac-safe");
+    expect(pin.textContent).toBe("1");
+    expect(pin.querySelector("svg")).not.toBeInTheDocument();
   });
 
   it("grows the selected dot unconditionally — size is state, only the transition is motion-gated", () => {
@@ -198,6 +203,78 @@ describe("DirectoryMap — pins", () => {
     // Pin and mini-card both request the same id (selection stays in sync).
     expect(onSelect).toHaveBeenNthCalledWith(1, "b");
     expect(onSelect).toHaveBeenNthCalledWith(2, "b");
+  });
+});
+
+describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview variant)", () => {
+  // The five fixture entries' accessible names, in `entries` order — index i
+  // must render the visible number i + 1 on both the pin and the card.
+  const names = [
+    "Root & Rye, Celiac-safe",
+    "Lucia Trattoria, Recent incident",
+    "New Spot, Not yet attested",
+    "Harvest Table, Celiac-safe, Recent incident",
+    "Bot Bistro, Not yet attested",
+  ];
+
+  it("shows the same 1-based number on pin N and card N, following the entries order", () => {
+    renderMap();
+    names.forEach((name, i) => {
+      const number = String(i + 1);
+      // The pin's only visible content is the number…
+      expect(pinOf(name).textContent).toBe(number);
+      // …and the card's leading chip carries the matching number.
+      expect(within(cardOf(name)).getByText(number)).toBeInTheDocument();
+    });
+  });
+
+  it("numbers the unattested pin too (grey fill, no fake verdict — still a numbered dot)", () => {
+    renderMap();
+    const pin = pinOf("New Spot, Not yet attested");
+    expect(pin.textContent).toBe("3");
+    // Still the neutral unattested pairing, never a safety-state fill.
+    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-muted-foreground");
+  });
+
+  it("keeps the number out of every accessible name — a visual correlation aid only", () => {
+    renderMap();
+    names.forEach((name) => {
+      // Exactly the shared pinAccessibleName on both buttons (getAllByRole with
+      // a string is a full exact match), and no digit anywhere in the label.
+      const buttons = screen.getAllByRole("button", { name });
+      expect(buttons).toHaveLength(2);
+      for (const button of buttons) {
+        expect(button.getAttribute("aria-label")).toBe(name);
+        expect(button.getAttribute("aria-label")).not.toMatch(/\d/);
+      }
+    });
+  });
+
+  it("fits two-digit numbers in the 24px dot by dropping to the smaller type size", () => {
+    const many: DirectoryMapEntry[] = Array.from({ length: 12 }, (_, i) => ({
+      vm: vm({
+        id: `m${i}`,
+        name: `Spot ${String.fromCharCode(65 + i)}`,
+        safetyState: "celiac-safe",
+      }),
+      lat: 39.7 + i * 0.005,
+      lng: -104.9 - i * 0.005,
+    }));
+    const { rerenderWith } = renderMap(null);
+    rerenderWith(null, many);
+
+    const first = pinOf("Spot A, Celiac-safe");
+    const twelfth = pinOf("Spot L, Celiac-safe");
+    expect(first.textContent).toBe("1");
+    expect(twelfth.textContent).toBe("12");
+    // Single digits render at text-caption; two digits shrink so "12" fits
+    // the dot's ~20px interior. Both stay tabular so widths are stable.
+    const numberSpanOf = (pin: HTMLElement) => pin.querySelector("span > span") as HTMLElement;
+    expect(numberSpanOf(first).className).toContain("text-caption");
+    expect(numberSpanOf(twelfth).className).toContain("text-[10px]");
+    expect(numberSpanOf(twelfth).className).toContain("tabular-nums");
+    // The card mirrors the two-digit number.
+    expect(within(cardOf("Spot L, Celiac-safe")).getByText("12")).toBeInTheDocument();
   });
 });
 

@@ -49,10 +49,11 @@ import { googleMapsBrowserKey } from "~/lib/public-env";
  * path) and draws an opaque background band, so any low pin hides behind the
  * band instead of over a card.
  *
- * Accessibility: every pin and mini-card is a real `<button>`; the pin's icon
- * is decorative and its accessible name is the restaurant name + its safety
- * state, so the safety meaning is never colour-only. The selected pin/mini-card
- * carry `aria-pressed` in addition to the visual ring/border.
+ * Accessibility: every pin and mini-card is a real `<button>`; the pin's
+ * visible content (the numbered-pins variant's index number) is decorative
+ * and its accessible name is the restaurant name + its safety state, so the
+ * safety meaning is never colour-only. The selected pin/mini-card carry
+ * `aria-pressed` in addition to the visual ring/border.
  */
 
 export type { DirectoryMapEntry };
@@ -213,13 +214,16 @@ function PlaceholderMap({
       {/* Pins — projected from real lat/lng. Each is an accessible button whose
           name carries the restaurant + its safety state (never colour alone). */}
       <ul className="absolute inset-0 list-none">
-        {entries.map(({ vm, lat, lng }) => {
+        {entries.map(({ vm, lat, lng }, entryIndex) => {
           const { left, top } = projectToMap(lat, lng);
           const selected = vm.id === selectedId;
           return (
             <li key={vm.id}>
               <MapPinButton
                 vm={vm}
+                // 1-based entries-order index — matches the carousel card's
+                // chip because both map over the same `entries` array.
+                index={entryIndex + 1}
                 selected={selected}
                 onSelect={onSelect}
                 // Runtime-computed left/top from the projection — the sanctioned
