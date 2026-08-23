@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/tanstackstart-react";
+import { Component, type ReactNode, useCallback, useEffect, useState } from "react";
 import { DirectoryMapLive } from "~/components/directory/DirectoryMapLive";
 import { projectToMap } from "~/components/directory/map-projection";
 import {
@@ -21,6 +23,20 @@ import { googleMapsBrowserKey } from "~/lib/public-env";
  *   listing's real `lat`/`lng` via a fixed metro-Denver bounding box
  *   (`projectToMap`), and the recenter FAB present but unwired.
  *
+ * Fallback-on-failure: a provisioned key does not guarantee a working map —
+ * Google can reject the key after the script loads (e.g.
+ * `RefererNotAllowedMapError` on a preview host outside the key's referrer
+ * allowlist), leaving the Maps runtime half-initialized so vis.gl marker
+ * internals throw during render. Three failure signals funnel into one
+ * handler that flips the view to the placeholder: `window.gm_authFailure`
+ * (auth/referrer rejection), a local error boundary around only the live map
+ * (render throws), and `APIProvider`'s `onError` (script-load/CSP failure).
+ * The degrade is silent for users — the placeholder is a designed surface and
+ * pins/carousel/selection keep working — but never for operators: the handler
+ * reports every failure to Sentry, since the boundary keeps a live-map crash
+ * from ever reaching `RootErrorBoundary`'s capture (and from unmounting the
+ * whole route, the carousel included).
+ *
  * Both paths share the same pin visuals, accessible names, and the bottom
  * mini-card carousel (`map-ui.tsx`), so the safety-signal contract and the
  * carousel-above-pins invariant below hold identically in both.
@@ -42,6 +58,35 @@ import { googleMapsBrowserKey } from "~/lib/public-env";
 
 export type { DirectoryMapEntry };
 
+declare global {
+  interface Window {
+    /**
+     * Google Maps JS's documented auth-failure hook (not in
+     * `@types/google.maps`): called at most once per page load, asynchronously
+     * after the script loads, when the key is rejected (e.g.
+     * RefererNotAllowedMapError). A future `@vis.gl/react-google-maps` may
+     * claim this global itself (1.9.0 ships a dead `AUTH_FAILURE` branch) —
+     * when upgrading, check whether `useApiLoadingStatus() === AUTH_FAILURE`
+     * has become the durable signal and retire the manual hook here.
+     */
+    gm_authFailure?: (() => void) | undefined;
+  }
+}
+
+// Module-level latch, deliberately outside component state: Google Maps
+// cannot recover a rejected key or failed script without a full page reload,
+// and `gm_authFailure` never fires a second time — so once the live map has
+// failed, a later remount (e.g. the List→Map view toggle) must start on the
+// placeholder rather than retry, blank-or-crash again, and re-report to
+// Sentry on every toggle. Mirrors vis.gl's own module-level loading-status
+// singleton. Cleared only by tests.
+let liveMapFailedThisPageLoad = false;
+
+/** Test-only seam: clears the module-level failure latch between tests. */
+export function resetLiveMapFailureLatch() {
+  liveMapFailedThisPageLoad = false;
+}
+
 export function DirectoryMap({
   entries,
   selectedId,
@@ -56,15 +101,50 @@ export function DirectoryMap({
   // depends on key provisioning or Google availability.
   const apiKey = googleMapsBrowserKey();
 
+  // Key present but the live map failed (auth rejection, script-load failure,
+  // or a render crash) → same placeholder path. Seeded from the module latch
+  // so a remount after a failure starts on the placeholder directly.
+  const [liveMapFailed, setLiveMapFailed] = useState(() => liveMapFailedThisPageLoad);
+  const onLiveMapFail = useCallback((cause: string, error?: unknown) => {
+    liveMapFailedThisPageLoad = true;
+    // Silent degrade for users, never for operators: the local boundary keeps
+    // failures from reaching RootErrorBoundary's Sentry capture, so report
+    // here — the original throw when there is one, a message for the
+    // signal-only failures (auth rejection, script load).
+    if (error === undefined) {
+      Sentry.captureMessage(`Live Google map unavailable (${cause})`, "warning");
+    } else {
+      Sentry.captureException(error);
+    }
+    console.warn(`Live Google map unavailable (${cause}); showing the placeholder map instead.`);
+    setLiveMapFailed(true);
+  }, []);
+
+  const liveMapActive = apiKey !== null && !liveMapFailed;
+
+  // Google's auth-failure hook is a bare window global, so own it only while
+  // the live path is mounted and restore whatever was there on cleanup.
+  useEffect(() => {
+    if (!liveMapActive || typeof window === "undefined") return;
+    const previous = window.gm_authFailure;
+    window.gm_authFailure = () => onLiveMapFail("Google rejected the Maps key for this referrer");
+    return () => {
+      window.gm_authFailure = previous;
+    };
+  }, [liveMapActive, onLiveMapFail]);
+
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {apiKey ? (
-        <DirectoryMapLive
-          apiKey={apiKey}
-          entries={entries}
-          selectedId={selectedId}
-          onSelect={onSelect}
-        />
+      {liveMapActive ? (
+        <LiveMapErrorBoundary onFail={onLiveMapFail}>
+          <DirectoryMapLive
+            apiKey={apiKey}
+            entries={entries}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            onLoadError={onLiveMapFail}
+          />
+        </LiveMapErrorBoundary>
       ) : (
         <PlaceholderMap entries={entries} selectedId={selectedId} onSelect={onSelect} />
       )}
@@ -75,6 +155,36 @@ export function DirectoryMap({
       <MapCarousel entries={entries} selectedId={selectedId} onSelect={onSelect} />
     </div>
   );
+}
+
+/**
+ * Local error boundary around only the live map (never the carousel): a
+ * half-initialized Maps runtime makes vis.gl marker internals throw during
+ * render, and without this boundary that throw would bubble to the root
+ * `errorComponent` and replace the whole browse route. A class component
+ * because that's the only React mechanism that catches render throws. On
+ * catch it defers to the parent's fail handler, passing the original throw
+ * along for Sentry — the parent flips to `PlaceholderMap`, keeping the path
+ * switch and the reporting in one place — and renders nothing while it waits
+ * for that state flip to unmount it.
+ */
+class LiveMapErrorBoundary extends Component<
+  { onFail: (cause: string, error: unknown) => void; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error) {
+    this.props.onFail(`the live map crashed while rendering: ${error.message}`, error);
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
 }
 
 /**

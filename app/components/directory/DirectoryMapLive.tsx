@@ -25,7 +25,11 @@ import { prefersReducedMotion } from "~/lib/motion";
  * The real directory map: Google Maps via `@vis.gl/react-google-maps`
  * (Google's endorsed React library), rendered only when the public,
  * referrer-restricted `VITE_GOOGLE_MAPS_BROWSER_KEY` is provisioned — the
- * key-absent fallback lives in `DirectoryMap.tsx`.
+ * key-absent fallback lives in `DirectoryMap.tsx`, which also degrades to
+ * that same placeholder when the live map fails: `onLoadError` (wired to
+ * `APIProvider`'s `onError` below) reports script-load/CSP failure, while
+ * auth rejection (`window.gm_authFailure`) and render crashes are caught by
+ * `DirectoryMap` itself.
  *
  * - **Pins** are `<AdvancedMarker>`s at each listing's true lat/lng, rendering
  *   the same `MapPinButton` as the placeholder (safety colour + the
@@ -118,11 +122,14 @@ export function DirectoryMapLive({
   entries,
   selectedId,
   onSelect,
+  onLoadError,
 }: {
   apiKey: string;
   entries: readonly DirectoryMapEntry[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** The Maps JS script failed to load (network/CSP) — see the module doc. */
+  onLoadError: (cause: string) => void;
 }) {
   const colorScheme = useMapColorScheme();
   const bounds = useMemo(() => boundsForEntries(entries), [entries]);
@@ -136,7 +143,17 @@ export function DirectoryMapLive({
   const programmaticMove = useRef(false);
 
   return (
-    <APIProvider apiKey={apiKey}>
+    <APIProvider
+      apiKey={apiKey}
+      // Fires on script-load failure only (network/CSP) — an auth rejection
+      // after a successful load fires `window.gm_authFailure` instead, which
+      // `DirectoryMap` handles alongside this callback.
+      onError={(error) =>
+        onLoadError(
+          `the Maps script failed to load: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    >
       <GoogleMap
         mapId={DIRECTORY_MAP_ID}
         // `z-0` is the explicit stacking clamp for the safety invariant (see
