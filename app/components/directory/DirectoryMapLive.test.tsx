@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
@@ -20,6 +20,9 @@ const mapMock = vi.hoisted(() => ({
   panTo: vi.fn(),
   panBy: vi.fn(),
   getDiv: () => ({ clientWidth: 800, clientHeight: 600 }),
+  // The camera center the "Search this area" control reads, in the Maps JS
+  // accessor shape (`center.lat()`).
+  getCenter: () => ({ lat: () => 39.71, lng: () => -104.87 }),
 }));
 
 vi.mock("@vis.gl/react-google-maps", () => ({
@@ -102,7 +105,10 @@ const entries: DirectoryMapEntry[] = [
 // is an inert required prop.
 const noopLoadError = () => {};
 
-function renderLive(selectedId: string | null = "a") {
+function renderLive(
+  selectedId: string | null = "a",
+  onSearchArea?: (center: { lat: number; lng: number }) => void | Promise<void>
+) {
   const onSelect = vi.fn();
   const view = render(
     <DirectoryMapLive
@@ -111,6 +117,7 @@ function renderLive(selectedId: string | null = "a") {
       selectedId={selectedId}
       onSelect={onSelect}
       onLoadError={noopLoadError}
+      {...(onSearchArea ? { onSearchArea } : {})}
     />
   );
   return { onSelect, view };
@@ -446,6 +453,119 @@ describe("DirectoryMapLive — camera fitting", () => {
       center: { lat: expect.any(Number), lng: expect.any(Number) },
       zoom: expect.any(Number),
     });
+  });
+});
+
+describe("DirectoryMapLive — search this area (AUB-284)", () => {
+  it("shows the pill only after the visitor moves the camera", () => {
+    renderLive("a", vi.fn());
+    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("simulate-dragstart"));
+    expect(screen.getByRole("button", { name: "Search this area" })).toBeInTheDocument();
+  });
+
+  it("never shows the pill when no onSearchArea is wired, even after movement", () => {
+    renderLive("a");
+    fireEvent.click(screen.getByTestId("simulate-dragstart"));
+    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+  });
+
+  it("ignores programmatic zooms; a user zoom after the camera settles surfaces the pill", () => {
+    renderLive("a", vi.fn());
+    // The mount fit's own zoom event is flagged programmatic — not the user.
+    fireEvent.click(screen.getByTestId("simulate-zoom-changed"));
+    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("simulate-idle"));
+    fireEvent.click(screen.getByTestId("simulate-zoom-changed"));
+    expect(screen.getByRole("button", { name: "Search this area" })).toBeInTheDocument();
+  });
+
+  it("hands the current map center to onSearchArea, shows the searching state, then hides", async () => {
+    let resolveSearch!: () => void;
+    const onSearchArea = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSearch = resolve;
+        })
+    );
+    renderLive("a", onSearchArea);
+    fireEvent.click(screen.getByTestId("simulate-dragstart"));
+    fireEvent.click(screen.getByRole("button", { name: "Search this area" }));
+    // The center comes from the live camera (map.getCenter), not from any pin.
+    expect(onSearchArea).toHaveBeenCalledTimes(1);
+    expect(onSearchArea).toHaveBeenCalledWith({ lat: 39.71, lng: -104.87 });
+    // While the browse re-runs the pill announces it and cannot double-fire.
+    const pending = screen.getByRole("button", { name: "Searching…" });
+    expect(pending).toBeDisabled();
+    await act(async () => {
+      resolveSearch();
+    });
+    expect(
+      screen.queryByRole("button", { name: /Search this area|Searching…/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the camera where the visitor framed it when the searched area's results land", async () => {
+    let resolveSearch!: () => void;
+    const onSearchArea = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSearch = resolve;
+        })
+    );
+    const onSelect = vi.fn();
+    const { rerender } = render(
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+        onSearchArea={onSearchArea}
+      />
+    );
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("simulate-dragstart"));
+    fireEvent.click(screen.getByRole("button", { name: "Search this area" }));
+    await act(async () => {
+      resolveSearch();
+    });
+    // The new area's result set arrives as new entries…
+    rerender(
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries.slice(0, 1)}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+        onSearchArea={onSearchArea}
+      />
+    );
+    // …and the user-moved heuristic keeps the refit suppressed: the visitor
+    // framed this view, so the camera must not jump to the new pins.
+    expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
+    expect(mapMock.moveCamera).not.toHaveBeenCalled();
+    // The pill stays hidden until the camera moves again.
+    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("simulate-dragstart"));
+    expect(screen.getByRole("button", { name: "Search this area" })).toBeInTheDocument();
+  });
+
+  it("drops the pill when the recenter FAB hands the camera back", () => {
+    renderLive("a", vi.fn());
+    fireEvent.click(screen.getByTestId("simulate-dragstart"));
+    expect(screen.getByRole("button", { name: "Search this area" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Recenter map" }));
+    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+  });
+
+  it("stacks between the map canvas and the carousel band (z-order safety invariant)", () => {
+    renderLive("a", vi.fn());
+    fireEvent.click(screen.getByTestId("simulate-dragstart"));
+    const pill = screen.getByRole("button", { name: "Search this area" });
+    // Above the z-0-clamped canvas, below the z-10 carousel: a safety chip on
+    // a mini-card can never end up under this pill.
+    expect(pill.className).toContain("z-[5]");
   });
 });
 

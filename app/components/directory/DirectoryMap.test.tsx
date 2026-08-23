@@ -13,6 +13,7 @@ import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { DirectoryMap, type DirectoryMapEntry, resetLiveMapFailureLatch } from "./DirectoryMap";
+import type { MapLoadMore } from "./map-ui";
 
 // Each carousel entry carries a FavoriteButton island, which imports the
 // `favorites.fn` server seam (transitively db-touching). As in
@@ -126,17 +127,25 @@ const entries: DirectoryMapEntry[] = [
  * external re-render signal, so `rerenderWith` updates the same mounted tree —
  * the selection discriminator lives in refs that a remount would reset.
  */
-async function renderMap(selectedId: string | null = "a") {
+async function renderMap(selectedId: string | null = "a", loadMore?: MapLoadMore) {
   const onSelect = vi.fn();
+  // Always wired so the fallback tests can prove the placeholder path never
+  // surfaces the "Search this area" pill (it has no camera).
+  const onSearchArea = vi.fn();
   // Seed the favorites + current-user suspense queries the FavoriteButton reads
   // (anonymous, no favorites) so each carousel heart renders synchronously.
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(favoriteIdsQuery.queryKey, []);
   queryClient.setQueryData(currentUserQuery.queryKey, null);
 
-  const box: { selectedId: string | null; entries: readonly DirectoryMapEntry[] } = {
+  const box: {
+    selectedId: string | null;
+    entries: readonly DirectoryMapEntry[];
+    loadMore: MapLoadMore | undefined;
+  } = {
     selectedId,
     entries,
+    loadMore,
   };
   const listeners = new Set<() => void>();
   function Harness() {
@@ -149,7 +158,13 @@ async function renderMap(selectedId: string | null = "a") {
     }, []);
     return (
       <QueryClientProvider client={queryClient}>
-        <DirectoryMap entries={box.entries} selectedId={box.selectedId} onSelect={onSelect} />
+        <DirectoryMap
+          entries={box.entries}
+          selectedId={box.selectedId}
+          onSelect={onSelect}
+          onSearchArea={onSearchArea}
+          {...(box.loadMore ? { loadMore: box.loadMore } : {})}
+        />
       </QueryClientProvider>
     );
   }
@@ -172,11 +187,17 @@ async function renderMap(selectedId: string | null = "a") {
   await screen.findByTestId("map-carousel");
   return {
     onSelect,
+    onSearchArea,
     router,
     unmount: () => view.unmount(),
-    rerenderWith: (sel: string | null, ents: readonly DirectoryMapEntry[] = entries) => {
+    rerenderWith: (
+      sel: string | null,
+      ents: readonly DirectoryMapEntry[] = entries,
+      nextLoadMore: MapLoadMore | undefined = box.loadMore
+    ) => {
       box.selectedId = sel;
       box.entries = ents;
+      box.loadMore = nextLoadMore;
       act(() => {
         for (const listener of listeners) listener();
       });
@@ -204,6 +225,13 @@ describe("DirectoryMap — key-absent fallback (AUB-111)", () => {
     expect(screen.getByTestId("map-placeholder-backdrop")).toBeInTheDocument();
     // The recenter FAB is present but unwired in the fallback.
     expect(screen.getByRole("button", { name: "Recenter map" })).toBeInTheDocument();
+  });
+
+  it("never surfaces the 'Search this area' pill on the placeholder path (no camera)", async () => {
+    // The harness wires onSearchArea, so its absence here is the placeholder
+    // path's doing: with no live camera there is no area to search.
+    await renderMap();
+    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
   });
 });
 
@@ -616,6 +644,72 @@ describe("DirectoryMap — carousel end spacer (Add-listing FAB clearance)", () 
     expect(spacer.className).toContain("shrink-0");
     // It must trail every card to give the strip its end clearance.
     expect(carousel.lastElementChild).toBe(spacer);
+  });
+});
+
+describe("DirectoryMap — carousel Load more (AUB-284)", () => {
+  const loadMore = (over: Partial<MapLoadMore> = {}): MapLoadMore => ({
+    hasNext: true,
+    pending: false,
+    onLoadMore: vi.fn(),
+    ...over,
+  });
+
+  it("renders the Load more card only when wired and a further page exists", async () => {
+    const { rerenderWith } = await renderMap("a");
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+    rerenderWith("a", entries, loadMore());
+    expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+    // Everything loaded: the action disappears instead of lying around inert.
+    rerenderWith("a", entries, loadMore({ hasNext: false }));
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the end spacer as the band's last child, the card just before it", async () => {
+    await renderMap("a", loadMore());
+    const carousel = screen.getByTestId("map-carousel");
+    const spacer = within(carousel).getByTestId("carousel-end-spacer");
+    const card = within(carousel).getByTestId("carousel-load-more");
+    // The spacer's FAB-clearance contract survives the new card…
+    expect(carousel.lastElementChild).toBe(spacer);
+    // …which slots in at the end of the strip, after every mini-card.
+    expect(card.nextElementSibling).toBe(spacer);
+  });
+
+  it("requests the next page on click", async () => {
+    const wiring = loadMore();
+    await renderMap("a", wiring);
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(wiring.onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a disabled loading state while a page fetches, including the final page", async () => {
+    // hasNext drops the moment the last page is requested; `pending` keeps the
+    // card mounted so the fetch has a visible, non-clickable state.
+    await renderMap("a", loadMore({ hasNext: false, pending: true }));
+    const busy = screen.getByRole("button", { name: "Loading…" });
+    expect(busy).toBeDisabled();
+    expect(screen.getByTestId("carousel-load-more")).toBe(busy);
+  });
+
+  it("continues the visible numbering across appended pages (pin and card 21 both read 21)", async () => {
+    const many: DirectoryMapEntry[] = Array.from({ length: 21 }, (_, i) => ({
+      vm: vm({
+        id: `p${i}`,
+        name: `Spot ${String.fromCharCode(65 + i)}`,
+        safetyState: "celiac-safe",
+      }),
+      lat: 39.7 + i * 0.003,
+      lng: -104.9 - i * 0.003,
+    }));
+    const { rerenderWith } = await renderMap(null, loadMore());
+    // The first page's 20 entries, then the appended page's arrival: numbering
+    // derives from the entries order, so the new entries keep counting.
+    rerenderWith(null, many.slice(0, 20));
+    rerenderWith(null, many);
+    const appended = pinOf("Spot U, Celiac-safe");
+    expect(appended.textContent).toBe("21");
+    expect(within(cardOf("Spot U, Celiac-safe")).getByText("21")).toBeInTheDocument();
   });
 });
 

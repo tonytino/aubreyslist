@@ -126,6 +126,23 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({ bot: "banana" }).bot).toBe(true);
   });
 
+  it("accepts a WGS84 area-search origin and keeps it absent when unset", () => {
+    // The searched area is a chosen, shareable view — unlike the visitor's
+    // own coordinates it rides in the URL, but only within valid ranges.
+    const parsed = browseSearchSchema.parse({ areaLat: 39.71, areaLng: -104.87 });
+    expect(parsed.areaLat).toBe(39.71);
+    expect(parsed.areaLng).toBe(-104.87);
+    const bare = browseSearchSchema.parse({});
+    expect(bare.areaLat).toBeUndefined();
+    expect(bare.areaLng).toBeUndefined();
+  });
+
+  it("degrades an out-of-range or garbage area origin to absent", () => {
+    expect(browseSearchSchema.parse({ areaLat: 91 }).areaLat).toBeUndefined();
+    expect(browseSearchSchema.parse({ areaLng: -181 }).areaLng).toBeUndefined();
+    expect(browseSearchSchema.parse({ areaLat: "downtown" }).areaLat).toBeUndefined();
+  });
+
   it("coerces radius to a valid option, falling back to the default", () => {
     // An on-list radius passes through the transform unchanged...
     expect(browseSearchSchema.parse({ radius: 5 }).radius).toBe(5);
@@ -166,6 +183,7 @@ describe("isAnyBrowseFilterActive", () => {
     ["quick", { quick: "celiac" }],
     ["saved", { saved: true }],
     ["bot (hide bot suggestions)", { bot: false }],
+    ["an area search", { areaLat: 39.71, areaLng: -104.87 }],
   ])("is true when only %s is off its default", (_label, override) => {
     expect(isAnyBrowseFilterActive({ ...AT_DEFAULT, ...override })).toBe(true);
   });

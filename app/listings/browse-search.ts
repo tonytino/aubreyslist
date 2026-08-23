@@ -60,7 +60,8 @@ export const BROWSE_SEARCH_DEFAULTS = {
 
 /**
  * The raw browse search values relevant to "is anything off its default" —
- * one field per {@link BROWSE_SEARCH_DEFAULTS} entry.
+ * one field per {@link BROWSE_SEARCH_DEFAULTS} entry, plus the no-default
+ * area-search origin (active whenever either coordinate is set).
  */
 export interface BrowseSearchLike {
   page: number;
@@ -71,6 +72,8 @@ export interface BrowseSearchLike {
   quick: string;
   saved: boolean;
   bot: boolean;
+  areaLat?: number | undefined;
+  areaLng?: number | undefined;
 }
 // `view` (the List/Map toggle) is deliberately not part of this interface or
 // `isAnyBrowseFilterActive`. It's a content-view choice, not a filter/sort
@@ -98,7 +101,9 @@ export function isAnyBrowseFilterActive(search: BrowseSearchLike): boolean {
     search.radius !== BROWSE_SEARCH_DEFAULTS.radius ||
     search.quick !== BROWSE_SEARCH_DEFAULTS.quick ||
     search.saved !== BROWSE_SEARCH_DEFAULTS.saved ||
-    search.bot !== BROWSE_SEARCH_DEFAULTS.bot
+    search.bot !== BROWSE_SEARCH_DEFAULTS.bot ||
+    search.areaLat !== undefined ||
+    search.areaLng !== undefined
   );
 }
 
@@ -174,4 +179,14 @@ export const browseSearchSchema = z.object({
     .enum(DIRECTORY_VIEW_VALUES)
     .catch(BROWSE_SEARCH_DEFAULTS.view)
     .default(BROWSE_SEARCH_DEFAULTS.view),
+  // The "Search this area" origin: the map center the visitor deliberately
+  // framed before tapping the button. In the URL — unlike the visitor's own
+  // coordinates — because a searched area is a chosen view of the directory,
+  // not a position: it is exactly the state a pasted link should restore, and
+  // it arrives pre-rounded (`coarsenCoords`) so it never encodes a precise
+  // fix. No default: absent means "no area override" and needs no strip
+  // entry. WGS84-bounded; garbage degrades to absent. The server threads it
+  // as the radius-filter origin (`originLat`/`originLng`).
+  areaLat: z.number().finite().min(-90).max(90).optional().catch(undefined),
+  areaLng: z.number().finite().min(-180).max(180).optional().catch(undefined),
 });

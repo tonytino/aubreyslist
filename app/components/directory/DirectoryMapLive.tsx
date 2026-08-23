@@ -5,6 +5,7 @@ import {
   Map as GoogleMap,
   useMap,
 } from "@vis.gl/react-google-maps";
+import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   boundsForEntries,
@@ -20,6 +21,7 @@ import {
   useUserSelectionChange,
 } from "~/components/directory/map-ui";
 import { prefersReducedMotion } from "~/lib/motion";
+import type { Coords } from "~/listings/distance";
 
 /**
  * The real directory map: Google Maps via `@vis.gl/react-google-maps`
@@ -46,6 +48,11 @@ import { prefersReducedMotion } from "~/lib/motion";
  *   (`PanToSelection`) — never on mount or when the route's validity guard
  *   reassigns the selection after a filter change, so the pan never fights
  *   the refit-unless-user-moved logic.
+ * - **"Search this area"**: once the visitor owns the camera, a pill over the
+ *   map offers to re-run the browse from the current map center
+ *   (`onSearchArea`). Running it hides the pill until the camera moves again
+ *   and leaves the user-moved flag set, so the refit that would otherwise
+ *   chase the new result pins stays suppressed — the visitor framed this view.
  * - **Reduced motion**: every programmatic fit or pan checks
  *   `prefers-reduced-motion`; when reduced, the camera jumps via the
  *   never-animated `map.moveCamera` (camera computed by the pure
@@ -123,6 +130,7 @@ export function DirectoryMapLive({
   selectedId,
   onSelect,
   onLoadError,
+  onSearchArea,
 }: {
   apiKey: string;
   entries: readonly DirectoryMapEntry[];
@@ -130,6 +138,12 @@ export function DirectoryMapLive({
   onSelect: (id: string) => void;
   /** The Maps JS script failed to load (network/CSP) — see the module doc. */
   onLoadError: (cause: string) => void;
+  /**
+   * Re-run the browse anchored on the current map center. When set, a
+   * "Search this area" pill surfaces after the visitor takes the camera over
+   * (the same drag/non-programmatic-zoom signal as `userMoved`).
+   */
+  onSearchArea?: (center: Coords) => void | Promise<void>;
 }) {
   const colorScheme = useMapColorScheme();
   const bounds = useMemo(() => boundsForEntries(entries), [entries]);
@@ -141,6 +155,18 @@ export function DirectoryMapLive({
   // never re-render the map.
   const userMoved = useRef(false);
   const programmaticMove = useRef(false);
+
+  // The "Search this area" pill's visibility — state, because it must render.
+  // Set alongside `userMoved` on the same gestures; cleared by the recenter
+  // FAB (the camera is the app's again) and after an area search runs. An
+  // area search deliberately leaves `userMoved.current` true: the visitor
+  // framed this view, so the refit that would otherwise chase the new pins
+  // stays suppressed and the camera does not jump.
+  const [cameraOwned, setCameraOwned] = useState(false);
+  const markCameraOwned = () => {
+    userMoved.current = true;
+    setCameraOwned(true);
+  };
 
   return (
     <APIProvider
@@ -176,12 +202,10 @@ export function DirectoryMapLive({
         gestureHandling="greedy"
         disableDefaultUI
         clickableIcons={false}
-        onDragstart={() => {
-          userMoved.current = true;
-        }}
+        onDragstart={markCameraOwned}
         onZoomChanged={() => {
           if (!programmaticMove.current) {
-            userMoved.current = true;
+            markCameraOwned();
           }
         }}
         // The camera settles: any programmatic fit is complete, so subsequent
@@ -219,7 +243,15 @@ export function DirectoryMapLive({
         />
         <PanToSelection entries={entries} selectedId={selectedId} />
       </GoogleMap>
-      <LiveRecenterFab bounds={bounds} userMoved={userMoved} programmaticMove={programmaticMove} />
+      {onSearchArea && cameraOwned ? (
+        <SearchAreaControl onSearchArea={onSearchArea} onSearched={() => setCameraOwned(false)} />
+      ) : null}
+      <LiveRecenterFab
+        bounds={bounds}
+        userMoved={userMoved}
+        programmaticMove={programmaticMove}
+        onRecenter={() => setCameraOwned(false)}
+      />
     </APIProvider>
   );
 }
@@ -290,18 +322,59 @@ function PanToSelection({
 }
 
 /**
+ * The "Search this area" pill: reads the current map center and hands it to
+ * the route to re-run the browse from there. Overlays the map top-center
+ * (the conventional spot), at `z-[5]` — above the `z-0`-clamped map canvas,
+ * below the `z-10` carousel band, so the z-order safety invariant
+ * (`map-ui.tsx`) is untouched. Mounted only while the visitor owns the
+ * camera; `onSearched` runs when the search settles (or fails) so the parent
+ * hides the pill until the camera moves again.
+ */
+function SearchAreaControl({
+  onSearchArea,
+  onSearched,
+}: {
+  onSearchArea: (center: Coords) => void | Promise<void>;
+  onSearched: () => void;
+}) {
+  const map = useMap();
+  const [pending, setPending] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => {
+        const center = map?.getCenter();
+        if (!center) return;
+        setPending(true);
+        void Promise.resolve(onSearchArea({ lat: center.lat(), lng: center.lng() })).finally(
+          onSearched
+        );
+      }}
+      className="absolute left-1/2 top-3 z-[5] inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-surface px-4 py-2 text-body-sm font-semibold text-brand-strong shadow-md motion-safe:transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring disabled:opacity-70"
+    >
+      <Search className="size-4" strokeWidth={2.25} aria-hidden="true" />
+      {pending ? "Searching…" : "Search this area"}
+    </button>
+  );
+}
+
+/**
  * The functional recenter FAB (unwired in the fallback path): re-fits the
  * camera to the current pins and hands the camera back to the app (clears the
- * user-moved flag so filter changes auto-fit again).
+ * user-moved flag so filter changes auto-fit again, and `onRecenter` lets the
+ * parent drop the "Search this area" pill for the same reason).
  */
 function LiveRecenterFab({
   bounds,
   userMoved,
   programmaticMove,
+  onRecenter,
 }: {
   bounds: MapBounds | null;
   userMoved: { current: boolean };
   programmaticMove: { current: boolean };
+  onRecenter: () => void;
 }) {
   const map = useMap();
   return (
@@ -309,6 +382,7 @@ function LiveRecenterFab({
       onClick={() => {
         if (!map || !bounds) return;
         userMoved.current = false;
+        onRecenter();
         fitMapToBounds(map, bounds, programmaticMove);
       }}
     />

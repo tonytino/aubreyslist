@@ -5,10 +5,12 @@ import { projectToMap } from "~/components/directory/map-projection";
 import {
   type DirectoryMapEntry,
   MapCarousel,
+  type MapLoadMore,
   MapPinButton,
   RecenterFab,
 } from "~/components/directory/map-ui";
 import { googleMapsBrowserKey } from "~/lib/public-env";
+import type { Coords } from "~/listings/distance";
 
 /**
  * The directory Map view. Two render paths behind one public component:
@@ -91,10 +93,20 @@ export function DirectoryMap({
   entries,
   selectedId,
   onSelect,
+  loadMore,
+  onSearchArea,
 }: {
   entries: readonly DirectoryMapEntry[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Carousel "Load more" wiring — shared by both render paths. */
+  loadMore?: MapLoadMore;
+  /**
+   * Re-run the browse anchored on the given map center ("Search this area").
+   * Live path only: the placeholder has no camera, so it never surfaces the
+   * button.
+   */
+  onSearchArea?: (center: Coords) => void | Promise<void>;
 }) {
   // Public, compile-time key (see app/lib/public-env.ts). Absent → the
   // deterministic CSS-placeholder fallback, so the view (and CI/E2E) never
@@ -143,6 +155,7 @@ export function DirectoryMap({
             selectedId={selectedId}
             onSelect={onSelect}
             onLoadError={onLiveMapFail}
+            {...(onSearchArea ? { onSearchArea } : {})}
           />
         </LiveMapErrorBoundary>
       ) : (
@@ -152,7 +165,12 @@ export function DirectoryMap({
       {/* Bottom carousel — must sit above the pins with an opaque band so a low
           pin can never bleed over a mini-card (safety-correctness; see
           map-ui.tsx). Shared verbatim by both map paths. */}
-      <MapCarousel entries={entries} selectedId={selectedId} onSelect={onSelect} />
+      <MapCarousel
+        entries={entries}
+        selectedId={selectedId}
+        onSelect={onSelect}
+        {...(loadMore ? { loadMore } : {})}
+      />
     </div>
   );
 }

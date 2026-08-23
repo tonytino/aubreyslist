@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, CircleDashed, LocateFixed } from "lucide-react";
+import { ChevronRight, CircleDashed, LoaderCircle, LocateFixed, Plus } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useRef } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
@@ -53,6 +53,19 @@ export interface DirectoryMapEntry {
   vm: RestaurantCardVM;
   lat: number;
   lng: number;
+}
+
+/**
+ * The carousel's "Load more" wiring: appends the next server page to the map
+ * view's accumulated entries. The card renders while a further page exists or
+ * one is in flight, and hides for good once everything is loaded.
+ */
+export interface MapLoadMore {
+  /** A further page exists after the loaded ones (from the honest total). */
+  hasNext: boolean;
+  /** The next page is being fetched. */
+  pending: boolean;
+  onLoadMore: () => void;
 }
 
 /**
@@ -308,10 +321,13 @@ export function MapCarousel({
   entries,
   selectedId,
   onSelect,
+  loadMore,
 }: {
   entries: readonly DirectoryMapEntry[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** When set, renders the "Load more" card after the last mini-card. */
+  loadMore?: MapLoadMore;
 }) {
   const navigate = useNavigate();
   const containerEl = useRef<HTMLDivElement | null>(null);
@@ -459,6 +475,33 @@ export function MapCarousel({
           </div>
         );
       })}
+      {/* "Load more" — an action card in the card family (same band height via
+          the flex row's default stretch; surface + border like a mini-card, but
+          centred brand-toned action content so it cannot be mistaken for a
+          listing). It stays visible while the just-requested final page is
+          still in flight (`pending`), then unmounts once nothing more exists.
+          Always before the end spacer: the spacer must stay the band's last
+          child so the strip keeps its FAB clearance. */}
+      {loadMore && (loadMore.hasNext || loadMore.pending) ? (
+        <button
+          type="button"
+          data-testid="carousel-load-more"
+          disabled={loadMore.pending}
+          onClick={loadMore.onLoadMore}
+          className="flex w-32 shrink-0 flex-col items-center justify-center gap-1 rounded-card border border-border bg-surface px-3 py-2 text-body-sm font-semibold text-brand-strong shadow-md motion-safe:transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring disabled:opacity-70"
+        >
+          {loadMore.pending ? (
+            <LoaderCircle
+              className="size-5 motion-safe:animate-spin"
+              strokeWidth={2.25}
+              aria-hidden="true"
+            />
+          ) : (
+            <Plus className="size-5" strokeWidth={2.25} aria-hidden="true" />
+          )}
+          {loadMore.pending ? "Loading…" : "Load more"}
+        </button>
+      ) : null}
       {/* End spacer sized to the viewport-fixed Add-listing FAB's footprint
           (right offset + pill width), so the last card can always scroll fully
           clear of it instead of ending underneath. */}

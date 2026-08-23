@@ -1,4 +1,10 @@
-import { queryOptions, useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  queryOptions,
+  type UseQueryResult,
+  useQueries,
+  useQuery,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddSpotFab } from "~/components/directory/AddSpotFab";
@@ -32,6 +38,8 @@ import {
 import type { BrowseSort } from "~/listings/sort";
 import type { ClaimAttribute } from "~/listings/taxonomy";
 import { useGeolocation } from "~/listings/use-geolocation";
+import { useMapExtraPages } from "~/listings/use-map-pages";
+import type { BrowseListingCard, BrowseListingsPage } from "~/server/listings/browse";
 import { fetchBrowseListings } from "~/server/listings/browse.fn";
 import { fetchBrowsePhotos } from "~/server/places-photos.fn";
 
@@ -65,6 +73,11 @@ import { fetchBrowsePhotos } from "~/server/places-photos.fn";
  * refetches or resets `page`. It is still a validated search param (not local
  * `useState`) because the Hard Rule treats a selected tab/view as
  * shareable/restorable UI state.
+ *
+ * Map view extras: the carousel's "Load more" card appends further server
+ * pages as extra pins (ephemeral accumulation — see use-map-pages.ts; the
+ * list view keeps its one-page pager), and "Search this area" re-anchors the
+ * radius filter on the framed map center via `?areaLat=`/`?areaLng=`.
  */
 
 function browseQueryOptions(
@@ -76,7 +89,8 @@ function browseQueryOptions(
   radius: number,
   saved: boolean,
   quick: QuickFilterValue[],
-  bot: boolean
+  bot: boolean,
+  area: UserCoords | undefined
 ) {
   // Only thread coords to the server when actually distance-sorting; without
   // them the server anchors on the request's coarse location or degrades to
@@ -110,6 +124,10 @@ function browseQueryOptions(
       // Curator-bot participation (`?bot=`) changes the result set + honest
       // total, so it is part of a page's identity.
       bot,
+      // The area-search origin (`?areaLat=`/`?areaLng=`) re-anchors the
+      // radius filter, so each searched area caches independently.
+      area?.lat ?? null,
+      area?.lng ?? null,
     ],
     queryFn: () =>
       fetchBrowseListings({
@@ -134,9 +152,31 @@ function browseQueryOptions(
           // community-evidence-only matching and hides bot-suggested-only
           // listings from the results.
           includeSuggested: bot,
+          // "Search this area": the map center overrides the radius origin.
+          // The server already accepts an explicit origin for the radius
+          // predicate; absent, it falls back through the sort anchor to
+          // Union Station.
+          originLat: area?.lat,
+          originLng: area?.lng,
         },
       }),
   });
+}
+
+/**
+ * Merge the map view's extra "Load more" pages into one stable value: the
+ * appended cards in page order plus whether any page is still in flight.
+ * Module-level so `useQueries` can memoize its output — a fresh function per
+ * render would defeat that and churn the map entries' identity every render.
+ */
+function combineExtraPages(results: UseQueryResult<BrowseListingsPage>[]): {
+  cards: BrowseListingCard[];
+  pending: boolean;
+} {
+  return {
+    cards: results.flatMap((result) => result.data?.cards ?? []),
+    pending: results.some((result) => result.isPending),
+  };
 }
 
 export const Route = createFileRoute("/")({
@@ -158,7 +198,9 @@ export const Route = createFileRoute("/")({
   search: {
     middlewares: [stripSearchParams(BROWSE_SEARCH_DEFAULTS)],
   },
-  loaderDeps: ({ search: { page, attrs, sort, q, radius, saved, quick, bot } }) => ({
+  loaderDeps: ({
+    search: { page, attrs, sort, q, radius, saved, quick, bot, areaLat, areaLng },
+  }) => ({
     page,
     attrs,
     sort,
@@ -167,8 +209,13 @@ export const Route = createFileRoute("/")({
     saved,
     quick,
     bot,
+    areaLat,
+    areaLng,
   }),
-  loader: async ({ context, deps: { page, attrs, sort, q, radius, saved, quick, bot } }) => {
+  loader: async ({
+    context,
+    deps: { page, attrs, sort, q, radius, saved, quick, bot, areaLat, areaLng },
+  }) => {
     // SSR has no browser reading, so this prefetch carries no coords: the
     // server anchors the default "near me" sort on the request's coarse
     // location, or degrades to the fallback order. Once the browser answers,
@@ -183,7 +230,8 @@ export const Route = createFileRoute("/")({
         radius,
         saved,
         parseQuick(quick),
-        bot
+        bot,
+        areaFromParams(areaLat, areaLng)
       )
     );
   },
@@ -192,6 +240,19 @@ export const Route = createFileRoute("/")({
 
 /** Debounce before a keystroke is pushed to the URL `?q=` (keeps typing smooth). */
 const SEARCH_DEBOUNCE_MS = 275;
+
+/**
+ * The area-search origin as a complete pair, or undefined — a half pair (one
+ * hand-edited param) is meaningless for an origin and degrades to none.
+ */
+function areaFromParams(
+  areaLat: number | undefined,
+  areaLng: number | undefined
+): UserCoords | undefined {
+  return areaLat !== undefined && areaLng !== undefined
+    ? { lat: areaLat, lng: areaLng }
+    : undefined;
+}
 
 function BrowseListings() {
   const {
@@ -204,6 +265,8 @@ function BrowseListings() {
     quick: quickParam,
     bot,
     view,
+    areaLat,
+    areaLng,
   } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const attrs = parseAttrs(attrsParam);
@@ -228,9 +291,22 @@ function BrowseListings() {
   // construction. `parseQuick` validates, de-dupes, and collapses the
   // mutually-exclusive safety group.
   const quick = parseQuick(quickParam);
-  const { data } = useSuspenseQuery(
-    browseQueryOptions(page, attrs, sort, coords, qParam, radius, saved, quick, bot)
+  // The "Search this area" origin (`?areaLat=`/`?areaLng=`), derived straight
+  // from the URL like every other result-set param.
+  const area = areaFromParams(areaLat, areaLng);
+  const browseOptions = browseQueryOptions(
+    page,
+    attrs,
+    sort,
+    coords,
+    qParam,
+    radius,
+    saved,
+    quick,
+    bot,
+    area
   );
+  const { data } = useSuspenseQuery(browseOptions);
   const geo = useGeolocation();
 
   // Ask the browser for a reading. The in-flight guard is a ref rather than
@@ -384,15 +460,49 @@ function BrowseListings() {
     [data.cards, photosById]
   );
 
+  // Map-view "Load more" accumulation: how many pages beyond the base page
+  // are appended as extra pins. Ephemeral, keyed on the base page's query key
+  // (see use-map-pages.ts) so any result-set change — filters, sort, search,
+  // radius, coords, an area search, or `?page=` itself — resets it. The list
+  // view never reads it and keeps its one-page `?page=` pager contract.
+  const { extraPages, loadNextPage } = useMapExtraPages(JSON.stringify(browseOptions.queryKey));
+  // Each extra page reuses the same query options (and cache entries) as the
+  // pager — no bespoke fetch path, no duplicate base-page fetch. Non-suspense
+  // by design: the carousel's "Load more" card renders the pending state
+  // while the current results stay on screen.
+  const extra = useQueries({
+    queries: Array.from({ length: extraPages }, (_, i) =>
+      browseQueryOptions(page + 1 + i, attrs, sort, coords, qParam, radius, saved, quick, bot, area)
+    ),
+    combine: combineExtraPages,
+  });
+
   // Map entries pair each VM with its real coordinates to project (never
-  // recomputed — straight from the loaded listing).
+  // recomputed — straight from the loaded listing): the base page plus any
+  // appended pages, in page order — index numbering (pins and cards derive it
+  // from this array's order) continues across pages. Deduped by id: if the
+  // underlying data shifts mid-accumulation a listing can slide between
+  // pages, and a duplicate would break React keys and double a pin.
   const mapEntries: DirectoryMapEntry[] = useMemo(() => {
-    const coordsById = new Map(data.cards.map((card) => [card.listing.id, card.listing]));
-    return vms.flatMap((vm) => {
-      const listing = coordsById.get(vm.id);
-      return listing ? [{ vm, lat: listing.lat, lng: listing.lng }] : [];
-    });
-  }, [vms, data.cards]);
+    const seen = new Set<string>();
+    const cards: BrowseListingCard[] = [];
+    for (const card of [...data.cards, ...extra.cards]) {
+      if (seen.has(card.listing.id)) continue;
+      seen.add(card.listing.id);
+      cards.push(card);
+    }
+    return cards.map((card) => ({
+      vm: listingToCardVM(
+        card.listing,
+        card.glance,
+        card.distanceLabel,
+        card.favoriteCount,
+        photosById?.[card.listing.id]
+      ),
+      lat: card.listing.lat,
+      lng: card.listing.lng,
+    }));
+  }, [data.cards, extra.cards, photosById]);
 
   // Default the map selection to the first visible entry, and keep the selection
   // valid as the filtered set changes (so a pin never points at a hidden card).
@@ -462,6 +572,24 @@ function BrowseListings() {
   }
 
   /**
+   * "Search this area": re-run the browse with the map center the visitor
+   * framed as the radius origin, same radius — page 1 of the new area, so the
+   * pins, numbering, and map accumulation all reset (the query key changes).
+   * Rounded before it enters the URL (`coarsenCoords`): the origin of a
+   * 5-25 mi radius needs no more precision, and a shared link never carries a
+   * street-level point. Returns the navigation promise so the map's pill can
+   * show its searching state until the new page is in. The camera itself is
+   * not touched: the live map's user-moved heuristic keeps the refit
+   * suppressed for this transition (DirectoryMapLive).
+   */
+  function searchArea(center: UserCoords) {
+    const rounded = coarsenCoords(center);
+    return navigate({
+      search: (prev) => ({ ...prev, page: 1, areaLat: rounded.lat, areaLng: rounded.lng }),
+    });
+  }
+
+  /**
    * Toggle the server-side "Saved" filter, resetting to page 1 and preserving
    * every other param. Signed-in only — the auth gate lives in
    * {@link FilterChips}: an anonymous click opens a sign-in dialog and never
@@ -484,20 +612,33 @@ function BrowseListings() {
   }
 
   // The no-results CTA clears every filter — quick chips, search, taxonomy
-  // filter, and the bot-suggestions exclusion. The saved filter is a distinct
-  // mode, not a filter over the directory, so the functional updater
-  // preserves it — clearing filters inside the saved view keeps you in it.
+  // filter, the bot-suggestions exclusion, and the searched area (an empty
+  // area must offer the way back to the whole directory). The saved filter is
+  // a distinct mode, not a filter over the directory, so the functional
+  // updater preserves it — clearing filters inside the saved view keeps you
+  // in it.
   function clearAll() {
     setSearchInput("");
     lastPushedQ.current = "";
-    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: "", q: "", quick: "", bot: true }) });
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        page: 1,
+        attrs: "",
+        q: "",
+        quick: "",
+        bot: true,
+        areaLat: undefined,
+        areaLng: undefined,
+      }),
+    });
   }
 
   /**
    * Reset every browse search param to its default in one navigation. Unlike
    * `clearAll` (scoped to "filters" only), this backs all the way out —
-   * search, quick chips, taxonomy attrs, saved mode, sort, radius, page, and
-   * the client-only List/Map `?view=`.
+   * search, quick chips, taxonomy attrs, saved mode, sort, radius, page, the
+   * searched area, and the client-only List/Map `?view=`.
    * `search: () => ({})` is a deliberate full replace: every param goes away,
    * `validateSearch` refills `BROWSE_SEARCH_DEFAULTS`, and `stripSearchParams`
    * keeps the URL bare — exactly like a fresh `/` visit. That fresh-visit
@@ -515,8 +656,11 @@ function BrowseListings() {
   }
 
   // Whether any filter is active — decides empty vs no-results. Uses the URL
-  // `?q=` (the server-applied search), not the in-flight local input.
-  const anyFilterActive = qParam.trim() !== "" || quick.length > 0 || attrs.length > 0 || !bot;
+  // `?q=` (the server-applied search), not the in-flight local input. A
+  // searched area counts: an empty area must read as "nothing here", never as
+  // an empty directory.
+  const anyFilterActive =
+    qParam.trim() !== "" || quick.length > 0 || attrs.length > 0 || !bot || area !== undefined;
 
   // Whether any browse search param is off its default — gates the "Reset"
   // chip. Broader than `anyFilterActive` above: this also covers the saved
@@ -533,6 +677,8 @@ function BrowseListings() {
     quick: quickParam,
     saved,
     bot,
+    areaLat,
+    areaLng,
   });
 
   // What the page says about location, taken from what the server actually
@@ -651,7 +797,23 @@ function BrowseListings() {
           // all visible — preserving the carousel-above-pins safety invariant
           // and pin/mini-card selection sync.
           <div className="relative h-[calc(100dvh-14rem)] min-h-[26rem]">
-            <DirectoryMap entries={mapEntries} selectedId={selectedId} onSelect={setSelectedId} />
+            <DirectoryMap
+              entries={mapEntries}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              // "Load more" appends the next page as extra pins/cards.
+              // `hasNext` is derived from the honest total (same WHERE as the
+              // page), so the card only offers what actually exists. New pins
+              // join the map without focus moves; the camera re-fits to
+              // include them only while the visitor hasn't taken the camera
+              // over (RefitOnEntriesChange's existing contract).
+              loadMore={{
+                hasNext: (page + extraPages) * data.pageSize < data.total,
+                pending: extra.pending,
+                onLoadMore: loadNextPage,
+              }}
+              onSearchArea={searchArea}
+            />
           </div>
         ) : (
           <>
