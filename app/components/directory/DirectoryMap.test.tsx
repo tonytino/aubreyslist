@@ -165,6 +165,9 @@ async function renderMap(selectedId: string | null = "a") {
     routeTree: rootRoute.addChildren([mapRoute, listingRoute]),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
+  // The Register interface types the app's real route tree, so this
+  // test-local router never satisfies RouterProvider's registered-router
+  // generic — same cast as the AddSpotFab harness.
   const view = render(<RouterProvider router={router as unknown as never} />);
   await screen.findByTestId("map-carousel");
   return {
@@ -263,23 +266,31 @@ describe("DirectoryMap — pins", () => {
 
 describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview variant)", () => {
   // The five fixture entries' accessible names, in `entries` order — index i
-  // must render the visible number i + 1 on both the pin and the card.
-  const names = [
-    "Root & Rye, Celiac-safe",
-    "Lucia Trattoria, Recent incident",
-    "New Spot, Not yet attested",
-    "Harvest Table, Celiac-safe, Recent incident",
-    "Bot Bistro, Not yet attested",
+  // must render the visible number i + 1 on both the pin and the card. Pin and
+  // card names match except for the bot-suggested unattested entry, whose CARD
+  // name appends the provenance the trust row shows (the pin stays terse).
+  const namePairs = [
+    { pin: "Root & Rye, Celiac-safe", card: "Root & Rye, Celiac-safe" },
+    { pin: "Lucia Trattoria, Recent incident", card: "Lucia Trattoria, Recent incident" },
+    { pin: "New Spot, Not yet attested", card: "New Spot, Not yet attested" },
+    {
+      pin: "Harvest Table, Celiac-safe, Recent incident",
+      card: "Harvest Table, Celiac-safe, Recent incident",
+    },
+    {
+      pin: "Bot Bistro, Not yet attested",
+      card: "Bot Bistro, Not yet attested, suggested by Aubrey's Bot",
+    },
   ];
 
   it("shows the same 1-based number on pin N and card N, following the entries order", async () => {
     await renderMap();
-    names.forEach((name, i) => {
+    namePairs.forEach(({ pin, card }, i) => {
       const number = String(i + 1);
       // The pin's only visible content is the number…
-      expect(pinOf(name).textContent).toBe(number);
+      expect(pinOf(pin).textContent).toBe(number);
       // …and the card's leading chip carries the matching number.
-      expect(within(cardOf(name)).getByText(number)).toBeInTheDocument();
+      expect(within(cardOf(card)).getByText(number)).toBeInTheDocument();
     });
   });
 
@@ -293,14 +304,16 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
 
   it("keeps the number out of every accessible name — a visual correlation aid only", async () => {
     await renderMap();
-    names.forEach((name) => {
-      // Exactly the shared pinAccessibleName on both buttons (getAllByRole with
-      // a string is a full exact match), and no digit anywhere in the label.
-      const buttons = screen.getAllByRole("button", { name });
-      expect(buttons).toHaveLength(2);
-      for (const button of buttons) {
-        expect(button.getAttribute("aria-label")).toBe(name);
-        expect(button.getAttribute("aria-label")).not.toMatch(/\d/);
+    namePairs.forEach(({ pin, card }) => {
+      // The exact shared name constructions on both surfaces (getAllByRole
+      // with a string is a full exact match), and no digit in either label.
+      const labels =
+        pin === card
+          ? screen.getAllByRole("button", { name: pin }).map((el) => el.getAttribute("aria-label"))
+          : [pinOf(pin).getAttribute("aria-label"), cardOf(card).getAttribute("aria-label")];
+      expect([...labels].sort()).toEqual([pin, card].sort());
+      for (const label of labels) {
+        expect(label).not.toMatch(/\d/);
       }
     });
   });
@@ -387,12 +400,27 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
     // Same gate as ListingCard: bot-suggested + null verdict never shows a
     // fabricated-looking empty-state chip. The trust row carries the list
     // card's exact provenance wording instead of sitting empty…
-    const botCard = within(carousel).getByRole("button", { name: "Bot Bistro, Not yet attested" });
+    const botCard = within(carousel).getByRole("button", {
+      name: "Bot Bistro, Not yet attested, suggested by Aubrey's Bot",
+    });
     expect(within(botCard).queryByText("Not yet attested")).not.toBeInTheDocument();
     const provenance = within(botCard).getByTestId("carousel-bot-provenance");
     expect(provenance).toHaveTextContent("Suggested by Aubrey's Bot");
-    // …and the accessible name still tells AT the honest verdict state.
-    expect(botCard.getAttribute("aria-label")).toBe("Bot Bistro, Not yet attested");
+    // The scroll row fades at its right edge so the long label reads as
+    // scrollable rather than hard-clipped.
+    expect((provenance.parentElement as HTMLElement).className).toContain("mask-image");
+    // …and the card's accessible name gives AT the honest verdict state PLUS
+    // the provenance sighted users see, mirroring the browse list card.
+    expect(botCard.getAttribute("aria-label")).toBe(
+      "Bot Bistro, Not yet attested, suggested by Aubrey's Bot"
+    );
+  });
+
+  it("keeps the pin announcement terse: provenance joins the card name only", async () => {
+    await renderMap();
+    const pin = pinOf("Bot Bistro, Not yet attested");
+    expect(pin.getAttribute("aria-label")).toBe("Bot Bistro, Not yet attested");
+    expect(screen.getAllByRole("button", { name: "Bot Bistro, Not yet attested" })).toHaveLength(1);
   });
 
   it("keeps the honest dashed chip (and no provenance hint) for a plain unattested listing", async () => {
@@ -441,7 +469,7 @@ describe("DirectoryMap — carousel scrolls the selected card flush-left", () =>
     expect(scrollTo).not.toHaveBeenCalled();
   });
 
-  it("scrolls the CAROUSEL ELEMENT to the selected card's flush-left offset (card offset minus band padding)", async () => {
+  it("scrolls the carousel element itself to the selected card's flush-left offset (card offset minus band padding)", async () => {
     const { rerenderWith } = await renderMap("a");
     const carousel = screen.getByTestId("map-carousel");
     // Simulate real layout: the selected card's wrapper sits 432px into the
@@ -486,7 +514,7 @@ describe("DirectoryMap — carousel scrolls the selected card flush-left", () =>
 });
 
 describe("DirectoryMap — mini-card navigation (AUB-283)", () => {
-  it("navigates to the listing when the ALREADY-SELECTED card is tapped (no re-select)", async () => {
+  it("navigates to the listing when the already-selected card is tapped (no re-select)", async () => {
     const { onSelect, router } = await renderMap("a");
     fireEvent.click(cardOf("Root & Rye, Celiac-safe"));
     await waitFor(() => expect(router.state.location.pathname).toBe("/listings/a"));
@@ -500,7 +528,7 @@ describe("DirectoryMap — mini-card navigation (AUB-283)", () => {
     expect(router.state.location.pathname).toBe("/");
   });
 
-  it("keeps pin behaviour unchanged: tapping the selected PIN re-selects, never navigates", async () => {
+  it("keeps pin behaviour unchanged: tapping the selected pin re-selects, never navigates", async () => {
     const { onSelect, router } = await renderMap("a");
     fireEvent.click(pinOf("Root & Rye, Celiac-safe"));
     expect(onSelect).toHaveBeenCalledWith("a");
@@ -514,20 +542,24 @@ describe("DirectoryMap — chevron link (AUB-283)", () => {
     for (const name of ["Root & Rye", "Lucia Trattoria", "New Spot", "Harvest Table"]) {
       expect(screen.getByRole("link", { name: `View ${name}` })).toBeInTheDocument();
     }
-    expect(screen.getByRole("link", { name: "View Root & Rye" })).toHaveAttribute(
-      "href",
-      "/listings/a"
-    );
+    const chevron = screen.getByRole("link", { name: "View Root & Rye" });
+    expect(chevron).toHaveAttribute("href", "/listings/a");
+    // Ring offset so the focus ring reads on the brand-solid selected fill
+    // (the AddSpotFab treatment for rings over solid brand surfaces).
+    expect(chevron.className).toContain("focus-visible:ring-offset-2");
   });
 
-  it("mutes the unselected chevron and strengthens the selected one to brand", async () => {
+  it("mutes the unselected chevron and strengthens the selected one to the primary pair", async () => {
     await renderMap("a");
     const selectedChevron = screen.getByRole("link", { name: "View Root & Rye" });
     const mutedChevron = screen.getByRole("link", { name: "View New Spot" });
-    expect(selectedChevron.className).toContain("bg-brand");
-    expect(selectedChevron.className).toContain("text-brand-foreground");
+    // The `primary` pair, not `brand`: dark mode lightens `brand` below AA for
+    // its white foreground, while `primary` is pinned darker for exactly this
+    // solid-fill case (styling.md).
+    expect(selectedChevron.className).toContain("bg-primary");
+    expect(selectedChevron.className).toContain("text-primary-foreground");
     expect(mutedChevron.className).toContain("text-muted-foreground");
-    expect(mutedChevron.className).not.toContain("bg-brand ");
+    expect(mutedChevron.className).not.toContain("bg-primary");
   });
 
   it("navigates when the chevron itself is tapped — the accessible path to the listing", async () => {
@@ -538,7 +570,7 @@ describe("DirectoryMap — chevron link (AUB-283)", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("keeps the chevron a SIBLING overlay, never nested inside the mini-card button", async () => {
+  it("keeps the chevron a sibling overlay, never nested inside the mini-card button", async () => {
     await renderMap("a");
     const miniCard = cardOf("Root & Rye, Celiac-safe");
     const chevron = screen.getByRole("link", { name: "View Root & Rye" });

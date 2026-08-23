@@ -9,6 +9,11 @@ import { Plus } from "lucide-react";
  * bottom-right so it stays pinned there at any scroll position and viewport
  * height, under the directory's natural document scroll, without overlapping the
  * cards.
+ *
+ * The map carousel's end spacer (`map-ui.tsx`, `w-40`) is sized to this
+ * pill's footprint (`right-6` offset + rendered width) so mini-cards can
+ * scroll clear of it — retune the two together, the same pairing rule as
+ * `CAROUSEL_BAND_PX` and its derived values.
  */
 export function AddSpotFab() {
   return (

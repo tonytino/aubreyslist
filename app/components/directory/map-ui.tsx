@@ -1,7 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, CircleDashed, LocateFixed, Sparkles } from "lucide-react";
+import { ChevronRight, CircleDashed, LocateFixed } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useRef } from "react";
+import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import {
@@ -163,6 +164,17 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
 }
 
 /**
+ * The mini-card's accessible name: the shared pin name plus, for a
+ * bot-suggested listing with no verdict, the provenance the card's trust row
+ * shows sighted users — the browse list card exposes the same context to AT.
+ * Card-only on purpose: pin announcements stay terse.
+ */
+function cardAccessibleName(vm: RestaurantCardVM): string {
+  const base = pinAccessibleName(vm);
+  return !vm.safetyState && vm.suggestedByBot ? `${base}, suggested by Aubrey's Bot` : base;
+}
+
+/**
  * The safety pin itself — an accessible `<button>` whose name carries the
  * restaurant + its safety state (never colour alone). The visible pin is a
  * 24px micro-dot (safety-state colour fill + the entry's 1-based index
@@ -262,9 +274,9 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
  * both map paths. Each card leads its name row with the entry's index chip —
  * the same 1-based number as its pin, on the neutral `secondary` fill so the
  * safety colours stay unique to the pin and the chip row — purely a sighted
- * correlation aid: it is `aria-hidden`, the card's accessible name stays
- * `pinAccessibleName` untouched, and safety meaning still comes from the chip
- * row below (colour + icon + label).
+ * correlation aid: it is `aria-hidden`, the card's accessible name
+ * (`cardAccessibleName`) never carries it, and safety meaning still comes
+ * from the chip row below (colour + icon + label).
  * Text-dense slim cards: name, distance (address when no distance), and the
  * same trust row rules as the browse list card (`ListingCard`): headline
  * `SafetySignal` (or the bot-provenance hint when there is no verdict but a
@@ -348,7 +360,7 @@ export function MapCarousel({
             <button
               type="button"
               aria-pressed={selected}
-              aria-label={pinAccessibleName(vm)}
+              aria-label={cardAccessibleName(vm)}
               // First tap selects (pan/highlight); a tap on the already-selected
               // card opens the listing — a sighted shortcut only. The chevron
               // link below is the accessible navigation path, so AT never
@@ -394,22 +406,18 @@ export function MapCarousel({
                   (py-1 + text-body-sm line + border) so every card keeps the
                   same height; overflow scrolls sideways like ListingCard's
                   row. `mr-10` ends the scroll box before the chevron overlay,
-                  so a safety chip can never slide underneath it. */}
-              <span className="mr-10 mt-1.5 flex min-h-[30px] items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  so a safety chip can never slide underneath it, and the
+                  right-edge mask fades clipped content so an overflowing
+                  label reads as scrollable, not truncated. */}
+              <span className="mr-10 mt-1.5 flex min-h-[30px] items-center gap-1.5 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%_-_16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {vm.safetyState ? (
                   <SafetySignal state={vm.safetyState} />
                 ) : vm.suggestedByBot ? (
-                  // No verdict but a live bot suggestion: the list card's
-                  // provenance label, not the dashed empty-state chip and not
-                  // a blank row. Provenance, never a verdict (ADR-007) — the
-                  // card's accessible name still says "Not yet attested".
-                  <span
-                    data-testid="carousel-bot-provenance"
-                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-caption font-semibold text-brand"
-                  >
-                    <Sparkles className="size-3.5" aria-hidden="true" />
-                    <span>Suggested by Aubrey's Bot</span>
-                  </span>
+                  // No verdict but a live bot suggestion: the shared provenance
+                  // label, not the dashed empty-state chip and not a blank row.
+                  // Provenance, never a verdict (ADR-007) — the card's
+                  // accessible name carries the same context for AT.
+                  <BotProvenanceLabel size="compact" data-testid="carousel-bot-provenance" />
                 ) : (
                   <UnattestedBadge />
                 )}
@@ -420,21 +428,29 @@ export function MapCarousel({
               </span>
             </button>
 
-            <FavoriteButton listingId={vm.id} listingName={vm.name} />
+            <FavoriteButton
+              listingId={vm.id}
+              listingName={vm.name}
+              // The default overlay chrome with `top-2` instead of `top-3`:
+              // on the ~92px mini-card the heart and the chevron below it
+              // would otherwise touch, so the heart gives the pair its gap.
+              className="absolute right-3 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand"
+            />
 
             {/* Chevron link — the accessible way to open the listing, and a
                 sibling overlay like the heart (never nested in the card
-                button). Muted while unselected, brand-solid once selected so
-                the affordance strengthens with the tap-again shortcut. Sits
-                under the heart in the card's right rail; the trust row's
+                button). Muted while unselected; selected uses the `primary`
+                pair, whose dark-mode value is pinned for AA foreground
+                contrast where the lightened dark `brand` is not (styling.md).
+                Sits under the heart in the card's right rail; the trust row's
                 `mr-10` keeps chips clear of it. */}
             <Link
               to="/listings/$id"
               params={{ id: vm.id }}
               aria-label={`View ${vm.name}`}
-              className={`absolute bottom-2 right-3 z-10 flex size-9 items-center justify-center rounded-full shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
+              className={`absolute bottom-2 right-3 z-10 flex size-9 items-center justify-center rounded-full shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2 ${
                 selected
-                  ? "bg-brand text-brand-foreground"
+                  ? "bg-primary text-primary-foreground"
                   : "bg-background/80 text-muted-foreground backdrop-blur hover:text-brand"
               }`}
             >
