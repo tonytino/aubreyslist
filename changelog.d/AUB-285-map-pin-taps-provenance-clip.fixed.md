@@ -1,0 +1,1 @@
+- `[manual]` Live-map pins now register taps on mobile (marker-level click wiring), and the map mini-card's provenance label reads "Bot-suggested" so it no longer clips on the card.

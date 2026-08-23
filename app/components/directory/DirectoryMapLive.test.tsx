@@ -68,8 +68,23 @@ vi.mock("@vis.gl/react-google-maps", () => ({
       {children}
     </div>
   ),
-  AdvancedMarker: ({ children, zIndex }: { children?: ReactNode; zIndex?: number }) => (
+  AdvancedMarker: ({
+    children,
+    zIndex,
+    onClick,
+  }: {
+    children?: ReactNode;
+    zIndex?: number;
+    onClick?: (e: unknown) => void;
+  }) => (
     <div data-testid="advanced-marker" data-zindex={zIndex}>
+      {/* Hook for tests to simulate the marker's own gmp-click — the event
+          Google's mobile gesture layer delivers instead of a DOM click on the
+          marker content. Rendered only when the marker registers a handler,
+          mirroring vis.gl's clickable auto-detection. */}
+      {onClick ? (
+        <button type="button" data-testid="simulate-marker-gmp-click" onClick={() => onClick({})} />
+      ) : null}
       {children}
     </div>
   ),
@@ -207,6 +222,29 @@ describe("DirectoryMapLive — markers", () => {
     const { onSelect } = renderLive("a");
     fireEvent.click(screen.getByRole("button", { name: "Lucia Trattoria, Recent incident" }));
     expect(onSelect).toHaveBeenCalledWith("b");
+  });
+});
+
+describe("DirectoryMapLive — marker-level tap wiring (AUB-285)", () => {
+  it("registers an onClick on every AdvancedMarker (mobile taps never reach the inner button)", () => {
+    renderLive();
+    // The mock renders the gmp-click hook only when the marker receives an
+    // onClick handler — its presence per marker is the wiring under test.
+    expect(screen.getAllByTestId("simulate-marker-gmp-click")).toHaveLength(entries.length);
+  });
+
+  it("selects the same restaurant from a marker gmp-click as from the button's DOM click", () => {
+    const { onSelect } = renderLive("a");
+    const markers = screen.getAllByTestId("advanced-marker");
+    const luciaMarker = markers[1] as HTMLElement;
+    fireEvent.click(
+      luciaMarker.querySelector('[data-testid="simulate-marker-gmp-click"]') as HTMLElement
+    );
+    expect(onSelect).toHaveBeenNthCalledWith(1, "b");
+    // Desktop delivers the DOM click too; the duplicate onSelect with the
+    // same id is a no-op re-select (pins have no tap-again behaviour).
+    fireEvent.click(screen.getByRole("button", { name: "Lucia Trattoria, Recent incident" }));
+    expect(onSelect).toHaveBeenNthCalledWith(2, "b");
   });
 });
 

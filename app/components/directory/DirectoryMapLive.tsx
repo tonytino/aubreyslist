@@ -222,6 +222,17 @@ export function DirectoryMapLive({
             // coordinate (the placeholder centres via -translate-x/y-1/2).
             anchorPoint={AdvancedMarkerAnchorPoint.CENTER}
             zIndex={vm.id === selectedId ? 2 : 1}
+            // Marker-level click, required for touch: without it vis.gl leaves
+            // the marker non-clickable (`gmpClickable` false, content
+            // `pointer-events: none`), and Google's mobile gesture layer
+            // swallows taps before they reach the inner button. The button's
+            // own DOM onClick stays for keyboard/AT and the placeholder path;
+            // when both fire on one desktop click, the second `onSelect` with
+            // the same id is a no-op for the selection state and the
+            // `useUserSelectionChange` discriminator (`prev === selectedId`),
+            // and pins have no tap-again navigation (carousel-only), so
+            // nothing double-triggers.
+            onClick={() => onSelect(vm.id)}
           >
             {/* The same accessible pin as the fallback path: real <button>,
                 colour + entries-order index number + "name, safety state"

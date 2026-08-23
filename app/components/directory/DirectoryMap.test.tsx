@@ -433,7 +433,10 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
     });
     expect(within(botCard).queryByText("Not yet attested")).not.toBeInTheDocument();
     const provenance = within(botCard).getByTestId("carousel-bot-provenance");
-    expect(provenance).toHaveTextContent("Suggested by Aubrey's Bot");
+    // The map surface uses the short vocabulary — the full wording clips on
+    // the 200px mini-card. ListingCard's meta row keeps the full label.
+    expect(provenance).toHaveTextContent("Bot-suggested");
+    expect(provenance).not.toHaveTextContent("Suggested by Aubrey's Bot");
     // The scroll row fades at its right edge so the long label reads as
     // scrollable rather than hard-clipped.
     expect((provenance.parentElement as HTMLElement).className).toContain("mask-image");
