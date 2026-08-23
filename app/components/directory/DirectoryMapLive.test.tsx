@@ -23,7 +23,23 @@ const mapMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@vis.gl/react-google-maps", () => ({
-  APIProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  APIProvider: ({
+    children,
+    onError,
+  }: {
+    children?: ReactNode;
+    onError?: (error: unknown) => void;
+  }) => (
+    <>
+      {/* Hook for tests to simulate the Maps JS script failing to load. */}
+      <button
+        type="button"
+        data-testid="simulate-script-load-error"
+        onClick={() => onError?.(new Error("script blocked"))}
+      />
+      {children}
+    </>
+  ),
   Map: ({
     children,
     className,
@@ -82,6 +98,10 @@ const entries: DirectoryMapEntry[] = [
   },
 ];
 
+// Load-failure wiring has its own tests below; everywhere else the callback
+// is an inert required prop.
+const noopLoadError = () => {};
+
 function renderLive(selectedId: string | null = "a") {
   const onSelect = vi.fn();
   const view = render(
@@ -90,6 +110,7 @@ function renderLive(selectedId: string | null = "a") {
       entries={entries}
       selectedId={selectedId}
       onSelect={onSelect}
+      onLoadError={noopLoadError}
     />
   );
   return { onSelect, view };
@@ -131,6 +152,7 @@ describe("DirectoryMapLive — markers", () => {
         entries={withIncident}
         selectedId="d"
         onSelect={vi.fn()}
+        onLoadError={noopLoadError}
       />
     );
     // aria-label overrides button content, so the incident must live in the
@@ -191,7 +213,13 @@ describe("DirectoryMapLive — camera fitting", () => {
   it("re-fits when the filtered set changes ONLY while the user hasn't moved the camera", () => {
     const onSelect = vi.fn();
     const { rerender } = render(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
 
@@ -199,7 +227,13 @@ describe("DirectoryMapLive — camera fitting", () => {
     fireEvent.click(screen.getByTestId("simulate-dragstart"));
     const fewer = entries.slice(0, 1);
     rerender(
-      <DirectoryMapLive apiKey="test-key" entries={fewer} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={fewer}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     // Filter change must not snatch the camera back.
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
@@ -209,7 +243,13 @@ describe("DirectoryMapLive — camera fitting", () => {
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(2);
     // …and re-arms auto-refit for the next filter change.
     rerender(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(3);
   });
@@ -217,7 +257,13 @@ describe("DirectoryMapLive — camera fitting", () => {
   it("treats zoom during a programmatic fit as NOT user-moved (idle re-arms, user zoom then disarms)", () => {
     const onSelect = vi.fn();
     const { rerender } = render(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     // The mount fit itself fires zoom events — flagged programmatic, so a
     // subsequent filter change still auto-refits.
@@ -228,6 +274,7 @@ describe("DirectoryMapLive — camera fitting", () => {
         entries={entries.slice(0, 1)}
         selectedId="a"
         onSelect={onSelect}
+        onLoadError={noopLoadError}
       />
     );
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(2);
@@ -236,7 +283,13 @@ describe("DirectoryMapLive — camera fitting", () => {
     fireEvent.click(screen.getByTestId("simulate-idle"));
     fireEvent.click(screen.getByTestId("simulate-zoom-changed"));
     rerender(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(2);
   });
@@ -244,7 +297,13 @@ describe("DirectoryMapLive — camera fitting", () => {
   it("pans to a newly selected entry at the current zoom (no fit, no zoom write)", () => {
     const onSelect = vi.fn();
     const { rerender } = render(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     // Mount: bounds fit only — the initial selection must never pan.
     expect(mapMock.panTo).not.toHaveBeenCalled();
@@ -254,7 +313,13 @@ describe("DirectoryMapLive — camera fitting", () => {
     // shifts down half the carousel band so the pin centres in the visible
     // canvas above the band instead of the raw canvas.
     rerender(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="b" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="b"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     expect(mapMock.panTo).toHaveBeenCalledTimes(1);
     expect(mapMock.panTo).toHaveBeenCalledWith({ lat: 39.7, lng: -104.9 });
@@ -268,11 +333,23 @@ describe("DirectoryMapLive — camera fitting", () => {
   it("does NOT pan on the route's validity reassign, and the pan never disarms refit-on-filter-change", () => {
     const onSelect = vi.fn();
     const { rerender } = render(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     // A real user selection pans…
     rerender(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="b" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="b"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     expect(mapMock.panTo).toHaveBeenCalledTimes(1);
 
@@ -282,7 +359,13 @@ describe("DirectoryMapLive — camera fitting", () => {
     // and the earlier pan must not have flipped the user-moved flag.
     const fewer = entries.slice(0, 1);
     rerender(
-      <DirectoryMapLive apiKey="test-key" entries={fewer} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={fewer}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     expect(mapMock.panTo).toHaveBeenCalledTimes(1);
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(2);
@@ -291,12 +374,24 @@ describe("DirectoryMapLive — camera fitting", () => {
   it("does NOT pan when the first selection arrives after mount (initial auto-select)", () => {
     const onSelect = vi.fn();
     const { rerender } = render(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId={null} onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId={null}
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     // The route's auto-select-first lands post-mount — still the initial
     // selection, so the bounds fit stands and no pan fires.
     rerender(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     expect(mapMock.panTo).not.toHaveBeenCalled();
   });
@@ -304,7 +399,13 @@ describe("DirectoryMapLive — camera fitting", () => {
   it("pans with an INSTANT moveCamera (center only, zoom untouched) under prefers-reduced-motion", () => {
     const onSelect = vi.fn();
     const { rerender } = render(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="a" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     mapMock.moveCamera.mockClear();
     vi.stubGlobal(
@@ -313,7 +414,13 @@ describe("DirectoryMapLive — camera fitting", () => {
     );
 
     rerender(
-      <DirectoryMapLive apiKey="test-key" entries={entries} selectedId="b" onSelect={onSelect} />
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="b"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+      />
     );
     expect(mapMock.panTo).not.toHaveBeenCalled();
     expect(mapMock.panBy).not.toHaveBeenCalled();
@@ -338,5 +445,25 @@ describe("DirectoryMapLive — camera fitting", () => {
       center: { lat: expect.any(Number), lng: expect.any(Number) },
       zoom: expect.any(Number),
     });
+  });
+});
+
+describe("DirectoryMapLive — script-load failure (AUB-281)", () => {
+  it("wires APIProvider's onError to the onLoadError callback with the failure cause", () => {
+    const onLoadError = vi.fn();
+    render(
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={vi.fn()}
+        onLoadError={onLoadError}
+      />
+    );
+    fireEvent.click(screen.getByTestId("simulate-script-load-error"));
+    // DirectoryMap funnels this into the placeholder fallback; here we assert
+    // only the wiring: one call, cause naming the load failure.
+    expect(onLoadError).toHaveBeenCalledTimes(1);
+    expect(onLoadError).toHaveBeenCalledWith(expect.stringContaining("script blocked"));
   });
 });
