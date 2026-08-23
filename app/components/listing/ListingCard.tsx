@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { Check, Clock, Heart, Sparkles, Star, TriangleAlert, Users } from "lucide-react";
+import { Check, Clock, Heart, Star, TriangleAlert, Users } from "lucide-react";
 import { type ComponentProps, useState } from "react";
+import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { SafetySignal, type SafetyState, UnattestedBadge } from "~/components/SafetySignal";
@@ -369,16 +370,9 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
                   <span>{vm.freshness.label}</span>
                 </span>
               ) : vm.suggestedByBot ? (
-                // Bot provenance in the freshness slot. Meaning is in the text + icon,
-                // never colour alone (styling.md); `text-brand` is distinct from every
-                // safety-state colour.
-                <span
-                  data-testid="bot-provenance"
-                  className="inline-flex items-center gap-1.5 font-semibold text-brand"
-                >
-                  <Sparkles className="h-4 w-4" aria-hidden="true" />
-                  <span>Suggested by Aubrey's Bot</span>
-                </span>
+                // Bot provenance in the freshness slot — the shared inline label
+                // (one wording + treatment across browse card and map mini-card).
+                <BotProvenanceLabel data-testid="bot-provenance" />
               ) : (
                 <span />
               )}

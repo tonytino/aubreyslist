@@ -1,6 +1,8 @@
-import { CircleDashed, LocateFixed } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ChevronRight, CircleDashed, LocateFixed } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useRef } from "react";
+import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import {
@@ -162,6 +164,17 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
 }
 
 /**
+ * The mini-card's accessible name: the shared pin name plus, for a
+ * bot-suggested listing with no verdict, the provenance the card's trust row
+ * shows sighted users — the browse list card exposes the same context to AT.
+ * Card-only on purpose: pin announcements stay terse.
+ */
+function cardAccessibleName(vm: RestaurantCardVM): string {
+  const base = pinAccessibleName(vm);
+  return !vm.safetyState && vm.suggestedByBot ? `${base}, suggested by Aubrey's Bot` : base;
+}
+
+/**
  * The safety pin itself — an accessible `<button>` whose name carries the
  * restaurant + its safety state (never colour alone). The visible pin is a
  * 24px micro-dot (safety-state colour fill + the entry's 1-based index
@@ -261,18 +274,31 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
  * both map paths. Each card leads its name row with the entry's index chip —
  * the same 1-based number as its pin, on the neutral `secondary` fill so the
  * safety colours stay unique to the pin and the chip row — purely a sighted
- * correlation aid: it is `aria-hidden`, the card's accessible name stays
- * `pinAccessibleName` untouched, and safety meaning still comes from the chip
- * row below (colour + icon + label).
- * Text-dense slim cards: name, address · distance, and the
+ * correlation aid: it is `aria-hidden`, the card's accessible name
+ * (`cardAccessibleName`) never carries it, and safety meaning still comes
+ * from the chip row below (colour + icon + label).
+ * Text-dense slim cards: name, distance (address when no distance), and the
  * same trust row rules as the browse list card (`ListingCard`): headline
- * `SafetySignal` (or the shared dashed `UnattestedBadge` when there is no
- * verdict and nothing bot-suggested), plus the incident add-on chip whenever
- * `hasRecentIncident` — recent harm must flag the mini-card no matter the
- * headline verdict. On a user selection (the shared
- * `useUserSelectionChange` discriminator), the selected card scrolls into
- * view — `inline: "center"`, `block: "nearest"` so the page itself never
- * jumps, smooth only when motion is allowed.
+ * `SafetySignal` (or the bot-provenance hint when there is no verdict but a
+ * live bot suggestion, or the shared dashed `UnattestedBadge` when neither),
+ * plus the incident add-on chip whenever `hasRecentIncident` — recent harm
+ * must flag the mini-card no matter the headline verdict.
+ *
+ * Selection scroll: on a user selection (the shared `useUserSelectionChange`
+ * discriminator) the carousel element itself is scrolled via
+ * `container.scrollTo` so the selected card lands flush with the left content
+ * edge (the card's `offsetLeft` minus the band's own left padding). Never
+ * `scrollIntoView`: that walks every scroll ancestor (so it can move the
+ * page), and its options object is unreliable in mobile Safari — a direct
+ * `scrollTo` on the one scroller is the only container this may ever move.
+ * Smooth only when motion is allowed.
+ *
+ * Navigation: the chevron link is the accessible path to `/listings/$id` and
+ * is always visible (muted until selected, brand-solid once selected). A tap
+ * on the already-selected card navigates too — a sighted shortcut; AT users
+ * get the same destination from the chevron's own "View {name}" link. Both
+ * the chevron and the heart are sibling overlays of the card button, never
+ * nested inside it (nested interactive controls are an a11y defect).
  *
  * Must sit above the pins with an opaque band so a low pin can never bleed
  * over a mini-card (safety-correctness — see the module comment). The opaque
@@ -287,17 +313,27 @@ export function MapCarousel({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const navigate = useNavigate();
+  const containerEl = useRef<HTMLDivElement | null>(null);
   const cardEls = useRef(new Map<string, HTMLDivElement>());
   useUserSelectionChange(true, entries, selectedId, (id) => {
-    cardEls.current.get(id)?.scrollIntoView({
+    const container = containerEl.current;
+    const card = cardEls.current.get(id);
+    if (!container || !card) return;
+    // Flush-left target: the card's offset inside the carousel minus the
+    // band's left padding, so the card's left edge lands on the visible
+    // content edge, not under the padding. jsdom reports no computed padding;
+    // `|| 0` keeps the fallback explicit.
+    const paddingLeft = Number.parseFloat(getComputedStyle(container).paddingLeft) || 0;
+    container.scrollTo({
+      left: Math.max(0, card.offsetLeft - paddingLeft),
       behavior: prefersReducedMotion() ? "auto" : "smooth",
-      inline: "center",
-      block: "nearest",
     });
   });
 
   return (
     <div
+      ref={containerEl}
       data-testid="map-carousel"
       className="absolute inset-x-0 bottom-0 z-10 flex gap-3 overflow-x-auto bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
@@ -324,8 +360,18 @@ export function MapCarousel({
             <button
               type="button"
               aria-pressed={selected}
-              aria-label={pinAccessibleName(vm)}
-              onClick={() => onSelect(vm.id)}
+              aria-label={cardAccessibleName(vm)}
+              // First tap selects (pan/highlight); a tap on the already-selected
+              // card opens the listing — a sighted shortcut only. The chevron
+              // link below is the accessible navigation path, so AT never
+              // depends on this press-again behaviour.
+              onClick={() => {
+                if (selected) {
+                  navigate({ to: "/listings/$id", params: { id: vm.id } });
+                } else {
+                  onSelect(vm.id);
+                }
+              }}
               className={`block w-full rounded-card bg-surface px-3 py-2 text-left shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
                 selected ? "border-2 border-brand" : "border border-border"
               }`}
@@ -349,19 +395,30 @@ export function MapCarousel({
                   {vm.name}
                 </span>
               </span>
+              {/* Distance when the browse response derived one ("0.4 mi" — the
+                  same server label the list card appends), address otherwise:
+                  a standing-outside decision cue first, never an empty row. */}
               <span className="mt-0.5 block truncate pr-14 text-caption text-muted-foreground">
-                {vm.address}
-                {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
+                {vm.distanceLabel ?? vm.address}
               </span>
               {/* Trust row — the same rules as ListingCard's claim row.
                   `min-h-[30px]` reserves the badge family's rendered height
-                  (py-1 + text-body-sm line + border) so the one chip-less case
-                  (bot-suggested, no verdict) keeps every card the same height;
-                  overflow scrolls sideways like ListingCard's row. */}
-              <span className="mt-1.5 flex min-h-[30px] items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  (py-1 + text-body-sm line + border) so every card keeps the
+                  same height; overflow scrolls sideways like ListingCard's
+                  row. `mr-10` ends the scroll box before the chevron overlay,
+                  so a safety chip can never slide underneath it, and the
+                  right-edge mask fades clipped content so an overflowing
+                  label reads as scrollable, not truncated. */}
+              <span className="mr-10 mt-1.5 flex min-h-[30px] items-center gap-1.5 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%_-_16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {vm.safetyState ? (
                   <SafetySignal state={vm.safetyState} />
-                ) : vm.suggestedByBot ? null : (
+                ) : vm.suggestedByBot ? (
+                  // No verdict but a live bot suggestion: the shared provenance
+                  // label, not the dashed empty-state chip and not a blank row.
+                  // Provenance, never a verdict (ADR-007) — the card's
+                  // accessible name carries the same context for AT.
+                  <BotProvenanceLabel size="compact" data-testid="carousel-bot-provenance" />
+                ) : (
                   <UnattestedBadge />
                 )}
                 {/* Recent harm flags the mini-card regardless of the headline
@@ -371,10 +428,41 @@ export function MapCarousel({
               </span>
             </button>
 
-            <FavoriteButton listingId={vm.id} listingName={vm.name} />
+            <FavoriteButton
+              listingId={vm.id}
+              listingName={vm.name}
+              // The default overlay chrome with `top-2` instead of `top-3`:
+              // on the ~92px mini-card the heart and the chevron below it
+              // would otherwise touch, so the heart gives the pair its gap.
+              className="absolute right-3 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand"
+            />
+
+            {/* Chevron link — the accessible way to open the listing, and a
+                sibling overlay like the heart (never nested in the card
+                button). Muted while unselected; selected uses the `primary`
+                pair, whose dark-mode value is pinned for AA foreground
+                contrast where the lightened dark `brand` is not (styling.md).
+                Sits under the heart in the card's right rail; the trust row's
+                `mr-10` keeps chips clear of it. */}
+            <Link
+              to="/listings/$id"
+              params={{ id: vm.id }}
+              aria-label={`View ${vm.name}`}
+              className={`absolute bottom-2 right-3 z-10 flex size-9 items-center justify-center rounded-full shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2 ${
+                selected
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background/80 text-muted-foreground backdrop-blur hover:text-brand"
+              }`}
+            >
+              <ChevronRight className="size-4" strokeWidth={2.4} aria-hidden="true" />
+            </Link>
           </div>
         );
       })}
+      {/* End spacer sized to the viewport-fixed Add-listing FAB's footprint
+          (right offset + pill width), so the last card can always scroll fully
+          clear of it instead of ending underneath. */}
+      <div aria-hidden="true" data-testid="carousel-end-spacer" className="w-40 shrink-0" />
     </div>
   );
 }
