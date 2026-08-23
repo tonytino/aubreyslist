@@ -28,7 +28,7 @@
     ],
     "menuUrl": "https://www.justbekitchen.com/",
     "googleRating": 4.3,
-    "googleRatingCount": 1033,
+    "googleRatingCount": 1034,
     "googleMapsUri": "https://maps.google.com/?cid=11159511238833796170&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -44,7 +44,7 @@
     ],
     "menuUrl": "https://ediblebeats.com/restaurants/vital-root/",
     "googleRating": 4.6,
-    "googleRatingCount": 1573,
+    "googleRatingCount": 1576,
     "googleMapsUri": "https://maps.google.com/?cid=559894689006324983&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -60,23 +60,8 @@
     ],
     "menuUrl": "https://www.riversandroadscoffee.com/",
     "googleRating": 4.7,
-    "googleRatingCount": 958,
+    "googleRatingCount": 959,
     "googleMapsUri": "https://maps.google.com/?cid=17881287265142780842&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
-  },
-  {
-    "placeId": "ChIJodsM_Np4bIcRjCJ1PxPx4ww",
-    "name": "Whole Nectar Smoothie Bar",
-    "address": "1125 17th St Bldg B, Denver, CO 80202",
-    "lat": 39.7494576,
-    "lng": -104.99466849999999,
-    "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
-      "dedicated_gf_menu"
-    ],
-    "menuUrl": null,
-    "googleRating": 4.6,
-    "googleRatingCount": 102,
-    "googleMapsUri": "https://maps.google.com/?cid=928851013139767948&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
     "placeId": "ChIJ765SZYFPjCcRvK_ewPKJUBk",
@@ -91,7 +76,7 @@
     ],
     "menuUrl": "https://www.greenbuscafe.com/locations-menus",
     "googleRating": 4.9,
-    "googleRatingCount": 285,
+    "googleRatingCount": 289,
     "googleMapsUri": "https://maps.google.com/?cid=1824109524795961276&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -168,7 +153,7 @@
     ],
     "menuUrl": "https://bluehummingbirdfoods.com/",
     "googleRating": 4.8,
-    "googleRatingCount": 571,
+    "googleRatingCount": 572,
     "googleMapsUri": "https://maps.google.com/?cid=5522803079775187851&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -199,7 +184,7 @@
     ],
     "menuUrl": "https://crestonebakery.com/",
     "googleRating": 4.9,
-    "googleRatingCount": 196,
+    "googleRatingCount": 197,
     "googleMapsUri": "https://maps.google.com/?cid=6029743350819454089&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -214,8 +199,68 @@
     ],
     "menuUrl": "https://www.rheinlanderbakery.com/",
     "googleRating": 4.7,
-    "googleRatingCount": 2081,
+    "googleRatingCount": 2083,
     "googleMapsUri": "https://maps.google.com/?cid=17310144209056739896&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJw5OUu-p4bIcRYAKF64-ohkY",
+    "name": "Denver Poke Company",
+    "address": "1550 Platte St a, Denver, CO 80202",
+    "lat": 39.756929,
+    "lng": -105.00847739999999,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://denverpokecompany.com/",
+    "googleRating": 4.7,
+    "googleRatingCount": 493,
+    "googleMapsUri": "https://maps.google.com/?cid=5081934565619335776&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ6bdPHgrta4cRXn_KWnKj2OI",
+    "name": "Sweet Sisters Bake Shop",
+    "address": "641 S Broadway, Boulder, CO 80305",
+    "lat": 39.9838966,
+    "lng": -105.2501784,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://www.sweetsistersboulder.com/",
+    "googleRating": 4.8,
+    "googleRatingCount": 240,
+    "googleMapsUri": "https://maps.google.com/?cid=16345994559086034782&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJCYPuMDiFa4cRGAxPQrBB-J4",
+    "name": "Parfait Co.",
+    "address": "13455 W Colfax Ave, Golden, CO 80401",
+    "lat": 39.739134,
+    "lng": -105.15004169999999,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.9,
+    "googleRatingCount": 405,
+    "googleMapsUri": "https://maps.google.com/?cid=11454977877499382808&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJh1fQ6Vh5bIcRLQV_d0vv_3s",
+    "name": "Starfish Bakery",
+    "address": "1426 E 22nd Ave, Denver, CO 80205",
+    "lat": 39.7493043,
+    "lng": -104.9701224,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://starfishbysarah.com/",
+    "googleRating": 4.9,
+    "googleRatingCount": 21,
+    "googleMapsUri": "https://maps.google.com/?cid=8935123293132752173&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
     "placeId": "ChIJ1TjixqWaa4cRxgvnONu4xq0",
@@ -228,7 +273,7 @@
     ],
     "menuUrl": "https://holidailybrewing.com/",
     "googleRating": 4.8,
-    "googleRatingCount": 469,
+    "googleRatingCount": 470,
     "googleMapsUri": "https://maps.google.com/?cid=12521899065642257350&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -242,7 +287,7 @@
     ],
     "menuUrl": "https://www.stemciders.com/",
     "googleRating": 4.6,
-    "googleRatingCount": 895,
+    "googleRatingCount": 894,
     "googleMapsUri": "https://maps.google.com/?cid=14948853403840338868&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -272,7 +317,7 @@
     ],
     "menuUrl": "https://acovarestaurant.com/menu/",
     "googleRating": 4.6,
-    "googleRatingCount": 2056,
+    "googleRatingCount": 2057,
     "googleMapsUri": "https://maps.google.com/?cid=3790194310908954719&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -289,7 +334,7 @@
     ],
     "menuUrl": "https://www.thefedbar.com/",
     "googleRating": 4.6,
-    "googleRatingCount": 1277,
+    "googleRatingCount": 1278,
     "googleMapsUri": "https://maps.google.com/?cid=12728350300365922875&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -305,7 +350,7 @@
     ],
     "menuUrl": "https://gbfishandchips.com/",
     "googleRating": 4.6,
-    "googleRatingCount": 3075,
+    "googleRatingCount": 3076,
     "googleMapsUri": "https://maps.google.com/?cid=9611169941850675969&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -320,8 +365,99 @@
     ],
     "menuUrl": "https://www.marcoscfp.com/gluten-free",
     "googleRating": 4.5,
-    "googleRatingCount": 2137,
+    "googleRatingCount": 2138,
     "googleMapsUri": "https://maps.google.com/?cid=10440668973694769114&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ9Ye1apN4bIcRTYyIbFdQAQ8",
+    "name": "Bamboo Sushi",
+    "address": "2715 17th St, Denver, CO 80211",
+    "lat": 39.761572099999995,
+    "lng": -105.01057209999999,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_fryer",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://bamboosushi.com/location/lohi/menu",
+    "googleRating": 4.5,
+    "googleRatingCount": 906,
+    "googleMapsUri": "https://maps.google.com/?cid=1081233721958894669&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJfe7hwNp_bIcR-tDfLBsWpd8",
+    "name": "Urban Egg",
+    "address": "3033 E 1st Ave, Denver, CO 80206",
+    "lat": 39.7184598,
+    "lng": -104.9513717,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.7,
+    "googleRatingCount": 744,
+    "googleMapsUri": "https://maps.google.com/?cid=16115311147587981562&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJZ2TDQmd7bIcRonQkg23FuS0",
+    "name": "HashTAG - Central Park",
+    "address": "10155 E 29th Dr #120, Denver, CO 80238",
+    "lat": 39.759745699999996,
+    "lng": -104.8689627,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 2590,
+    "googleMapsUri": "https://maps.google.com/?cid=3294881676540540066&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJTZTpvrHta4cRNLikVfFt58I",
+    "name": "Cozobi Fonda Fina",
+    "address": "909 Walnut St Ste 100, Boulder, CO 80302",
+    "lat": 40.016380399999996,
+    "lng": -105.28325679999999,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.8,
+    "googleRatingCount": 453,
+    "googleMapsUri": "https://maps.google.com/?cid=14044314846269585460&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJrZP9oIPta4cRhHLhZTR8YwQ",
+    "name": "Holy Crepe!!",
+    "address": "1650 Broadway, Boulder, CO 80302",
+    "lat": 40.013950799999996,
+    "lng": -105.2782063,
+    "suggestedAttributes": [
+      "celiac_safe_vs_gluten_friendly",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.9,
+    "googleRatingCount": 574,
+    "googleMapsUri": "https://maps.google.com/?cid=316232963335484036&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJkVGhUzkLbIcRXgPxuh_pGB0",
+    "name": "The Ginger Pig",
+    "address": "4262 Lowell Blvd, Denver, CO 80211",
+    "lat": 39.7761099,
+    "lng": -105.03412069999999,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://www.gingerpig.com/denver-menus",
+    "googleRating": 4.4,
+    "googleRatingCount": 690,
+    "googleMapsUri": "https://maps.google.com/?cid=2096681949030581086&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
     "placeId": "ChIJm5csC9p4bIcRDhpgwqiuxNc",
@@ -335,7 +471,7 @@
     ],
     "menuUrl": "https://panzano-denver.com/menu",
     "googleRating": 4.5,
-    "googleRatingCount": 1745,
+    "googleRatingCount": 1746,
     "googleMapsUri": "https://maps.google.com/?cid=15547743853428611598&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -367,7 +503,7 @@
     ],
     "menuUrl": null,
     "googleRating": 4.7,
-    "googleRatingCount": 7899,
+    "googleRatingCount": 7919,
     "googleMapsUri": "https://maps.google.com/?cid=316730940782008034&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -397,7 +533,7 @@
     ],
     "menuUrl": "https://www.eatbirdcall.com/",
     "googleRating": 4.3,
-    "googleRatingCount": 666,
+    "googleRatingCount": 667,
     "googleMapsUri": "https://maps.google.com/?cid=8314930347422296886&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -412,7 +548,7 @@
     ],
     "menuUrl": null,
     "googleRating": 4.6,
-    "googleRatingCount": 3567,
+    "googleRatingCount": 3568,
     "googleMapsUri": "https://maps.google.com/?cid=17225337941047925068&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -427,7 +563,7 @@
     ],
     "menuUrl": "https://lingerdenver.com/",
     "googleRating": 4.5,
-    "googleRatingCount": 5606,
+    "googleRatingCount": 5608,
     "googleMapsUri": "https://maps.google.com/?cid=17836480053584340068&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -442,7 +578,7 @@
     ],
     "menuUrl": "https://www.parkburger.com/menu/",
     "googleRating": 4.5,
-    "googleRatingCount": 2229,
+    "googleRatingCount": 2230,
     "googleMapsUri": "https://maps.google.com/?cid=13510119701281578848&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -457,7 +593,7 @@
     ],
     "menuUrl": "https://www.larkburger.com/",
     "googleRating": 4.6,
-    "googleRatingCount": 2434,
+    "googleRatingCount": 2436,
     "googleMapsUri": "https://maps.google.com/?cid=16473051942276152570&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -472,7 +608,7 @@
     ],
     "menuUrl": "https://illegalpetes.com/",
     "googleRating": 4.5,
-    "googleRatingCount": 3077,
+    "googleRatingCount": 3080,
     "googleMapsUri": "https://maps.google.com/?cid=9171206871149048773&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -488,7 +624,7 @@
     ],
     "menuUrl": "https://adelitasco.com/",
     "googleRating": 4.6,
-    "googleRatingCount": 3950,
+    "googleRatingCount": 3952,
     "googleMapsUri": "https://maps.google.com/?cid=10884009593375406928&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -503,8 +639,242 @@
     ],
     "menuUrl": null,
     "googleRating": 4.7,
-    "googleRatingCount": 473,
+    "googleRatingCount": 474,
     "googleMapsUri": "https://maps.google.com/?cid=197453144699623665&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJhd5noXCRbIcRA9_kM3m0J-s",
+    "name": "West Main Taproom + Grill",
+    "address": "18595 Mainstreet Ste 100, Parker, CO 80134",
+    "lat": 39.5191842,
+    "lng": -104.77256779999999,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://westmaintaproom.com/",
+    "googleRating": 4.4,
+    "googleRatingCount": 1042,
+    "googleMapsUri": "https://maps.google.com/?cid=16944710555659460355&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJI0H8E8N4bIcRyB2e9SzUSv4",
+    "name": "Hopdoddy Burger Bar",
+    "address": "1747 Wynkoop St, Denver, CO 80202",
+    "lat": 39.7537273,
+    "lng": -104.999144,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.hopdoddy.com/gluten-free-menu",
+    "googleRating": 4.5,
+    "googleRatingCount": 3601,
+    "googleMapsUri": "https://maps.google.com/?cid=18323691323474714056&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJoc2CkkaPbIcRg2W--GjNYu0",
+    "name": "CD’s Wings - Aurora",
+    "address": "6710 S Cornerstar Way b, Aurora, CO 80016",
+    "lat": 39.594491999999995,
+    "lng": -104.80630269999999,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.2,
+    "googleRatingCount": 142,
+    "googleMapsUri": "https://maps.google.com/?cid=17105460185440085379&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJI3nRqGJ8bIcRX4KcrvxeDqI",
+    "name": "Famous Buffalo Wings & Things",
+    "address": "8208 E Colfax Ave, Denver, CO 80220",
+    "lat": 39.739970299999996,
+    "lng": -104.8925431,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleRating": 4,
+    "googleRatingCount": 205,
+    "googleMapsUri": "https://maps.google.com/?cid=11677375323172536927&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJG3BjLyp_bIcRRPMY9bkF5bs",
+    "name": "Torchy's Tacos",
+    "address": "1085 Broadway, Denver, CO 80203",
+    "lat": 39.733489999999996,
+    "lng": -104.98783429999999,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": "https://torchystacos.com/",
+    "googleRating": 4.3,
+    "googleRatingCount": 5638,
+    "googleMapsUri": "https://maps.google.com/?cid=13539234150998405956&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJbY9bXsN4bIcR6bvaxe_vkYY",
+    "name": "Jax Fish House & Oyster Bar",
+    "address": "1539 17th St, Denver, CO 80202",
+    "lat": 39.752105,
+    "lng": -104.99851699999999,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": "https://www.jaxfishhouse.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 2401,
+    "googleMapsUri": "https://maps.google.com/?cid=9696795285801057257&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJE2oNutF4bIcRNZEeHwOJCxo",
+    "name": "Stout Street Social",
+    "address": "1400 Stout St, Denver, CO 80202",
+    "lat": 39.7440941,
+    "lng": -104.9949255,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 3513,
+    "googleMapsUri": "https://maps.google.com/?cid=1876744316229947701&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJP5Do07x4bIcRrBUCu1Ve8EE",
+    "name": "Briar Common Brewery + Eatery",
+    "address": "2298 Clay St, Denver, CO 80211",
+    "lat": 39.7510689,
+    "lng": -105.0203794,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.briarcommon.com/food",
+    "googleRating": 4.5,
+    "googleRatingCount": 2039,
+    "googleMapsUri": "https://maps.google.com/?cid=4751401329178580396&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJXZ1dLGqGa4cRbpQDwdSrkz8",
+    "name": "TBirds",
+    "address": "9701 W 44th Ave, Wheat Ridge, CO 80033",
+    "lat": 39.7783893,
+    "lng": -105.1053432,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.5,
+    "googleRatingCount": 493,
+    "googleMapsUri": "https://maps.google.com/?cid=4581194176225580142&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJL2GZKyN5bIcRAD9AFtvrX60",
+    "name": "Smashburger",
+    "address": "2001 Blake St, Denver, CO 80205",
+    "lat": 39.7555149,
+    "lng": -104.99308669999999,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://smashburger.com/",
+    "googleRating": 4.1,
+    "googleRatingCount": 33,
+    "googleMapsUri": "https://maps.google.com/?cid=12492963217552719616&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJOQTwMAp-bIcRCvrAFbuhLaQ",
+    "name": "Five Guys",
+    "address": "2021 S Colorado Blvd, Denver, CO 80222",
+    "lat": 39.679434500000006,
+    "lng": -104.941198,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": "https://www.fiveguys.com/",
+    "googleRating": 4.1,
+    "googleRatingCount": 1140,
+    "googleMapsUri": "https://maps.google.com/?cid=11830289621068085770&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJXeOanAdjbIcRQCTYcVu4ys0",
+    "name": "In-N-Out Burger",
+    "address": "14150 E Alameda Ave, Aurora, CO 80012",
+    "lat": 39.7107311,
+    "lng": -104.82362979999999,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": "https://www.in-n-out.com/",
+    "googleRating": 4.4,
+    "googleRatingCount": 7563,
+    "googleMapsUri": "https://maps.google.com/?cid=14828867425962304576&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJV7ePoniKa4cRqTlww8ql0ak",
+    "name": "North Side Tavern Restaurant",
+    "address": "12708 Lowell Blvd, Broomfield, CO 80020",
+    "lat": 39.9270585,
+    "lng": -105.0327274,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 2309,
+    "googleMapsUri": "https://maps.google.com/?cid=12236743952823237033&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJlfUG-HTza4cRFcm40VIrIIA",
+    "name": "Rocky Mountain Tap & Garden Craft Kitchen & Pizza",
+    "address": "1071 Courtesy Rd, Louisville, CO 80027",
+    "lat": 39.9804842,
+    "lng": -105.12899759999999,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 594,
+    "googleMapsUri": "https://maps.google.com/?cid=9232426870815377685&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJFTHK_WaJa4cRj2dWhe1scx8",
+    "name": "G's Tacos - Westy",
+    "address": "9100 W 100th Ave #9, Broomfield, CO 80021",
+    "lat": 39.877601,
+    "lng": -105.099054,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 697,
+    "googleMapsUri": "https://maps.google.com/?cid=2266274804897572751&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJGyE7_cR4bIcRuzF0YptKk0E",
+    "name": "P.F. Chang's",
+    "address": "1415 15th St, Denver, CO 80202",
+    "lat": 39.749278499999996,
+    "lng": -104.9997302,
+    "suggestedAttributes": [
+      "dedicated_fryer",
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://www.pfchangs.com/gluten-free.html",
+    "googleRating": 4.3,
+    "googleRatingCount": 2019,
+    "googleMapsUri": "https://maps.google.com/?cid=4725202465273950651&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
     "placeId": "ChIJh5CRUXuHa4cR6gH1P0MAGEo",
@@ -533,7 +903,7 @@
     ],
     "menuUrl": "https://www.cattivelladenver.com/menu",
     "googleRating": 4.5,
-    "googleRatingCount": 1436,
+    "googleRatingCount": 1437,
     "googleMapsUri": "https://maps.google.com/?cid=7520422871500840710&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -548,7 +918,7 @@
     ],
     "menuUrl": "https://www.miciitalian.com/",
     "googleRating": 4.4,
-    "googleRatingCount": 564,
+    "googleRatingCount": 561,
     "googleMapsUri": "https://maps.google.com/?cid=7970913481115951124&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -563,23 +933,8 @@
     ],
     "menuUrl": "https://www.northitalia.com/",
     "googleRating": 4.5,
-    "googleRatingCount": 2558,
+    "googleRatingCount": 2559,
     "googleMapsUri": "https://maps.google.com/?cid=15301476956213107739&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
-  },
-  {
-    "placeId": "ChIJxz3k85Z-bIcRQcAPJ0SZzO4",
-    "name": "True Food Kitchen",
-    "address": "2800 E 2nd Ave Unit 101, Denver, CO 80206",
-    "lat": 39.7192778,
-    "lng": -104.9542128,
-    "suggestedAttributes": [
-      "dedicated_gf_menu",
-      "gf_substitutes"
-    ],
-    "menuUrl": "https://www.truefoodkitchen.com/locations/denver/",
-    "googleRating": 4.6,
-    "googleRatingCount": 4446,
-    "googleMapsUri": "https://maps.google.com/?cid=17207296794267992129&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
     "placeId": "ChIJAexs4PiIa4cRYHRp5qqymJQ",
@@ -592,23 +947,8 @@
     ],
     "menuUrl": "https://www.beaujos.com/menu/",
     "googleRating": 4.4,
-    "googleRatingCount": 4291,
+    "googleRatingCount": 4292,
     "googleMapsUri": "https://maps.google.com/?cid=10707504561153209440&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
-  },
-  {
-    "placeId": "ChIJL2TJFlJ-bIcRENgfRp3uELQ",
-    "name": "Sushi Den",
-    "address": "1487 S Pearl St, Denver, CO 80210",
-    "lat": 39.689578,
-    "lng": -104.9808419,
-    "suggestedAttributes": [
-      "dedicated_gf_menu",
-      "gf_substitutes"
-    ],
-    "menuUrl": "https://www.sushiden.net/",
-    "googleRating": 4.7,
-    "googleRatingCount": 5354,
-    "googleMapsUri": "https://maps.google.com/?cid=12975132885708167184&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
     "placeId": "ChIJe0sEeD9_bIcRylnzzjqW9g4",
@@ -622,7 +962,7 @@
     ],
     "menuUrl": "https://phattmatts.com/",
     "googleRating": 4.9,
-    "googleRatingCount": 466,
+    "googleRatingCount": 468,
     "googleMapsUri": "https://maps.google.com/?cid=1078214340126136778&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -638,8 +978,639 @@
     ],
     "menuUrl": "https://www.doughcounter.com/gluten-free",
     "googleRating": 4.6,
-    "googleRatingCount": 439,
+    "googleRatingCount": 441,
     "googleMapsUri": "https://maps.google.com/?cid=7980567508272627020&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJe7dM3Nt-bIcREiH0mld4gE0",
+    "name": "Angelo’s Taverna",
+    "address": "620 E 6th Ave, Denver, CO 80203",
+    "lat": 39.725482299999996,
+    "lng": -104.9792109,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://angelostaverna.com/denver/gluten-free-menu-options/",
+    "googleRating": 4.6,
+    "googleRatingCount": 3773,
+    "googleMapsUri": "https://maps.google.com/?cid=5584595855596593426&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ8Rbv2Nt-bIcR2D3JFSg29yw",
+    "name": "Odyssey Italian Restaurant",
+    "address": "603 E 6th Ave, Denver, CO 80203",
+    "lat": 39.7257811,
+    "lng": -104.9796734,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://odysseyitalian.com/",
+    "googleRating": 4.5,
+    "googleRatingCount": 2527,
+    "googleMapsUri": "https://maps.google.com/?cid=3240118002708463064&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJG7kMFcV4bIcRBjA7KQQb03s",
+    "name": "Osteria Marco",
+    "address": "1453 Larimer St, Denver, CO 80202",
+    "lat": 39.7481033,
+    "lng": -104.99909249999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 1846,
+    "googleMapsUri": "https://maps.google.com/?cid=8922504991436648454&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJLz1VrIKHa4cRytFIEWvCQTM",
+    "name": "Hops & Pie",
+    "address": "3920 Tennyson St, Denver, CO 80212",
+    "lat": 39.7713884,
+    "lng": -105.0437324,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.hopsandpie.com/hops-and-pie-faqs",
+    "googleRating": 4.7,
+    "googleRatingCount": 2550,
+    "googleMapsUri": "https://maps.google.com/?cid=3693446934527791562&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJBaRy7994bIcRq8oIj4xn9EU",
+    "name": "Cart-Driver RiNo",
+    "address": "2500 Larimer St #100, Denver, CO 80205",
+    "lat": 39.7575444,
+    "lng": -104.98617499999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.7,
+    "googleRatingCount": 2019,
+    "googleMapsUri": "https://maps.google.com/?cid=5040767736327228075&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJj0Z90il_bIcRb_qs7nYRi1k",
+    "name": "DiFranco's",
+    "address": "955 Lincoln St D, Denver, CO 80203",
+    "lat": 39.7310732,
+    "lng": -104.9863396,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.difrancos.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 905,
+    "googleMapsUri": "https://maps.google.com/?cid=6452270093646494319&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJa8LR2bx-bIcRKq_mJTlas_Q",
+    "name": "Barolo Grill",
+    "address": "3030 E 6th Ave, Denver, CO 80206",
+    "lat": 39.72542260000001,
+    "lng": -104.95145439999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.7,
+    "googleRatingCount": 1150,
+    "googleMapsUri": "https://maps.google.com/?cid=17632536167581134634&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ5fIM0MN4bIcRb-fymS7_krs",
+    "name": "Tavernetta",
+    "address": "1889 16th St Mall, Denver, CO 80202",
+    "lat": 39.7530169,
+    "lng": -105.0019674,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 2625,
+    "googleMapsUri": "https://maps.google.com/?cid=13516146007308691311&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJE1djLLF-bIcRmyM01gT5S5Q",
+    "name": "Shells and Sauce",
+    "address": "2600 E 12th Ave, Denver, CO 80206",
+    "lat": 39.7350062,
+    "lng": -104.95611749999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.shellsandsauce.net/menus/",
+    "googleRating": 4.5,
+    "googleRatingCount": 1699,
+    "googleMapsUri": "https://maps.google.com/?cid=10685908340035560347&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ11OHgWB-bIcR9CCrhPwANNY",
+    "name": "Homegrown Tap & Dough",
+    "address": "1001 S Gaylord St, Denver, CO 80209",
+    "lat": 39.698247099999996,
+    "lng": -104.96221349999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.tapanddough.com/menus/",
+    "googleRating": 4.5,
+    "googleRatingCount": 1272,
+    "googleMapsUri": "https://maps.google.com/?cid=15434962907463098612&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJHasRVOl9bIcRdpvQvq7qppw",
+    "name": "Esters Virginia Village",
+    "address": "1950 S Holly St, Denver, CO 80222",
+    "lat": 39.6814534,
+    "lng": -104.9213963,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.estersdenver.com/menus/",
+    "googleRating": 4.7,
+    "googleRatingCount": 2691,
+    "googleMapsUri": "https://maps.google.com/?cid=11287967552297278326&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJB8H2oa1-bIcR0v0lKsQugFw",
+    "name": "Atomic Cowboy home of Denver Biscuit Co & Fat Sully's NY Pizza",
+    "address": "3237 E Colfax Ave, Denver, CO 80206",
+    "lat": 39.7403976,
+    "lng": -104.9490503,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.theatomiccowboy.com/fatsullys",
+    "googleRating": 4.6,
+    "googleRatingCount": 8251,
+    "googleMapsUri": "https://maps.google.com/?cid=6665378868563934674&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ-Se139aBbIcRHVQ6qtIo3_M",
+    "name": "Na Favola Trattoria & Pizzeria",
+    "address": "5909 S University Blvd, Greenwood Village, CO 80121",
+    "lat": 39.6090559,
+    "lng": -104.9604471,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://nafavolatrattoria.com/",
+    "googleRating": 4.8,
+    "googleRatingCount": 538,
+    "googleMapsUri": "https://maps.google.com/?cid=17572809156287157277&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ0Y-F5uKGbIcR61YZ6PqjQk4",
+    "name": "Saverina",
+    "address": "6985 E Chenango Ave, Denver, CO 80237",
+    "lat": 39.6257018,
+    "lng": -104.905627,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 187,
+    "googleMapsUri": "https://maps.google.com/?cid=5639249981452408555&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJtxdi1Np4bIcRAGiUGukeo-w",
+    "name": "Mellow Mushroom Downtown Denver",
+    "address": "1201 16th St Mall Ste 108, Denver, CO 80202",
+    "lat": 39.7489503,
+    "lng": -104.9967004,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 2298,
+    "googleMapsUri": "https://maps.google.com/?cid=17051506600676976640&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJLRKtb_fta4cRf58cCOXY8Bs",
+    "name": "Pizzeria Alberico",
+    "address": "1730 Pearl St, Boulder, CO 80302",
+    "lat": 40.0192762,
+    "lng": -105.2726469,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.pizzerialocale.com/bringing-you-gluten-free-choices/",
+    "googleRating": 4.4,
+    "googleRatingCount": 1577,
+    "googleMapsUri": "https://maps.google.com/?cid=2013347511629815679&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJPT9ZVsPta4cRGbtCBP9HcGw",
+    "name": "Basta",
+    "address": "3601 Arapahoe Ave, Boulder, CO 80303",
+    "lat": 40.0153301,
+    "lng": -105.24842280000001,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.5,
+    "googleRatingCount": 559,
+    "googleMapsUri": "https://maps.google.com/?cid=7813824514101525273&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJnXI3XM2PbIcRTDVhPr4hkrk",
+    "name": "Lil' Ricci's NY Pizza & Pasta - Parker",
+    "address": "16526 Keystone Blvd Unit G, Parker, CO 80134",
+    "lat": 39.532485099999995,
+    "lng": -104.7952487,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 740,
+    "googleMapsUri": "https://maps.google.com/?cid=13371787344590484812&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJo5Y42a6La4cRPRWuWxLuR0c",
+    "name": "Infinitus Pie Broomfield",
+    "address": "145 Nickel St, Broomfield, CO 80020",
+    "lat": 39.9195567,
+    "lng": -105.08885079999999,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 1057,
+    "googleMapsUri": "https://maps.google.com/?cid=5136335662654297405&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJL2TJFlJ-bIcRENgfRp3uELQ",
+    "name": "Sushi Den",
+    "address": "1487 S Pearl St, Denver, CO 80210",
+    "lat": 39.689578,
+    "lng": -104.9808419,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.sushiden.net/",
+    "googleRating": 4.7,
+    "googleRatingCount": 5357,
+    "googleMapsUri": "https://maps.google.com/?cid=12975132885708167184&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJv3XJR5uAbIcRsc2x1txb34I",
+    "name": "Aung's Bangkok Cafe",
+    "address": "1225 E Hampden Ave, Englewood, CO 80113",
+    "lat": 39.6534228,
+    "lng": -104.97318020000002,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://aungsbangkokcafe.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 1044,
+    "googleMapsUri": "https://maps.google.com/?cid=9430357148790017457&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJH6v5-3N9bIcReWP8XOqiycE",
+    "name": "Phở Lăng Cô",
+    "address": "2233 S Monaco St Pkwy Ste 105, Denver, CO 80222",
+    "lat": 39.677470899999996,
+    "lng": -104.91413159999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.pholangco.com/",
+    "googleRating": 4.6,
+    "googleRatingCount": 400,
+    "googleMapsUri": "https://maps.google.com/?cid=13963871247105024889&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJGwoYqN-Aa4cRR7cRsBTePiE",
+    "name": "Little India Restaurant and Bar",
+    "address": "425 S Teller St, Lakewood, CO 80226",
+    "lat": 39.7087559,
+    "lng": -105.0772095,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": "https://littleindiaofdenver.com/best-gluten-free-restaurant-in-denver/",
+    "googleRating": 4.4,
+    "googleRatingCount": 1281,
+    "googleMapsUri": "https://maps.google.com/?cid=2395596232242345799&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJjX8sCYF4bIcRt1h6ULJLdIM",
+    "name": "SPICE ROOM",
+    "address": "3157 W 38th Ave, Denver, CO 80211",
+    "lat": 39.7696074,
+    "lng": -105.0289932,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://denverspiceroom.com/gluten-free-indian-food-denver/",
+    "googleRating": 4.7,
+    "googleRatingCount": 2607,
+    "googleMapsUri": "https://maps.google.com/?cid=9472279145493452983&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJMXwTyeJ5bIcRmHODiEPDHHw",
+    "name": "Nozomi",
+    "address": "4100 Tejon St, Denver, CO 80211",
+    "lat": 39.7730501,
+    "lng": -105.0110203,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://nozomisushidenver.com/",
+    "googleRating": 4.8,
+    "googleRatingCount": 475,
+    "googleMapsUri": "https://maps.google.com/?cid=8943237654871503768&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJm63rjHB5bIcRU3F3LFC7mWg",
+    "name": "Kawa Ni",
+    "address": "1900 W 32nd Ave, Denver, CO 80211",
+    "lat": 39.7618138,
+    "lng": -105.00997029999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 614,
+    "googleMapsUri": "https://maps.google.com/?cid=7537261404399038803&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJSxsW6yp5bIcRPYpCtXxAAvQ",
+    "name": "Phở-natic Vietnamese Restaurant",
+    "address": "229 E Colfax Ave, Denver, CO 80203",
+    "lat": 39.7401972,
+    "lng": -104.98411109999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://phodenver.com/",
+    "googleRating": 4.5,
+    "googleRatingCount": 1149,
+    "googleMapsUri": "https://maps.google.com/?cid=17582686799568996925&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJj_xTkJN_bIcRejDyW7B0_94",
+    "name": "Pupusas Lover",
+    "address": "2236 S Colorado Blvd, Denver, CO 80222",
+    "lat": 39.67577,
+    "lng": -104.94028899999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.pupusasloverdenver.com/pupusas",
+    "googleRating": 4.7,
+    "googleRatingCount": 744,
+    "googleMapsUri": "https://maps.google.com/?cid=16068690296286883962&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ3Uan-R95bIcRv7tavBDdeO0",
+    "name": "Sushi-Rama RiNo",
+    "address": "2615 Larimer St, Denver, CO 80205",
+    "lat": 39.7589731,
+    "lng": -104.9850847,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 1094,
+    "googleMapsUri": "https://maps.google.com/?cid=17111669848143477695&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJV7L-L6d-bIcRS1qM-0vBQDs",
+    "name": "DAE GEE KOREAN BBQ",
+    "address": "827 Colorado Blvd, Denver, CO 80206",
+    "lat": 39.729724999999995,
+    "lng": -104.9410977,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://daegee.com/",
+    "googleRating": 4.1,
+    "googleRatingCount": 919,
+    "googleMapsUri": "https://maps.google.com/?cid=4269624978834217547&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ_9wRRB5_bIcR0izxo_cs8H0",
+    "name": "Thai Monkey Club",
+    "address": "102 S Broadway, Denver, CO 80209",
+    "lat": 39.7146064,
+    "lng": -104.9872495,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": "https://www.thaimonkeyclubco.com/",
+    "googleRating": 4.3,
+    "googleRatingCount": 754,
+    "googleMapsUri": "https://maps.google.com/?cid=9074802691270585554&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJh5dYuc1-bIcRrA4G15yYqjg",
+    "name": "Little Gingko Asian Cafe",
+    "address": "1279 Marion St, Denver, CO 80218",
+    "lat": 39.7367833,
+    "lng": -104.9719861,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 619,
+    "googleMapsUri": "https://maps.google.com/?cid=4083243811554594476&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJHVXBEpZ-bIcRGEmd2dJCN7I",
+    "name": "Sweet Ginger Asian Bistro&Sushi",
+    "address": "2710 E 3rd Ave, Denver, CO 80206",
+    "lat": 39.7208228,
+    "lng": -104.95542719999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 582,
+    "googleMapsUri": "https://maps.google.com/?cid=12841806335831787800&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJKxMCmpV-bIcRuIpSf936SiI",
+    "name": "Little Ollie's",
+    "address": "2360 E 3rd Ave, Denver, CO 80206",
+    "lat": 39.7207821,
+    "lng": -104.9584055,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.2,
+    "googleRatingCount": 883,
+    "googleMapsUri": "https://maps.google.com/?cid=2471063174796970680&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJm5EmRmZ5bIcRZZcHfONzcVg",
+    "name": "La Diabla Pozole y Mezcal",
+    "address": "2233 Larimer St, Denver, CO 80205",
+    "lat": 39.7554631,
+    "lng": -104.9897484,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 1633,
+    "googleMapsUri": "https://maps.google.com/?cid=6373002368581605221&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJNaA4pfuRbIcRCa2WWyLqh-0",
+    "name": "Indochine Cuisine",
+    "address": "E, 19751 Mainstreet R2, Parker, CO 80138",
+    "lat": 39.518398499999996,
+    "lng": -104.7606421,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 855,
+    "googleMapsUri": "https://maps.google.com/?cid=17115906342131248393&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJE1o0GYB-bIcR4QdDgw7MYiA",
+    "name": "Garbanzo",
+    "address": "630 S Colorado Blvd, Glendale, CO 80246",
+    "lat": 39.7053782,
+    "lng": -104.94021099999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://eatgarbanzo.com/",
+    "googleRating": 4,
+    "googleRatingCount": 830,
+    "googleMapsUri": "https://maps.google.com/?cid=2333651919635154913&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJw9FqUex4bIcRpV-3fHDv2TQ",
+    "name": "Ash'Kara",
+    "address": "2005 W 33rd Ave, Denver, CO 80211",
+    "lat": 39.7633856,
+    "lng": -105.0115857,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.ashkaradenver.com/menus/",
+    "googleRating": 4.3,
+    "googleRatingCount": 1160,
+    "googleMapsUri": "https://maps.google.com/?cid=3808338226326232997&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJx-4HPHh5bIcRC3bPV5euPOA",
+    "name": "Safta",
+    "address": "3330 Brighton Blvd #201, Denver, CO 80216",
+    "lat": 39.76882,
+    "lng": -104.98024,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": "https://www.eatwithsafta.com/safta-menu",
+    "googleRating": 4.5,
+    "googleRatingCount": 2462,
+    "googleMapsUri": "https://maps.google.com/?cid=16157981528135005707&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ69OCc7iaa4cRl4e5kV-pn-0",
+    "name": "Ali Baba Grill | Lebanese • Mediterranean",
+    "address": "109 N Rubey Dr, Golden, CO 80403",
+    "lat": 39.766275,
+    "lng": -105.2326194,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 1576,
+    "googleMapsUri": "https://maps.google.com/?cid=17122590536217757591&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJSxU0cKp1bIcR37SSi_zpJqE",
+    "name": "Bengal Tiger Indian Restaurant and Bar",
+    "address": "14312 Lincoln St, Thornton, CO 80023",
+    "lat": 39.9552067,
+    "lng": -104.98448789999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.9,
+    "googleRatingCount": 936,
+    "googleMapsUri": "https://maps.google.com/?cid=11612225960104080607&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJsUFc7TSGa4cRyAM70oz8dl0",
+    "name": "Kokoro Restaurant",
+    "address": "5535 Wadsworth Blvd, Arvada, CO 80002",
+    "lat": 39.7973175,
+    "lng": -105.0777435,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 2703,
+    "googleMapsUri": "https://maps.google.com/?cid=6734847974531859400&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJZeETIiKEa4cR2iBnfvMfCP0",
+    "name": "Moose Hill Cantina and Catering",
+    "address": "11911 W Colfax Ave, Lakewood, CO 80215",
+    "lat": 39.7404557,
+    "lng": -105.13222239999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 1964,
+    "googleMapsUri": "https://maps.google.com/?cid=18232858222067654874&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
     "placeId": "ChIJn3GgDMN4bIcR0V-dyxWKihw",
@@ -652,7 +1623,7 @@
     ],
     "menuUrl": "https://www.snoozeeatery.com/",
     "googleRating": 4.5,
-    "googleRatingCount": 3641,
+    "googleRatingCount": 3647,
     "googleMapsUri": "https://maps.google.com/?cid=2056608006063087569&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
@@ -684,18 +1655,419 @@
     "googleMapsUri": "https://maps.google.com/?cid=14796615967298453620&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
-    "placeId": "ChIJv3XJR5uAbIcRsc2x1txb34I",
-    "name": "Aung's Bangkok Cafe",
-    "address": "1225 E Hampden Ave, Englewood, CO 80113",
-    "lat": 39.6534228,
-    "lng": -104.97318020000002,
+    "placeId": "ChIJL4Chlo55bIcRIYb15QUIN9o",
+    "name": "Olive & Finch",
+    "address": "1701 Wynkoop St, Denver, CO 80202",
+    "lat": 39.7534268,
+    "lng": -104.9998918,
     "suggestedAttributes": [
       "off_menu_gf_on_request",
       "gf_substitutes"
     ],
-    "menuUrl": "https://aungsbangkokcafe.com/",
+    "menuUrl": "https://www.oliveandfinch.com/location/olive-finch-union-station/",
+    "googleRating": 4.1,
+    "googleRatingCount": 116,
+    "googleMapsUri": "https://maps.google.com/?cid=15724045445413307937&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ___7G3iHa4cR6KJdkP2nol8",
+    "name": "Wendell's",
+    "address": "3838 Tennyson St, Denver, CO 80212",
+    "lat": 39.7701,
+    "lng": -105.04374399999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.2,
+    "googleRatingCount": 531,
+    "googleMapsUri": "https://maps.google.com/?cid=6891255087320900328&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ-TVPY4Z4bIcRnl0dgQbZUNI",
+    "name": "The Universal",
+    "address": "2911 W 38th Ave, Denver, CO 80211",
+    "lat": 39.769624,
+    "lng": -105.0232113,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
     "googleRating": 4.6,
-    "googleRatingCount": 1044,
-    "googleMapsUri": "https://maps.google.com/?cid=9430357148790017457&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+    "googleRatingCount": 1295,
+    "googleMapsUri": "https://maps.google.com/?cid=15154851368060935582&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJkT6oM9x_bIcRGWQAQW8cTUs",
+    "name": "Parlor Doughnuts",
+    "address": "95 Lincoln St, Denver, CO 80203",
+    "lat": 39.718208,
+    "lng": -104.98646199999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 826,
+    "googleMapsUri": "https://maps.google.com/?cid=5426024390208807961&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ64PV-GqHa4cR0lZU-1M4vjE",
+    "name": "Legacy Pie Co.- Tennyson St.",
+    "address": "4000 Tennyson St Ste 100, Denver, CO 80212",
+    "lat": 39.7717819,
+    "lng": -105.0437324,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://legacypie.co/menu/legacypieco",
+    "googleRating": 4.8,
+    "googleRatingCount": 1036,
+    "googleMapsUri": "https://maps.google.com/?cid=3584364286783542994&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ_6EMOoqHa4cRK0hMkiQBfnA",
+    "name": "Gelato Boy",
+    "address": "4022 Tennyson St, Denver, CO 80212",
+    "lat": 39.77212540000001,
+    "lng": -105.0436639,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://gelatoboy.com/",
+    "googleRating": 4.8,
+    "googleRatingCount": 111,
+    "googleMapsUri": "https://maps.google.com/?cid=8105917635898394667&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJfbL0h4p-bIcR-gKlgzpzelI",
+    "name": "Bonnie Brae Ice Cream",
+    "address": "799 S University Blvd, Denver, CO 80209",
+    "lat": 39.7021264,
+    "lng": -104.9595674,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.7,
+    "googleRatingCount": 2311,
+    "googleMapsUri": "https://maps.google.com/?cid=5943189353422717690&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJn3p7nDx5bIcRINbmjFaoUp4",
+    "name": "Campo Juice + Kitchen",
+    "address": "3450 Larimer St, Denver, CO 80205",
+    "lat": 39.7664438,
+    "lng": -104.9747357,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.9,
+    "googleRatingCount": 322,
+    "googleMapsUri": "https://maps.google.com/?cid=11408365895767479840&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJodsM_Np4bIcRjCJ1PxPx4ww",
+    "name": "Whole Nectar Smoothie Bar",
+    "address": "1125 17th St Bldg B, Denver, CO 80202",
+    "lat": 39.7494576,
+    "lng": -104.99466849999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 102,
+    "googleMapsUri": "https://maps.google.com/?cid=928851013139767948&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJibR7zOp4bIcR3-bo4JUrw-I",
+    "name": "Inside Scoop Creamery",
+    "address": "1535 Platte St, Denver, CO 80202",
+    "lat": 39.7570568,
+    "lng": -105.00876149999999,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.7,
+    "googleRatingCount": 499,
+    "googleMapsUri": "https://maps.google.com/?cid=16339951795753772767&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJDSTJbdt5bIcRX_MhPrWf0Xo",
+    "name": "Heaven Creamery RiNo",
+    "address": "2935 Larimer St, Denver, CO 80205",
+    "lat": 39.7621209,
+    "lng": -104.98108909999999,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 444,
+    "googleMapsUri": "https://maps.google.com/?cid=8850030343540044639&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJlfS0BYnza4cRmcuBzaNc57I",
+    "name": "Button Rock Bakery Lafayette",
+    "address": "400 W South Boulder Rd Ste 2200, Lafayette, CO 80026",
+    "lat": 39.985834,
+    "lng": -105.0949586,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 610,
+    "googleMapsUri": "https://maps.google.com/?cid=12891374316968594329&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ4RZHpJuMa4cRbpSgG9tfvMk",
+    "name": "Cafe Crêpe",
+    "address": "1 W Flatiron Crossing Dr, Broomfield, CO 80021",
+    "lat": 39.9330487,
+    "lng": -105.1337585,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 3.8,
+    "googleRatingCount": 111,
+    "googleMapsUri": "https://maps.google.com/?cid=14536599091911103598&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJOzk6gqF3bIcRDjYM_IrjHBs",
+    "name": "Bluebird Cafe",
+    "address": "885 Thornton Pkwy, Thornton, CO 80229",
+    "lat": 39.8714885,
+    "lng": -104.9756264,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 1334,
+    "googleMapsUri": "https://maps.google.com/?cid=1953686524445603342&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJadZQWuata4cRgFBP0aM9OX8",
+    "name": "Blue Sky Cafe and Juice Bar",
+    "address": "14403 W Colfax Ave, Lakewood, CO 80401",
+    "lat": 39.733820699999995,
+    "lng": -105.1631314,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.5,
+    "googleRatingCount": 1051,
+    "googleMapsUri": "https://maps.google.com/?cid=9167426290289954944&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJxz3k85Z-bIcRQcAPJ0SZzO4",
+    "name": "True Food Kitchen",
+    "address": "2800 E 2nd Ave Unit 101, Denver, CO 80206",
+    "lat": 39.7192778,
+    "lng": -104.9542128,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.truefoodkitchen.com/locations/denver/",
+    "googleRating": 4.6,
+    "googleRatingCount": 4465,
+    "googleMapsUri": "https://maps.google.com/?cid=17207296794267992129&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJI8vB8Ct5bIcR40G-TvheRxE",
+    "name": "Steuben's Uptown",
+    "address": "523 E 17th Ave, Denver, CO 80203",
+    "lat": 39.7434807,
+    "lng": -104.9804065,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://steubens.com/denver-uptown-steubens-food-menu",
+    "googleRating": 4.4,
+    "googleRatingCount": 6096,
+    "googleMapsUri": "https://maps.google.com/?cid=1245068242557223395&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJAQAwdN54bIcRUirTm9Nh7xE",
+    "name": "Cherry Cricket - Downtown",
+    "address": "2220 Blake St, Denver, CO 80205",
+    "lat": 39.7562717,
+    "lng": -104.99123189999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.4,
+    "googleRatingCount": 2030,
+    "googleMapsUri": "https://maps.google.com/?cid=1292359179558922834&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJC4cKadd4bIcRgbLBZ79ZiP8",
+    "name": "Guard and Grace",
+    "address": "1801 California St, Denver, CO 80202",
+    "lat": 39.7475338,
+    "lng": -104.9895298,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.7,
+    "googleRatingCount": 4553,
+    "googleMapsUri": "https://maps.google.com/?cid=18413065755118645889&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJS7FA8d94bIcR0Yx7VLagdMo",
+    "name": "Work & Class",
+    "address": "2500 Larimer St, Denver, CO 80205",
+    "lat": 39.757652,
+    "lng": -104.9862239,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 1770,
+    "googleMapsUri": "https://maps.google.com/?cid=14588461797921754321&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJXzv-5Sh_bIcRiXHv9VJ2ZMA",
+    "name": "Town Pump Provisions - Bodega",
+    "address": "2810 E 3rd Ave, Denver, CO 80206",
+    "lat": 39.7208471,
+    "lng": -104.9542807,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": "https://www.modernmarket.com/",
+    "googleRating": 3.4,
+    "googleRatingCount": 55,
+    "googleMapsUri": "https://maps.google.com/?cid=13863335651638735241&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJiQPbK2OMbIcREENDDqSw1VA",
+    "name": "Lazy Dog Restaurant & Bar",
+    "address": "24110 E State Ave, Aurora, CO 80016",
+    "lat": 39.6021043,
+    "lng": -104.70773960000001,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": "https://www.lazydogrestaurants.com/menus/gluten-sensitive",
+    "googleRating": 4.5,
+    "googleRatingCount": 5762,
+    "googleMapsUri": "https://maps.google.com/?cid=5824755911734018832&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJHc-Fz6t5bIcR2mOREy6UcMo",
+    "name": "A5 Steakhouse",
+    "address": "1600 15th St, Denver, CO 80202",
+    "lat": 39.7502674,
+    "lng": -105.001548,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.5,
+    "googleRatingCount": 1112,
+    "googleMapsUri": "https://maps.google.com/?cid=14587322118670738394&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJhY9j5894bIcRZyWZLZfchCw",
+    "name": "EDGE Restaurant & Bar",
+    "address": "1111 14th St, Denver, CO 80202",
+    "lat": 39.7463689,
+    "lng": -104.9978792,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.5,
+    "googleRatingCount": 1129,
+    "googleMapsUri": "https://maps.google.com/?cid=3207931376457819495&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ1zzAXfyGbIcRBtKu5izf18w",
+    "name": "Shanahan's Steakhouse",
+    "address": "5085 S Syracuse St, Denver, CO 80237",
+    "lat": 39.6245438,
+    "lng": -104.9003455,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.7,
+    "googleRatingCount": 3256,
+    "googleMapsUri": "https://maps.google.com/?cid=14760511687671861766&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJk5NKzZB-bIcRStrvnGcExmI",
+    "name": "801 Chophouse",
+    "address": "3000 E 1st Ave, Denver, CO 80206",
+    "lat": 39.7171885,
+    "lng": -104.95284679999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.6,
+    "googleRatingCount": 1125,
+    "googleMapsUri": "https://maps.google.com/?cid=7117381104166754890&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ_Xn8zMJ4bIcRDE9w8dnwix8",
+    "name": "Denver ChopHouse & Brewery",
+    "address": "1735 19th St Ste 100, Denver, CO 80202",
+    "lat": 39.755020699999996,
+    "lng": -104.99731179999999,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 1379,
+    "googleMapsUri": "https://maps.google.com/?cid=2273175255787785996&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJU6RNN_uRbIcRE2BAgf3g97k",
+    "name": "Parker Garage",
+    "address": "19420 Mainstreet, Parker, CO 80138",
+    "lat": 39.518339999999995,
+    "lng": -104.763086,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.2,
+    "googleRatingCount": 1352,
+    "googleMapsUri": "https://maps.google.com/?cid=13400426595664027667&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJdUUM8dKaa4cR8-EPhVSqCHo",
+    "name": "Windy Saddle Cafe",
+    "address": "1110 Washington Ave Suite #100, Golden, CO 80401",
+    "lat": 39.755741199999996,
+    "lng": -105.2219262,
+    "suggestedAttributes": [
+      "off_menu_gf_on_request"
+    ],
+    "menuUrl": null,
+    "googleRating": 4.3,
+    "googleRatingCount": 906,
+    "googleMapsUri": "https://maps.google.com/?cid=8793465552427278835&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   }
 ]
