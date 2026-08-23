@@ -54,6 +54,13 @@ export interface SeedSource {
   suggestedAttributes: ClaimAttribute[];
   /** Optional official menu / GF-info page, seeded as a `menu`-kind `listing_links` row. */
   menuUrl?: string;
+  /**
+   * The brand operates 2+ locations; this entry is its single flagship. Not
+   * consumed by the seed pipeline — it marks candidates for a future
+   * per-location fan-out (AUB-280), whose attributes need per-location
+   * re-verification rather than inheritance.
+   */
+  chain?: true;
 }
 
 export const SEED_SOURCES: SeedSource[] = [
