@@ -88,11 +88,6 @@ export const SEED_SOURCES: SeedSource[] = [
     menuUrl: "https://www.riversandroadscoffee.com/",
   },
   {
-    query: "Whole Sol Blend Bar, LoDo, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
-    chain: true,
-  },
-  {
     query: "Green Bus Cafe, Denver, CO",
     suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.greenbuscafe.com/locations-menus",
