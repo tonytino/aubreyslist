@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
-import { DirectoryMap, type DirectoryMapEntry } from "./DirectoryMap";
+import { DirectoryMap, type DirectoryMapEntry, resetLiveMapFailureLatch } from "./DirectoryMap";
 
 // Each carousel entry carries a FavoriteButton island, which imports the
 // `favorites.fn` server seam (transitively db-touching). As in
@@ -16,10 +16,19 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
 }));
 
 // The live path's internals are covered in DirectoryMapLive.test.tsx against a
-// mocked Maps module; here a controllable stub stands in so the AUB-281
-// fallback tests can make the live subtree crash on demand without pulling the
-// real vis.gl runtime into jsdom.
+// mocked Maps module; here a controllable stub stands in so the
+// failure-fallback tests can make the live subtree crash on demand without
+// pulling the real vis.gl runtime into jsdom.
 const liveMapMock = vi.hoisted(() => ({ throwOnRender: false }));
+
+// Every live-map failure must reach Sentry (the local boundary keeps it from
+// RootErrorBoundary's capture) — mocked at the module seam so the fallback
+// tests can assert the report without a DSN.
+const sentryMock = vi.hoisted(() => ({
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+}));
+vi.mock("@sentry/tanstackstart-react", () => sentryMock);
 vi.mock("~/components/directory/DirectoryMapLive", () => ({
   DirectoryMapLive: () => {
     if (liveMapMock.throwOnRender) {
@@ -38,8 +47,8 @@ vi.mock("~/components/directory/DirectoryMapLive", () => ({
  * selection stay in sync; and the carousel is stacked above the pins with an
  * opaque band so a pin can never bleed over a different restaurant's card. The
  * real-map path is covered (against a mocked Maps module) in
- * `DirectoryMapLive.test.tsx`; the live-map FAILURE fallback (AUB-281) is
- * covered here, against the stub above.
+ * `DirectoryMapLive.test.tsx`; the live-map failure fallback is covered here,
+ * against the stubs above.
  */
 
 // Pin the browser key to absent for this whole file so the fallback renders
@@ -342,15 +351,19 @@ describe("DirectoryMap — carousel FavoriteButton (F6, AUB-125)", () => {
 });
 
 describe("DirectoryMap — live-map failure fallback (AUB-281)", () => {
-  // These tests need the key-PRESENT path; the seam is the same env accessor
+  // These tests need the key-present path; the seam is the same env accessor
   // (app/lib/public-env.ts) the file-level stub pins to absent.
   beforeEach(() => {
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_KEY", "test-key");
+    resetLiveMapFailureLatch();
   });
   afterEach(() => {
     vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_KEY", "");
     liveMapMock.throwOnRender = false;
+    resetLiveMapFailureLatch();
     window.gm_authFailure = undefined;
+    sentryMock.captureException.mockClear();
+    sentryMock.captureMessage.mockClear();
     vi.restoreAllMocks();
   });
 
@@ -368,11 +381,17 @@ describe("DirectoryMap — live-map failure fallback (AUB-281)", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     renderMap();
     expect(screen.getByTestId("map-placeholder-backdrop")).toBeInTheDocument();
-    // The regression that motivated the fix: before the local boundary, this
-    // throw replaced the ENTIRE browse route — carousel included — with the
-    // root error page.
+    // Guards the route-level invariant: a live-map throw must never unmount
+    // the carousel (the root error page would otherwise replace the whole
+    // browse route).
     expect(screen.getByTestId("map-carousel")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Root & Rye, Celiac-safe" }).length).toBe(2);
+    // The degrade is silent for users but not for operators: the original
+    // throw reaches Sentry.
+    expect(sentryMock.captureException).toHaveBeenCalledTimes(1);
+    expect(sentryMock.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "maps runtime half-initialized" })
+    );
   });
 
   it("degrades to the placeholder when Google rejects the key (window.gm_authFailure)", () => {
@@ -388,6 +407,28 @@ describe("DirectoryMap — live-map failure fallback (AUB-281)", () => {
     expect(screen.queryByTestId("live-map-stub")).not.toBeInTheDocument();
     expect(screen.getByTestId("map-placeholder-backdrop")).toBeInTheDocument();
     expect(screen.getByTestId("map-carousel")).toBeInTheDocument();
+    // No throw to preserve on this signal, so the report is a Sentry message.
+    expect(sentryMock.captureMessage).toHaveBeenCalledTimes(1);
+    expect(sentryMock.captureMessage).toHaveBeenCalledWith(
+      expect.stringContaining("rejected the Maps key"),
+      "warning"
+    );
+  });
+
+  it("latches the failure for the whole page load: a remount starts on the placeholder", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { unmount } = renderMap();
+    act(() => {
+      window.gm_authFailure?.();
+    });
+    unmount();
+    // Maps can't recover without a reload and gm_authFailure never fires
+    // twice, so the List→Map toggle's remount must not retry the live path.
+    renderMap();
+    expect(screen.queryByTestId("live-map-stub")).not.toBeInTheDocument();
+    expect(screen.getByTestId("map-placeholder-backdrop")).toBeInTheDocument();
+    // One Sentry report per page load, not one per remount.
+    expect(sentryMock.captureMessage).toHaveBeenCalledTimes(1);
   });
 
   it("restores the previous gm_authFailure handler on unmount (no leak between mounts)", () => {

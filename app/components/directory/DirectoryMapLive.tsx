@@ -26,10 +26,10 @@ import { prefersReducedMotion } from "~/lib/motion";
  * (Google's endorsed React library), rendered only when the public,
  * referrer-restricted `VITE_GOOGLE_MAPS_BROWSER_KEY` is provisioned — the
  * key-absent fallback lives in `DirectoryMap.tsx`, which also degrades to
- * that same placeholder when the live map FAILS (AUB-281): `onLoadError`
- * (wired to `APIProvider`'s `onError` below) reports script-load/CSP
- * failure, while auth rejection (`window.gm_authFailure`) and render crashes
- * are caught by `DirectoryMap` itself.
+ * that same placeholder when the live map fails: `onLoadError` (wired to
+ * `APIProvider`'s `onError` below) reports script-load/CSP failure, while
+ * auth rejection (`window.gm_authFailure`) and render crashes are caught by
+ * `DirectoryMap` itself.
  *
  * - **Pins** are `<AdvancedMarker>`s at each listing's true lat/lng, rendering
  *   the same `MapPinButton` as the placeholder (colour + distinct icon shape +
@@ -144,9 +144,9 @@ export function DirectoryMapLive({
   return (
     <APIProvider
       apiKey={apiKey}
-      // Fires on script-LOAD failure only (network/CSP) — an auth rejection
+      // Fires on script-load failure only (network/CSP) — an auth rejection
       // after a successful load fires `window.gm_authFailure` instead, which
-      // `DirectoryMap` handles alongside this callback (AUB-281).
+      // `DirectoryMap` handles alongside this callback.
       onError={(error) =>
         onLoadError(
           `the Maps script failed to load: ${error instanceof Error ? error.message : String(error)}`
