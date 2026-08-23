@@ -15,7 +15,9 @@ import type { ClaimAttribute } from "~/db/schema";
  * then re-run the refresh to re-capture.
  *
  * Honest by construction: `suggestedAttributes` are grounded in each spot's
- * public GF reputation. `celiac_safe_vs_gluten_friendly` applies only to
+ * public GF reputation — community reports (findmeglutenfree, NCA Denver
+ * Celiacs), local press, and official menus/allergen pages.
+ * `celiac_safe_vs_gluten_friendly` applies only to
  * genuinely dedicated or strongly celiac-reputed places; merely
  * gluten-friendly spots get the specific attributes instead. These are
  * suggestions, not verdicts — the community owns the truth. No incidents are
@@ -56,9 +58,9 @@ export interface SeedSource {
   menuUrl?: string;
   /**
    * The brand operates 2+ locations; this entry is its single flagship. Not
-   * consumed by the seed pipeline — it marks candidates for a future
-   * per-location fan-out (AUB-280), whose attributes need per-location
-   * re-verification rather than inheritance.
+   * consumed by the seed pipeline — it marks brands whose other locations
+   * could be enumerated, where attributes need per-location re-verification
+   * rather than inheritance.
    */
   chain?: true;
 }
@@ -136,6 +138,25 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "gf_substitutes"],
     menuUrl: "https://www.rheinlanderbakery.com/",
   },
+  {
+    query: "Denver Poke Company, LoHi, Denver, CO",
+    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    menuUrl: "https://denverpokecompany.com/",
+  },
+  {
+    query: "Sweet Sisters Bake Shop, Boulder, CO",
+    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    menuUrl: "https://www.sweetsistersboulder.com/",
+  },
+  {
+    query: "Dedicated Bistro and Bakery, Golden, CO",
+    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+  },
+  {
+    query: "Starfish Bakery, Denver, CO",
+    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    menuUrl: "https://starfishbysarah.com/",
+  },
   // --- Dedicated GF beverages (celiac-safe drinks; food cross-contact varies)
   {
     query: "Holidaily Brewing Company, Golden, CO",
@@ -153,7 +174,7 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
     menuUrl: "https://waldschankeciders.com/",
   },
-  // --- Celiac-owner / dedicated-fryer restaurants (strong celiac reputation)
+  // --- Celiac owners / strong celiac reputation (strict cross-contact protocols)
   {
     query: "Acova, Highland, Denver, CO",
     suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_fryer", "dedicated_gf_menu"],
@@ -180,6 +201,35 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
     menuUrl: "https://www.marcoscfp.com/gluten-free",
   },
+  {
+    query: "Bamboo Sushi, LoHi, Denver, CO",
+    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_fryer", "dedicated_gf_menu"],
+    menuUrl: "https://bamboosushi.com/location/lohi/menu",
+    chain: true,
+  },
+  {
+    query: "Urban Egg, Cherry Creek North, Denver, CO",
+    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
+    chain: true,
+  },
+  {
+    query: "HashTAG Restaurant, Aurora, CO",
+    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "off_menu_gf_on_request"],
+  },
+  {
+    query: "Cozobi Fonda Fina, Boulder, CO",
+    suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
+  },
+  {
+    query: "Holy Crepe, Boulder, CO",
+    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "gf_substitutes"],
+  },
+  {
+    query: "The Ginger Pig, Berkeley, Denver, CO",
+    suggestedAttributes: ["dedicated_fryer", "dedicated_gf_menu"],
+    menuUrl: "https://www.gingerpig.com/denver-menus",
+  },
+  // --- Dedicated GF fryer (shared kitchen otherwise)
   {
     query: "Panzano, Downtown Denver, CO",
     suggestedAttributes: ["dedicated_fryer", "dedicated_gf_menu"],
@@ -240,134 +290,6 @@ export const SEED_SOURCES: SeedSource[] = [
     query: "Desert Donuts, Greenwood Village, CO",
     suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
   },
-  // --- Labeled GF menu / GF substitutes (gluten-friendly, shared kitchen)
-  {
-    query: "Blue Pan Pizza, West Highland, Denver, CO",
-    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
-    menuUrl: "https://bluepandenver.com/menu/",
-    chain: true,
-  },
-  {
-    query: "Cattivella, Central Park, Denver, CO",
-    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
-    menuUrl: "https://www.cattivelladenver.com/menu",
-  },
-  {
-    query: "Mici Handcrafted Italian, 7th and Colorado, Denver, CO",
-    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
-    menuUrl: "https://www.miciitalian.com/",
-    chain: true,
-  },
-  {
-    query: "North Italia, Cherry Creek, Denver, CO",
-    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
-    menuUrl: "https://www.northitalia.com/",
-    chain: true,
-  },
-  {
-    query: "True Food Kitchen, Cherry Creek, Denver, CO",
-    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
-    menuUrl: "https://www.truefoodkitchen.com/locations/denver/",
-    chain: true,
-  },
-  {
-    query: "Beau Jo's Pizza, Olde Town Arvada, CO",
-    suggestedAttributes: ["dedicated_gf_menu"],
-    menuUrl: "https://www.beaujos.com/menu/",
-    chain: true,
-  },
-  {
-    query: "Sushi Den, Old South Pearl, Denver, CO",
-    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
-    menuUrl: "https://www.sushiden.net/",
-  },
-  {
-    query: "Phatt Matt's, Denver, CO",
-    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
-    menuUrl: "https://phattmatts.com/",
-  },
-  {
-    query: "Dough Counter, University Hills, Denver, CO",
-    suggestedAttributes: ["dedicated_fryer", "dedicated_gf_menu", "gf_substitutes"],
-    menuUrl: "https://www.doughcounter.com/gluten-free",
-  },
-  {
-    query: "Snooze an A.M. Eatery, Ballpark, Denver, CO",
-    suggestedAttributes: ["gf_substitutes"],
-    menuUrl: "https://www.snoozeeatery.com/",
-    chain: true,
-  },
-  {
-    query: "Gold Mine Cupcakes, Golden, CO",
-    suggestedAttributes: ["gf_substitutes"],
-    menuUrl: "https://www.goldminecupcakes.com/",
-  },
-  {
-    query: "Bella Macaron, Westminster, CO",
-    suggestedAttributes: ["gf_substitutes"],
-    menuUrl: "https://www.bellamacaron.com/",
-  },
-  {
-    query: "Aung's Bangkok Cafe, Englewood, CO",
-    suggestedAttributes: ["off_menu_gf_on_request", "gf_substitutes"],
-    menuUrl: "https://aungsbangkokcafe.com/",
-  },
-  // ------------------------------------------------------------------------
-  // Second curation pass (AUB-279): ~96 additional metro spots, same honesty
-  // rules. Community-report evidence (findmeglutenfree, NCA Denver Celiacs,
-  // local press) grounds every attribute; thinner entries carry only the one
-  // attribute the community source actually names.
-  // ------------------------------------------------------------------------
-  // --- Dedicated / 100% gluten-free facilities (highest-confidence celiac-safe)
-  {
-    query: "Denver Poke Company, LoHi, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
-    menuUrl: "https://denverpokecompany.com/",
-  },
-  {
-    query: "Sweet Sisters Bake Shop, Boulder, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
-    menuUrl: "https://www.sweetsistersboulder.com/",
-  },
-  {
-    query: "Dedicated Bistro and Bakery, Golden, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
-  },
-  {
-    query: "Starfish Bakery, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
-    menuUrl: "https://starfishbysarah.com/",
-  },
-  // --- Strong celiac reputation (dedicated fryers, protocols, community-endorsed)
-  {
-    query: "Bamboo Sushi, LoHi, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_fryer", "dedicated_gf_menu"],
-    menuUrl: "https://bamboosushi.com/location/lohi/menu",
-    chain: true,
-  },
-  {
-    query: "Urban Egg, Cherry Creek North, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
-    chain: true,
-  },
-  {
-    query: "HashTAG Restaurant, Aurora, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "off_menu_gf_on_request"],
-  },
-  {
-    query: "Cozobi Fonda Fina, Boulder, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
-  },
-  {
-    query: "Holy Crepe, Boulder, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "gf_substitutes"],
-  },
-  {
-    query: "The Ginger Pig, Berkeley, Denver, CO",
-    suggestedAttributes: ["dedicated_fryer", "dedicated_gf_menu"],
-    menuUrl: "https://www.gingerpig.com/denver-menus",
-  },
-  // --- Dedicated-fryer restaurants
   {
     query: "West Main Taproom and Grill, Parker, CO",
     suggestedAttributes: ["dedicated_fryer", "dedicated_gf_menu", "gf_substitutes"],
@@ -449,7 +371,46 @@ export const SEED_SOURCES: SeedSource[] = [
     menuUrl: "https://www.pfchangs.com/gluten-free.html",
     chain: true,
   },
-  // --- Pizza & Italian (GF crusts/pastas, labeled menus, celiac-aware prep)
+  // --- Gluten-friendly pizza & Italian (GF crusts/pastas, labeled menus)
+  {
+    query: "Blue Pan Pizza, West Highland, Denver, CO",
+    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
+    menuUrl: "https://bluepandenver.com/menu/",
+    chain: true,
+  },
+  {
+    query: "Cattivella, Central Park, Denver, CO",
+    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
+    menuUrl: "https://www.cattivelladenver.com/menu",
+  },
+  {
+    query: "Mici Handcrafted Italian, 7th and Colorado, Denver, CO",
+    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
+    menuUrl: "https://www.miciitalian.com/",
+    chain: true,
+  },
+  {
+    query: "North Italia, Cherry Creek, Denver, CO",
+    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
+    menuUrl: "https://www.northitalia.com/",
+    chain: true,
+  },
+  {
+    query: "Beau Jo's Pizza, Olde Town Arvada, CO",
+    suggestedAttributes: ["dedicated_gf_menu"],
+    menuUrl: "https://www.beaujos.com/menu/",
+    chain: true,
+  },
+  {
+    query: "Phatt Matt's, Denver, CO",
+    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
+    menuUrl: "https://phattmatts.com/",
+  },
+  {
+    query: "Dough Counter, University Hills, Denver, CO",
+    suggestedAttributes: ["dedicated_fryer", "dedicated_gf_menu", "gf_substitutes"],
+    menuUrl: "https://www.doughcounter.com/gluten-free",
+  },
   {
     query: "Angelo's Taverna, Speer, Denver, CO",
     suggestedAttributes: ["dedicated_gf_menu", "off_menu_gf_on_request", "gf_substitutes"],
@@ -543,7 +504,17 @@ export const SEED_SOURCES: SeedSource[] = [
     query: "Infinitus Pizza PIE, Broomfield, CO",
     suggestedAttributes: ["gf_substitutes"],
   },
-  // --- Mexican, Latin American & Asian (GF-marked menus, tamari, corn-based)
+  // --- Gluten-friendly Mexican, Latin American & Asian (GF-marked menus, tamari, corn-based)
+  {
+    query: "Sushi Den, Old South Pearl, Denver, CO",
+    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
+    menuUrl: "https://www.sushiden.net/",
+  },
+  {
+    query: "Aung's Bangkok Cafe, Englewood, CO",
+    suggestedAttributes: ["off_menu_gf_on_request", "gf_substitutes"],
+    menuUrl: "https://aungsbangkokcafe.com/",
+  },
   {
     query: "Pho Lang Co, Virginia Village, Denver, CO",
     suggestedAttributes: ["off_menu_gf_on_request", "gf_substitutes"],
@@ -556,7 +527,7 @@ export const SEED_SOURCES: SeedSource[] = [
     chain: true,
   },
   {
-    query: "Spice Room, Highlands, Denver, CO",
+    query: "Spice Room, Highland, Denver, CO",
     suggestedAttributes: ["dedicated_gf_menu"],
     menuUrl: "https://denverspiceroom.com/gluten-free-indian-food-denver/",
     chain: true,
@@ -651,7 +622,23 @@ export const SEED_SOURCES: SeedSource[] = [
     query: "Moose Hill Cantina, Lakewood, CO",
     suggestedAttributes: ["off_menu_gf_on_request"],
   },
-  // --- Breakfast, cafes & desserts (GF swaps and labeled options)
+  // --- Gluten-friendly breakfast, cafes & desserts (GF swaps, labeled options)
+  {
+    query: "Snooze an A.M. Eatery, Ballpark, Denver, CO",
+    suggestedAttributes: ["gf_substitutes"],
+    menuUrl: "https://www.snoozeeatery.com/",
+    chain: true,
+  },
+  {
+    query: "Gold Mine Cupcakes, Golden, CO",
+    suggestedAttributes: ["gf_substitutes"],
+    menuUrl: "https://www.goldminecupcakes.com/",
+  },
+  {
+    query: "Bella Macaron, Westminster, CO",
+    suggestedAttributes: ["gf_substitutes"],
+    menuUrl: "https://www.bellamacaron.com/",
+  },
   {
     query: "Olive and Finch, Union Station, Denver, CO",
     suggestedAttributes: ["off_menu_gf_on_request", "gf_substitutes"],
@@ -718,7 +705,13 @@ export const SEED_SOURCES: SeedSource[] = [
     query: "Blue Sky Cafe and Juice Bar, Lakewood, CO",
     suggestedAttributes: ["off_menu_gf_on_request"],
   },
-  // --- American, gastropub & steakhouse (GF menus, buns, celiac-aware service)
+  // --- Gluten-friendly American, pub & steakhouse (GF menus, buns, aware service)
+  {
+    query: "True Food Kitchen, Cherry Creek, Denver, CO",
+    suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
+    menuUrl: "https://www.truefoodkitchen.com/locations/denver/",
+    chain: true,
+  },
   {
     query: "Steuben's, Uptown, Denver, CO",
     suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
