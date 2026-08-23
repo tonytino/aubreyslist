@@ -1,0 +1,1 @@
+- `[manual]` The map page no longer breaks when Google Maps can't load (blocked script, or a key rejected for the current site); the simplified map is shown instead, with pins, cards, and selection all still working.

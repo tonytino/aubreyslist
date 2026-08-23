@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
@@ -15,6 +15,22 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
   unfavoriteListing: vi.fn(() => Promise.resolve()),
 }));
 
+// The live path's internals are covered in DirectoryMapLive.test.tsx against a
+// mocked Maps module; here a controllable stub stands in so the AUB-281
+// fallback tests can make the live subtree crash on demand without pulling the
+// real vis.gl runtime into jsdom.
+const liveMapMock = vi.hoisted(() => ({ throwOnRender: false }));
+vi.mock("~/components/directory/DirectoryMapLive", () => ({
+  DirectoryMapLive: () => {
+    if (liveMapMock.throwOnRender) {
+      // Stand-in for the minified vis.gl marker throws that a half-initialized
+      // Maps runtime produces after an async auth rejection.
+      throw new Error("maps runtime half-initialized");
+    }
+    return <div data-testid="live-map-stub" />;
+  },
+}));
+
 /**
  * Tests for the Map view's key-absent fallback path. Safety-relevant
  * behaviour: every pin/mini-card carries an accessible name that includes the
@@ -22,7 +38,8 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
  * selection stay in sync; and the carousel is stacked above the pins with an
  * opaque band so a pin can never bleed over a different restaurant's card. The
  * real-map path is covered (against a mocked Maps module) in
- * `DirectoryMapLive.test.tsx`.
+ * `DirectoryMapLive.test.tsx`; the live-map FAILURE fallback (AUB-281) is
+ * covered here, against the stub above.
  */
 
 // Pin the browser key to absent for this whole file so the fallback renders
@@ -94,6 +111,7 @@ function renderMap(selectedId: string | null = "a") {
   const view = render(ui(selectedId, entries));
   return {
     onSelect,
+    unmount: () => view.unmount(),
     rerenderWith: (sel: string | null, ents: readonly DirectoryMapEntry[] = entries) =>
       view.rerender(ui(sel, ents)),
   };
@@ -320,5 +338,64 @@ describe("DirectoryMap — carousel FavoriteButton (F6, AUB-125)", () => {
     const heart = within(carousel).getByRole("button", { name: "Save Root & Rye" });
     expect(miniCard).not.toContainElement(heart);
     expect(heart).not.toContainElement(miniCard);
+  });
+});
+
+describe("DirectoryMap — live-map failure fallback (AUB-281)", () => {
+  // These tests need the key-PRESENT path; the seam is the same env accessor
+  // (app/lib/public-env.ts) the file-level stub pins to absent.
+  beforeEach(() => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_KEY", "test-key");
+  });
+  afterEach(() => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_BROWSER_KEY", "");
+    liveMapMock.throwOnRender = false;
+    window.gm_authFailure = undefined;
+    vi.restoreAllMocks();
+  });
+
+  it("renders the live path, not the placeholder, when a key is provisioned", () => {
+    renderMap();
+    expect(screen.getByTestId("live-map-stub")).toBeInTheDocument();
+    expect(screen.queryByTestId("map-placeholder-backdrop")).not.toBeInTheDocument();
+  });
+
+  it("degrades to the placeholder WITH the carousel intact when the live map throws during render", () => {
+    liveMapMock.throwOnRender = true;
+    // React logs boundary-caught errors and the fail handler warns — both
+    // expected here, neither useful as test noise.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    renderMap();
+    expect(screen.getByTestId("map-placeholder-backdrop")).toBeInTheDocument();
+    // The regression that motivated the fix: before the local boundary, this
+    // throw replaced the ENTIRE browse route — carousel included — with the
+    // root error page.
+    expect(screen.getByTestId("map-carousel")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Root & Rye, Celiac-safe" }).length).toBe(2);
+  });
+
+  it("degrades to the placeholder when Google rejects the key (window.gm_authFailure)", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    renderMap();
+    expect(screen.getByTestId("live-map-stub")).toBeInTheDocument();
+    // The live path registered Google's auth-failure hook…
+    expect(window.gm_authFailure).toBeTypeOf("function");
+    // …and Google calling it (async, post-load) flips the view to the fallback.
+    act(() => {
+      window.gm_authFailure?.();
+    });
+    expect(screen.queryByTestId("live-map-stub")).not.toBeInTheDocument();
+    expect(screen.getByTestId("map-placeholder-backdrop")).toBeInTheDocument();
+    expect(screen.getByTestId("map-carousel")).toBeInTheDocument();
+  });
+
+  it("restores the previous gm_authFailure handler on unmount (no leak between mounts)", () => {
+    const previous = vi.fn();
+    window.gm_authFailure = previous;
+    const { unmount } = renderMap();
+    expect(window.gm_authFailure).not.toBe(previous);
+    unmount();
+    expect(window.gm_authFailure).toBe(previous);
   });
 });
