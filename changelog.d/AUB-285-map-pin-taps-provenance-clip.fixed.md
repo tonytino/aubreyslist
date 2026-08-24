@@ -1,0 +1,1 @@
+- `[manual]` Each live-map pin now carries a marker-level click handler so Google's mobile gesture layer no longer swallows pin taps, and the map mini-card's provenance label reads "Aubrey's Bot" so it fits the card.

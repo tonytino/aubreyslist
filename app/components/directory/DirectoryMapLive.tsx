@@ -17,9 +17,11 @@ import {
   type DirectoryMapEntry,
   MapPinButton,
   RecenterFab,
+  SearchAreaPill,
   useUserSelectionChange,
 } from "~/components/directory/map-ui";
 import { prefersReducedMotion } from "~/lib/motion";
+import type { Coords } from "~/listings/distance";
 
 /**
  * The real directory map: Google Maps via `@vis.gl/react-google-maps`
@@ -46,6 +48,12 @@ import { prefersReducedMotion } from "~/lib/motion";
  *   (`PanToSelection`) — never on mount or when the route's validity guard
  *   reassigns the selection after a filter change, so the pan never fights
  *   the refit-unless-user-moved logic.
+ * - **"Search near here"**: once the visitor owns the camera, a pill over the
+ *   map offers to re-run the browse from the current map center
+ *   (`onSearchArea`). A successful search hides the pill until the camera
+ *   moves again and leaves the user-moved flag set, so the refit that would
+ *   otherwise chase the new result pins stays suppressed — the visitor framed
+ *   this view. A failed search keeps the pill up for a retry.
  * - **Reduced motion**: every programmatic fit or pan checks
  *   `prefers-reduced-motion`; when reduced, the camera jumps via the
  *   never-animated `map.moveCamera` (camera computed by the pure
@@ -66,6 +74,21 @@ import { prefersReducedMotion } from "~/lib/motion";
  */
 
 const DIRECTORY_MAP_ID = "DEMO_MAP_ID";
+
+/**
+ * Keep the marker element itself out of the tab order and the accessibility
+ * tree: registering a marker click handler makes Maps treat the element as
+ * interactive (focusable), which would double every stop — the element AND
+ * the accessible pin `<button>` inside it. `role="presentation"` strips only
+ * the element's own role; the inner button keeps its role, name, and
+ * `aria-pressed`. Stable module-level ref callback so re-renders never
+ * re-run it needlessly.
+ */
+function demoteMarkerElement(marker: google.maps.marker.AdvancedMarkerElement | null): void {
+  if (!marker) return;
+  marker.tabIndex = -1;
+  marker.setAttribute("role", "presentation");
+}
 
 /**
  * Pixel padding for every bounds fit: on the bottom, the opaque mini-card
@@ -123,6 +146,7 @@ export function DirectoryMapLive({
   selectedId,
   onSelect,
   onLoadError,
+  onSearchArea,
 }: {
   apiKey: string;
   entries: readonly DirectoryMapEntry[];
@@ -130,17 +154,39 @@ export function DirectoryMapLive({
   onSelect: (id: string) => void;
   /** The Maps JS script failed to load (network/CSP) — see the module doc. */
   onLoadError: (cause: string) => void;
+  /**
+   * Re-run the browse anchored on the current map center. When set, the
+   * "Search near here" pill surfaces after the visitor takes the camera over
+   * (the same user-gesture signals as `userMoved`).
+   */
+  onSearchArea?: (center: Coords) => void | Promise<void>;
 }) {
   const colorScheme = useMapColorScheme();
   const bounds = useMemo(() => boundsForEntries(entries), [entries]);
 
   // "User moved the camera" heuristic (simple by design): a drag start, or a
-  // zoom change that we didn't cause programmatically, marks the camera as
-  // user-owned — after which filter changes stop re-fitting until the visitor
-  // taps the recenter FAB (which resets the flag). Refs, not state: these must
-  // never re-render the map.
+  // zoom/center change that we didn't cause programmatically, marks the
+  // camera as user-owned — after which filter changes stop re-fitting until
+  // the visitor taps the recenter FAB (which resets the flag). Refs, not
+  // state: these must never re-render the map.
   const userMoved = useRef(false);
-  const programmaticMove = useRef(false);
+  // Starts true: map creation applies the initial camera (`defaultBounds`)
+  // before any effect can flag it, so the camera events it fires must not
+  // read as user gestures. The first idle — and every later one — hands the
+  // event stream back to the user.
+  const programmaticMove = useRef(true);
+
+  // Whether the "Search near here" pill shows — state, because it must
+  // render. Set alongside `userMoved` on the same gestures; cleared by the
+  // recenter FAB (the camera is the app's again) and after a successful area
+  // search. A search deliberately leaves `userMoved.current` true: the
+  // visitor framed this view, so the refit that would otherwise chase the
+  // new pins stays suppressed and the camera does not jump.
+  const [showSearchArea, setShowSearchArea] = useState(false);
+  const onUserCameraMove = () => {
+    userMoved.current = true;
+    setShowSearchArea(true);
+  };
 
   return (
     <APIProvider
@@ -154,6 +200,15 @@ export function DirectoryMapLive({
         )
       }
     >
+      {/* Before the map in DOM order (position is absolute, so visuals are
+          unchanged): the pill is the canvas overlay's first tab stop instead
+          of sitting after every marker. */}
+      {onSearchArea && showSearchArea ? (
+        <LiveSearchAreaControl
+          onSearchArea={onSearchArea}
+          onSearched={() => setShowSearchArea(false)}
+        />
+      ) : null}
       <GoogleMap
         mapId={DIRECTORY_MAP_ID}
         // `z-0` is the explicit stacking clamp for the safety invariant (see
@@ -176,16 +231,23 @@ export function DirectoryMapLive({
         gestureHandling="greedy"
         disableDefaultUI
         clickableIcons={false}
-        onDragstart={() => {
-          userMoved.current = true;
-        }}
+        onDragstart={onUserCameraMove}
         onZoomChanged={() => {
           if (!programmaticMove.current) {
-            userMoved.current = true;
+            onUserCameraMove();
           }
         }}
-        // The camera settles: any programmatic fit is complete, so subsequent
-        // zoom events are user-initiated again.
+        // Keyboard pans (arrow keys) fire no dragstart — the guarded
+        // center-change is their user-gesture signal. Programmatic camera
+        // writes (mount fit, refit, recenter, the selection pan) all set
+        // `programmaticMove` first, so only real gestures pass the guard.
+        onCenterChanged={() => {
+          if (!programmaticMove.current) {
+            onUserCameraMove();
+          }
+        }}
+        // The camera settles: any programmatic fit or pan is complete, so
+        // subsequent camera events are user-initiated again.
         onIdle={() => {
           programmaticMove.current = false;
         }}
@@ -193,11 +255,27 @@ export function DirectoryMapLive({
         {entries.map(({ vm, lat, lng }, entryIndex) => (
           <AdvancedMarker
             key={vm.id}
+            // Demote the marker element itself out of the focus/AT order:
+            // with `gmpClickable` set, Maps makes its own element focusable,
+            // which would double every stop (marker + inner button). The
+            // inner button stays the single named, `aria-pressed` control.
+            ref={demoteMarkerElement}
             position={{ lat, lng }}
             // Match the placeholder's semantics: the pin body is centred on the
             // coordinate (the placeholder centres via -translate-x/y-1/2).
             anchorPoint={AdvancedMarkerAnchorPoint.CENTER}
             zIndex={vm.id === selectedId ? 2 : 1}
+            // Marker-level click, required for touch: without it vis.gl leaves
+            // the marker non-clickable (`gmpClickable` false, content
+            // `pointer-events: none`), and Google's mobile gesture layer
+            // swallows taps before they reach the inner button. The button's
+            // own DOM onClick stays for keyboard/AT and the placeholder path;
+            // when both fire on one desktop click, the second `onSelect` with
+            // the same id is a no-op for the selection state and the
+            // `useUserSelectionChange` discriminator (`prev === selectedId`),
+            // and pins have no tap-again navigation (carousel-only), so
+            // nothing double-triggers.
+            onClick={() => onSelect(vm.id)}
           >
             {/* The same accessible pin as the fallback path: real <button>,
                 colour + entries-order index number + "name, safety state"
@@ -217,9 +295,18 @@ export function DirectoryMapLive({
           userMoved={userMoved}
           programmaticMove={programmaticMove}
         />
-        <PanToSelection entries={entries} selectedId={selectedId} />
+        <PanToSelection
+          entries={entries}
+          selectedId={selectedId}
+          programmaticMove={programmaticMove}
+        />
       </GoogleMap>
-      <LiveRecenterFab bounds={bounds} userMoved={userMoved} programmaticMove={programmaticMove} />
+      <LiveRecenterFab
+        bounds={bounds}
+        userMoved={userMoved}
+        programmaticMove={programmaticMove}
+        onRecenter={() => setShowSearchArea(false)}
+      />
     </APIProvider>
   );
 }
@@ -263,21 +350,25 @@ function RefitOnEntriesChange({
  * the band offset needs a pixel→lat projection at the live zoom, and the pin
  * stays well clear of the band without it (canvas min-height ≫ 2× band).
  *
- * Leaves `userMoved` alone: the pan answers an explicit tap and fires no zoom
- * event, so the user-moved heuristic and the next filter-change refit behave
- * per `RefitOnEntriesChange`'s contract.
+ * Leaves `userMoved` alone: the pan answers an explicit tap and flags itself
+ * programmatic (its center-change events must not read as a camera gesture),
+ * so the user-moved heuristic and the next filter-change refit behave per
+ * `RefitOnEntriesChange`'s contract.
  */
 function PanToSelection({
   entries,
   selectedId,
+  programmaticMove,
 }: {
   entries: readonly DirectoryMapEntry[];
   selectedId: string | null;
+  programmaticMove: { current: boolean };
 }) {
   const map = useMap();
   useUserSelectionChange(map !== null, entries, selectedId, (id) => {
     const entry = entries.find((candidate) => candidate.vm.id === id);
     if (!map || !entry) return;
+    programmaticMove.current = true;
     const center = { lat: entry.lat, lng: entry.lng };
     if (prefersReducedMotion()) {
       map.moveCamera({ center });
@@ -290,18 +381,60 @@ function PanToSelection({
 }
 
 /**
+ * The live wiring for the shared {@link SearchAreaPill} (the LiveRecenterFab
+ * pattern): reads the current map center and hands it to the route to re-run
+ * the browse from there. Mounted only while the visitor owns the camera. A
+ * successful search calls `onSearched` so the parent hides the pill until
+ * the camera moves again; a failed one clears only the busy state — the pill
+ * stays mounted as its own retry, and the rejection is swallowed here (the
+ * route's status region announces the failure).
+ */
+function LiveSearchAreaControl({
+  onSearchArea,
+  onSearched,
+}: {
+  onSearchArea: (center: Coords) => void | Promise<void>;
+  onSearched: () => void;
+}) {
+  const map = useMap();
+  const [pending, setPending] = useState(false);
+  return (
+    <SearchAreaPill
+      pending={pending}
+      onClick={() => {
+        const center = map?.getCenter();
+        if (!center) return;
+        setPending(true);
+        void Promise.resolve(onSearchArea({ lat: center.lat(), lng: center.lng() })).then(
+          () => {
+            setPending(false);
+            onSearched();
+          },
+          () => {
+            setPending(false);
+          }
+        );
+      }}
+    />
+  );
+}
+
+/**
  * The functional recenter FAB (unwired in the fallback path): re-fits the
  * camera to the current pins and hands the camera back to the app (clears the
- * user-moved flag so filter changes auto-fit again).
+ * user-moved flag so filter changes auto-fit again, and `onRecenter` lets the
+ * parent drop the "Search near here" pill for the same reason).
  */
 function LiveRecenterFab({
   bounds,
   userMoved,
   programmaticMove,
+  onRecenter,
 }: {
   bounds: MapBounds | null;
   userMoved: { current: boolean };
   programmaticMove: { current: boolean };
+  onRecenter: () => void;
 }) {
   const map = useMap();
   return (
@@ -309,6 +442,7 @@ function LiveRecenterFab({
       onClick={() => {
         if (!map || !bounds) return;
         userMoved.current = false;
+        onRecenter();
         fitMapToBounds(map, bounds, programmaticMove);
       }}
     />

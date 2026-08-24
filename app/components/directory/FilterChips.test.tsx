@@ -36,6 +36,7 @@ function renderChips(
   const onSavedToggle = vi.fn();
   const onBotToggle = vi.fn();
   const onSortChange = vi.fn();
+  const onClearArea = vi.fn();
   const onResetAll = vi.fn();
 
   // Seed the current-user suspense source so `useSuspenseQuery(currentUserQuery)`
@@ -58,6 +59,8 @@ function renderChips(
         onBotToggle={onBotToggle}
         sort="alpha"
         onSortChange={onSortChange}
+        areaActive={false}
+        onClearArea={onClearArea}
         isAnyFilterActive={false}
         onResetAll={onResetAll}
         {...overrides}
@@ -71,6 +74,7 @@ function renderChips(
     onSavedToggle,
     onBotToggle,
     onSortChange,
+    onClearArea,
     onResetAll,
   };
 }
@@ -319,5 +323,23 @@ describe("FilterChips — Reset chip (repo-owner mobile feedback)", () => {
     const { onResetAll } = renderChips({ isAnyFilterActive: true });
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(onResetAll).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("FilterChips — searched-spot chip (AUB-284)", () => {
+  it("is absent while no area search is active", () => {
+    renderChips();
+    expect(screen.queryByRole("button", { name: "Clear searched spot" })).not.toBeInTheDocument();
+  });
+
+  it("shows a dismissible chip while an area anchors the browse, and one tap clears it", () => {
+    // Visible in both views (the row renders above list AND map), so the
+    // active constraint is never invisible in the list.
+    const { onClearArea } = renderChips({ areaActive: true });
+    const chip = screen.getByRole("button", { name: "Clear searched spot" });
+    // Label-in-name: the visible label is contained in the accessible name.
+    expect(chip).toHaveTextContent("Searched spot");
+    fireEvent.click(chip);
+    expect(onClearArea).toHaveBeenCalledTimes(1);
   });
 });

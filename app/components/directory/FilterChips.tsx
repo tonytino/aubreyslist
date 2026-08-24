@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
-import { Check, Heart, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
+import { Check, Heart, MapPin, RotateCcw, ShieldCheck, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { SearchChip } from "~/components/directory/SearchChip";
@@ -189,6 +189,8 @@ export function FilterChips({
   onBotToggle,
   sort,
   onSortChange,
+  areaActive,
+  onClearArea,
   isAnyFilterActive,
   onResetAll,
 }: {
@@ -232,6 +234,14 @@ export function FilterChips({
    */
   onSortChange: (next: BrowseSort) => void;
   /**
+   * Whether an area search is anchoring the browse (`?areaLat=`/`?areaLng=`
+   * both set). Shows the dismissible "Searched spot" chip in both views — an
+   * invisible active constraint would be dishonest.
+   */
+  areaActive: boolean;
+  /** Dismiss the searched area; the route clears both params (page 1). */
+  onClearArea: () => void;
+  /**
    * Whether any filter-like browse search param (search, quick, taxonomy
    * attrs, saved mode, sort, radius, page, or a near-me coordinate pair) is
    * off its default — the route computes this via `isAnyBrowseFilterActive`
@@ -268,6 +278,24 @@ export function FilterChips({
       {/* Sort chip — the server-side `?sort=` control, mirroring the
           DistanceSelector chip pattern. */}
       <SortSelector value={sort} onChange={onSortChange} />
+
+      {/* Active area search ("Search near here" on the map): a dismissible
+          chip, visible in BOTH views so the constraint is never invisible in
+          the list. One tap clears it; the X is the visual dismiss cue, and
+          the accessible name leads with the action while containing the
+          visible label (WCAG label-in-name). */}
+      {areaActive ? (
+        <button
+          type="button"
+          aria-label="Clear searched spot"
+          onClick={onClearArea}
+          className={chipClasses(true)}
+        >
+          <MapPin className="size-4" strokeWidth={2.25} aria-hidden="true" />
+          <span>Searched spot</span>
+          <X className="size-4" strokeWidth={2.25} aria-hidden="true" />
+        </button>
+      ) : null}
 
       {/* Sign-in-gated "Saved" chip — the server-side favorites filter. */}
       <SavedChip saved={saved} onToggle={onSavedToggle} />
