@@ -1,0 +1,1 @@
+- `[manual]` Removed the never-populated Google rating pill from the browse card.

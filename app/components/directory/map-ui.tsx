@@ -12,7 +12,11 @@ import type { CSSProperties } from "react";
 import { useEffect, useRef } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
-import type { RestaurantCardVM } from "~/components/listing/ListingCard";
+import {
+  CardLocationLine,
+  cardLocationParts,
+  type RestaurantCardVM,
+} from "~/components/listing/ListingCard";
 import {
   SafetySignal,
   type SafetyState,
@@ -77,8 +81,8 @@ const MAP_CONTROL_SURFACE =
 /**
  * Approximate rendered height of the opaque carousel band in px — the ONE
  * retune point when the mini-cards change size: `pt-3` (12) + card (~92: `py-2`
- * + name + address + 30px chip row + border) + `pb-3` (12). Derived from it:
- * the live map's `FIT_PADDING.bottom` and selection-pan offset
+ * + name + location line + 30px chip row + border) + `pb-3` (12). Derived from
+ * it: the live map's `FIT_PADDING.bottom` and selection-pan offset
  * (`DirectoryMapLive.tsx`) and the recenter FAB's `bottom-[128px]` (band + a
  * 12px gap — Tailwind can't interpolate a JS constant into a class, so that
  * one is restated below).
@@ -183,14 +187,19 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
 }
 
 /**
- * The mini-card's accessible name: the shared pin name plus, for a
- * bot-suggested listing with no verdict, the provenance the card's trust row
- * shows sighted users — the browse list card exposes the same context to AT.
- * Card-only on purpose: pin announcements stay terse.
+ * The mini-card's accessible name: the shared pin name, the location the card
+ * shows sighted users, and — for a bot-suggested listing with no verdict — the
+ * provenance from its trust row. The browse list card exposes the same context
+ * to AT. Card-only on purpose: pin announcements stay terse.
+ *
+ * `aria-label` overrides button content, so the location is announced only
+ * because it is folded in here. Comma-joined, never the visual middot: a screen
+ * reader has no useful reading of "·".
  */
 function cardAccessibleName(vm: RestaurantCardVM): string {
-  const base = pinAccessibleName(vm);
-  return !vm.safetyState && vm.suggestedByBot ? `${base}, suggested by Aubrey's Bot` : base;
+  const parts = [pinAccessibleName(vm), ...cardLocationParts(vm)];
+  if (!vm.safetyState && vm.suggestedByBot) parts.push("suggested by Aubrey's Bot");
+  return parts.join(", ");
 }
 
 /**
@@ -349,8 +358,8 @@ function scrollCardFlushLeft(container: HTMLDivElement, card: HTMLDivElement): v
  * correlation aid: it is `aria-hidden`, the card's accessible name
  * (`cardAccessibleName`) never carries it, and safety meaning still comes
  * from the chip row below (colour + icon + label).
- * Text-dense slim cards: name, distance (address when no distance), and the
- * same trust row rules as the browse list card (`ListingCard`): headline
+ * Text-dense slim cards: name, the shared "city · distance" location line, and
+ * the same trust row rules as the browse list card (`ListingCard`): headline
  * `SafetySignal` (or the bot-provenance hint when there is no verdict but a
  * live bot suggestion, or the shared dashed `UnattestedBadge` when neither),
  * plus the incident add-on chip whenever `hasRecentIncident` — recent harm
@@ -498,12 +507,15 @@ export function MapCarousel({
                   {vm.name}
                 </span>
               </span>
-              {/* Distance when the browse response derived one ("0.4 mi" — the
-                  same server label the list card appends), address otherwise:
-                  a standing-outside decision cue first, never an empty row. */}
-              <span className="mt-0.5 block truncate pr-14 text-caption text-muted-foreground">
-                {vm.distanceLabel ?? vm.address}
-              </span>
+              {/* The same location line the list card renders, from one shared
+                  component so the two surfaces cannot disagree. At 200px only the
+                  city truncates — the distance always stays whole. `pr-14` keeps
+                  it clear of the overlaid heart. */}
+              <CardLocationLine
+                vm={vm}
+                as="span"
+                className="mt-0.5 pr-14 text-caption text-muted-foreground"
+              />
               {/* Trust row — the same rules as ListingCard's claim row.
                   `min-h-[30px]` reserves the badge family's rendered height
                   (py-1 + text-body-sm line + border) so every card keeps the

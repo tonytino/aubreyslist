@@ -1,0 +1,1 @@
+- `[manual]` Browse cards and map mini-cards now read "Denver · 1.2 mi" instead of the full street address, and announce the same location to screen readers. On a narrow card only the city truncates — the distance always stays whole. The full address is still shown on the listing detail page.

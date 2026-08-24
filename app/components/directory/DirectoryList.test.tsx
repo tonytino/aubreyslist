@@ -32,7 +32,7 @@ const vms: RestaurantCardVM[] = [
   {
     id: "listing-1",
     name: "Acme Gluten-Free",
-    address: "123 Main St, Denver, CO",
+    city: "Denver",
     safetyState: "celiac-safe",
     suggestedByBot: false,
     suggestedAttributes: [],
@@ -43,7 +43,7 @@ const vms: RestaurantCardVM[] = [
   {
     id: "listing-2",
     name: "Second Spot",
-    address: "456 Elm St, Denver, CO",
+    city: "Boulder",
     safetyState: "gluten-friendly",
     suggestedByBot: false,
     suggestedAttributes: [],

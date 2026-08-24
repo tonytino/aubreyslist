@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Check, Clock, Heart, Star, TriangleAlert, Users } from "lucide-react";
+import { Check, Clock, Heart, TriangleAlert, Users } from "lucide-react";
 import { type ComponentProps, useState } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
@@ -8,6 +8,7 @@ import { SafetySignal, type SafetyState, UnattestedBadge } from "~/components/Sa
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
 import { cn } from "~/lib/utils";
+import { cityFromAddress } from "~/listings/address";
 import { listingPreviewLinkState } from "~/listings/photo-preview-state";
 import { placePhotoProxyUrl } from "~/listings/place-photo-url";
 import type { ClaimAttribute } from "~/listings/taxonomy";
@@ -32,14 +33,18 @@ export type RestaurantCardAccent = "lavender" | "peach" | "mint" | "sky";
  * never the raw DB row, so the card stays client-safe and testable.
  *
  * ADR-007: `safetyState` is the only safety verdict. `null` renders the honest
- * "Not yet attested" chip, never a fabricated verdict. `googleRating` is an external,
- * attributed Google Places rating and must not read as a safety score.
+ * "Not yet attested" chip, never a fabricated verdict.
  */
 export interface RestaurantCardVM {
   id: string;
   name: string;
-  /** Location line (neighborhood is not in the schema yet — omitted for now). */
-  address: string;
+  /**
+   * City parsed from the stored address, e.g. "Denver". Absent when the address
+   * has no parseable city — the location line then drops the segment. A card
+   * renders the city alone; the full street address is shown on the
+   * listing-detail page (the browse payload still carries it either way).
+   */
+  city?: string;
   /** e.g. "0.4 mi" — rendered only when provided. */
   distanceLabel?: string;
   /** The headline safety verdict, or `null` for the honest "Not yet attested" chip. */
@@ -72,11 +77,6 @@ export interface RestaurantCardVM {
   evidence?: { confirmations: number; contributors: number };
   /** Decorative photo-placeholder gradient (never a safety signal). */
   accent: RestaurantCardAccent;
-  /**
-   * External Google Places rating. Rendered as an attributed pill only when present —
-   * never styled or labelled as a safety score (ADR-007).
-   */
-  googleRating?: { value: number; count: number } | null;
   /**
    * Public count of people who have saved this listing; the pill hides at 0. Meaning is
    * carried by the heart glyph + count + `aria-label` + tooltip, with no visible "saves"
@@ -113,9 +113,71 @@ const FRESHNESS = {
 } as const;
 
 /**
- * Attributed community pill — the shared shell for the save-count and Google-rating
- * pills. A real, non-submitting `<button type="button">` so the tooltip trigger is
- * focusable with proper semantics; Tailwind preflight strips native button chrome.
+ * The location atoms for an accessible name — `["Denver", "0.8 mi"]`, either
+ * segment allowed to be absent. A surface folding location into an `aria-label`
+ * joins these with commas, so it never has to unpick a rendered separator.
+ */
+export function cardLocationParts(vm: RestaurantCardVM): string[] {
+  return [vm.city, vm.distanceLabel].filter((part): part is string => Boolean(part));
+}
+
+/**
+ * The card's location line — `city · distance`, with either segment allowed to
+ * be absent. Shared by the browse card and the map mini-card so the two
+ * surfaces cannot disagree on what a listing's location reads as, or on how it
+ * degrades. Each caller passes only its own wrapper classes.
+ *
+ * Overflow rule: the CITY truncates and the distance never does. The segments
+ * are separate flex items (`min-w-0 truncate` / `shrink-0`) because a single
+ * joined string clips from the right — on the 200px mini-card that drops the
+ * distance entirely. "Greenwood Village · 12.4 mi" degrades to
+ * "Greenwood Vill… · 12.4 mi".
+ *
+ * The line always renders: with neither segment it keeps an `invisible`
+ * non-breaking space, so a card's height never depends on what it knows and an
+ * unstyled render paints no stub word as content.
+ *
+ * Only the `·` is `aria-hidden`; its surrounding spaces are not. The browse
+ * card's line sits outside the labelled `<a>`, so read-mode lands on the spans
+ * directly and needs the word boundary. Surfaces that fold location into an
+ * `aria-label` build it from {@link cardLocationParts}, never from this markup.
+ */
+export function CardLocationLine({
+  vm,
+  as = "p",
+  className,
+}: {
+  vm: RestaurantCardVM;
+  /** The mini-card sits inside a `<button>`, where a `<p>` is invalid HTML. */
+  as?: "p" | "span";
+  className?: string;
+}) {
+  const Wrapper = as;
+  return (
+    <Wrapper data-testid="card-location" className={cn("flex min-w-0 items-center", className)}>
+      {cardLocationParts(vm).length > 0 ? (
+        <>
+          {vm.city ? <span className="min-w-0 truncate">{vm.city}</span> : null}
+          {vm.city && vm.distanceLabel ? (
+            <span className="shrink-0">
+              &nbsp;<span aria-hidden="true">·</span>&nbsp;
+            </span>
+          ) : null}
+          {vm.distanceLabel ? <span className="shrink-0">{vm.distanceLabel}</span> : null}
+        </>
+      ) : (
+        <span aria-hidden="true" className="invisible">
+          &nbsp;
+        </span>
+      )}
+    </Wrapper>
+  );
+}
+
+/**
+ * Attributed community pill — the shell for the save-count pill. A real,
+ * non-submitting `<button type="button">` so the tooltip trigger is focusable with
+ * proper semantics; Tailwind preflight strips native button chrome.
  * ADR-007: a non-safety signal — meaning lives in the visible content and accessible
  * name, never in the tooltip alone.
  */
@@ -141,16 +203,16 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  * "Not yet attested" chip, never a fabricated verdict. A recent incident adds the
  * `incident` signal.
  *
- * ADR-007: the Google rating pill is external and attributed, not a safety score;
+ * ADR-007: the save-count pill is an attributed community signal, not a safety score;
  * all safety meaning stays in {@link SafetySignal}. Bot suggestions are provenance,
  * never evidence: a listing with live suggestions shows the "Suggested by Aubrey's Bot"
  * label in the meta row's freshness slot (a real freshness cue wins the slot) plus one
  * suggested-variant {@link ClaimBadge} per attribute.
  *
  * Consistent height: every card in a grid row renders at the same height. The shell is
- * `h-full flex flex-col` with a `flex-1` body, and the meta row's space is always
- * reserved — an `invisible` placeholder of the same composition when a VM has no
- * signal. Reserved space, never a fixed total height, so wrapped text is never clipped.
+ * `h-full flex flex-col` with a `flex-1` body, and the location line and meta row always
+ * reserve their space — an `invisible` placeholder of the same composition when a VM has
+ * no signal. Reserved space, never a fixed total height, so wrapped text is never clipped.
  * The claim row holds to that too: it is a single never-wrapping line that scrolls
  * horizontally, so a listing's badge count changes what you scroll to, not the card's
  * height.
@@ -184,7 +246,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
       <Link
         to="/listings/$id"
         params={{ id: vm.id }}
-        aria-label={vm.name}
+        aria-label={[vm.name, ...cardLocationParts(vm)].join(", ")}
         className="block shrink-0 after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
         {...(showPhoto && vm.photoUrl
           ? listingPreviewLinkState(
@@ -245,61 +307,44 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
       {/* Body — a sibling of the Link, not nested in the anchor; `flex-1` so the card
           fills its grid cell and the meta row can pin to the bottom via `mt-auto`. */}
       <div className="flex flex-1 flex-col gap-1 px-4 pb-4 pt-3">
-        {/* Title row: name (left) + attributed pills (right) in one flex row, so a
-            long name can never slide under the pills. */}
+        {/* Title row: name (left) + the attributed pill (right) in one flex row, so a
+            long name can never slide under it. */}
         <div className="flex items-start justify-between gap-2">
           <h3 className="min-w-0 break-words font-display text-card-title font-bold text-foreground">
             {vm.name}
           </h3>
 
-          {/* Attributed community pills, raised above the stretched-link overlay with
-              `relative z-10` so hover/focus reaches them; they can be real tooltip
-              triggers only because they are not descendants of the <a>. ADR-007:
-              attributed community signals, never a safety verdict — all safety meaning
-              stays in SafetySignal below. */}
-          {(vm.saveCount && vm.saveCount > 0) || vm.googleRating ? (
+          {/* Public save-count — heart glyph + number, hidden at 0, no visible "saves"
+              word. Meaning is carried by the glyph + count + aria-label + tooltip, never
+              colour alone (styling.md). Lavender is distinct from every safety-state
+              colour (ADR-007): an attributed community signal, never a safety verdict —
+              all safety meaning stays in SafetySignal below. The wrapper raises it above
+              the stretched-link overlay with `relative z-10` so hover/focus reaches it;
+              it can be a real tooltip trigger only because it is not a descendant of
+              the <a>. */}
+          {vm.saveCount !== undefined && vm.saveCount > 0 ? (
             <div className="relative z-10 flex shrink-0 items-center gap-1.5">
-              {/* Public save-count — heart glyph + number, hidden at 0, no visible
-                  "saves" word. Meaning is carried by the glyph + count + aria-label +
-                  tooltip, never colour alone (styling.md). Lavender is distinct from
-                  every safety-state colour (ADR-007). */}
-              {vm.saveCount && vm.saveCount > 0 ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <AttributedPill
-                      data-testid="save-count"
-                      className="bg-accent-lavender/50"
-                      aria-label={`${vm.saveCount} saves`}
-                    >
-                      <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                      <span aria-hidden="true">{vm.saveCount}</span>
-                    </AttributedPill>
-                  </TooltipTrigger>
-                  <TooltipContent>Community saves, not a safety score.</TooltipContent>
-                </Tooltip>
-              ) : null}
-
-              {/* External Google Places rating — attributed, never a safety score (ADR-007). */}
-              {vm.googleRating ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <AttributedPill data-testid="google-rating" className="bg-accent-peach/50">
-                      <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                      <span>{vm.googleRating.value.toFixed(1)}</span>
-                      <span className="font-normal text-muted-foreground">Google</span>
-                    </AttributedPill>
-                  </TooltipTrigger>
-                  <TooltipContent>Google rating, not an Aubrey's List safety score.</TooltipContent>
-                </Tooltip>
-              ) : null}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AttributedPill
+                    data-testid="save-count"
+                    className="bg-accent-lavender/50"
+                    aria-label={`${vm.saveCount} saves`}
+                  >
+                    <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                    <span aria-hidden="true">{vm.saveCount}</span>
+                  </AttributedPill>
+                </TooltipTrigger>
+                <TooltipContent>Community saves, not a safety score.</TooltipContent>
+              </Tooltip>
             </div>
           ) : null}
         </div>
 
-        <p className="text-body-sm text-muted-foreground">
-          {vm.address}
-          {vm.distanceLabel ? ` · ${vm.distanceLabel}` : ""}
-        </p>
+        {/* Location line — the shared component, so this card and the map mini-card
+            cannot drift. An unparseable address yields no city, and the full street
+            address stays on the detail page. */}
+        <CardLocationLine vm={vm} className="text-body-sm text-muted-foreground" />
 
         {/* Claim row — one line that scrolls horizontally on overflow instead of
             wrapping (the `SafetySummary` hero / `FilterChips` pattern), so badge
@@ -464,6 +509,9 @@ interface ListingCardProps {
  * `photoUrl`/`photoAttributions` are derived (via {@link placePhotoProxyUrl} at
  * {@link CARD_PHOTO_MAX_WIDTH_PX}), so surfaces can never disagree on the URL/width.
  *
+ * `city` is derived here too (via {@link cityFromAddress}), so no surface parses the
+ * address itself and none can fall back to the full street address.
+ *
  * Client-safe: imports only pure/client-safe/type-only modules.
  */
 export function listingToCardVM(
@@ -473,10 +521,11 @@ export function listingToCardVM(
   saveCount?: number | undefined,
   photo?: PlacePhoto | undefined
 ): RestaurantCardVM {
+  const city = cityFromAddress(listing.address);
+
   return {
     id: listing.id,
     name: listing.name,
-    address: listing.address,
     safetyState: glance.safetyState,
     suggestedByBot: glance.suggestedByBot,
     suggestedAttributes: glance.suggestedAttributes,
@@ -485,6 +534,7 @@ export function listingToCardVM(
     accent: accentForId(listing.id),
     // Each optional field is spread in only when present, so the prop stays truly
     // absent (not `undefined`) under `exactOptionalPropertyTypes`.
+    ...(city !== null ? { city } : {}),
     ...(glance.evidence ? { evidence: glance.evidence } : {}),
     ...(glance.freshness ? { freshness: glance.freshness } : {}),
     ...(distanceLabel !== undefined ? { distanceLabel } : {}),
