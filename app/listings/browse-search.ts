@@ -20,6 +20,32 @@ import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/list
  */
 export const DIRECTORY_VIEW_VALUES = ["list", "map"] as const;
 
+/**
+ * Cap on the map view's appended "Load more" pages (`?pages=`). With the base
+ * page that bounds the map at `(1 + cap) * pageSize` pins/mini-cards — enough
+ * to sweep a wide radius, small enough to keep marker count and memory sane.
+ * Someone who exhausts it can narrow the radius or search near a different
+ * spot. Lives here so the schema's clamp and the accumulation hook
+ * (`use-map-pages.ts`) share one bound.
+ */
+export const MAX_MAP_EXTRA_PAGES = 5;
+
+/**
+ * Upper bound on a `?sel=` listing id. Ids are app-generated UUIDs (36
+ * chars); the headroom only tolerates a future id scheme, never freeform
+ * text — anything longer is garbage and degrades to absent.
+ */
+const MAX_SELECTED_ID_LENGTH = 64;
+
+/**
+ * The map-view params that describe cards of the current result set: the
+ * `?pages=` accumulation and the `?sel=` selection. Spread into every
+ * navigation that changes the result set — anything that resets `page: 1`,
+ * plus the pager's page links — so a new set never inherits an accumulation
+ * or a selection that belonged to the old one.
+ */
+export const MAP_VIEW_PARAMS_CLEARED = { pages: undefined, sel: undefined } as const;
+
 /** One directory content view: the results list or the (placeholder) map. */
 export type DirectoryView = (typeof DIRECTORY_VIEW_VALUES)[number];
 
@@ -190,6 +216,28 @@ const rawBrowseSearchSchema = z.object({
   // as the radius-filter origin (`originLat`/`originLng`).
   areaLat: z.number().finite().min(-90).max(90).optional().catch(undefined),
   areaLng: z.number().finite().min(-180).max(180).optional().catch(undefined),
+  // Map view only: how many extra "Load more" pages ride on top of the base
+  // page. In the URL because the accumulated carousel is a chosen view of the
+  // directory — Back and a pasted link must restore all of it, not just page
+  // one. Client-only (the base server page is still `?page=`): excluded from
+  // `loaderDeps`, written with `replace: true` + `resetScroll: false`, and
+  // stripped alongside `sel` by every navigation that changes the result set.
+  // No default: absent means no extra pages and needs no strip entry. Values
+  // past the cap clamp to it; garbage degrades to absent.
+  pages: z
+    .number()
+    .int()
+    .min(0)
+    .transform((value) => Math.min(value, MAX_MAP_EXTRA_PAGES))
+    .optional()
+    .catch(undefined),
+  // Map view only: the selected listing's id. A selection is a chosen view of
+  // the directory (shareable, restorable on Back), so it lives in the URL —
+  // written on every pin/card tap with `replace: true` + `resetScroll: false`
+  // and stripped alongside `pages` on result-set changes. Untrusted input:
+  // only a bounded non-empty string passes; anything else degrades to absent,
+  // and an id that matches no loaded listing is dropped by the route.
+  sel: z.string().min(1).max(MAX_SELECTED_ID_LENGTH).optional().catch(undefined),
 });
 
 export const browseSearchSchema = rawBrowseSearchSchema.transform((search) => {

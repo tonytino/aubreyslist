@@ -92,15 +92,19 @@ export const CAROUSEL_BAND_PX = 116;
  * notion of "user selection" can never drift. `selectedId` itself carries no
  * cause, so the cause is inferred from the transition; skipped by design:
  *
- * - the first selection seen while `ready` — mount, and the route's
- *   auto-select-first that lands right after (the selection effect in
- *   `app/routes/index.tsx` names this hook as a dependent);
+ * - the first selection seen while `ready` — the mount value (the route's
+ *   default-first or a URL-restored `?sel=`), and a restored `?sel=` that
+ *   resolves from null once its URL-seeded page lands;
  * - any change while `!ready` (the live map instance not created yet): nothing
  *   is recorded, so when `ready` flips the pending selection counts as
  *   initial, never replayed;
  * - a change whose PREVIOUS selection is no longer in `entries`: that is the
- *   route's validity guard reassigning after a filter change, not a tap — the
- *   camera/scroll must not chase it.
+ *   route falling back to the default selection after a filter change, not a
+ *   tap — the camera/scroll must not chase it;
+ * - a change landing in the same commit as a NEW `entries` identity: a tap
+ *   never replaces the entries, so that is a result-set change resetting the
+ *   selection (the navigation strips `?sel=`), even when the previously
+ *   selected listing happens to survive into the new set.
  */
 export function useUserSelectionChange(
   ready: boolean,
@@ -109,11 +113,15 @@ export function useUserSelectionChange(
   onUserSelect: (id: string) => void
 ): void {
   const prevSelected = useRef<string | null>(null);
+  const prevEntries = useRef<readonly DirectoryMapEntry[] | null>(null);
   useEffect(() => {
     if (!ready) return;
     const prev = prevSelected.current;
     prevSelected.current = selectedId;
+    const entriesChanged = prevEntries.current !== null && prevEntries.current !== entries;
+    prevEntries.current = entries;
     if (!selectedId || prev === null || prev === selectedId) return;
+    if (entriesChanged) return;
     if (!entries.some((entry) => entry.vm.id === prev)) return;
     onUserSelect(selectedId);
   }, [ready, entries, selectedId, onUserSelect]);
@@ -327,17 +335,23 @@ export function SearchAreaPill({ pending, onClick }: { pending: boolean; onClick
 /**
  * Scroll the carousel so `card` lands flush with the band's left content
  * edge (the card's offset minus the band's own left padding) — shared by the
- * selection sync and the append-scroll. Never `scrollIntoView`: that walks
- * every scroll ancestor (so it can move the page), and its options object is
- * unreliable in mobile Safari — a direct `scrollTo` on the one scroller is
- * the only container this may ever move. Smooth only when motion is allowed.
+ * selection sync, the append-scroll, and the deep-link restore. Never
+ * `scrollIntoView`: that walks every scroll ancestor (so it can move the
+ * page), and its options object is unreliable in mobile Safari — a direct
+ * `scrollTo` on the one scroller is the only container this may ever move.
+ * Default behaviour is smooth only when motion is allowed; the restore passes
+ * an explicit "instant" (a restored position is state, not motion).
  * jsdom reports no computed padding; `|| 0` keeps the fallback explicit.
  */
-function scrollCardFlushLeft(container: HTMLDivElement, card: HTMLDivElement): void {
+function scrollCardFlushLeft(
+  container: HTMLDivElement,
+  card: HTMLDivElement,
+  behavior: ScrollBehavior = prefersReducedMotion() ? "auto" : "smooth"
+): void {
   const paddingLeft = Number.parseFloat(getComputedStyle(container).paddingLeft) || 0;
   container.scrollTo({
     left: Math.max(0, card.offsetLeft - paddingLeft),
-    behavior: prefersReducedMotion() ? "auto" : "smooth",
+    behavior,
   });
 }
 
@@ -358,8 +372,11 @@ function scrollCardFlushLeft(container: HTMLDivElement, card: HTMLDivElement): v
  *
  * Selection scroll: a user selection (the shared `useUserSelectionChange`
  * discriminator) scrolls the selected card flush-left via
- * {@link scrollCardFlushLeft}; an appended "Load more" page scrolls its first
- * new card the same way.
+ * {@link scrollCardFlushLeft}; a "Load more" page the visitor requested here
+ * scrolls its first new card the same way. A deep-link restore
+ * (`restoreSelectedId`, the URL's `?sel=` at mount) scrolls its card
+ * flush-left instantly — no animation, no focus move — as soon as the card
+ * exists, which may be after URL-seeded extra pages land.
  *
  * Navigation: the chevron link is the accessible path to `/listings/$id` and
  * is always visible (muted until selected, brand-solid once selected). A tap
@@ -377,12 +394,19 @@ export function MapCarousel({
   selectedId,
   onSelect,
   loadMore,
+  restoreSelectedId,
 }: {
   entries: readonly DirectoryMapEntry[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   /** When set, renders the "Load more" card after the last mini-card. */
   loadMore?: MapLoadMore;
+  /**
+   * The URL-restored selection (`?sel=`) to scroll to instantly once its card
+   * exists. Read once at mount: later `sel` writes are user taps, which the
+   * selection sync animates instead.
+   */
+  restoreSelectedId?: string | null;
 }) {
   const navigate = useNavigate();
   const containerEl = useRef<HTMLDivElement | null>(null);
@@ -394,11 +418,37 @@ export function MapCarousel({
     scrollCardFlushLeft(container, card);
   });
 
+  // Deep-link restore: put the restored selection's card flush-left the
+  // moment it exists — instantly (a restored position is state, not motion)
+  // and without touching focus. The target is captured at mount and used at
+  // most once; its card may only appear after URL-seeded extra pages land,
+  // so the effect re-checks as entries grow.
+  const restoreTarget = useRef(restoreSelectedId ?? null);
+  const restorePending = loadMore?.pending ?? false;
+  useEffect(() => {
+    const target = restoreTarget.current;
+    if (!target) return;
+    if (entries.some((entry) => entry.vm.id === target)) {
+      const container = containerEl.current;
+      const card = cardEls.current.get(target);
+      if (!container || !card) return;
+      restoreTarget.current = null;
+      scrollCardFlushLeft(container, card, "instant");
+      return;
+    }
+    // Every requested page settled without the target: a dead id. Forget it
+    // so a later Load more can never scroll to a card nobody asked for.
+    if (!restorePending) restoreTarget.current = null;
+  }, [entries, restorePending]);
+
   // Bring the first appended page into view: when new entries arrive as a
   // pure append (every previous id keeps its slot — a filter/sort/area
-  // change replaces instead, and must not scroll), the band scrolls to the
-  // first new card so "Load more" visibly delivered something. Scroll only —
-  // focus never moves to the new content.
+  // change replaces instead, and must not scroll) AND the visitor asked for
+  // it via the Load more card, the band scrolls to the first new card so
+  // "Load more" visibly delivered something. Scroll only — focus never moves
+  // to the new content. The click gate keeps a URL-seeded hydration append
+  // (a restored `?pages=` arriving post-mount) from yanking the band.
+  const appendRequested = useRef(false);
   const prevEntryIds = useRef<string[]>([]);
   useEffect(() => {
     const ids = entries.map((entry) => entry.vm.id);
@@ -406,6 +456,8 @@ export function MapCarousel({
     prevEntryIds.current = ids;
     if (prev.length === 0 || ids.length <= prev.length) return;
     if (!prev.every((id, i) => ids[i] === id)) return;
+    if (!appendRequested.current) return;
+    appendRequested.current = false;
     const firstNewId = ids[prev.length];
     const container = containerEl.current;
     const firstNewCard = firstNewId ? cardEls.current.get(firstNewId) : undefined;
@@ -585,7 +637,11 @@ export function MapCarousel({
             loadMoreFocused.current = false;
           }}
           onClick={() => {
-            if (!loadMore.pending) loadMore.onLoadMore();
+            if (loadMore.pending) return;
+            // Marks the coming append as visitor-requested so the append
+            // scroll above runs for it (and only for it).
+            appendRequested.current = true;
+            loadMore.onLoadMore();
           }}
           className={`flex w-32 shrink-0 flex-col items-center justify-center gap-1 rounded-card border border-dashed border-brand/40 bg-surface px-3 py-2 text-body-sm font-semibold text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}
         >

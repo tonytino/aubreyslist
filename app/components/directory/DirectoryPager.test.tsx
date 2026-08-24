@@ -106,4 +106,22 @@ describe("DirectoryPager", () => {
     expect(next.getAttribute("href")).toContain("sort=trust");
     expect(next.getAttribute("href")).toContain("page=3");
   });
+
+  it("strips the map view's ?pages= and ?sel= from the page links", async () => {
+    // A page change is a result-set change: the map accumulation and
+    // selection describe cards of the outgoing page, so they leave the URL
+    // with it — while other params still carry forward.
+    renderInRouter(
+      <DirectoryPager page={2} pageSize={20} total={45} />,
+      "/?page=2&sort=trust&pages=2&sel=abc"
+    );
+
+    const next = await screen.findByRole("link", { name: "Next" });
+    expect(next.getAttribute("href")).not.toContain("pages=");
+    expect(next.getAttribute("href")).not.toContain("sel=");
+    expect(next.getAttribute("href")).toContain("sort=trust");
+    const prev = screen.getByRole("link", { name: "Previous" });
+    expect(prev.getAttribute("href")).not.toContain("pages=");
+    expect(prev.getAttribute("href")).not.toContain("sel=");
+  });
 });

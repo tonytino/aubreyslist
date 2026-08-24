@@ -6,6 +6,8 @@ import {
   type BrowseSearchLike,
   browseSearchSchema,
   isAnyBrowseFilterActive,
+  MAP_VIEW_PARAMS_CLEARED,
+  MAX_MAP_EXTRA_PAGES,
 } from "./browse-search";
 
 /**
@@ -152,6 +154,47 @@ describe("browseSearchSchema", () => {
     const lngOnly = browseSearchSchema.parse({ areaLng: -104.9, areaLat: "junk" });
     expect(lngOnly.areaLat).toBeUndefined();
     expect(lngOnly.areaLng).toBeUndefined();
+  });
+
+  it("accepts a map accumulation count within the cap and keeps it absent when unset", () => {
+    expect(browseSearchSchema.parse({ pages: 3 }).pages).toBe(3);
+    expect(browseSearchSchema.parse({ pages: MAX_MAP_EXTRA_PAGES }).pages).toBe(
+      MAX_MAP_EXTRA_PAGES
+    );
+    expect(browseSearchSchema.parse({}).pages).toBeUndefined();
+  });
+
+  it("clamps a map accumulation count past the cap", () => {
+    // A hand-edited count keeps the restore but never exceeds the pin cap.
+    expect(browseSearchSchema.parse({ pages: 99 }).pages).toBe(MAX_MAP_EXTRA_PAGES);
+  });
+
+  it("degrades a garbage map accumulation count to absent", () => {
+    expect(browseSearchSchema.parse({ pages: -1 }).pages).toBeUndefined();
+    expect(browseSearchSchema.parse({ pages: 2.5 }).pages).toBeUndefined();
+    expect(browseSearchSchema.parse({ pages: "lots" }).pages).toBeUndefined();
+  });
+
+  it("accepts a bounded selected-listing id and keeps it absent when unset", () => {
+    // Ids are app-generated UUIDs; the schema only guards shape — whether the
+    // id matches a loaded listing is the route's judgement.
+    const uuid = "6f9619ff-8b86-4d01-b42d-00cf4fc964ff";
+    expect(browseSearchSchema.parse({ sel: uuid }).sel).toBe(uuid);
+    expect(browseSearchSchema.parse({}).sel).toBeUndefined();
+  });
+
+  it("degrades a garbage selected-listing id to absent (untrusted URL input)", () => {
+    expect(browseSearchSchema.parse({ sel: "" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "x".repeat(65) }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: 42 }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: { nested: true } }).sel).toBeUndefined();
+  });
+
+  it("clears exactly the map view params in MAP_VIEW_PARAMS_CLEARED", () => {
+    // Spread into every result-set-changing navigation: both params — and
+    // only these — must leave the URL with the outgoing set.
+    expect(MAP_VIEW_PARAMS_CLEARED).toEqual({ pages: undefined, sel: undefined });
+    expect(Object.keys(MAP_VIEW_PARAMS_CLEARED).sort()).toEqual(["pages", "sel"]);
   });
 
   it("coerces radius to a valid option, falling back to the default", () => {
