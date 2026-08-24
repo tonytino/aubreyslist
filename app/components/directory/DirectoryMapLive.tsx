@@ -423,7 +423,7 @@ function LiveSearchAreaControl({
  * The functional recenter FAB (unwired in the fallback path): re-fits the
  * camera to the current pins and hands the camera back to the app (clears the
  * user-moved flag so filter changes auto-fit again, and `onRecenter` lets the
- * parent drop the "Search this area" pill for the same reason).
+ * parent drop the "Search near here" pill for the same reason).
  */
 function LiveRecenterFab({
   bounds,

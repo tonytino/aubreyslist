@@ -38,7 +38,7 @@ export function browseQueryOptions(
   // the area coords ride in as the sort coords, so page 1 of an area search
   // is the closest-to-that-spot page and its labels read from the spot, not
   // from wherever the visitor is standing. Without an area, the browser
-  // reading anchors as before; without either, the server anchors on the
+  // reading anchors the sort; without either, the server anchors on the
   // request's coarse location or degrades to the fallback order. Coords are
   // threaded only when actually distance-sorting.
   const anchor = sort === "distance" ? (area ?? coords) : undefined;

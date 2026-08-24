@@ -180,7 +180,7 @@ const rawBrowseSearchSchema = z.object({
     .enum(DIRECTORY_VIEW_VALUES)
     .catch(BROWSE_SEARCH_DEFAULTS.view)
     .default(BROWSE_SEARCH_DEFAULTS.view),
-  // The "Search this area" origin: the map center the visitor deliberately
+  // The "Search near here" origin: the map center the visitor deliberately
   // framed before tapping the button. In the URL — unlike the visitor's own
   // coordinates — because a searched area is a chosen view of the directory,
   // not a position: it is exactly the state a pasted link should restore, and
