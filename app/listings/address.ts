@@ -13,6 +13,9 @@
  */
 const STATE_TAIL = /^\s*[A-Za-z]{2}(?:\s+\d{5}(?:-\d{4})?)?\s*$/;
 
+/** Mirrors the manual-intake `address` cap in `~/listings/create-input`. */
+const MAX_ADDRESS_LENGTH = 512;
+
 /**
  * The city from a stored address, or `null` when the address has no US
  * city/state tail. Splits on commas rather than matching the whole tail, so
@@ -22,6 +25,10 @@ const STATE_TAIL = /^\s*[A-Za-z]{2}(?:\s+\d{5}(?:-\d{4})?)?\s*$/;
  * `null` is the honest answer, and never the street address.
  */
 export function cityFromAddress(address: string): string | null {
+  // Manual intake caps `address` at 512 (`create-input.ts`), but the Places path
+  // and the column itself are uncapped, so bound the work here too: this runs per
+  // card and its result reaches an `aria-label`.
+  if (address.length > MAX_ADDRESS_LENGTH) return null;
   const segments = address.split(",");
   // "…, City, ST" — the city needs a comma on both sides, so two segments
   // ("Denver, CO") is a miss, not a city.

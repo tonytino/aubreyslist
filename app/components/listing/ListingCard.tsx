@@ -40,8 +40,9 @@ export interface RestaurantCardVM {
   name: string;
   /**
    * City parsed from the stored address, e.g. "Denver". Absent when the address
-   * has no parseable city — the location line then drops the segment. The full
-   * street address stays on the listing-detail page, never on a card.
+   * has no parseable city — the location line then drops the segment. A card
+   * renders the city alone; the full street address is shown on the
+   * listing-detail page (the browse payload still carries it either way).
    */
   city?: string;
   /** e.g. "0.4 mi" — rendered only when provided. */
@@ -135,6 +136,11 @@ export function cardLocationParts(vm: RestaurantCardVM): string[] {
  * The line always renders: with neither segment it keeps an `invisible`
  * non-breaking space, so a card's height never depends on what it knows and an
  * unstyled render paints no stub word as content.
+ *
+ * The separator is `aria-hidden`, and it carries the only whitespace between the
+ * segments — so a consumer that does not set its own `aria-label` would compute
+ * "Denver0.8 mi". Build names from {@link cardLocationParts} instead, as both
+ * callers do.
  */
 export function CardLocationLine({
   vm,
@@ -149,7 +155,7 @@ export function CardLocationLine({
   const Wrapper = as;
   return (
     <Wrapper data-testid="card-location" className={cn("flex min-w-0 items-center", className)}>
-      {vm.city || vm.distanceLabel ? (
+      {cardLocationParts(vm).length > 0 ? (
         <>
           {vm.city ? <span className="min-w-0 truncate">{vm.city}</span> : null}
           {vm.city && vm.distanceLabel ? (

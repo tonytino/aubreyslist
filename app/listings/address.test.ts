@@ -54,4 +54,13 @@ describe("cityFromAddress", () => {
     expect(cityFromAddress(planted)).toBeNull();
     expect(performance.now() - started).toBeLessThan(50);
   });
+
+  it("returns null past the 512-char cap, so an uncapped address bounds the work", () => {
+    // The Places path and the `text` column are uncapped, unlike manual intake.
+    const tail = ", Denver, CO 80205";
+    const atCap = `${"a".repeat(512 - tail.length)}${tail}`;
+    expect(atCap).toHaveLength(512);
+    expect(cityFromAddress(atCap)).toBe("Denver");
+    expect(cityFromAddress(`a${atCap}`)).toBeNull();
+  });
 });
