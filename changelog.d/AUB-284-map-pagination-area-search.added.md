@@ -1,1 +1,1 @@
-- `[manual]` Map view: a "Load more" carousel card appends the next results page as extra pins with continuous numbering, and a "Search this area" button re-runs the browse from the map center after panning the live map.
+- `[manual]` Map view: a "Load more" carousel card appends the next results page as extra pins with continuous numbering, and a "Search near here" button re-runs the browse anchored on the map center after you pan or zoom the live map.

@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { forwardRef, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { DirectoryMapLive } from "./DirectoryMapLive";
@@ -20,7 +20,7 @@ const mapMock = vi.hoisted(() => ({
   panTo: vi.fn(),
   panBy: vi.fn(),
   getDiv: () => ({ clientWidth: 800, clientHeight: 600 }),
-  // The camera center the "Search this area" control reads, in the Maps JS
+  // The camera center the "Search near here" control reads, in the Maps JS
   // accessor shape (`center.lat()`).
   getCenter: () => ({ lat: () => 39.71, lng: () => -104.87 }),
 }));
@@ -48,12 +48,14 @@ vi.mock("@vis.gl/react-google-maps", () => ({
     className,
     onDragstart,
     onZoomChanged,
+    onCenterChanged,
     onIdle,
   }: {
     children?: ReactNode;
     className?: string;
     onDragstart?: (event: unknown) => void;
     onZoomChanged?: (event: unknown) => void;
+    onCenterChanged?: (event: unknown) => void;
     onIdle?: (event: unknown) => void;
   }) => (
     <div data-testid="google-map" className={className}>
@@ -64,30 +66,38 @@ vi.mock("@vis.gl/react-google-maps", () => ({
         data-testid="simulate-zoom-changed"
         onClick={() => onZoomChanged?.({})}
       />
+      <button
+        type="button"
+        data-testid="simulate-center-changed"
+        onClick={() => onCenterChanged?.({})}
+      />
       <button type="button" data-testid="simulate-idle" onClick={() => onIdle?.({})} />
       {children}
     </div>
   ),
-  AdvancedMarker: ({
-    children,
-    zIndex,
-    onClick,
-  }: {
-    children?: ReactNode;
-    zIndex?: number;
-    onClick?: (e: unknown) => void;
-  }) => (
-    <div data-testid="advanced-marker" data-zindex={zIndex}>
+  // forwardRef so the component's demote ref callback (tabIndex/role on the
+  // marker element) is exercised against this stand-in element.
+  AdvancedMarker: forwardRef<
+    HTMLDivElement,
+    { children?: ReactNode; zIndex?: number; onClick?: (e: unknown) => void }
+  >(({ children, zIndex, onClick }, ref) => (
+    <div ref={ref} data-testid="advanced-marker" data-zindex={zIndex}>
       {/* Hook for tests to simulate the marker's own gmp-click — the event
           Google's mobile gesture layer delivers instead of a DOM click on the
           marker content. Rendered only when the marker registers a handler,
-          mirroring vis.gl's clickable auto-detection. */}
+          mirroring vis.gl's clickable auto-detection. tabIndex -1: a test
+          hook, never part of the focus-order contract under test. */}
       {onClick ? (
-        <button type="button" data-testid="simulate-marker-gmp-click" onClick={() => onClick({})} />
+        <button
+          type="button"
+          tabIndex={-1}
+          data-testid="simulate-marker-gmp-click"
+          onClick={() => onClick({})}
+        />
       ) : null}
       {children}
     </div>
-  ),
+  )),
   AdvancedMarkerAnchorPoint: { CENTER: ["50%", "50%"] },
   useMap: () => mapMock,
 }));
@@ -245,6 +255,23 @@ describe("DirectoryMapLive — marker-level tap wiring (AUB-285)", () => {
     // same id is a no-op re-select (pins have no tap-again behaviour).
     fireEvent.click(screen.getByRole("button", { name: "Lucia Trattoria, Recent incident" }));
     expect(onSelect).toHaveBeenNthCalledWith(2, "b");
+  });
+
+  it("demotes the marker element: tabindex -1 + role presentation, one focusable control inside", () => {
+    renderLive();
+    for (const marker of screen.getAllByTestId("advanced-marker")) {
+      // A clickable marker element would otherwise be focusable itself,
+      // doubling every stop (marker + inner button).
+      expect(marker).toHaveAttribute("tabindex", "-1");
+      expect(marker).toHaveAttribute("role", "presentation");
+      const tabbables = within(marker)
+        .getAllByRole("button")
+        .filter((el) => el.tabIndex >= 0);
+      // Exactly the accessible pin button — the single named, aria-pressed
+      // control per marker.
+      expect(tabbables).toHaveLength(1);
+      expect(tabbables[0]?.getAttribute("aria-label")).toBeTruthy();
+    }
   });
 });
 
@@ -494,31 +521,75 @@ describe("DirectoryMapLive — camera fitting", () => {
   });
 });
 
-describe("DirectoryMapLive — search this area (AUB-284)", () => {
+describe("DirectoryMapLive — search near here (AUB-284)", () => {
   it("shows the pill only after the visitor moves the camera", () => {
     renderLive("a", vi.fn());
-    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Search near here" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("simulate-dragstart"));
-    expect(screen.getByRole("button", { name: "Search this area" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Search near here" })).toBeInTheDocument();
   });
 
   it("never shows the pill when no onSearchArea is wired, even after movement", () => {
     renderLive("a");
     fireEvent.click(screen.getByTestId("simulate-dragstart"));
-    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Search near here" })).not.toBeInTheDocument();
   });
 
   it("ignores programmatic zooms; a user zoom after the camera settles surfaces the pill", () => {
     renderLive("a", vi.fn());
-    // The mount fit's own zoom event is flagged programmatic — not the user.
+    // Camera events before the first idle are the mount fit's own — not the
+    // user.
     fireEvent.click(screen.getByTestId("simulate-zoom-changed"));
-    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Search near here" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("simulate-idle"));
     fireEvent.click(screen.getByTestId("simulate-zoom-changed"));
-    expect(screen.getByRole("button", { name: "Search this area" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Search near here" })).toBeInTheDocument();
   });
 
-  it("hands the current map center to onSearchArea, shows the searching state, then hides", async () => {
+  it("treats a settled center change (keyboard pan) as a user gesture, but never a programmatic one", () => {
+    renderLive("a", vi.fn());
+    // Before idle: the initial camera write's own center events don't count.
+    fireEvent.click(screen.getByTestId("simulate-center-changed"));
+    expect(screen.queryByRole("button", { name: "Search near here" })).not.toBeInTheDocument();
+    // After idle, a center change is the user's — arrow-key pans fire no
+    // dragstart, so this is their path to the pill.
+    fireEvent.click(screen.getByTestId("simulate-idle"));
+    fireEvent.click(screen.getByTestId("simulate-center-changed"));
+    expect(screen.getByRole("button", { name: "Search near here" })).toBeInTheDocument();
+  });
+
+  it("does not surface the pill from a selection pan's center events", () => {
+    const onSelect = vi.fn();
+    const onSearchArea = vi.fn();
+    const { rerender } = render(
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="a"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+        onSearchArea={onSearchArea}
+      />
+    );
+    fireEvent.click(screen.getByTestId("simulate-idle"));
+    // A pin tap pans the camera (PanToSelection flags it programmatic); the
+    // pan's center events must not read as the user framing an area.
+    rerender(
+      <DirectoryMapLive
+        apiKey="test-key"
+        entries={entries}
+        selectedId="b"
+        onSelect={onSelect}
+        onLoadError={noopLoadError}
+        onSearchArea={onSearchArea}
+      />
+    );
+    expect(mapMock.panTo).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("simulate-center-changed"));
+    expect(screen.queryByRole("button", { name: "Search near here" })).not.toBeInTheDocument();
+  });
+
+  it("hands the current map center to onSearchArea, shows the busy state, then hides on success", async () => {
     let resolveSearch!: () => void;
     const onSearchArea = vi.fn(
       () =>
@@ -528,19 +599,49 @@ describe("DirectoryMapLive — search this area (AUB-284)", () => {
     );
     renderLive("a", onSearchArea);
     fireEvent.click(screen.getByTestId("simulate-dragstart"));
-    fireEvent.click(screen.getByRole("button", { name: "Search this area" }));
+    const pill = screen.getByRole("button", { name: "Search near here" });
+    pill.focus();
+    fireEvent.click(pill);
     // The center comes from the live camera (map.getCenter), not from any pin.
     expect(onSearchArea).toHaveBeenCalledTimes(1);
     expect(onSearchArea).toHaveBeenCalledWith({ lat: 39.71, lng: -104.87 });
-    // While the browse re-runs the pill announces it and cannot double-fire.
-    const pending = screen.getByRole("button", { name: "Searching…" });
-    expect(pending).toBeDisabled();
+    // Busy: aria-disabled + aria-busy, never `disabled` — focus stays on the
+    // control — and a second click cannot double-fire.
+    const busy = screen.getByRole("button", { name: "Searching…" });
+    expect(busy).not.toBeDisabled();
+    expect(busy).toHaveAttribute("aria-disabled", "true");
+    expect(busy).toHaveAttribute("aria-busy", "true");
+    expect(document.activeElement).toBe(busy);
+    fireEvent.click(busy);
+    expect(onSearchArea).toHaveBeenCalledTimes(1);
     await act(async () => {
       resolveSearch();
     });
     expect(
-      screen.queryByRole("button", { name: /Search this area|Searching…/ })
+      screen.queryByRole("button", { name: /Search near here|Searching…/ })
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps the pill mounted for a retry when the search fails", async () => {
+    let rejectSearch!: (error: Error) => void;
+    const onSearchArea = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSearch = reject;
+        })
+    );
+    renderLive("a", onSearchArea);
+    fireEvent.click(screen.getByTestId("simulate-dragstart"));
+    fireEvent.click(screen.getByRole("button", { name: "Search near here" }));
+    await act(async () => {
+      rejectSearch(new Error("offline"));
+    });
+    // Failure: busy clears, the pill stays as its own retry (the route's
+    // status region announces the failure), and nothing rejects unhandled.
+    const pill = screen.getByRole("button", { name: "Search near here" });
+    expect(pill).toHaveAttribute("aria-disabled", "false");
+    fireEvent.click(pill);
+    expect(onSearchArea).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the camera where the visitor framed it when the searched area's results land", async () => {
@@ -564,7 +665,7 @@ describe("DirectoryMapLive — search this area (AUB-284)", () => {
     );
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByTestId("simulate-dragstart"));
-    fireEvent.click(screen.getByRole("button", { name: "Search this area" }));
+    fireEvent.click(screen.getByRole("button", { name: "Search near here" }));
     await act(async () => {
       resolveSearch();
     });
@@ -584,23 +685,23 @@ describe("DirectoryMapLive — search this area (AUB-284)", () => {
     expect(mapMock.fitBounds).toHaveBeenCalledTimes(1);
     expect(mapMock.moveCamera).not.toHaveBeenCalled();
     // The pill stays hidden until the camera moves again.
-    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Search near here" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("simulate-dragstart"));
-    expect(screen.getByRole("button", { name: "Search this area" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Search near here" })).toBeInTheDocument();
   });
 
   it("drops the pill when the recenter FAB hands the camera back", () => {
     renderLive("a", vi.fn());
     fireEvent.click(screen.getByTestId("simulate-dragstart"));
-    expect(screen.getByRole("button", { name: "Search this area" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Search near here" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Recenter map" }));
-    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Search near here" })).not.toBeInTheDocument();
   });
 
   it("stacks between the map canvas and the carousel band (z-order safety invariant)", () => {
     renderLive("a", vi.fn());
     fireEvent.click(screen.getByTestId("simulate-dragstart"));
-    const pill = screen.getByRole("button", { name: "Search this area" });
+    const pill = screen.getByRole("button", { name: "Search near here" });
     // Above the z-0-clamped canvas, below the z-10 carousel: a safety chip on
     // a mini-card can never end up under this pill.
     expect(pill.className).toContain("z-[5]");

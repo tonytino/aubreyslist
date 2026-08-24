@@ -12,8 +12,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
-import { DirectoryMap, type DirectoryMapEntry, resetLiveMapFailureLatch } from "./DirectoryMap";
-import type { MapLoadMore } from "./map-ui";
+import type { MapLoadMore } from "~/listings/use-map-pages";
+import {
+  type AreaSearchStatus,
+  DirectoryMap,
+  type DirectoryMapEntry,
+  resetLiveMapFailureLatch,
+} from "./DirectoryMap";
 
 // Each carousel entry carries a FavoriteButton island, which imports the
 // `favorites.fn` server seam (transitively db-touching). As in
@@ -130,7 +135,7 @@ const entries: DirectoryMapEntry[] = [
 async function renderMap(selectedId: string | null = "a", loadMore?: MapLoadMore) {
   const onSelect = vi.fn();
   // Always wired so the fallback tests can prove the placeholder path never
-  // surfaces the "Search this area" pill (it has no camera).
+  // surfaces the "Search near here" pill (it has no camera).
   const onSearchArea = vi.fn();
   // Seed the favorites + current-user suspense queries the FavoriteButton reads
   // (anonymous, no favorites) so each carousel heart renders synchronously.
@@ -142,10 +147,12 @@ async function renderMap(selectedId: string | null = "a", loadMore?: MapLoadMore
     selectedId: string | null;
     entries: readonly DirectoryMapEntry[];
     loadMore: MapLoadMore | undefined;
+    areaSearchStatus: AreaSearchStatus;
   } = {
     selectedId,
     entries,
     loadMore,
+    areaSearchStatus: "idle",
   };
   const listeners = new Set<() => void>();
   function Harness() {
@@ -163,6 +170,7 @@ async function renderMap(selectedId: string | null = "a", loadMore?: MapLoadMore
           selectedId={box.selectedId}
           onSelect={onSelect}
           onSearchArea={onSearchArea}
+          areaSearchStatus={box.areaSearchStatus}
           {...(box.loadMore ? { loadMore: box.loadMore } : {})}
         />
       </QueryClientProvider>
@@ -190,14 +198,17 @@ async function renderMap(selectedId: string | null = "a", loadMore?: MapLoadMore
     onSearchArea,
     router,
     unmount: () => view.unmount(),
+    // `nextLoadMore`: omit to keep the current wiring, `null` to clear it.
     rerenderWith: (
       sel: string | null,
       ents: readonly DirectoryMapEntry[] = entries,
-      nextLoadMore: MapLoadMore | undefined = box.loadMore
+      nextLoadMore: MapLoadMore | null | undefined = box.loadMore,
+      nextAreaStatus: AreaSearchStatus = box.areaSearchStatus
     ) => {
       box.selectedId = sel;
       box.entries = ents;
-      box.loadMore = nextLoadMore;
+      box.loadMore = nextLoadMore ?? undefined;
+      box.areaSearchStatus = nextAreaStatus;
       act(() => {
         for (const listener of listeners) listener();
       });
@@ -227,11 +238,11 @@ describe("DirectoryMap — key-absent fallback (AUB-111)", () => {
     expect(screen.getByRole("button", { name: "Recenter map" })).toBeInTheDocument();
   });
 
-  it("never surfaces the 'Search this area' pill on the placeholder path (no camera)", async () => {
+  it("never surfaces the 'Search near here' pill on the placeholder path (no camera)", async () => {
     // The harness wires onSearchArea, so its absence here is the placeholder
     // path's doing: with no live camera there is no area to search.
     await renderMap();
-    expect(screen.queryByRole("button", { name: "Search this area" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Search near here" })).not.toBeInTheDocument();
   });
 });
 
@@ -433,10 +444,11 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
     });
     expect(within(botCard).queryByText("Not yet attested")).not.toBeInTheDocument();
     const provenance = within(botCard).getByTestId("carousel-bot-provenance");
-    // The map surface uses the short vocabulary — the full wording clips on
-    // the 200px mini-card. ListingCard's meta row keeps the full label.
-    expect(provenance).toHaveTextContent("Bot-suggested");
-    expect(provenance).not.toHaveTextContent("Suggested by Aubrey's Bot");
+    // The map surface names the agent alone — noun-shaped, short enough to
+    // read whole on the mini-card. ListingCard's meta row keeps the full
+    // wording; the card's accessible name (asserted below) still carries it.
+    expect(provenance).toHaveTextContent("Aubrey's Bot");
+    expect(provenance).not.toHaveTextContent("Suggested by");
     // The scroll row fades at its right edge so the long label reads as
     // scrollable rather than hard-clipped.
     expect((provenance.parentElement as HTMLElement).className).toContain("mask-image");
@@ -654,6 +666,7 @@ describe("DirectoryMap — carousel Load more (AUB-284)", () => {
   const loadMore = (over: Partial<MapLoadMore> = {}): MapLoadMore => ({
     hasNext: true,
     pending: false,
+    failed: false,
     onLoadMore: vi.fn(),
     ...over,
   });
@@ -686,13 +699,52 @@ describe("DirectoryMap — carousel Load more (AUB-284)", () => {
     expect(wiring.onLoadMore).toHaveBeenCalledTimes(1);
   });
 
-  it("shows a disabled loading state while a page fetches, including the final page", async () => {
-    // hasNext drops the moment the last page is requested; `pending` keeps the
-    // card mounted so the fetch has a visible, non-clickable state.
-    await renderMap("a", loadMore({ hasNext: false, pending: true }));
+  it("keeps focus through the busy state: aria-disabled + aria-busy, never disabled", async () => {
+    const wiring = loadMore();
+    const { rerenderWith } = await renderMap("a", wiring);
+    const button = screen.getByRole("button", { name: "Load more" });
+    act(() => button.focus());
+    fireEvent.click(button);
+    expect(wiring.onLoadMore).toHaveBeenCalledTimes(1);
+    // The fetch begins: the same element flips to its busy state…
+    rerenderWith("a", entries, loadMore({ pending: true }));
     const busy = screen.getByRole("button", { name: "Loading…" });
-    expect(busy).toBeDisabled();
-    expect(screen.getByTestId("carousel-load-more")).toBe(busy);
+    expect(busy).not.toBeDisabled();
+    expect(busy).toHaveAttribute("aria-disabled", "true");
+    expect(busy).toHaveAttribute("aria-busy", "true");
+    // …keeping focus (a `disabled` attr would silently drop it to <body>)…
+    expect(document.activeElement).toBe(busy);
+    // …while the click guard, not the disabled attr, stops a double fire.
+    fireEvent.click(busy);
+    expect(wiring.onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays mounted with the busy state while the just-requested final page is in flight", async () => {
+    await renderMap("a", loadMore({ hasNext: false, pending: true }));
+    expect(screen.getByRole("button", { name: "Loading…" })).toBe(
+      screen.getByTestId("carousel-load-more")
+    );
+  });
+
+  it("offers a retry for a failed page through the same handler", async () => {
+    const wiring = loadMore({ failed: true });
+    await renderMap("a", wiring);
+    // The failed state replaces the label — the hook routes this click to a
+    // refetch of the failed page rather than appending past the hole.
+    const retry = screen.getByRole("button", { name: "Try again" });
+    fireEvent.click(retry);
+    expect(wiring.onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands focus to the band when the final page lands and the card unmounts", async () => {
+    const { rerenderWith } = await renderMap("a", loadMore({ hasNext: false, pending: true }));
+    const busy = screen.getByRole("button", { name: "Loading…" });
+    act(() => busy.focus());
+    // The final page resolves: nothing more exists, the card unmounts —
+    // focus moves to the band deliberately, never silently to <body>.
+    rerenderWith("a", entries, loadMore({ hasNext: false, pending: false }));
+    expect(screen.queryByTestId("carousel-load-more")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByTestId("map-carousel"));
   });
 
   it("continues the visible numbering across appended pages (pin and card 21 both read 21)", async () => {
@@ -713,6 +765,88 @@ describe("DirectoryMap — carousel Load more (AUB-284)", () => {
     const appended = pinOf("Spot U, Celiac-safe");
     expect(appended.textContent).toBe("21");
     expect(within(cardOf("Spot U, Celiac-safe")).getByText("21")).toBeInTheDocument();
+  });
+});
+
+describe("DirectoryMap — append scroll (AUB-284)", () => {
+  // jsdom doesn't implement element scrolling; the spy doubles as the
+  // implementation (same pattern as the flush-left suite above).
+  const scrollTo = vi.fn();
+  beforeAll(() => {
+    Element.prototype.scrollTo = scrollTo as unknown as Element["scrollTo"];
+  });
+  afterEach(() => {
+    scrollTo.mockClear();
+  });
+
+  const appended: DirectoryMapEntry[] = [
+    ...entries,
+    {
+      vm: vm({ id: "f", name: "Fresh Find", safetyState: "celiac-safe" }),
+      lat: 39.77,
+      lng: -104.91,
+    },
+  ];
+
+  it("scrolls the band to the first appended card when Load more delivers", async () => {
+    const { rerenderWith } = await renderMap("a");
+    const carousel = screen.getByTestId("map-carousel");
+    // Every previous id keeps its slot and new ones follow — an append.
+    rerenderWith("a", appended);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    // The one scroller this may ever move is the band itself; the flush-left
+    // offset math is the shared helper the selection suite pins down.
+    expect(scrollTo.mock.contexts[0]).toBe(carousel);
+  });
+
+  it("does not scroll when the entries are replaced (filter or area change), only on appends", async () => {
+    const { rerenderWith } = await renderMap("a");
+    // Same length, different order — a replacement, not an append.
+    const replaced = [...entries.slice(1), entries[0] as DirectoryMapEntry];
+    rerenderWith("a", replaced);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("DirectoryMap — status region (AUB-284)", () => {
+  it("announces count, load-more progress, and failures through one polite region", async () => {
+    const { rerenderWith } = await renderMap("a");
+    const region = screen.getByRole("status");
+    expect(region).toHaveTextContent("Showing 5 places");
+    rerenderWith("a", entries, {
+      hasNext: true,
+      pending: true,
+      failed: false,
+      onLoadMore: vi.fn(),
+    });
+    expect(region).toHaveTextContent("Loading more places…");
+    rerenderWith("a", entries, {
+      hasNext: true,
+      pending: false,
+      failed: true,
+      onLoadMore: vi.fn(),
+    });
+    expect(region).toHaveTextContent("Couldn't load more places. Try again.");
+    // Success lands as the new honest count.
+    rerenderWith("a", entries, {
+      hasNext: false,
+      pending: false,
+      failed: false,
+      onLoadMore: vi.fn(),
+    });
+    expect(region).toHaveTextContent("Showing 5 places");
+  });
+
+  it("announces the area search lifecycle, then the result count", async () => {
+    const { rerenderWith } = await renderMap("a");
+    const region = screen.getByRole("status");
+    rerenderWith("a", entries, null, "pending");
+    expect(region).toHaveTextContent("Searching near here…");
+    rerenderWith("a", entries, null, "failed");
+    expect(region).toHaveTextContent("Search failed. Try again.");
+    // The searched area's page 1 arrives: the count is the announcement.
+    rerenderWith("a", entries.slice(0, 1), null, "idle");
+    expect(region).toHaveTextContent("Showing 1 place");
   });
 });
 

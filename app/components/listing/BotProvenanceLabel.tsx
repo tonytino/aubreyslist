@@ -4,10 +4,10 @@ import { cn } from "~/lib/utils";
 
 /**
  * The inline bot-provenance label — the one source for the wording per size
- * ("Suggested by Aubrey's Bot" at `meta`, the short "Bot-suggested" at
- * `compact`) + Sparkles glyph + `text-brand` treatment, shared by the browse
- * card's meta row and the map mini-card's trust row. Provenance, never a
- * verdict (ADR-007); meaning lives in the text + icon, never colour alone
+ * ("Suggested by Aubrey's Bot" at `meta`, "Aubrey's Bot" at `compact`) +
+ * Sparkles glyph + `text-brand` treatment, shared by the browse card's meta
+ * row and the map mini-card's trust row. Provenance, never a verdict
+ * (ADR-007); meaning lives in the text + icon, never colour alone
  * (styling.md), and `text-brand` is distinct from every safety-state colour.
  *
  * The listing-detail `ClaimTrustSummary` provenance chip stays separate by
@@ -20,15 +20,15 @@ const LABEL_SIZES = {
   meta: { root: "gap-1.5", icon: "h-4 w-4", label: "Suggested by Aubrey's Bot" },
   /**
    * Self-sized caption text that never wraps or shrinks, for the map
-   * mini-card's horizontally scrolling trust row. The label is the repo's
-   * short provenance vocabulary, "Bot-suggested": the full wording clips on
-   * the 200px mini-card, and the card's accessible name still carries the
-   * full provenance for AT.
+   * mini-card's horizontally scrolling trust row. The label must stay short
+   * enough to read whole there, and noun-shaped — the named agent, never a
+   * word that could sit in the verdict slot's grammar. The card's accessible
+   * name still carries the full "suggested by Aubrey's Bot" provenance.
    */
   compact: {
     root: "shrink-0 gap-1 whitespace-nowrap text-caption",
     icon: "size-3.5",
-    label: "Bot-suggested",
+    label: "Aubrey's Bot",
   },
 } as const;
 

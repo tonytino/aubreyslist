@@ -102,12 +102,13 @@ export function isAnyBrowseFilterActive(search: BrowseSearchLike): boolean {
     search.quick !== BROWSE_SEARCH_DEFAULTS.quick ||
     search.saved !== BROWSE_SEARCH_DEFAULTS.saved ||
     search.bot !== BROWSE_SEARCH_DEFAULTS.bot ||
-    search.areaLat !== undefined ||
-    search.areaLng !== undefined
+    // The pair, matching the schema's half-pair normalization: only a
+    // complete origin makes the area search active.
+    (search.areaLat !== undefined && search.areaLng !== undefined)
   );
 }
 
-export const browseSearchSchema = z.object({
+const rawBrowseSearchSchema = z.object({
   // `.catch(...).default(...)` on every defaulted field: `.catch` degrades
   // garbage to the default; `.default` keeps the param optional on the input
   // side under zod 4 — without it every `navigate`/`<Link>` would have to
@@ -189,4 +190,13 @@ export const browseSearchSchema = z.object({
   // as the radius-filter origin (`originLat`/`originLng`).
   areaLat: z.number().finite().min(-90).max(90).optional().catch(undefined),
   areaLng: z.number().finite().min(-180).max(180).optional().catch(undefined),
+});
+
+export const browseSearchSchema = rawBrowseSearchSchema.transform((search) => {
+  // A lone area coordinate (a hand-edited link) cannot anchor an area, so it
+  // normalizes away at the boundary — downstream code never sees a half pair.
+  if ((search.areaLat === undefined) !== (search.areaLng === undefined)) {
+    return { ...search, areaLat: undefined, areaLng: undefined };
+  }
+  return search;
 });

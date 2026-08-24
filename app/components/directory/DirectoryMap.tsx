@@ -1,16 +1,16 @@
 import * as Sentry from "@sentry/tanstackstart-react";
-import { Component, type ReactNode, useCallback, useEffect, useState } from "react";
+import { Component, memo, type ReactNode, useCallback, useEffect, useState } from "react";
 import { DirectoryMapLive } from "~/components/directory/DirectoryMapLive";
 import { projectToMap } from "~/components/directory/map-projection";
 import {
   type DirectoryMapEntry,
   MapCarousel,
-  type MapLoadMore,
   MapPinButton,
   RecenterFab,
 } from "~/components/directory/map-ui";
 import { googleMapsBrowserKey } from "~/lib/public-env";
 import type { Coords } from "~/listings/distance";
+import type { MapLoadMore } from "~/listings/use-map-pages";
 
 /**
  * The directory Map view. Two render paths behind one public component:
@@ -89,12 +89,42 @@ export function resetLiveMapFailureLatch() {
   liveMapFailedThisPageLoad = false;
 }
 
-export function DirectoryMap({
+/** The route-owned area-search lifecycle, announced by the status region. */
+export type AreaSearchStatus = "idle" | "pending" | "failed";
+
+/**
+ * What the map view's polite status region says. One always-mounted region
+ * (the `<output>` below) carries every async outcome — loading more, an
+ * area search, either one failing — so screen-reader users hear the same
+ * progress sighted users watch on the card/pill. Busy states first, then the
+ * honest count of what is showing.
+ */
+function mapStatusText(
+  count: number,
+  loadMore: MapLoadMore | undefined,
+  areaSearch: AreaSearchStatus
+): string {
+  if (loadMore?.pending) return "Loading more places…";
+  if (loadMore?.failed) return "Couldn't load more places. Try again.";
+  if (areaSearch === "pending") return "Searching near here…";
+  if (areaSearch === "failed") return "Search failed. Try again.";
+  return count === 1 ? "Showing 1 place" : `Showing ${count} places`;
+}
+
+/**
+ * Memoized: the browse route re-renders on every search keystroke, and
+ * without the bail-out each keystroke would re-render every pin/marker (and,
+ * on the live path, re-run vis.gl's per-marker effects). All props are
+ * stable-by-construction at the call site — memoized entries/loadMore,
+ * useCallback handlers, setState setters.
+ */
+export const DirectoryMap = memo(function DirectoryMap({
   entries,
   selectedId,
   onSelect,
   loadMore,
   onSearchArea,
+  areaSearchStatus = "idle",
 }: {
   entries: readonly DirectoryMapEntry[];
   selectedId: string | null;
@@ -102,11 +132,13 @@ export function DirectoryMap({
   /** Carousel "Load more" wiring — shared by both render paths. */
   loadMore?: MapLoadMore;
   /**
-   * Re-run the browse anchored on the given map center ("Search this area").
+   * Re-run the browse anchored on the given map center ("Search near here").
    * Live path only: the placeholder has no camera, so it never surfaces the
    * button.
    */
   onSearchArea?: (center: Coords) => void | Promise<void>;
+  /** The area search's lifecycle, for the status region's announcements. */
+  areaSearchStatus?: AreaSearchStatus;
 }) {
   // Public, compile-time key (see app/lib/public-env.ts). Absent → the
   // deterministic CSS-placeholder fallback, so the view (and CI/E2E) never
@@ -171,9 +203,17 @@ export function DirectoryMap({
         onSelect={onSelect}
         {...(loadMore ? { loadMore } : {})}
       />
+
+      {/* The map view's one polite status region. Always mounted with only
+          its text swapped (a live region inserted together with its content
+          is commonly not announced); sr-only because sighted users get the
+          same states from the card/pill/pins themselves. */}
+      <output className="sr-only">
+        {mapStatusText(entries.length, loadMore, areaSearchStatus)}
+      </output>
     </div>
   );
-}
+});
 
 /**
  * Local error boundary around only the live map (never the carousel): a

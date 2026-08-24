@@ -143,6 +143,17 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({ areaLat: "downtown" }).areaLat).toBeUndefined();
   });
 
+  it("normalizes a half area pair to absent at the boundary", () => {
+    // A lone coordinate (a hand-edited link, or one half degraded by .catch)
+    // cannot anchor an area — downstream code never sees a half pair.
+    const latOnly = browseSearchSchema.parse({ areaLat: 39.7 });
+    expect(latOnly.areaLat).toBeUndefined();
+    expect(latOnly.areaLng).toBeUndefined();
+    const lngOnly = browseSearchSchema.parse({ areaLng: -104.9, areaLat: "junk" });
+    expect(lngOnly.areaLat).toBeUndefined();
+    expect(lngOnly.areaLng).toBeUndefined();
+  });
+
   it("coerces radius to a valid option, falling back to the default", () => {
     // An on-list radius passes through the transform unchanged...
     expect(browseSearchSchema.parse({ radius: 5 }).radius).toBe(5);
@@ -186,6 +197,13 @@ describe("isAnyBrowseFilterActive", () => {
     ["an area search", { areaLat: 39.71, areaLng: -104.87 }],
   ])("is true when only %s is off its default", (_label, override) => {
     expect(isAnyBrowseFilterActive({ ...AT_DEFAULT, ...override })).toBe(true);
+  });
+
+  it("requires the complete area pair to count as active", () => {
+    // Mirrors the schema's half-pair normalization: a lone coordinate never
+    // lights the Reset chip.
+    expect(isAnyBrowseFilterActive({ ...AT_DEFAULT, areaLat: 39.71 })).toBe(false);
+    expect(isAnyBrowseFilterActive({ ...AT_DEFAULT, areaLng: -104.87 })).toBe(false);
   });
 
   it("is true when multiple params are stacked", () => {

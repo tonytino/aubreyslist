@@ -97,6 +97,14 @@ Report what actually happened. The browse response carries `effectiveSort` and
 `locationSource` so the page can say it fell back, rather than showing one
 order under another order's name.
 
+The line is *who chose the point*. The visitor's own reading — even coarsened
+— is a position, so it never enters the URL. A map center the visitor
+deliberately framed and then asked to search (`searchArea` in
+`app/routes/index.tsx`, the map's "Search near here") is a chosen view of the
+directory: it may ride in the URL (`?areaLat=`/`?areaLng=`), coarsened on
+write, and only ever written behind an explicit camera gesture — never
+inferred from where the visitor happens to be.
+
 ## Device preferences: `localStorage`
 
 A *per-device preference* that is not sensitive belongs in `localStorage` —

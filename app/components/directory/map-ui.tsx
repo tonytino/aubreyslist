@@ -1,5 +1,13 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, CircleDashed, LoaderCircle, LocateFixed, Plus } from "lucide-react";
+import {
+  ChevronRight,
+  CircleDashed,
+  LoaderCircle,
+  LocateFixed,
+  Plus,
+  RotateCw,
+  Search,
+} from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useRef } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
@@ -13,6 +21,7 @@ import {
   UnattestedBadge,
 } from "~/components/SafetySignal";
 import { prefersReducedMotion } from "~/lib/motion";
+import type { MapLoadMore } from "~/listings/use-map-pages";
 
 /**
  * Shared presentational pieces of the directory Map view: the safety-pin
@@ -56,17 +65,14 @@ export interface DirectoryMapEntry {
 }
 
 /**
- * The carousel's "Load more" wiring: appends the next server page to the map
- * view's accumulated entries. The card renders while a further page exists or
- * one is in flight, and hides for good once everything is loaded.
+ * Chrome shared by the map's floating controls — the recenter FAB, the
+ * carousel's "Load more" card, and the "Search near here" pill: elevation,
+ * the house focus ring, and a motion-gated colour transition. Fills stay
+ * per-control: the neutral surface pair for controls over the band, the
+ * pinned `primary` pair for the pill over map tiles.
  */
-export interface MapLoadMore {
-  /** A further page exists after the loaded ones (from the honest total). */
-  hasNext: boolean;
-  /** The next page is being fetched. */
-  pending: boolean;
-  onLoadMore: () => void;
-}
+const MAP_CONTROL_SURFACE =
+  "shadow-md motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
 
 /**
  * Approximate rendered height of the opaque carousel band in px — the ONE
@@ -275,11 +281,64 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
       type="button"
       aria-label="Recenter map"
       {...(onClick ? { onClick } : {})}
-      className="absolute bottom-[128px] right-4 z-[11] inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface text-brand-strong shadow-md hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
+      className={`absolute bottom-[128px] right-4 z-[11] inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}
     >
       <LocateFixed className="size-5" strokeWidth={2.25} aria-hidden="true" />
     </button>
   );
+}
+
+/**
+ * "Search near here" pill — presentational only; the live map wires it (the
+ * placeholder path has no camera, so it never renders one). Top-center over
+ * the canvas at `z-[5]`: above the `z-0`-clamped map, below the `z-10`
+ * carousel band, so the z-order safety invariant holds. The pinned `primary`
+ * pair keeps the label AA over light and dark tiles (styling.md); `min-w` is
+ * sized to the resting label so the busy swap never changes the pill's
+ * width; the enter animation is motion-gated. Busy: `aria-busy` +
+ * `aria-disabled` + a click guard, never `disabled` — focus must stay on the
+ * control — with the spinner and label at full opacity.
+ */
+export function SearchAreaPill({ pending, onClick }: { pending: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-busy={pending}
+      aria-disabled={pending}
+      onClick={() => {
+        if (!pending) onClick();
+      }}
+      className={`absolute left-1/2 top-3 z-[5] inline-flex min-w-44 -translate-x-1/2 items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-2 text-body-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:ring-offset-2 motion-safe:animate-in fade-in-0 slide-in-from-top-2 ${MAP_CONTROL_SURFACE}`}
+    >
+      {pending ? (
+        <LoaderCircle
+          className="size-4 motion-safe:animate-spin"
+          strokeWidth={2.25}
+          aria-hidden="true"
+        />
+      ) : (
+        <Search className="size-4" strokeWidth={2.25} aria-hidden="true" />
+      )}
+      {pending ? "Searching…" : "Search near here"}
+    </button>
+  );
+}
+
+/**
+ * Scroll the carousel so `card` lands flush with the band's left content
+ * edge (the card's offset minus the band's own left padding) — shared by the
+ * selection sync and the append-scroll. Never `scrollIntoView`: that walks
+ * every scroll ancestor (so it can move the page), and its options object is
+ * unreliable in mobile Safari — a direct `scrollTo` on the one scroller is
+ * the only container this may ever move. Smooth only when motion is allowed.
+ * jsdom reports no computed padding; `|| 0` keeps the fallback explicit.
+ */
+function scrollCardFlushLeft(container: HTMLDivElement, card: HTMLDivElement): void {
+  const paddingLeft = Number.parseFloat(getComputedStyle(container).paddingLeft) || 0;
+  container.scrollTo({
+    left: Math.max(0, card.offsetLeft - paddingLeft),
+    behavior: prefersReducedMotion() ? "auto" : "smooth",
+  });
 }
 
 /**
@@ -297,14 +356,10 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
  * plus the incident add-on chip whenever `hasRecentIncident` — recent harm
  * must flag the mini-card no matter the headline verdict.
  *
- * Selection scroll: on a user selection (the shared `useUserSelectionChange`
- * discriminator) the carousel element itself is scrolled via
- * `container.scrollTo` so the selected card lands flush with the left content
- * edge (the card's `offsetLeft` minus the band's own left padding). Never
- * `scrollIntoView`: that walks every scroll ancestor (so it can move the
- * page), and its options object is unreliable in mobile Safari — a direct
- * `scrollTo` on the one scroller is the only container this may ever move.
- * Smooth only when motion is allowed.
+ * Selection scroll: a user selection (the shared `useUserSelectionChange`
+ * discriminator) scrolls the selected card flush-left via
+ * {@link scrollCardFlushLeft}; an appended "Load more" page scrolls its first
+ * new card the same way.
  *
  * Navigation: the chevron link is the accessible path to `/listings/$id` and
  * is always visible (muted until selected, brand-solid once selected). A tap
@@ -336,21 +391,53 @@ export function MapCarousel({
     const container = containerEl.current;
     const card = cardEls.current.get(id);
     if (!container || !card) return;
-    // Flush-left target: the card's offset inside the carousel minus the
-    // band's left padding, so the card's left edge lands on the visible
-    // content edge, not under the padding. jsdom reports no computed padding;
-    // `|| 0` keeps the fallback explicit.
-    const paddingLeft = Number.parseFloat(getComputedStyle(container).paddingLeft) || 0;
-    container.scrollTo({
-      left: Math.max(0, card.offsetLeft - paddingLeft),
-      behavior: prefersReducedMotion() ? "auto" : "smooth",
-    });
+    scrollCardFlushLeft(container, card);
   });
+
+  // Bring the first appended page into view: when new entries arrive as a
+  // pure append (every previous id keeps its slot — a filter/sort/area
+  // change replaces instead, and must not scroll), the band scrolls to the
+  // first new card so "Load more" visibly delivered something. Scroll only —
+  // focus never moves to the new content.
+  const prevEntryIds = useRef<string[]>([]);
+  useEffect(() => {
+    const ids = entries.map((entry) => entry.vm.id);
+    const prev = prevEntryIds.current;
+    prevEntryIds.current = ids;
+    if (prev.length === 0 || ids.length <= prev.length) return;
+    if (!prev.every((id, i) => ids[i] === id)) return;
+    const firstNewId = ids[prev.length];
+    const container = containerEl.current;
+    const firstNewCard = firstNewId ? cardEls.current.get(firstNewId) : undefined;
+    if (!container || !firstNewCard) return;
+    scrollCardFlushLeft(container, firstNewCard);
+  }, [entries]);
+
+  // When the final page lands, the Load more card unmounts; if it held
+  // focus, hand focus to the band (tabIndex -1 below) instead of letting it
+  // drop to `<body>`. The focused flag rides a ref updated by focus/blur —
+  // removing a focused element fires no blur, which is exactly the case this
+  // catches.
+  const loadMoreVisible = Boolean(
+    loadMore && (loadMore.hasNext || loadMore.pending || loadMore.failed)
+  );
+  const loadMoreFocused = useRef(false);
+  const prevLoadMoreVisible = useRef(loadMoreVisible);
+  useEffect(() => {
+    if (prevLoadMoreVisible.current && !loadMoreVisible && loadMoreFocused.current) {
+      loadMoreFocused.current = false;
+      containerEl.current?.focus();
+    }
+    prevLoadMoreVisible.current = loadMoreVisible;
+  }, [loadMoreVisible]);
 
   return (
     <div
       ref={containerEl}
       data-testid="map-carousel"
+      // tabIndex -1: a programmatic focus target only (the Load more focus
+      // hand-off above) — never a tab stop.
+      tabIndex={-1}
       className="absolute inset-x-0 bottom-0 z-10 flex gap-3 overflow-x-auto bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {entries.map(({ vm }, entryIndex) => {
@@ -475,20 +562,32 @@ export function MapCarousel({
           </div>
         );
       })}
-      {/* "Load more" — an action card in the card family (same band height via
-          the flex row's default stretch; surface + border like a mini-card, but
-          centred brand-toned action content so it cannot be mistaken for a
-          listing). It stays visible while the just-requested final page is
-          still in flight (`pending`), then unmounts once nothing more exists.
-          Always before the end spacer: the spacer must stay the band's last
-          child so the strip keeps its FAB clearance. */}
-      {loadMore && (loadMore.hasNext || loadMore.pending) ? (
+      {/* "Load more" — an action card in the band (same height via the flex
+          row's default stretch) that cannot be mistaken for a listing: dashed
+          brand-tinted border, centred brand-toned action content. It stays
+          while the just-requested final page is in flight (`pending`) and
+          while a failed page offers its retry (`failed`), then unmounts once
+          nothing more exists. Always before the end spacer: the spacer must
+          stay the band's last child so the strip keeps its FAB clearance.
+          Busy: `aria-busy` + `aria-disabled` + a click guard, never
+          `disabled` — focus must stay on the control — with the spinner and
+          label at full opacity. */}
+      {loadMore && (loadMore.hasNext || loadMore.pending || loadMore.failed) ? (
         <button
           type="button"
           data-testid="carousel-load-more"
-          disabled={loadMore.pending}
-          onClick={loadMore.onLoadMore}
-          className="flex w-32 shrink-0 flex-col items-center justify-center gap-1 rounded-card border border-border bg-surface px-3 py-2 text-body-sm font-semibold text-brand-strong shadow-md motion-safe:transition-colors hover:bg-brand-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring disabled:opacity-70"
+          aria-busy={loadMore.pending}
+          aria-disabled={loadMore.pending}
+          onFocus={() => {
+            loadMoreFocused.current = true;
+          }}
+          onBlur={() => {
+            loadMoreFocused.current = false;
+          }}
+          onClick={() => {
+            if (!loadMore.pending) loadMore.onLoadMore();
+          }}
+          className={`flex w-32 shrink-0 flex-col items-center justify-center gap-1 rounded-card border border-dashed border-brand/40 bg-surface px-3 py-2 text-body-sm font-semibold text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}
         >
           {loadMore.pending ? (
             <LoaderCircle
@@ -496,10 +595,12 @@ export function MapCarousel({
               strokeWidth={2.25}
               aria-hidden="true"
             />
+          ) : loadMore.failed ? (
+            <RotateCw className="size-5" strokeWidth={2.25} aria-hidden="true" />
           ) : (
             <Plus className="size-5" strokeWidth={2.25} aria-hidden="true" />
           )}
-          {loadMore.pending ? "Loading…" : "Load more"}
+          {loadMore.pending ? "Loading…" : loadMore.failed ? "Try again" : "Load more"}
         </button>
       ) : null}
       {/* End spacer sized to the viewport-fixed Add-listing FAB's footprint
