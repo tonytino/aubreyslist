@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { type ReactNode, useCallback, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -179,6 +179,33 @@ describe("useMapPages — URL-seeded hydration", () => {
     expect(fetchMock.calls).toEqual([2, 3, 4, 5, 6]);
     expect(result.current.cards).toHaveLength(2 + MAX_MAP_EXTRA_PAGES);
     expect(result.current.loadMore.hasNext).toBe(false);
+  });
+
+  it("keeps a seeded page pending while its fetch is not yet dispatched (real-browser idle window)", async () => {
+    // A real device holds an enabled, dataless query in a non-fetching state
+    // (fetchStatus "paused" on a connectivity blip, or before the dispatch).
+    // The unresolved signal must not read settled in that window: consumers
+    // (the stale-sel strip, the restore wait, the busy card) would judge the
+    // restored URL against a set that is still missing its pages.
+    onlineManager.setOnline(false);
+    try {
+      const { result } = renderMapPages({ pages: 1 });
+      // Let the mount's optimistic fetch state settle into the paused,
+      // not-fetching reality before asserting.
+      await act(async () => {});
+      expect(result.current.cards).toHaveLength(2);
+      expect(result.current.loadMore.pending).toBe(true);
+
+      // Connectivity returns: the fetch dispatches and delivers, and only
+      // then does the page count as resolved.
+      act(() => onlineManager.setOnline(true));
+      await waitFor(() =>
+        expect(result.current.cards.map((c) => c.listing.id)).toEqual(["a1", "a2", "p2-1"])
+      );
+      expect(result.current.loadMore.pending).toBe(false);
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });
 

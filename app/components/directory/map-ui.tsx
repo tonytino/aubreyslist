@@ -401,6 +401,7 @@ export function MapCarousel({
   onSelect,
   loadMore,
   restoreSelectedId,
+  resultSetPending = false,
 }: {
   entries: readonly DirectoryMapEntry[];
   selectedId: string | null;
@@ -413,6 +414,13 @@ export function MapCarousel({
    * selection sync animates instead.
    */
   restoreSelectedId?: string | null;
+  /**
+   * True while the current entries may still be replaced without any
+   * navigation (the route's distance anchor is still resolving). The restore
+   * snaps provisionally but stays armed, so the settled set gets the final
+   * snap at its real card offsets.
+   */
+  resultSetPending?: boolean;
 }) {
   const navigate = useNavigate();
   const containerEl = useRef<HTMLDivElement | null>(null);
@@ -428,11 +436,16 @@ export function MapCarousel({
   // moment it exists — instantly (a restored position is state, not motion),
   // before paint (useLayoutEffect: a cache-warm Back must never flash the
   // band at its start and then teleport), and without touching focus. The
-  // target is captured at mount and used at most once. It survives loading
-  // and failed pages (a retry may still deliver its card) and dies the
-  // moment the selection moves elsewhere — a user tap, or the route's
-  // fallback after it strips a stale `?sel=`.
+  // target survives loading and failed pages (a retry may still deliver its
+  // card) and dies the moment the visitor takes the band over — a card tap,
+  // a Load more click, or the route's fallback after it strips a stale
+  // `?sel=`. While the result set is still transient (`resultSetPending`)
+  // a hit snaps but stays armed: the re-anchored set may put the same card
+  // at a different offset, and the settled set owns the final snap. The
+  // sequence guard keeps a content-only refresh from re-yanking the band
+  // between those two snaps.
   const restoreTarget = useRef(restoreSelectedId ?? null);
+  const restoreSnappedIds = useRef<string | null>(null);
   useLayoutEffect(() => {
     const target = restoreTarget.current;
     if (!target) return;
@@ -444,9 +457,15 @@ export function MapCarousel({
     const container = containerEl.current;
     const card = cardEls.current.get(target);
     if (!container || !card) return;
-    restoreTarget.current = null;
+    if (resultSetPending) {
+      const sequence = entries.map((entry) => entry.vm.id).join("\n");
+      if (restoreSnappedIds.current === sequence) return;
+      restoreSnappedIds.current = sequence;
+    } else {
+      restoreTarget.current = null;
+    }
     scrollCardFlushLeft(container, card, "instant");
-  }, [entries, selectedId]);
+  }, [entries, selectedId, resultSetPending]);
 
   // Bring the first appended page into view: when new entries arrive as a
   // pure append (every previous id keeps its slot — a filter/sort/area
@@ -670,8 +689,11 @@ export function MapCarousel({
           onClick={() => {
             if (loadMore.pending) return;
             // Marks the coming append as visitor-requested so the append
-            // scroll above runs for it (and only for it).
+            // scroll above runs for it (and only for it). The click is also
+            // a takeover of the band, so a still-armed provisional restore
+            // must not snap back over the append.
             appendRequested.current = true;
+            restoreTarget.current = null;
             loadMore.onLoadMore();
           }}
           className={`flex w-32 shrink-0 flex-col items-center justify-center gap-1 rounded-card border border-dashed border-brand/40 bg-surface px-3 py-2 text-body-sm font-semibold text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}

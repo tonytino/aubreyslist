@@ -135,7 +135,8 @@ const entries: DirectoryMapEntry[] = [
 async function renderMap(
   selectedId: string | null = "a",
   loadMore?: MapLoadMore,
-  restoreSelectedId: string | null = null
+  restoreSelectedId: string | null = null,
+  resultSetPending = false
 ) {
   const onSelect = vi.fn();
   // Always wired so the fallback tests can prove the placeholder path never
@@ -153,12 +154,14 @@ async function renderMap(
     loadMore: MapLoadMore | undefined;
     areaSearchStatus: AreaSearchStatus;
     restoreSelectedId: string | null;
+    resultSetPending: boolean;
   } = {
     selectedId,
     entries,
     loadMore,
     areaSearchStatus: "idle",
     restoreSelectedId,
+    resultSetPending,
   };
   const listeners = new Set<() => void>();
   function Harness() {
@@ -178,6 +181,7 @@ async function renderMap(
           onSearchArea={onSearchArea}
           areaSearchStatus={box.areaSearchStatus}
           restoreSelectedId={box.restoreSelectedId}
+          resultSetPending={box.resultSetPending}
           {...(box.loadMore ? { loadMore: box.loadMore } : {})}
         />
       </QueryClientProvider>
@@ -210,12 +214,14 @@ async function renderMap(
       sel: string | null,
       ents: readonly DirectoryMapEntry[] = entries,
       nextLoadMore: MapLoadMore | null | undefined = box.loadMore,
-      nextAreaStatus: AreaSearchStatus = box.areaSearchStatus
+      nextAreaStatus: AreaSearchStatus = box.areaSearchStatus,
+      nextResultSetPending: boolean = box.resultSetPending
     ) => {
       box.selectedId = sel;
       box.entries = ents;
       box.loadMore = nextLoadMore ?? undefined;
       box.areaSearchStatus = nextAreaStatus;
+      box.resultSetPending = nextResultSetPending;
       act(() => {
         for (const listener of listeners) listener();
       });
@@ -939,6 +945,52 @@ describe("DirectoryMap — deep-link selection restore (?sel=)", () => {
     expect(scrollTo).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     rerenderWith("a", withF, idleLoadMore());
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
+  });
+
+  it("re-snaps at the settled offsets when a provisional restore's set is re-anchored", async () => {
+    // The Back-navigation reality: the first set renders before the distance
+    // anchor resolves (resultSetPending). The restored card is present, so
+    // the band snaps provisionally — but stays armed, because the reading
+    // will reshuffle the offsets without any navigation.
+    const { rerenderWith } = await renderMap("b", undefined, "b", true);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "instant" });
+
+    // The reading lands: same cards, new order, anchor settled. The restore
+    // must snap once more so the band shows the card at its real offset.
+    const reanchored = [...entries].reverse();
+    rerenderWith("b", reanchored, undefined, "idle", false);
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+
+    // Consumed: later entry changes never snap back.
+    rerenderWith("b", [...reanchored]);
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not re-yank a provisional restore on a content-only refresh (same id sequence)", async () => {
+    const { rerenderWith } = await renderMap("b", undefined, "b", true);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    // A background revalidation replaces identities but not the sequence —
+    // the visitor may have scrolled away, so nothing moves the band again.
+    rerenderWith(
+      "b",
+      entries.map((entry) => ({ ...entry }))
+    );
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it("retires the restore when the visitor clicks Load more before it resolves", async () => {
+    const { rerenderWith } = await renderMap(null, idleLoadMore(), "f");
+    expect(scrollTo).not.toHaveBeenCalled();
+    // The visitor asks for more while the restore still waits for its card:
+    // the click owns the band now.
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    // The append delivers the page holding the restored card. The requested
+    // append scroll (smooth) runs; the retired restore never snaps.
+    rerenderWith("f", withF, idleLoadMore());
     expect(scrollTo).toHaveBeenCalledTimes(1);
     expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
   });

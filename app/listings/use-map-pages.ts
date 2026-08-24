@@ -31,7 +31,8 @@ import type { BrowseListingCard, BrowseListingsPage } from "~/server/listings/br
 export interface MapLoadMore {
   /** A further page exists after the loaded ones (honest total, capped). */
   hasNext: boolean;
-  /** A page is being fetched — the card shows its busy state. */
+  /** A requested page is still unresolved (no data, no error — dispatched
+   * or not) — the card shows its busy state. */
   pending: boolean;
   /**
    * A page request failed. The card offers a retry, and `onLoadMore` retries
@@ -55,9 +56,14 @@ interface FetchedPage {
  * `useQueries` can memoize its output — a fresh function per render would
  * defeat that and churn the map entries' identity every render.
  *
- * `pending` is "a page with no data yet is fetching": first loads and error
- * retries show the busy card, background revalidation of an already-shown
- * page does not.
+ * `pending` is "a requested page is still unresolved": no data and no error
+ * counts, whatever the fetch's dispatch state. Deliberately not
+ * `isFetching`: a real browser holds an enabled, dataless query in a
+ * non-fetching state (fetchStatus "paused" on a connectivity blip, or before
+ * the dispatch), and reading that window as settled lets consumers — the
+ * stale-sel strip, the restore wait, the append disarm, the status region —
+ * judge the URL against a set that is still missing its pages. Background
+ * revalidation of an already-shown page still does not count (it has data).
  */
 function combineExtraPages(results: UseQueryResult<BrowseListingsPage>[]): {
   pages: FetchedPage[];
@@ -68,7 +74,7 @@ function combineExtraPages(results: UseQueryResult<BrowseListingsPage>[]): {
     pages: results.flatMap((result) =>
       result.data ? [{ cards: result.data.cards, updatedAt: result.dataUpdatedAt }] : []
     ),
-    pending: results.some((result) => !result.data && result.isFetching),
+    pending: results.some((result) => !result.data && !result.isError),
     failed: results.some((result) => result.isError),
   };
 }

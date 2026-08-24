@@ -126,6 +126,7 @@ export const DirectoryMap = memo(function DirectoryMap({
   onSearchArea,
   areaSearchStatus = "idle",
   restoreSelectedId,
+  resultSetPending,
 }: {
   entries: readonly DirectoryMapEntry[];
   selectedId: string | null;
@@ -135,6 +136,9 @@ export const DirectoryMap = memo(function DirectoryMap({
   /** The URL-restored selection to scroll the carousel to instantly on
    * mount (see `MapCarousel`). */
   restoreSelectedId?: string | null;
+  /** True while the entries may still be replaced without a navigation
+   * (the distance anchor resolving) — the restore's settle signal. */
+  resultSetPending?: boolean;
   /**
    * Re-run the browse anchored on the given map center ("Search near here").
    * Live path only: the placeholder has no camera, so it never surfaces the
@@ -207,6 +211,7 @@ export const DirectoryMap = memo(function DirectoryMap({
         onSelect={onSelect}
         {...(loadMore ? { loadMore } : {})}
         {...(restoreSelectedId ? { restoreSelectedId } : {})}
+        {...(resultSetPending !== undefined ? { resultSetPending } : {})}
       />
 
       {/* The map view's one polite status region. Always mounted with only
