@@ -795,11 +795,12 @@ describe("DirectoryMap — append scroll (AUB-284)", () => {
     },
   ];
 
-  const loadMoreWiring = (): MapLoadMore => ({
+  const loadMoreWiring = (over: Partial<MapLoadMore> = {}): MapLoadMore => ({
     hasNext: true,
     pending: false,
     failed: false,
     onLoadMore: vi.fn(),
+    ...over,
   });
 
   it("scrolls the band to the first appended card when a requested Load more delivers", async () => {
@@ -830,6 +831,30 @@ describe("DirectoryMap — append scroll (AUB-284)", () => {
     // Same length, different order — a replacement, not an append.
     const replaced = [...entries.slice(1), entries[0] as DirectoryMapEntry];
     rerenderWith("a", replaced);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("disarms the click when a replacement lands before the page: the next append is unrequested", async () => {
+    const { rerenderWith } = await renderMap("a", loadMoreWiring());
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    // A result-set change replaces the entries mid-flight…
+    const replaced = [...entries.slice(1), entries[0] as DirectoryMapEntry];
+    rerenderWith("a", replaced);
+    // …so a later pure append (e.g. Back refilling ?pages= into the still-
+    // mounted band) arrives with no click behind it and must not scroll.
+    rerenderWith("a", [...replaced, appended[appended.length - 1] as DirectoryMapEntry]);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("disarms the click once the requested fetch settles without growing the strip", async () => {
+    // The requested page turns out fully deduped: pending settles, entries
+    // unchanged.
+    const { rerenderWith } = await renderMap("a", loadMoreWiring());
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    rerenderWith("a", entries, loadMoreWiring({ pending: true }));
+    rerenderWith("a", entries, loadMoreWiring());
+    // A later unrequested append (URL-seeded hydration) must not scroll.
+    rerenderWith("a", appended);
     expect(scrollTo).not.toHaveBeenCalled();
   });
 });
@@ -892,17 +917,43 @@ describe("DirectoryMap — deep-link selection restore (?sel=)", () => {
     expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
   });
 
-  it("forgets a dead restore id once the pages settle: a later append never jumps to it", async () => {
-    // "f" is not in the results at mount and no page is loading, so the
-    // restore target is dropped. When Load more later delivers a page that
-    // happens to contain "f", the band scrolls to the append (smooth), never
-    // to the long-dead restore (instant).
+  it("yields to a user tap made while the restored card's page is still loading", async () => {
+    // Deep link ?sel=f with f's seeded page in flight: nothing is selected
+    // yet. The visitor taps another card before the page lands.
+    const { rerenderWith } = await renderMap(null, idleLoadMore({ pending: true }), "f");
+    fireEvent.click(cardOf("Lucia Trattoria, Recent incident"));
+    rerenderWith("b", entries, idleLoadMore({ pending: true }));
+    scrollTo.mockClear();
+    // The seeded page finally lands, target card included: the visitor took
+    // over, so the stale restore must not move the band.
+    rerenderWith("b", withF, idleLoadMore());
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("abandons a restore the selection has moved past: a later append never jumps to it", async () => {
+    // The selection sits elsewhere (the route's fallback after stripping a
+    // stale ?sel=f), so the target dies. When Load more later delivers a
+    // page that happens to contain "f", the band scrolls to the append
+    // (smooth), never to the abandoned restore (instant).
     const { rerenderWith } = await renderMap("a", idleLoadMore(), "f");
     expect(scrollTo).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     rerenderWith("a", withF, idleLoadMore());
     expect(scrollTo).toHaveBeenCalledTimes(1);
     expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
+  });
+
+  it("keeps waiting through a failed page: a successful retry still restores instantly", async () => {
+    // The seeded page fails; the restore target must survive (the route
+    // keeps ?sel= while a retry can deliver it), so Try again completes the
+    // restore.
+    const { rerenderWith } = await renderMap(null, idleLoadMore({ pending: true }), "f");
+    rerenderWith(null, entries, idleLoadMore({ failed: true }));
+    expect(scrollTo).not.toHaveBeenCalled();
+    rerenderWith(null, entries, idleLoadMore({ pending: true }));
+    rerenderWith("f", withF, idleLoadMore());
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "instant" });
   });
 });
 
@@ -926,6 +977,19 @@ describe("DirectoryMap — selection reset on a result-set change", () => {
     const reordered = [...entries].reverse();
     rerenderWith(reordered[0]?.vm.id ?? null, reordered);
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("still animates a tap batched with a content-only refresh (same entry-id sequence)", async () => {
+    const { rerenderWith } = await renderMap("a");
+    rerenderWith("b");
+    scrollTo.mockClear();
+    // A background revalidation gives every entry a new identity without
+    // changing which cards are shown; the tap that lands in the same commit
+    // is still a tap.
+    const refreshed = entries.map((entry) => ({ ...entry }));
+    rerenderWith("d", refreshed);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
   });
 });
 

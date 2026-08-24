@@ -9,7 +9,7 @@ import {
   Search,
 } from "lucide-react";
 import type { CSSProperties } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
@@ -101,10 +101,13 @@ export const CAROUSEL_BAND_PX = 116;
  * - a change whose PREVIOUS selection is no longer in `entries`: that is the
  *   route falling back to the default selection after a filter change, not a
  *   tap — the camera/scroll must not chase it;
- * - a change landing in the same commit as a NEW `entries` identity: a tap
- *   never replaces the entries, so that is a result-set change resetting the
- *   selection (the navigation strips `?sel=`), even when the previously
- *   selected listing happens to survive into the new set.
+ * - a change landing in the same commit as a different entry-id sequence: a
+ *   tap never changes which cards are shown, so that is a result-set change
+ *   resetting the selection (the navigation strips `?sel=`), even when the
+ *   previously selected listing survives into the new set. Compared as an id
+ *   sequence, not array identity: a content-only refresh (background
+ *   revalidation) keeps the sequence, so a tap batched with one still
+ *   animates.
  */
 export function useUserSelectionChange(
   ready: boolean,
@@ -113,16 +116,19 @@ export function useUserSelectionChange(
   onUserSelect: (id: string) => void
 ): void {
   const prevSelected = useRef<string | null>(null);
-  const prevEntries = useRef<readonly DirectoryMapEntry[] | null>(null);
+  const prevIds = useRef<readonly string[] | null>(null);
   useEffect(() => {
     if (!ready) return;
     const prev = prevSelected.current;
     prevSelected.current = selectedId;
-    const entriesChanged = prevEntries.current !== null && prevEntries.current !== entries;
-    prevEntries.current = entries;
+    const ids = entries.map((entry) => entry.vm.id);
+    const before = prevIds.current;
+    prevIds.current = ids;
+    const setChanged =
+      before !== null && (before.length !== ids.length || before.some((id, i) => id !== ids[i]));
     if (!selectedId || prev === null || prev === selectedId) return;
-    if (entriesChanged) return;
-    if (!entries.some((entry) => entry.vm.id === prev)) return;
+    if (setChanged) return;
+    if (!ids.includes(prev)) return;
     onUserSelect(selectedId);
   }, [ready, entries, selectedId, onUserSelect]);
 }
@@ -339,7 +345,7 @@ export function SearchAreaPill({ pending, onClick }: { pending: boolean; onClick
  * `scrollIntoView`: that walks every scroll ancestor (so it can move the
  * page), and its options object is unreliable in mobile Safari — a direct
  * `scrollTo` on the one scroller is the only container this may ever move.
- * Default behaviour is smooth only when motion is allowed; the restore passes
+ * Default behavior is smooth only when motion is allowed; the restore passes
  * an explicit "instant" (a restored position is state, not motion).
  * jsdom reports no computed padding; `|| 0` keeps the fallback explicit.
  */
@@ -419,31 +425,32 @@ export function MapCarousel({
   });
 
   // Deep-link restore: put the restored selection's card flush-left the
-  // moment it exists — instantly (a restored position is state, not motion)
-  // and without touching focus. The target is captured at mount and used at
-  // most once; its card may only appear after URL-seeded extra pages land,
-  // so the effect re-checks as entries grow.
+  // moment it exists — instantly (a restored position is state, not motion),
+  // before paint (useLayoutEffect: a cache-warm Back must never flash the
+  // band at its start and then teleport), and without touching focus. The
+  // target is captured at mount and used at most once. It survives loading
+  // and failed pages (a retry may still deliver its card) and dies the
+  // moment the selection moves elsewhere — a user tap, or the route's
+  // fallback after it strips a stale `?sel=`.
   const restoreTarget = useRef(restoreSelectedId ?? null);
-  const restorePending = loadMore?.pending ?? false;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const target = restoreTarget.current;
     if (!target) return;
-    if (entries.some((entry) => entry.vm.id === target)) {
-      const container = containerEl.current;
-      const card = cardEls.current.get(target);
-      if (!container || !card) return;
+    if (selectedId !== null && selectedId !== target) {
       restoreTarget.current = null;
-      scrollCardFlushLeft(container, card, "instant");
       return;
     }
-    // Every requested page settled without the target: a dead id. Forget it
-    // so a later Load more can never scroll to a card nobody asked for.
-    if (!restorePending) restoreTarget.current = null;
-  }, [entries, restorePending]);
+    if (!entries.some((entry) => entry.vm.id === target)) return;
+    const container = containerEl.current;
+    const card = cardEls.current.get(target);
+    if (!container || !card) return;
+    restoreTarget.current = null;
+    scrollCardFlushLeft(container, card, "instant");
+  }, [entries, selectedId]);
 
   // Bring the first appended page into view: when new entries arrive as a
   // pure append (every previous id keeps its slot — a filter/sort/area
-  // change replaces instead, and must not scroll) AND the visitor asked for
+  // change replaces instead, and must not scroll) and the visitor asked for
   // it via the Load more card, the band scrolls to the first new card so
   // "Load more" visibly delivered something. Scroll only — focus never moves
   // to the new content. The click gate keeps a URL-seeded hydration append
@@ -454,8 +461,16 @@ export function MapCarousel({
     const ids = entries.map((entry) => entry.vm.id);
     const prev = prevEntryIds.current;
     prevEntryIds.current = ids;
-    if (prev.length === 0 || ids.length <= prev.length) return;
-    if (!prev.every((id, i) => ids[i] === id)) return;
+    if (prev.length === 0) return;
+    const pureAppend = ids.length > prev.length && prev.every((id, i) => ids[i] === id);
+    if (!pureAppend) {
+      // A replacement or shrink retires the click: any in-flight Load more
+      // now lands in a different set, so it no longer authorizes an append
+      // scroll. An identical sequence (a content-only refresh) keeps it.
+      const identical = ids.length === prev.length && prev.every((id, i) => ids[i] === id);
+      if (!identical) appendRequested.current = false;
+      return;
+    }
     if (!appendRequested.current) return;
     appendRequested.current = false;
     const firstNewId = ids[prev.length];
@@ -464,6 +479,19 @@ export function MapCarousel({
     if (!container || !firstNewCard) return;
     scrollCardFlushLeft(container, firstNewCard);
   }, [entries]);
+
+  // A requested fetch that settles without growing the strip (every card was
+  // a duplicate, or the page failed) must not leave the click armed for a
+  // later append the visitor did not request. Runs after the append effect
+  // above, so a delivering fetch gets its scroll in the same commit first.
+  const appendPending = loadMore?.pending ?? false;
+  const prevAppendPending = useRef(appendPending);
+  useEffect(() => {
+    if (prevAppendPending.current && !appendPending) {
+      appendRequested.current = false;
+    }
+    prevAppendPending.current = appendPending;
+  }, [appendPending]);
 
   // When the final page lands, the Load more card unmounts; if it held
   // focus, hand focus to the band (tabIndex -1 below) instead of letting it
@@ -524,6 +552,9 @@ export function MapCarousel({
                 if (selected) {
                   navigate({ to: "/listings/$id", params: { id: vm.id } });
                 } else {
+                  // A tap is a takeover: a restore still waiting on its page
+                  // is obsolete the moment the visitor picks a card.
+                  restoreTarget.current = null;
                   onSelect(vm.id);
                 }
               }}

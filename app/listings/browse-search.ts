@@ -12,6 +12,7 @@
 import { z } from "zod";
 import { DEFAULT_RADIUS_MILES, parseRadiusMiles } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
+import type { GeolocationStatus } from "~/listings/use-geolocation";
 
 /**
  * The directory's content-view vocabulary (List vs Map). Kept here so the
@@ -31,11 +32,11 @@ export const DIRECTORY_VIEW_VALUES = ["list", "map"] as const;
 export const MAX_MAP_EXTRA_PAGES = 5;
 
 /**
- * Upper bound on a `?sel=` listing id. Ids are app-generated UUIDs (36
- * chars); the headroom only tolerates a future id scheme, never freeform
- * text — anything longer is garbage and degrades to absent.
+ * The shape of a `?sel=` listing id: id characters only (UUID alphabet plus
+ * headroom for a future id scheme), bounded length, never freeform text —
+ * anything else is garbage and degrades to absent.
  */
-const MAX_SELECTED_ID_LENGTH = 64;
+const SELECTED_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * The map-view params that describe cards of the current result set: the
@@ -45,6 +46,30 @@ const MAX_SELECTED_ID_LENGTH = 64;
  * or a selection that belonged to the old one.
  */
 export const MAP_VIEW_PARAMS_CLEARED = { pages: undefined, sel: undefined } as const;
+
+/**
+ * True while the browse result set's distance anchor is still resolving
+ * client-side: the "near me" sort with no searched area and no reading yet,
+ * and the browser's geolocation answer still possible (anything short of an
+ * error can still deliver coords). While true, the visible result set is
+ * transient — a reading will re-anchor it without any navigation — so
+ * judgements about what the set contains must wait. The map route gates its
+ * stale-`?sel=` strip on this: judging a restored selection against the
+ * pre-reading window would destroy a restore that succeeds moments later.
+ */
+export function isBrowseAnchorPending(input: {
+  sort: BrowseSort;
+  areaActive: boolean;
+  coordsKnown: boolean;
+  geoStatus: GeolocationStatus;
+}): boolean {
+  return (
+    input.sort === "distance" &&
+    !input.areaActive &&
+    !input.coordsKnown &&
+    input.geoStatus !== "error"
+  );
+}
 
 /** One directory content view: the results list or the (placeholder) map. */
 export type DirectoryView = (typeof DIRECTORY_VIEW_VALUES)[number];
@@ -235,9 +260,10 @@ const rawBrowseSearchSchema = z.object({
   // the directory (shareable, restorable on Back), so it lives in the URL —
   // written on every pin/card tap with `replace: true` + `resetScroll: false`
   // and stripped alongside `pages` on result-set changes. Untrusted input:
-  // only a bounded non-empty string passes; anything else degrades to absent,
-  // and an id that matches no loaded listing is dropped by the route.
-  sel: z.string().min(1).max(MAX_SELECTED_ID_LENGTH).optional().catch(undefined),
+  // only a bounded id-shaped string passes (`SELECTED_ID_PATTERN`); anything
+  // else degrades to absent, and an id that matches no loaded listing is
+  // dropped by the route.
+  sel: z.string().regex(SELECTED_ID_PATTERN).optional().catch(undefined),
 });
 
 export const browseSearchSchema = rawBrowseSearchSchema.transform((search) => {

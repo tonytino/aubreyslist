@@ -338,10 +338,15 @@ function RefitOnEntriesChange({
  * current zoom — never a zoom change. Which selection changes count as a user
  * tap is the shared `useUserSelectionChange` discriminator (`map-ui.tsx`) —
  * the same one the carousel's scroll-into-view uses — so a mount/auto-select
- * or the route's post-filter validity reassign never pans, and the pan can't
+ * or the route's post-filter fallback reassign never pans, and the pan can't
  * fight `RefitOnEntriesChange`'s refit-unless-user-moved contract. The hook's
  * `ready` gate is the map instance itself: a selection made before the map
  * exists counts as initial (nothing to pan yet), not replayed later.
+ *
+ * A URL-restored selection (`?sel=` at mount) deliberately does not pan
+ * either: the mount camera fits all pins, and the restored state reads from
+ * the highlighted marker plus the carousel's instant scroll — framing the
+ * whole set beats zooming to one card the visitor may not remember choosing.
  *
  * The pan target is offset by half the carousel band so the pin lands centred
  * in the VISIBLE canvas above the band (`panBy` moves the camera down by

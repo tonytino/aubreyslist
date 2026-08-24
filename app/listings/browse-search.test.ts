@@ -6,6 +6,7 @@ import {
   type BrowseSearchLike,
   browseSearchSchema,
   isAnyBrowseFilterActive,
+  isBrowseAnchorPending,
   MAP_VIEW_PARAMS_CLEARED,
   MAX_MAP_EXTRA_PAGES,
 } from "./browse-search";
@@ -190,6 +191,16 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({ sel: { nested: true } }).sel).toBeUndefined();
   });
 
+  it("rejects injection-shaped sel values: only id characters pass", () => {
+    // The id alphabet (letters, digits, hyphen, underscore) is the whole
+    // grammar — markup, quotes, spaces, and path characters all degrade.
+    expect(browseSearchSchema.parse({ sel: "<script>alert(1)</script>" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "a'; drop table listings--" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "two words" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "../listings/1" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "id%00" }).sel).toBeUndefined();
+  });
+
   it("clears exactly the map view params in MAP_VIEW_PARAMS_CLEARED", () => {
     // Spread into every result-set-changing navigation: both params — and
     // only these — must leave the URL with the outgoing set.
@@ -204,6 +215,47 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({ radius: 7 }).radius).toBe(DEFAULT_RADIUS_MILES);
     // ...and a non-numeric value trips `.catch` back to the default.
     expect(browseSearchSchema.parse({ radius: "far" }).radius).toBe(DEFAULT_RADIUS_MILES);
+  });
+});
+
+/**
+ * {@link isBrowseAnchorPending} gates the map route's stale-`?sel=` strip.
+ * The regression it pins: on Back, coords die with the route, so the first
+ * result set renders un-anchored — judging a restored selection against that
+ * transient window would strip a `?sel=` that becomes valid the moment the
+ * reading lands.
+ */
+describe("isBrowseAnchorPending", () => {
+  const RESOLVING = {
+    sort: "distance",
+    areaActive: false,
+    coordsKnown: false,
+    geoStatus: "prompting",
+  } as const;
+
+  it("holds judgement while the near-me anchor awaits the browser (late-arriving coords)", () => {
+    // The Back-navigation window: distance sort, no reading yet, the request
+    // in flight (or about to fire from idle). The set is transient.
+    expect(isBrowseAnchorPending(RESOLVING)).toBe(true);
+    expect(isBrowseAnchorPending({ ...RESOLVING, geoStatus: "idle" })).toBe(true);
+    // Success reported but the reading not yet applied: still transient.
+    expect(isBrowseAnchorPending({ ...RESOLVING, geoStatus: "success" })).toBe(true);
+  });
+
+  it("settles once the reading lands", () => {
+    expect(isBrowseAnchorPending({ ...RESOLVING, coordsKnown: true })).toBe(false);
+    expect(isBrowseAnchorPending({ ...RESOLVING, coordsKnown: true, geoStatus: "success" })).toBe(
+      false
+    );
+  });
+
+  it("settles when geolocation answers with an error (no reading is coming)", () => {
+    expect(isBrowseAnchorPending({ ...RESOLVING, geoStatus: "error" })).toBe(false);
+  });
+
+  it("never holds when the anchor cannot change the set: non-distance sort or a searched area", () => {
+    expect(isBrowseAnchorPending({ ...RESOLVING, sort: "alpha" })).toBe(false);
+    expect(isBrowseAnchorPending({ ...RESOLVING, areaActive: true })).toBe(false);
   });
 });
 

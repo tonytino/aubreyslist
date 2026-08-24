@@ -14,9 +14,13 @@ import type { BrowseListingCard, BrowseListingsPage } from "~/server/listings/br
  * so the hook holds no page-count state of its own. Because the result-set
  * params and `?pages=` travel in the same URL, Back/forward and a pasted link
  * restore the accumulation coherently, and a result-set change resets it by
- * stripping the param at the navigation that changes the set. Extra pages
- * mount as one `useQueries` batch, so a URL-seeded count fetches every page
- * in parallel — never a waterfall.
+ * stripping the param at the navigation that changes the set. One sanctioned
+ * exception: the visitor's reading arriving for the "near me" anchor changes
+ * the result set with no navigation, so nothing is stripped — the same count
+ * refetches under the new anchor, and the route re-judges `?sel=` against
+ * the re-anchored set (`isBrowseAnchorPending` holds that judgement until
+ * the anchor settles). Extra pages mount as one `useQueries` batch, so a
+ * URL-seeded count fetches every page in parallel — never a waterfall.
  */
 
 /**
