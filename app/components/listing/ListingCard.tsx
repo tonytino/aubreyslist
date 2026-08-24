@@ -137,10 +137,10 @@ export function cardLocationParts(vm: RestaurantCardVM): string[] {
  * non-breaking space, so a card's height never depends on what it knows and an
  * unstyled render paints no stub word as content.
  *
- * The separator is `aria-hidden`, and it carries the only whitespace between the
- * segments — so a consumer that does not set its own `aria-label` would compute
- * "Denver0.8 mi". Build names from {@link cardLocationParts} instead, as both
- * callers do.
+ * Only the `·` is `aria-hidden`; its surrounding spaces are not. The browse
+ * card's line sits outside the labelled `<a>`, so read-mode lands on the spans
+ * directly and needs the word boundary. Surfaces that fold location into an
+ * `aria-label` build it from {@link cardLocationParts}, never from this markup.
  */
 export function CardLocationLine({
   vm,
@@ -159,8 +159,8 @@ export function CardLocationLine({
         <>
           {vm.city ? <span className="min-w-0 truncate">{vm.city}</span> : null}
           {vm.city && vm.distanceLabel ? (
-            <span aria-hidden="true" className="shrink-0">
-              &nbsp;·&nbsp;
+            <span className="shrink-0">
+              &nbsp;<span aria-hidden="true">·</span>&nbsp;
             </span>
           ) : null}
           {vm.distanceLabel ? <span className="shrink-0">{vm.distanceLabel}</span> : null}

@@ -17,6 +17,14 @@ const STATE_TAIL = /^\s*[A-Za-z]{2}(?:\s+\d{5}(?:-\d{4})?)?\s*$/;
 const MAX_ADDRESS_LENGTH = 512;
 
 /**
+ * A trailing country segment, dropped before the state tail is read. Live
+ * Place Details calls omit `regionCode`, so Google returns "…, CO 80205, USA";
+ * the seed refresh sends `regionCode: "US"` and gets "…, CO 80205". Both shapes
+ * are stored, so both must parse.
+ */
+const COUNTRY_TAIL = /^\s*(?:USA|US|United States(?: of America)?)\s*$/i;
+
+/**
  * The city from a stored address, or `null` when the address has no US
  * city/state tail. Splits on commas rather than matching the whole tail, so
  * cost is linear in the address length.
@@ -30,6 +38,7 @@ export function cityFromAddress(address: string): string | null {
   // card and its result reaches an `aria-label`.
   if (address.length > MAX_ADDRESS_LENGTH) return null;
   const segments = address.split(",");
+  if (COUNTRY_TAIL.test(segments[segments.length - 1] ?? "")) segments.pop();
   // "…, City, ST" — the city needs a comma on both sides, so two segments
   // ("Denver, CO") is a miss, not a city.
   if (segments.length < 3) return null;

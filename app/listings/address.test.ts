@@ -55,6 +55,18 @@ describe("cityFromAddress", () => {
     expect(performance.now() - started).toBeLessThan(50);
   });
 
+  it("reads the city through a trailing country segment", () => {
+    // Live Place Details omits `regionCode`, so Google returns the country;
+    // the seed refresh sends it and does not. Both shapes are stored.
+    expect(cityFromAddress("3331 N Downing St, Denver, CO 80205, USA")).toBe("Denver");
+    expect(cityFromAddress("1600 Amphitheatre Pkwy, Mountain View, CA 94043, USA")).toBe(
+      "Mountain View"
+    );
+    expect(cityFromAddress("1 Test St, Boulder, CO, United States")).toBe("Boulder");
+    // The country alone is not a city: "Denver, CO, USA" still has too few segments.
+    expect(cityFromAddress("Denver, CO, USA")).toBeNull();
+  });
+
   it("returns null past the 512-char cap, so an uncapped address bounds the work", () => {
     // The Places path and the `text` column are uncapped, unlike manual intake.
     const tail = ", Denver, CO 80205";

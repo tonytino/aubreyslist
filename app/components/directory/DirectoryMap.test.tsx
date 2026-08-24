@@ -322,8 +322,8 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
       // number itself, not "no digits": the card's distance segment carries
       // legitimate digits of its own.
       const number = String(i + 1);
-      expect(pin).not.toContain(number);
-      expect(card).not.toContain(number);
+      expect(pinOf(pin).getAttribute("aria-label")).not.toContain(number);
+      expect(cardOf(pin).getAttribute("aria-label")).not.toContain(number);
     });
   });
 
