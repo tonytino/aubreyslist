@@ -99,8 +99,6 @@ const listing = (over: Partial<SeededListing> = {}): SeededListing => ({
   lng: -104.99,
   suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
   menuUrl: null,
-  googleRating: 4.8,
-  googleRatingCount: 120,
   ...over,
 });
 
