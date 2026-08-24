@@ -112,15 +112,60 @@ const FRESHNESS = {
 } as const;
 
 /**
- * The card's location line: `city · distance`, with either segment allowed to be
- * absent. Returns `""` when neither exists, so callers reserve the line's height
- * instead of rendering a stray separator.
- *
- * Shared by the browse card and the map mini-card so the two surfaces cannot
- * disagree on what a listing's location reads as.
+ * The location atoms for an accessible name — `["Denver", "0.8 mi"]`, either
+ * segment allowed to be absent. A surface folding location into an `aria-label`
+ * joins these with commas, so it never has to unpick a rendered separator.
  */
-export function cardLocationLine(vm: RestaurantCardVM): string {
-  return [vm.city, vm.distanceLabel].filter(Boolean).join(" · ");
+export function cardLocationParts(vm: RestaurantCardVM): string[] {
+  return [vm.city, vm.distanceLabel].filter((part): part is string => Boolean(part));
+}
+
+/**
+ * The card's location line — `city · distance`, with either segment allowed to
+ * be absent. Shared by the browse card and the map mini-card so the two
+ * surfaces cannot disagree on what a listing's location reads as, or on how it
+ * degrades. Each caller passes only its own wrapper classes.
+ *
+ * Overflow rule: the CITY truncates and the distance never does. The segments
+ * are separate flex items (`min-w-0 truncate` / `shrink-0`) because a single
+ * joined string clips from the right — on the 200px mini-card that drops the
+ * distance entirely. "Greenwood Village · 12.4 mi" degrades to
+ * "Greenwood Vill… · 12.4 mi".
+ *
+ * The line always renders: with neither segment it keeps an `invisible`
+ * non-breaking space, so a card's height never depends on what it knows and an
+ * unstyled render paints no stub word as content.
+ */
+export function CardLocationLine({
+  vm,
+  as = "p",
+  className,
+}: {
+  vm: RestaurantCardVM;
+  /** The mini-card sits inside a `<button>`, where a `<p>` is invalid HTML. */
+  as?: "p" | "span";
+  className?: string;
+}) {
+  const Wrapper = as;
+  return (
+    <Wrapper data-testid="card-location" className={cn("flex min-w-0 items-center", className)}>
+      {vm.city || vm.distanceLabel ? (
+        <>
+          {vm.city ? <span className="min-w-0 truncate">{vm.city}</span> : null}
+          {vm.city && vm.distanceLabel ? (
+            <span aria-hidden="true" className="shrink-0">
+              &nbsp;·&nbsp;
+            </span>
+          ) : null}
+          {vm.distanceLabel ? <span className="shrink-0">{vm.distanceLabel}</span> : null}
+        </>
+      ) : (
+        <span aria-hidden="true" className="invisible">
+          &nbsp;
+        </span>
+      )}
+    </Wrapper>
+  );
 }
 
 /**
@@ -170,7 +215,6 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  */
 export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
   const freshness = vm.freshness ? FRESHNESS[vm.freshness.kind] : null;
-  const locationLine = cardLocationLine(vm);
 
   // A broken image (stale token, proxy 503) falls back to the gradient placeholder.
   // Storing the failed src (not a boolean) scopes the suppression to the exact image
@@ -196,7 +240,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
       <Link
         to="/listings/$id"
         params={{ id: vm.id }}
-        aria-label={vm.name}
+        aria-label={[vm.name, ...cardLocationParts(vm)].join(", ")}
         className="block shrink-0 after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring"
         {...(showPhoto && vm.photoUrl
           ? listingPreviewLinkState(
@@ -291,17 +335,10 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           ) : null}
         </div>
 
-        {/* Location line — "Denver · 1.2 mi", with either segment allowed to be absent.
-            An unparseable address yields no city, and the full street address stays on
-            the detail page. The line always renders: with neither segment it keeps an
-            `invisible` placeholder so a card's height never depends on it. */}
-        <p data-testid="card-location" className="text-body-sm text-muted-foreground">
-          {locationLine || (
-            <span aria-hidden="true" className="invisible">
-              Location
-            </span>
-          )}
-        </p>
+        {/* Location line — the shared component, so this card and the map mini-card
+            cannot drift. An unparseable address yields no city, and the full street
+            address stays on the detail page. */}
+        <CardLocationLine vm={vm} className="text-body-sm text-muted-foreground" />
 
         {/* Claim row — one line that scrolls horizontally on overflow instead of
             wrapping (the `SafetySummary` hero / `FilterChips` pattern), so badge

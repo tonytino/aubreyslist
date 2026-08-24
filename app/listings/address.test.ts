@@ -39,4 +39,19 @@ describe("cityFromAddress", () => {
   it("returns null for an empty string", () => {
     expect(cityFromAddress("")).toBeNull();
   });
+
+  it("returns null for a whitespace-only city segment (never a blank city)", () => {
+    expect(cityFromAddress("1 Test St, , CO 80205")).toBeNull();
+  });
+
+  it("stays linear on a long run of spaces (no catastrophic backtracking)", () => {
+    // `listings.address` is user-controlled on manual intake and capped at 512
+    // chars, so a quadratic parse here is a plantable per-card render stall.
+    // Pathological shape: one comma followed by a long space run.
+    const planted = `a,${" ".repeat(509)}b`;
+    expect(planted).toHaveLength(512);
+    const started = performance.now();
+    expect(cityFromAddress(planted)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(50);
+  });
 });

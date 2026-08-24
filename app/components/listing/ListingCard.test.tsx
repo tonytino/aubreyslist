@@ -6,7 +6,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
@@ -136,7 +136,20 @@ describe("RestaurantCard", () => {
 
   it("renders city and distance joined on the location line", async () => {
     renderCard({ distanceLabel: "1.2 mi" });
-    expect(await screen.findByText("Denver · 1.2 mi")).toBeInTheDocument();
+    expect(await screen.findByTestId("card-location")).toHaveTextContent("Denver · 1.2 mi");
+  });
+
+  it("truncates only the city, so the distance survives a narrow card", async () => {
+    renderCard({ city: "Greenwood Village", distanceLabel: "12.4 mi" });
+    const line = await screen.findByTestId("card-location");
+    // A single joined string clips from the right and drops the distance —
+    // the segment that matters most. Separate flex items, city-only truncation.
+    const city = within(line).getByText("Greenwood Village");
+    const distance = within(line).getByText("12.4 mi");
+    expect(city.className).toContain("truncate");
+    expect(city.className).toContain("min-w-0");
+    expect(distance.className).toContain("shrink-0");
+    expect(distance.className).not.toContain("truncate");
   });
 
   it("renders the city alone when there is no distance", async () => {
@@ -157,12 +170,30 @@ describe("RestaurantCard", () => {
     expect(line).not.toHaveTextContent("·");
     expect(line.firstElementChild).toHaveClass("invisible");
     expect(line.firstElementChild).toHaveAttribute("aria-hidden", "true");
+    // Value-shaped, not a stub label word: an unstyled render paints nothing
+    // readable as content.
+    expect(line.firstElementChild?.textContent?.trim()).toBe("");
   });
 
   it("never renders the full street address on a card", async () => {
     renderCard({ distanceLabel: "1.2 mi" });
-    await screen.findByText("Denver · 1.2 mi");
+    await screen.findByTestId("card-location");
     expect(screen.queryByText(/123 Main St/)).not.toBeInTheDocument();
+  });
+
+  it("folds the location into the card link's accessible name, comma-joined", async () => {
+    renderCard({ distanceLabel: "1.2 mi" });
+    const link = await screen.findByRole("link");
+    // The anchor wraps only the media, so its name is the `aria-label` alone.
+    // Two branches of one chain in one city are otherwise byte-identical to AT.
+    // Commas, never the visual middot: a screen reader has no reading for "·".
+    expect(link).toHaveAccessibleName("Acme Gluten-Free, Denver, 1.2 mi");
+    expect(link).toHaveAccessibleName(/Denver/);
+  });
+
+  it("drops the location from the link name when the address had no parseable city", async () => {
+    renderCityLessCard();
+    expect(await screen.findByRole("link")).toHaveAccessibleName("Manual Entry Cafe");
   });
 
   it("links the whole card to the listing detail page", async () => {
@@ -453,7 +484,9 @@ describe("RestaurantCard", () => {
     expect(links).toHaveLength(1);
     const link = links[0] as HTMLElement;
     expect(link).toHaveAttribute("href", "/listings/listing-1");
-    expect(link).toHaveAccessibleName("Acme Gluten-Free");
+    // With the street address gone from the card, the name alone can't tell two
+    // branches of one chain apart — the location joins the accessible name.
+    expect(link).toHaveAccessibleName("Acme Gluten-Free, Denver");
   });
 
   it("renders evidence counts when present", async () => {
@@ -732,7 +765,7 @@ describe("ListingCard (mapping wrapper)", () => {
 
   it("maps the distanceLabel onto the card's location line", async () => {
     renderWrapper({}, "0.4 mi");
-    expect(await screen.findByText("Denver · 0.4 mi")).toBeInTheDocument();
+    expect(await screen.findByTestId("card-location")).toHaveTextContent("Denver · 0.4 mi");
   });
 
   it("omits evidence/freshness when the glance carries none", async () => {

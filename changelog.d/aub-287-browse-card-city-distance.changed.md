@@ -1,2 +1,1 @@
-- `[manual]` Browse cards and map mini-cards now read "Denver · 1.2 mi" instead of the full street address. The address stays on the listing detail page.
-- `[manual]` Removed the never-populated Google rating pill from the browse card.
+- `[manual]` Browse cards and map mini-cards now read "Denver · 1.2 mi" instead of the full street address, and announce the same location to screen readers. On a narrow card only the city truncates — the distance always stays whole. The address stays on the listing detail page.

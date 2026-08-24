@@ -4,7 +4,11 @@ import type { CSSProperties } from "react";
 import { useEffect, useRef } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
-import { cardLocationLine, type RestaurantCardVM } from "~/components/listing/ListingCard";
+import {
+  CardLocationLine,
+  cardLocationParts,
+  type RestaurantCardVM,
+} from "~/components/listing/ListingCard";
 import {
   SafetySignal,
   type SafetyState,
@@ -164,14 +168,19 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
 }
 
 /**
- * The mini-card's accessible name: the shared pin name plus, for a
- * bot-suggested listing with no verdict, the provenance the card's trust row
- * shows sighted users — the browse list card exposes the same context to AT.
- * Card-only on purpose: pin announcements stay terse.
+ * The mini-card's accessible name: the shared pin name, the location the card
+ * shows sighted users, and — for a bot-suggested listing with no verdict — the
+ * provenance from its trust row. The browse list card exposes the same context
+ * to AT. Card-only on purpose: pin announcements stay terse.
+ *
+ * `aria-label` overrides button content, so the location is announced only
+ * because it is folded in here. Comma-joined, never the visual middot: a screen
+ * reader has no useful reading of "·".
  */
 function cardAccessibleName(vm: RestaurantCardVM): string {
-  const base = pinAccessibleName(vm);
-  return !vm.safetyState && vm.suggestedByBot ? `${base}, suggested by Aubrey's Bot` : base;
+  const parts = [pinAccessibleName(vm), ...cardLocationParts(vm)];
+  if (!vm.safetyState && vm.suggestedByBot) parts.push("suggested by Aubrey's Bot");
+  return parts.join(", ");
 }
 
 /**
@@ -395,17 +404,15 @@ export function MapCarousel({
                   {vm.name}
                 </span>
               </span>
-              {/* The same "Denver · 0.4 mi" location line the list card renders,
-                  from one shared helper so the two surfaces cannot disagree. It
-                  truncates rather than wrapping, and an empty line keeps an
-                  `invisible` placeholder so mini-card heights stay uniform. */}
-              <span className="mt-0.5 block truncate pr-14 text-caption text-muted-foreground">
-                {cardLocationLine(vm) || (
-                  <span aria-hidden="true" className="invisible">
-                    Location
-                  </span>
-                )}
-              </span>
+              {/* The same location line the list card renders, from one shared
+                  component so the two surfaces cannot disagree. At 200px only the
+                  city truncates — the distance always stays whole. `pr-14` keeps
+                  it clear of the overlaid heart. */}
+              <CardLocationLine
+                vm={vm}
+                as="span"
+                className="mt-0.5 pr-14 text-caption text-muted-foreground"
+              />
               {/* Trust row — the same rules as ListingCard's claim row.
                   `min-h-[30px]` reserves the badge family's rendered height
                   (py-1 + text-body-sm line + border) so every card keeps the

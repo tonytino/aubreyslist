@@ -191,9 +191,17 @@ function pinOf(name: string): HTMLElement {
     .find((el) => el.className.includes("size-11")) as HTMLElement;
 }
 
-/** The carousel mini-card among the two buttons sharing an accessible name. */
-function cardOf(name: string): HTMLElement {
-  return within(screen.getByTestId("map-carousel")).getByRole("button", { name });
+/**
+ * The carousel mini-card for a pin's accessible name. The mini-card name
+ * EXTENDS the pin's with the location the card shows (and the provenance, for a
+ * bot-suggested listing), so this matches on that prefix; the exact
+ * constructions are asserted in the accessible-name tests below.
+ */
+function cardOf(pinName: string): HTMLElement {
+  const prefix = pinName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return within(screen.getByTestId("map-carousel")).getByRole("button", {
+    name: new RegExp(`^${prefix}`),
+  });
 }
 
 describe("DirectoryMap — key-absent fallback (AUB-111)", () => {
@@ -210,25 +218,25 @@ describe("DirectoryMap — key-absent fallback (AUB-111)", () => {
 describe("DirectoryMap — pins", () => {
   it("labels each pin with the restaurant name AND its safety state", async () => {
     await renderMap();
-    // Both the pin and the mini-card share the accessible name, so there are two.
-    expect(screen.getAllByRole("button", { name: "Root & Rye, Celiac-safe" }).length).toBe(2);
-    expect(screen.getAllByRole("button", { name: "Lucia Trattoria, Recent incident" }).length).toBe(
-      2
+    expect(pinOf("Root & Rye, Celiac-safe")).toHaveAccessibleName("Root & Rye, Celiac-safe");
+    expect(pinOf("Lucia Trattoria, Recent incident")).toHaveAccessibleName(
+      "Lucia Trattoria, Recent incident"
     );
   });
 
   it("renders an honest 'Not yet attested' label for a null safety state (no fake verdict)", async () => {
     await renderMap();
-    expect(screen.getAllByRole("button", { name: "New Spot, Not yet attested" }).length).toBe(2);
+    expect(pinOf("New Spot, Not yet attested")).toHaveAccessibleName("New Spot, Not yet attested");
+    expect(cardOf("New Spot, Not yet attested")).toHaveAccessibleName(
+      "New Spot, Not yet attested, Denver"
+    );
   });
 
   it("marks the selected entry via aria-pressed on both its pin and mini-card", async () => {
     await renderMap("b");
-    const pressed = screen
-      .getAllByRole("button", { name: "Lucia Trattoria, Recent incident" })
-      .filter((el) => el.getAttribute("aria-pressed") === "true");
     // Both the pin and the carousel card reflect the selection.
-    expect(pressed).toHaveLength(2);
+    expect(pinOf("Lucia Trattoria, Recent incident")).toHaveAttribute("aria-pressed", "true");
+    expect(cardOf("Lucia Trattoria, Recent incident")).toHaveAttribute("aria-pressed", "true");
   });
 
   it("shows the index number in the dot instead of the safety icon (AUB-275 variant)", async () => {
@@ -255,9 +263,8 @@ describe("DirectoryMap — pins", () => {
 
   it("selects the same restaurant whether its pin or its mini-card is tapped", async () => {
     const { onSelect } = await renderMap("a");
-    const targets = screen.getAllByRole("button", { name: "Lucia Trattoria, Recent incident" });
-    fireEvent.click(targets[0] as HTMLElement);
-    fireEvent.click(targets[1] as HTMLElement);
+    fireEvent.click(pinOf("Lucia Trattoria, Recent incident"));
+    fireEvent.click(cardOf("Lucia Trattoria, Recent incident"));
     // Pin and mini-card both request the same id (selection stays in sync).
     expect(onSelect).toHaveBeenNthCalledWith(1, "b");
     expect(onSelect).toHaveBeenNthCalledWith(2, "b");
@@ -266,31 +273,34 @@ describe("DirectoryMap — pins", () => {
 
 describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview variant)", () => {
   // The five fixture entries' accessible names, in `entries` order — index i
-  // must render the visible number i + 1 on both the pin and the card. Pin and
-  // card names match except for the bot-suggested unattested entry, whose CARD
-  // name appends the provenance the trust row shows (the pin stays terse).
+  // must render the visible number i + 1 on both the pin and the card. The pin
+  // stays terse; the CARD name adds the location it shows sighted users, plus
+  // the trust row's provenance for the bot-suggested unattested entry.
   const namePairs = [
-    { pin: "Root & Rye, Celiac-safe", card: "Root & Rye, Celiac-safe" },
-    { pin: "Lucia Trattoria, Recent incident", card: "Lucia Trattoria, Recent incident" },
-    { pin: "New Spot, Not yet attested", card: "New Spot, Not yet attested" },
+    { pin: "Root & Rye, Celiac-safe", card: "Root & Rye, Celiac-safe, Denver, 0.8 mi" },
+    {
+      pin: "Lucia Trattoria, Recent incident",
+      card: "Lucia Trattoria, Recent incident, Denver",
+    },
+    { pin: "New Spot, Not yet attested", card: "New Spot, Not yet attested, Denver" },
     {
       pin: "Harvest Table, Celiac-safe, Recent incident",
-      card: "Harvest Table, Celiac-safe, Recent incident",
+      card: "Harvest Table, Celiac-safe, Recent incident, Denver",
     },
     {
       pin: "Bot Bistro, Not yet attested",
-      card: "Bot Bistro, Not yet attested, suggested by Aubrey's Bot",
+      card: "Bot Bistro, Not yet attested, Denver, suggested by Aubrey's Bot",
     },
   ];
 
   it("shows the same 1-based number on pin N and card N, following the entries order", async () => {
     await renderMap();
-    namePairs.forEach(({ pin, card }, i) => {
+    namePairs.forEach(({ pin }, i) => {
       const number = String(i + 1);
       // The pin's only visible content is the number…
       expect(pinOf(pin).textContent).toBe(number);
       // …and the card's leading chip carries the matching number.
-      expect(within(cardOf(card)).getByText(number)).toBeInTheDocument();
+      expect(within(cardOf(pin)).getByText(number)).toBeInTheDocument();
     });
   });
 
@@ -304,17 +314,16 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
 
   it("keeps the number out of every accessible name — a visual correlation aid only", async () => {
     await renderMap();
-    namePairs.forEach(({ pin, card }) => {
-      // The exact shared name constructions on both surfaces (getAllByRole
-      // with a string is a full exact match), and no digit in either label.
-      const labels =
-        pin === card
-          ? screen.getAllByRole("button", { name: pin }).map((el) => el.getAttribute("aria-label"))
-          : [pinOf(pin).getAttribute("aria-label"), cardOf(card).getAttribute("aria-label")];
-      expect([...labels].sort()).toEqual([pin, card].sort());
-      for (const label of labels) {
-        expect(label).not.toMatch(/\d/);
-      }
+    namePairs.forEach(({ pin, card }, i) => {
+      // The exact name construction on each surface…
+      expect(pinOf(pin)).toHaveAccessibleName(pin);
+      expect(cardOf(pin)).toHaveAccessibleName(card);
+      // …and the correlation number reaches neither. Asserted against the
+      // number itself, not "no digits": the card's distance segment carries
+      // legitimate digits of its own.
+      const number = String(i + 1);
+      expect(pin).not.toContain(number);
+      expect(card).not.toContain(number);
     });
   });
 
@@ -358,10 +367,9 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
 
   it("keeps a mini-card's safety chip inside that same card (no cross-card bleed in the DOM)", async () => {
     await renderMap();
-    const carousel = screen.getByTestId("map-carousel");
     // Root & Rye's carousel button contains only its own celiac-safe chip, never
     // another restaurant's incident signal.
-    const rootCard = within(carousel).getByRole("button", { name: "Root & Rye, Celiac-safe" });
+    const rootCard = cardOf("Root & Rye, Celiac-safe");
     expect(within(rootCard).getByText("Celiac-safe")).toBeInTheDocument();
     expect(within(rootCard).queryByText("Recent incident")).not.toBeInTheDocument();
   });
@@ -370,12 +378,9 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
 describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", () => {
   it("adds the incident chip alongside the headline verdict when hasRecentIncident", async () => {
     await renderMap();
-    const carousel = screen.getByTestId("map-carousel");
     // Recent harm must never read clean on the map: the card keeps its
     // headline chip AND flags the incident, exactly like the browse card.
-    const card = within(carousel).getByRole("button", {
-      name: "Harvest Table, Celiac-safe, Recent incident",
-    });
+    const card = cardOf("Harvest Table, Celiac-safe, Recent incident");
     expect(within(card).getByText("Celiac-safe")).toBeInTheDocument();
     expect(within(card).getByText("Recent incident")).toBeInTheDocument();
   });
@@ -385,24 +390,27 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
     // aria-label overrides button content, so the visual incident chip alone
     // would be sighted-only. The shared name construction appends it: what
     // sighted users see is what screen readers hear — on the pin AND the card.
-    expect(
-      screen.getAllByRole("button", { name: "Harvest Table, Celiac-safe, Recent incident" })
-    ).toHaveLength(2);
+    expect(pinOf("Harvest Table, Celiac-safe, Recent incident")).toHaveAccessibleName(
+      "Harvest Table, Celiac-safe, Recent incident"
+    );
+    expect(cardOf("Harvest Table, Celiac-safe, Recent incident")).toHaveAccessibleName(
+      "Harvest Table, Celiac-safe, Recent incident, Denver"
+    );
     // Never doubled when the headline already IS the incident state.
-    expect(
-      screen.getAllByRole("button", { name: "Lucia Trattoria, Recent incident" })
-    ).toHaveLength(2);
+    expect(pinOf("Lucia Trattoria, Recent incident")).toHaveAccessibleName(
+      "Lucia Trattoria, Recent incident"
+    );
+    expect(cardOf("Lucia Trattoria, Recent incident")).toHaveAccessibleName(
+      "Lucia Trattoria, Recent incident, Denver"
+    );
   });
 
   it("shows the bot-provenance hint (never the dashed chip) for a bot-suggested listing with no verdict", async () => {
     await renderMap();
-    const carousel = screen.getByTestId("map-carousel");
     // Same gate as ListingCard: bot-suggested + null verdict never shows a
     // fabricated-looking empty-state chip. The trust row carries the list
     // card's exact provenance wording instead of sitting empty…
-    const botCard = within(carousel).getByRole("button", {
-      name: "Bot Bistro, Not yet attested, suggested by Aubrey's Bot",
-    });
+    const botCard = cardOf("Bot Bistro, Not yet attested");
     expect(within(botCard).queryByText("Not yet attested")).not.toBeInTheDocument();
     const provenance = within(botCard).getByTestId("carousel-bot-provenance");
     expect(provenance).toHaveTextContent("Suggested by Aubrey's Bot");
@@ -411,22 +419,23 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
     expect((provenance.parentElement as HTMLElement).className).toContain("mask-image");
     // …and the card's accessible name gives AT the honest verdict state PLUS
     // the provenance sighted users see, mirroring the browse list card.
-    expect(botCard.getAttribute("aria-label")).toBe(
-      "Bot Bistro, Not yet attested, suggested by Aubrey's Bot"
+    expect(botCard).toHaveAccessibleName(
+      "Bot Bistro, Not yet attested, Denver, suggested by Aubrey's Bot"
     );
   });
 
   it("keeps the pin announcement terse: provenance joins the card name only", async () => {
     await renderMap();
-    const pin = pinOf("Bot Bistro, Not yet attested");
-    expect(pin.getAttribute("aria-label")).toBe("Bot Bistro, Not yet attested");
+    expect(pinOf("Bot Bistro, Not yet attested")).toHaveAccessibleName(
+      "Bot Bistro, Not yet attested"
+    );
+    // Exactly one button carries the terse pin name — the card's adds location.
     expect(screen.getAllByRole("button", { name: "Bot Bistro, Not yet attested" })).toHaveLength(1);
   });
 
   it("keeps the honest dashed chip (and no provenance hint) for a plain unattested listing", async () => {
     await renderMap();
-    const carousel = screen.getByTestId("map-carousel");
-    const plainCard = within(carousel).getByRole("button", { name: "New Spot, Not yet attested" });
+    const plainCard = cardOf("New Spot, Not yet attested");
     expect(within(plainCard).getByText("Not yet attested")).toBeInTheDocument();
     expect(within(plainCard).queryByTestId("carousel-bot-provenance")).not.toBeInTheDocument();
   });
@@ -437,19 +446,56 @@ describe("DirectoryMap — mini-card location line", () => {
     await renderMap();
     const card = cardOf("Root & Rye, Celiac-safe");
     // The same line the browse list card renders — never new phrasing.
-    expect(within(card).getByText("Denver · 0.8 mi")).toBeInTheDocument();
+    expect(within(card).getByTestId("card-location")).toHaveTextContent("Denver · 0.8 mi");
   });
 
   it("shows the city alone when no distance exists (never an empty row)", async () => {
     await renderMap();
     const card = cardOf("New Spot, Not yet attested");
-    expect(within(card).getByText("Denver")).toBeInTheDocument();
+    expect(within(card).getByTestId("card-location")).toHaveTextContent(/^Denver$/);
   });
 
   it("never shows a street address on a mini-card", async () => {
     await renderMap();
     const card = cardOf("Root & Rye, Celiac-safe");
     expect(within(card).queryByText(/St,|Ave,/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the DISTANCE whole when a long city has to truncate at 200px", async () => {
+    const { rerenderWith } = await renderMap(null);
+    rerenderWith(null, [
+      {
+        vm: vm({
+          id: "gv",
+          name: "Verdant Table",
+          safetyState: "celiac-safe",
+          city: "Greenwood Village",
+          distanceLabel: "12.4 mi",
+        }),
+        lat: 39.61,
+        lng: -104.95,
+      },
+    ]);
+    const line = within(cardOf("Verdant Table, Celiac-safe")).getByTestId("card-location");
+    // The 200px card cannot fit both segments. Only the CITY is allowed to
+    // clip: the distance is the segment the map exists to convey, so it stays
+    // in the DOM and out of the truncating box.
+    expect(within(line).getByText("Greenwood Village").className).toContain("truncate");
+    const distance = within(line).getByText("12.4 mi");
+    expect(distance.className).toContain("shrink-0");
+    expect(distance.className).not.toContain("truncate");
+  });
+
+  it("announces the location to AT, comma-joined, since aria-label hides card content", async () => {
+    await renderMap();
+    // The mini-card is a <button aria-label>, so its city/distance text reaches
+    // nobody unless the name carries it — on the surface whose whole point is
+    // where a place is.
+    expect(
+      within(screen.getByTestId("map-carousel")).getByRole("button", {
+        name: /Denver, 0\.8 mi/,
+      })
+    ).toBeInTheDocument();
   });
 });
 
@@ -603,7 +649,7 @@ describe("DirectoryMap — carousel FavoriteButton (F6, AUB-125)", () => {
     const carousel = screen.getByTestId("map-carousel");
     // A <button> inside the mini-card <button> would be invalid HTML + nested
     // interactive; the heart must be a sibling, not a descendant.
-    const miniCard = within(carousel).getByRole("button", { name: "Root & Rye, Celiac-safe" });
+    const miniCard = cardOf("Root & Rye, Celiac-safe");
     const heart = within(carousel).getByRole("button", { name: "Save Root & Rye" });
     expect(miniCard).not.toContainElement(heart);
     expect(heart).not.toContainElement(miniCard);
@@ -652,7 +698,7 @@ describe("DirectoryMap — live-map failure fallback (AUB-281)", () => {
     // MapCarousel is rendered by DirectoryMap outside the live/placeholder
     // switch, so the card-content contract holds identically in both paths.
     const card = cardOf("Root & Rye, Celiac-safe");
-    expect(within(card).getByText("Denver · 0.8 mi")).toBeInTheDocument();
+    expect(within(card).getByTestId("card-location")).toHaveTextContent("Denver · 0.8 mi");
     expect(screen.getByRole("link", { name: "View Root & Rye" })).toBeInTheDocument();
     expect(
       within(screen.getByTestId("map-carousel")).getByTestId("carousel-end-spacer")
@@ -671,7 +717,7 @@ describe("DirectoryMap — live-map failure fallback (AUB-281)", () => {
     // the carousel (the root error page would otherwise replace the whole
     // browse route).
     expect(screen.getByTestId("map-carousel")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Root & Rye, Celiac-safe" }).length).toBe(2);
+    expect(cardOf("Root & Rye, Celiac-safe")).toBeInTheDocument();
     // The degrade is silent for users but not for operators: the original
     // throw reaches Sentry.
     expect(sentryMock.captureException).toHaveBeenCalledTimes(1);
