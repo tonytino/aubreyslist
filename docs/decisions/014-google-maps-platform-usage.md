@@ -134,8 +134,11 @@ Embed API free/unlimited, Maps JS 10k free loads. Rules:
   - **Map surfaces** fall back to the existing CSS placeholder /
     deep-link-only behavior whenever `VITE_GOOGLE_MAPS_BROWSER_KEY` is absent.
     The browser key is optional by design.
-  - **Enterprise-tier fields** (hours / phone / website — the 1k/month cap)
-    stay behind a **separate, default-off** switch (AUB-218).
+  - **Enterprise-tier fields** — hours / phone / website (AUB-218), plus
+    `rating` / `userRatingCount` — share the 1k/month cap and stay behind a
+    **separate, default-off** switch. AUB-218 covers hours/phone/website only;
+    no rating surface is planned (AUB-104 canceled), so surfacing one would
+    need its own gate.
 - Prefer the free/unlimited **Maps Embed API** where it suffices before
   reaching for Maps JS SDK loads.
 

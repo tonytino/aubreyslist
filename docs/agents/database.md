@@ -216,9 +216,9 @@ the Places API call away from the seed so `pnpm db:seed` is **API-free**:
    suggest.
 2. **Refresh (Places, one-time):** `pnpm db:seed:refresh`
    (`scripts/refresh-seed-data.ts`) resolves each `query` to a real Google
-   Place ID + coordinates (+ rating + Google's `googleMapsUri` share link,
-   preferred as the seeded `mapsUrl`) via Places Text Search (biased to Union
-   Station, hard-capped at a 25-mile radius) and **bakes** the resolved entries
+   Place ID + coordinates (+ Google's `googleMapsUri` share link, preferred as
+   the seeded `mapsUrl`) via Places Text Search (biased to Union Station,
+   hard-capped at a 25-mile radius) and **bakes** the resolved entries
    into `scripts/seed-listings.generated.json`. Needs **only**
    `GOOGLE_PLACES_API_KEY` (via `getPlacesApiKey()`; no DB connection, so no
    `DATABASE_URL`). Anything unresolvable or outside 25 miles is skipped and
@@ -238,8 +238,14 @@ the Places API call away from the seed so `pnpm db:seed` is **API-free**:
 - **Command:** `pnpm db:seed` — needs only `DATABASE_URL` (via `getDb()`); no
   network call.
 - **Adding a captured field:** extend the field mask + `SeededListing` shape in
-  `scripts/refresh-seed-data.ts` (and `seed-data.ts`), then re-run
-  `pnpm db:seed:refresh` and commit the regenerated JSON.
+  `scripts/refresh-seed-data.ts` (and `seed-data.ts`), widen `ALLOWED_KEYS` in
+  `scripts/seed-data.invariant.test.ts`, then re-run `pnpm db:seed:refresh` and
+  commit the regenerated JSON. ADR-014 guardrail: no *new* Google Places field
+  may be baked here — ratings, hours, phone, photos and reviews are
+  render-time-fetch-only. The bake's existing `name` / `address` /
+  `googleMapsUri` are the accepted risk ADR-014 §1 records, not a licence to
+  add more; whether that posture covers a committed bake at all is an open
+  owner question (AUB-288).
 - **Curator bot:** a single `users` row (`Aubrey's Bot`, role `user`) that is
   intrinsically collision-proof with any real account on both unique columns —
   a non-numeric sentinel `google_sub` (`seed:aubreys-bot`) no real Google login

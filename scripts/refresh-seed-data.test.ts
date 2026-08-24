@@ -15,8 +15,6 @@ const place = (over: Partial<ResolvedPlace> = {}): ResolvedPlace => ({
   address: "123 Main St, Denver, CO",
   lat: 39.75,
   lng: -104.99,
-  googleRating: 4.8,
-  googleRatingCount: 120,
   googleMapsUri: "https://maps.google.com/?cid=98765",
   ...over,
 });
@@ -44,11 +42,18 @@ describe("refreshSeedData", () => {
         lng: -104.99,
         suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
         menuUrl: "https://example.com/menu",
-        googleRating: 4.8,
-        googleRatingCount: 120,
         googleMapsUri: "https://maps.google.com/?cid=98765",
       },
     ]);
+  });
+
+  it("never bakes rating fields onto the emitted listing (ADR-014)", async () => {
+    const resolvePlace = vi.fn(async () => place());
+
+    const result = await refreshSeedData({ sources: [source()], resolvePlace });
+
+    expect(result.listings[0]).not.toHaveProperty("googleRating");
+    expect(result.listings[0]).not.toHaveProperty("googleRatingCount");
   });
 
   it("records a source the resolver can't place, without baking a listing", async () => {
@@ -62,7 +67,7 @@ describe("refreshSeedData", () => {
     ]);
   });
 
-  it("defaults a missing menuUrl, rating, and maps link to null on the baked entry", async () => {
+  it("defaults a missing menuUrl and maps link to null on the baked entry", async () => {
     // A resolver + source that omit the optional fields entirely.
     const bareResolved: ResolvedPlace = {
       placeId: "place-1",
@@ -81,8 +86,6 @@ describe("refreshSeedData", () => {
 
     expect(result.listings[0]).toMatchObject({
       menuUrl: null,
-      googleRating: null,
-      googleRatingCount: null,
       googleMapsUri: null,
     });
   });

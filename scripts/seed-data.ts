@@ -38,10 +38,6 @@ export interface SeededListing {
   suggestedAttributes: ClaimAttribute[];
   /** Optional official menu / GF-info page, seeded as a `menu`-kind `listing_links` row. */
   menuUrl?: string | null;
-  /** Captured Google star rating at refresh time (informational). */
-  googleRating?: number | null;
-  /** Captured Google rating count at refresh time (informational). */
-  googleRatingCount?: number | null;
   /**
    * Google's own share link for the place (the Maps "Share" button URL),
    * captured at refresh time. Preferred as `listings.mapsUrl` when present;

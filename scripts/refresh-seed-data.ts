@@ -3,8 +3,8 @@
  *
  * The only script that talks to the Google Places API. It reads the
  * human-curated `SEED_SOURCES` (`scripts/seed-sources.ts`), resolves each
- * `query` to a real Google Place ID, coordinates, rating, and `googleMapsUri`
- * share link via Places Text Search (biased to Union Station, hard-capped at a
+ * `query` to a real Google Place ID, coordinates, and `googleMapsUri` share
+ * link via Places Text Search (biased to Union Station, hard-capped at a
  * 25-mile radius), and bakes the resolved entries to
  * `scripts/seed-listings.generated.json`. That committed file is what the
  * API-free `pnpm db:seed` inserts — seeding never calls Places.
@@ -39,8 +39,6 @@ export interface ResolvedPlace {
   address: string;
   lat: number;
   lng: number;
-  googleRating?: number | null;
-  googleRatingCount?: number | null;
   /** Google's own share link for the place (the Maps "Share" button URL). */
   googleMapsUri?: string | null;
 }
@@ -91,8 +89,6 @@ export async function refreshSeedData(deps: RefreshSeedDataDeps): Promise<Refres
       lng: place.lng,
       suggestedAttributes: source.suggestedAttributes,
       menuUrl: source.menuUrl ?? null,
-      googleRating: place.googleRating ?? null,
-      googleRatingCount: place.googleRatingCount ?? null,
       googleMapsUri: place.googleMapsUri ?? null,
     });
     log(`OK    ${place.name} — captured`);
@@ -102,19 +98,20 @@ export async function refreshSeedData(deps: RefreshSeedDataDeps): Promise<Refres
 }
 
 // Places API (New) Text Search — one call resolves a query to id + name + address
-// + coordinates + rating + Google's own share link (no separate details call).
-// We validate only what we bake.
+// + coordinates + Google's own share link (no separate details call). We
+// validate only what we bake.
 const PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
 const SEARCH_FIELD_MASK =
-  "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri";
+  "places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri";
 
 /* jscpd:ignore-start -- Accepted clone of `detailsResponseSchema` in
-   app/server/places.ts. The two describe DIFFERENT Places API responses
-   (searchText here, Place Details there) and only collide because Google reuses
-   field names. This one also carries `rating`/`userRatingCount`, which Details
-   does not. A shared "common subset" schema would couple two independent API
-   surfaces, so either could not change without dragging the other. This build-
-   time script also must not import the runtime server module. */
+   app/server/places.ts: the two are currently field-for-field identical, but
+   deliberately so. They describe DIFFERENT Places API responses (searchText
+   here, Place Details there) that only collide today because Google reuses
+   field names; each must stay free to diverge as its own API surface evolves.
+   A shared "common subset" schema would couple them, so neither could change
+   without dragging the other. This build-time script also must not import
+   the runtime server module. */
 const searchTextResponseSchema = z.object({
   places: z
     .array(
@@ -123,8 +120,6 @@ const searchTextResponseSchema = z.object({
         displayName: z.object({ text: z.string() }).optional(),
         formattedAddress: z.string().optional(),
         location: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
-        rating: z.number().optional(),
-        userRatingCount: z.number().optional(),
         googleMapsUri: z.string().optional(),
       })
     )
@@ -195,8 +190,6 @@ export function makePlacesResolver(
       address: place.formattedAddress,
       lat: coords.lat,
       lng: coords.lng,
-      googleRating: place.rating ?? null,
-      googleRatingCount: place.userRatingCount ?? null,
       googleMapsUri: place.googleMapsUri ?? null,
     };
   };
