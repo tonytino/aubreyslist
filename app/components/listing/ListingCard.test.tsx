@@ -34,9 +34,10 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
 /**
  * Tests for the browse-list card. Covers the trust-glance render across states —
  * celiac-safe, gluten-friendly, the honest "Not yet attested" empty state, the
- * recent-incident flag — plus the attributed (non-safety) Google rating pill,
- * evidence counts, and the photo placeholder vs `<img>`. The accessible signals
- * (colour + icon + text label) are asserted via their visible text, never colour.
+ * recent-incident flag — plus the attributed (non-safety) save-count pill, the
+ * city/distance location line, evidence counts, and the photo placeholder vs
+ * `<img>`. The accessible signals (colour + icon + text label) are asserted via
+ * their visible text, never colour.
  *
  * The card uses TanStack Router's `Link`, so it must render inside a router: a
  * tiny in-memory router whose tree includes the `/listings/$id` target lets `Link`
@@ -46,7 +47,7 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
 const baseVm: RestaurantCardVM = {
   id: "listing-1",
   name: "Acme Gluten-Free",
-  address: "123 Main St, Denver, CO",
+  city: "Denver",
   safetyState: "celiac-safe",
   suggestedByBot: false,
   suggestedAttributes: [],
@@ -107,16 +108,61 @@ function renderCard(overrides: Partial<RestaurantCardVM> = {}) {
   return renderInRouter(<RestaurantCard vm={{ ...baseVm, ...overrides }} />);
 }
 
+/**
+ * The VM of a listing whose free-form address carried no parseable city. `city`
+ * is truly absent (not `undefined`) under `exactOptionalPropertyTypes`, so it is
+ * built here rather than overridden on {@link baseVm}.
+ */
+const cityLessVm: RestaurantCardVM = {
+  id: "listing-2",
+  name: "Manual Entry Cafe",
+  safetyState: "celiac-safe",
+  suggestedByBot: false,
+  suggestedAttributes: [],
+  confirmedAttributes: [],
+  hasRecentIncident: false,
+  accent: "mint",
+};
+
+function renderCityLessCard(overrides: Partial<RestaurantCardVM> = {}) {
+  return renderInRouter(<RestaurantCard vm={{ ...cityLessVm, ...overrides }} />);
+}
+
 describe("RestaurantCard", () => {
-  it("renders the listing name and address", async () => {
+  it("renders the listing name", async () => {
     renderCard();
     expect(await screen.findByRole("heading", { name: "Acme Gluten-Free" })).toBeInTheDocument();
-    expect(screen.getByText(/123 Main St, Denver, CO/)).toBeInTheDocument();
   });
 
-  it("appends the distance label to the location line when provided", async () => {
-    renderCard({ distanceLabel: "0.4 mi" });
-    expect(await screen.findByText("123 Main St, Denver, CO · 0.4 mi")).toBeInTheDocument();
+  it("renders city and distance joined on the location line", async () => {
+    renderCard({ distanceLabel: "1.2 mi" });
+    expect(await screen.findByText("Denver · 1.2 mi")).toBeInTheDocument();
+  });
+
+  it("renders the city alone when there is no distance", async () => {
+    renderCard();
+    expect(await screen.findByTestId("card-location")).toHaveTextContent(/^Denver$/);
+  });
+
+  it("renders the distance alone when the address had no parseable city", async () => {
+    renderCityLessCard({ distanceLabel: "12.4 mi" });
+    expect(await screen.findByTestId("card-location")).toHaveTextContent(/^12\.4 mi$/);
+  });
+
+  it("keeps the location line's height with neither city nor distance", async () => {
+    renderCityLessCard();
+    const line = await screen.findByTestId("card-location");
+    // No dangling separator, and the reserved line is hidden from AT as well as
+    // from paint, so a card's height never depends on what it knows.
+    expect(line).not.toHaveTextContent("·");
+    expect(line.firstElementChild).toHaveClass("invisible");
+    expect(line.firstElementChild).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("never renders the full street address on a card", async () => {
+    renderCard({ distanceLabel: "1.2 mi" });
+    await screen.findByText("Denver · 1.2 mi");
+    expect(screen.queryByText(/123 Main St/)).not.toBeInTheDocument();
   });
 
   it("links the whole card to the listing detail page", async () => {
@@ -314,30 +360,10 @@ describe("RestaurantCard", () => {
     expect(screen.queryByText("Recent incident")).not.toBeInTheDocument();
   });
 
-  it("does not render a Google rating pill when googleRating is absent", async () => {
-    renderCard({ googleRating: null });
-    await screen.findByText("Celiac-safe");
-    expect(screen.queryByTestId("google-rating")).not.toBeInTheDocument();
-    expect(screen.queryByText("Google")).not.toBeInTheDocument();
-  });
-
-  it("renders an ATTRIBUTED Google rating pill only when googleRating is present", async () => {
-    renderCard({ googleRating: { value: 4.8, count: 128 } });
-    const pill = await screen.findByTestId("google-rating");
-    // The value is shown and explicitly attributed to Google...
-    expect(pill).toHaveTextContent("4.8");
-    expect(pill).toHaveTextContent("Google");
-    // ...and it is not presented as a safety verdict (ADR-007): no safety label,
-    // and it carries no SafetySignal state marker.
-    expect(pill).not.toHaveTextContent(/celiac|safe|gluten/i);
-    expect(pill).not.toHaveAttribute("data-safety-state");
-  });
-
   it("does not render a save-count pill when saveCount is 0", async () => {
     renderCard({ saveCount: 0 });
     await screen.findByText("Celiac-safe");
-    // Hidden at 0 (matches how googleRating hides when absent) — no fabricated
-    // "0 saves" pill.
+    // Hidden at 0 — no fabricated "0 saves" pill.
     expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
   });
 
@@ -378,45 +404,37 @@ describe("RestaurantCard", () => {
     expect(pill.parentElement).not.toBe((safety as HTMLElement).parentElement);
   });
 
-  it("renders the pills as real <button> tooltip triggers OUTSIDE the anchor (a11y)", async () => {
-    renderCard({ saveCount: 8, googleRating: { value: 4.8, count: 128 } });
+  it("renders the pill as a real <button> tooltip trigger OUTSIDE the anchor (a11y)", async () => {
+    renderCard({ saveCount: 8 });
     const link = await screen.findByRole("link");
     const save = screen.getByTestId("save-count");
-    const google = screen.getByTestId("google-rating");
     // Nesting a focusable/interactive element inside an <a> is invalid HTML + an
-    // a11y defect, so the pills must be siblings of the link, not descendants.
+    // a11y defect, so the pill must be a sibling of the link, not a descendant.
     expect(link).not.toContainElement(save);
-    expect(link).not.toContainElement(google);
-    // They are honest, natively-focusable, non-submitting <button> triggers (not a
+    // It is an honest, natively-focusable, non-submitting <button> trigger (not a
     // tabindex-hacked span) — giving keyboard users real trigger semantics for the
     // ADR-007 tooltip.
     expect(save.tagName).toBe("BUTTON");
-    expect(google.tagName).toBe("BUTTON");
     expect(save).toHaveAttribute("type", "button");
-    expect(google).toHaveAttribute("type", "button");
   });
 
-  it("keeps BOTH pills IN-FLOW in the title row so they reflow and never overlap the name", async () => {
-    // An absolute overlay would let a long name slide under the pills at 375px.
-    // With the pills in-flow in the same flex row as the name, flexbox reflows
+  it("keeps the pill IN-FLOW in the title row so it reflows and never overlaps the name", async () => {
+    // An absolute overlay would let a long name slide under the pill at 375px.
+    // With the pill in-flow in the same flex row as the name, flexbox reflows
     // them side-by-side — structurally impossible to overlap, no magic offsets.
     renderCard({
       name: "The Extraordinarily Long Gluten-Free Bakery And Coffee House Name",
       saveCount: 8,
-      googleRating: { value: 4.8, count: 128 },
     });
     const heading = await screen.findByRole("heading");
     const save = screen.getByTestId("save-count");
-    const google = screen.getByTestId("google-rating");
     const titleRow = heading.parentElement as HTMLElement;
-    // Name + both pills share one in-flow row container, never an absolute layer.
+    // Name + pill share one in-flow row container, never an absolute layer.
     expect(titleRow).toContainElement(heading);
     expect(titleRow).toContainElement(save);
-    expect(titleRow).toContainElement(google);
-    // ...and the pills stay out of the anchor even in the both-pills case.
+    // ...and the pill stays out of the anchor.
     const link = screen.getByRole("link");
     expect(link).not.toContainElement(save);
-    expect(link).not.toContainElement(google);
   });
 
   it("exposes the save-count ADR-007 tooltip on keyboard focus", async () => {
@@ -428,7 +446,7 @@ describe("RestaurantCard", () => {
   });
 
   it("keeps the card ONE link with an accessible name after moving the body out", async () => {
-    renderCard({ saveCount: 8, googleRating: { value: 4.8, count: 128 } });
+    renderCard({ saveCount: 8 });
     // Exactly one anchor, pointing at the detail page. The <h3> is not inside the
     // anchor, so the link takes its accessible name from `aria-label`.
     const links = await screen.findAllByRole("link");
@@ -436,22 +454,6 @@ describe("RestaurantCard", () => {
     const link = links[0] as HTMLElement;
     expect(link).toHaveAttribute("href", "/listings/listing-1");
     expect(link).toHaveAccessibleName("Acme Gluten-Free");
-  });
-
-  it("exposes the Google-rating ADR-007 tooltip on keyboard focus (never colour/tooltip alone)", async () => {
-    renderCard({ googleRating: { value: 4.8, count: 128 } });
-    const pill = await screen.findByTestId("google-rating");
-    // Resting state: the supplementary copy is portaled shut...
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    // ...the visible "Google" attribution is always present (meaning never rests
-    // on the tooltip alone)...
-    expect(pill).toHaveTextContent("Google");
-    // ...and focusing the pill (keyboard path) reveals the ADR-007 attribution.
-    fireEvent.focus(pill);
-    const tip = await screen.findByRole("tooltip");
-    expect(tip).toHaveTextContent("Google rating, not an Aubrey's List safety score.");
-    // The tooltip explicitly denies being a safety score.
-    expect(tip).not.toHaveTextContent(/celiac-safe|gluten-friendly/i);
   });
 
   it("renders evidence counts when present", async () => {
@@ -703,7 +705,7 @@ describe("ListingCard (mapping wrapper)", () => {
   it("maps a Listing + glance onto the card and links to the detail page", async () => {
     renderWrapper();
     expect(await screen.findByRole("heading", { name: "Acme Gluten-Free" })).toBeInTheDocument();
-    expect(screen.getByText(/123 Main St, Denver, CO/)).toBeInTheDocument();
+    expect(screen.getByTestId("card-location")).toHaveTextContent(/^Denver$/);
     const link = await screen.findByRole("link");
     expect(link).toHaveAttribute("href", "/listings/listing-1");
   });
@@ -730,7 +732,7 @@ describe("ListingCard (mapping wrapper)", () => {
 
   it("maps the distanceLabel onto the card's location line", async () => {
     renderWrapper({}, "0.4 mi");
-    expect(await screen.findByText("123 Main St, Denver, CO · 0.4 mi")).toBeInTheDocument();
+    expect(await screen.findByText("Denver · 0.4 mi")).toBeInTheDocument();
   });
 
   it("omits evidence/freshness when the glance carries none", async () => {
@@ -776,6 +778,19 @@ describe("listingToCardVM (bot-provenance threading)", () => {
     // render no pill — the prop stays truly absent, not `undefined`.
     const vm = listingToCardVM(baseListing, glance);
     expect("saveCount" in vm).toBe(false);
+  });
+
+  it("derives the city from the listing address at the single mapping site", () => {
+    const vm = listingToCardVM(baseListing, glance);
+    expect(vm.city).toBe("Denver");
+  });
+
+  it("leaves city absent for a free-form manual address, never the full address", () => {
+    // The VM carries no address at all, so an unparseable one can only mean a
+    // missing city segment — never a street address on a card.
+    const vm = listingToCardVM({ ...baseListing, address: "The red barn on Highway 36" }, glance);
+    expect("city" in vm).toBe(false);
+    expect("address" in vm).toBe(false);
   });
 });
 

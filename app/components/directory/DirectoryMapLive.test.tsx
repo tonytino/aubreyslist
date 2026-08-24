@@ -78,7 +78,7 @@ function vm(overrides: Partial<RestaurantCardVM>): RestaurantCardVM {
   return {
     id: "id",
     name: "Name",
-    address: "Addr",
+    city: "Denver",
     safetyState: null,
     suggestedByBot: false,
     suggestedAttributes: [],

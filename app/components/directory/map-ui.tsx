@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useRef } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
-import type { RestaurantCardVM } from "~/components/listing/ListingCard";
+import { cardLocationLine, type RestaurantCardVM } from "~/components/listing/ListingCard";
 import {
   SafetySignal,
   type SafetyState,
@@ -58,8 +58,8 @@ export interface DirectoryMapEntry {
 /**
  * Approximate rendered height of the opaque carousel band in px — the ONE
  * retune point when the mini-cards change size: `pt-3` (12) + card (~92: `py-2`
- * + name + address + 30px chip row + border) + `pb-3` (12). Derived from it:
- * the live map's `FIT_PADDING.bottom` and selection-pan offset
+ * + name + location line + 30px chip row + border) + `pb-3` (12). Derived from
+ * it: the live map's `FIT_PADDING.bottom` and selection-pan offset
  * (`DirectoryMapLive.tsx`) and the recenter FAB's `bottom-[128px]` (band + a
  * 12px gap — Tailwind can't interpolate a JS constant into a class, so that
  * one is restated below).
@@ -277,8 +277,8 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
  * correlation aid: it is `aria-hidden`, the card's accessible name
  * (`cardAccessibleName`) never carries it, and safety meaning still comes
  * from the chip row below (colour + icon + label).
- * Text-dense slim cards: name, distance (address when no distance), and the
- * same trust row rules as the browse list card (`ListingCard`): headline
+ * Text-dense slim cards: name, the shared "city · distance" location line, and
+ * the same trust row rules as the browse list card (`ListingCard`): headline
  * `SafetySignal` (or the bot-provenance hint when there is no verdict but a
  * live bot suggestion, or the shared dashed `UnattestedBadge` when neither),
  * plus the incident add-on chip whenever `hasRecentIncident` — recent harm
@@ -395,11 +395,16 @@ export function MapCarousel({
                   {vm.name}
                 </span>
               </span>
-              {/* Distance when the browse response derived one ("0.4 mi" — the
-                  same server label the list card appends), address otherwise:
-                  a standing-outside decision cue first, never an empty row. */}
+              {/* The same "Denver · 0.4 mi" location line the list card renders,
+                  from one shared helper so the two surfaces cannot disagree. It
+                  truncates rather than wrapping, and an empty line keeps an
+                  `invisible` placeholder so mini-card heights stay uniform. */}
               <span className="mt-0.5 block truncate pr-14 text-caption text-muted-foreground">
-                {vm.distanceLabel ?? vm.address}
+                {cardLocationLine(vm) || (
+                  <span aria-hidden="true" className="invisible">
+                    Location
+                  </span>
+                )}
               </span>
               {/* Trust row — the same rules as ListingCard's claim row.
                   `min-h-[30px]` reserves the badge family's rendered height

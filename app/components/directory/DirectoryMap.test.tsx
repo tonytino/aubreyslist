@@ -73,7 +73,7 @@ function vm(overrides: Partial<RestaurantCardVM>): RestaurantCardVM {
   return {
     id: "id",
     name: "Name",
-    address: "Addr",
+    city: "Denver",
     safetyState: null,
     suggestedByBot: false,
     suggestedAttributes: [],
@@ -86,8 +86,8 @@ function vm(overrides: Partial<RestaurantCardVM>): RestaurantCardVM {
 
 const entries: DirectoryMapEntry[] = [
   {
-    // Carries a server-derived distance label — the mini-card must show it in
-    // place of the address.
+    // Carries a server-derived distance label — the mini-card must join it to
+    // the city on the location line.
     vm: vm({ id: "a", name: "Root & Rye", safetyState: "celiac-safe", distanceLabel: "0.8 mi" }),
     lat: 39.76,
     lng: -104.98,
@@ -432,19 +432,24 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
   });
 });
 
-describe("DirectoryMap — mini-card distance line", () => {
-  it("shows the server-derived distance in place of the address when present", async () => {
+describe("DirectoryMap — mini-card location line", () => {
+  it("joins the city and the server-derived distance when both exist", async () => {
     await renderMap();
     const card = cardOf("Root & Rye, Celiac-safe");
-    // The same "0.8 mi" label the browse list card renders — never new phrasing.
-    expect(within(card).getByText("0.8 mi")).toBeInTheDocument();
-    expect(within(card).queryByText("Addr")).not.toBeInTheDocument();
+    // The same line the browse list card renders — never new phrasing.
+    expect(within(card).getByText("Denver · 0.8 mi")).toBeInTheDocument();
   });
 
-  it("falls back to the address when no distance exists (never an empty row)", async () => {
+  it("shows the city alone when no distance exists (never an empty row)", async () => {
     await renderMap();
     const card = cardOf("New Spot, Not yet attested");
-    expect(within(card).getByText("Addr")).toBeInTheDocument();
+    expect(within(card).getByText("Denver")).toBeInTheDocument();
+  });
+
+  it("never shows a street address on a mini-card", async () => {
+    await renderMap();
+    const card = cardOf("Root & Rye, Celiac-safe");
+    expect(within(card).queryByText(/St,|Ave,/)).not.toBeInTheDocument();
   });
 });
 
@@ -642,12 +647,12 @@ describe("DirectoryMap — live-map failure fallback (AUB-281)", () => {
     expect(screen.queryByTestId("map-placeholder-backdrop")).not.toBeInTheDocument();
   });
 
-  it("shares the carousel between paths: distance line and chevron render in the live path too", async () => {
+  it("shares the carousel between paths: location line and chevron render in the live path too", async () => {
     await renderMap();
     // MapCarousel is rendered by DirectoryMap outside the live/placeholder
     // switch, so the card-content contract holds identically in both paths.
     const card = cardOf("Root & Rye, Celiac-safe");
-    expect(within(card).getByText("0.8 mi")).toBeInTheDocument();
+    expect(within(card).getByText("Denver · 0.8 mi")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View Root & Rye" })).toBeInTheDocument();
     expect(
       within(screen.getByTestId("map-carousel")).getByTestId("carousel-end-spacer")
