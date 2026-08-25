@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Run a session as the orchestrator — Linear recon, worker dispatch by model tier, adversarial review, labeled PR, safe:agent self-merge or safe:human handoff. Use at the start of every session before multi-step work (CLAUDE.md directs every session here). Skip only for the tiny-task exception (questions, typo-class doc fixes).
+description: Run a session as the orchestrator — Linear recon, worker dispatch by model tier, adversarial review, labeled PR, safe:agent self-merge or safe:human handoff. Use at the start of every session before multi-step work (CLAUDE.md directs every session here).
 ---
 
 # Orchestrate (Session Default)
@@ -11,9 +11,11 @@ this skill routes you: `docs/agents/orchestration.md` (loop, model tiers, merge
 runbook), `docs/agents/linear.md` (tracking), `docs/agents/tasks.md` (PR
 conventions), `docs/agents/governance.md` (owner-gated surfaces).
 
-**Tiny-task exception:** answering questions and typo-class / one-line doc
-fixes may be handled directly — no workers, no loop. Committed changes still
-ship per PR conventions (`skip-review` is the sanctioned bypass).
+**Review routing:** the lenses a PR owes come from its changed-file list. A
+prose-only diff routes conventions + copy; every other diff routes the full
+panel. Prose is an allowlist, so any unlisted path is full-panel — `AGENTS.md`,
+`CLAUDE.md`, `docs/agents/**`, `docs/decisions/**`, and `.claude/**` included.
+Answering a question changes no files, so there is no PR and no gate.
 
 ## Session lifecycle
 
@@ -28,8 +30,8 @@ ship per PR conventions (`skip-review` is the sanctioned bypass).
    specialist review panel, fresh reviewer per lens, 2 reviews per lens;
    escalate unresolved items in the PR description.
 5. **Ship the PR.** Conventional-Commit title; one each of `type:*` / `size:*`
-   / `safe:*`; `## TL;DR`; `## Adversarial review` block +
-   `review:adversarial-passed` (or `skip-review`); `changelog.d/` fragment (or
+   / `safe:*`; `## TL;DR`; an `## Adversarial review` block with a verdict for
+   every routed lens + `review:adversarial-passed`; `changelog.d/` fragment (or
    `skip-changelog`); `Fixes AUB-<n>`. Check the owner-review gate: if the diff
    touches an owner-gated surface it MUST be `safe:human`
    (`docs/agents/governance.md` — a local check command lives there).
@@ -53,6 +55,6 @@ never fabricate an answer to a blocking question.
 
 - A Reviewer is never the Worker — fresh, adversarial subagent every round.
 - Never merge (or enable auto-merge on) a `safe:human` PR.
-- Never skip the review panel outside the tiny-task exception.
+- Never ship a PR whose routed lenses lack a verdict.
 - Never create a duplicate Linear issue.
 - Owner-gated ⇒ `safe:human`, no exceptions.

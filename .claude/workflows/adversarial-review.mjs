@@ -92,7 +92,9 @@ const LENS_FOCUS = {
 }
 
 // Deterministic routing: conditional lenses run only when the changed-file
-// list matches their globs. Mirrors the roster table in orchestration.md.
+// list matches their globs. The panel here and the CI gate
+// (.github/scripts/check-review-block.mjs) must route the same lenses — a lens
+// CI requires but the panel skips is recorded `n/a` and fails the gate.
 const UI_GLOBS = [/^app\/components\//, /^app\/routes\/.*\.tsx$/, /\.css$/, /^components\.json$/]
 const ROUTING = {
   design: UI_GLOBS,
@@ -101,6 +103,23 @@ const ROUTING = {
   performance: [/^app\/server\//, /^db\//, /^package\.json$/, /^vite\.config\.ts$/],
   data: [/^db\//, /^drizzle\.config\.ts$/],
 }
+
+// Prose is an ALLOWLIST: an unrecognised path gets the full panel. Files that
+// bind future sessions (AGENTS.md, CLAUDE.md, docs/agents/**) and ADRs
+// (docs/decisions/**) are deliberately outside it.
+const isProse = (f) => {
+  if (typeof f !== 'string' || f === '') return false
+  if (f === 'LICENSE') return true
+  if (f.startsWith('changelog.d/')) return true
+  if (f.startsWith('docs/')) {
+    return !f.startsWith('docs/agents/') && !f.startsWith('docs/decisions/')
+  }
+  if (/^[^/]+\.md$/.test(f)) return f !== 'AGENTS.md' && f !== 'CLAUDE.md'
+  return false
+}
+
+// A diff of pure prose earns this panel instead of the always-on four.
+const REDUCED = ['conventions', 'copy']
 
 // forceSpecialists is additive-only and limited to conditional lenses —
 // always-on lenses can never be removed, so there is nothing to validate there.
@@ -249,9 +268,16 @@ const results = await pipeline(
     const files = Array.isArray(fileResult?.files) ? fileResult.files : []
 
     const routed = CONDITIONAL.filter(
-      (key) => forced.includes(key) || files.some((f) => ROUTING[key].some((re) => re.test(f))),
+      (key) =>
+        forced.includes(key) ||
+        (key === 'copy' && files.some(isProse)) ||
+        files.some((f) => ROUTING[key].some((re) => re.test(f))),
     )
-    const panel = ALWAYS_ON.concat(routed)
+    // An empty file list means the diff could not be read: route the full panel.
+    const proseOnly = files.length > 0 && files.every(isProse)
+    const panel = proseOnly
+      ? Array.from(new Set(REDUCED.concat(forced)))
+      : ALWAYS_ON.concat(routed)
     log(`Item ${i} panel: ${panel.join(', ')} (files matched: ${files.length}).`)
 
     const state = {}
@@ -271,6 +297,16 @@ const results = await pipeline(
     panel.forEach((key, idx) => {
       state[key] = { ran: true, rounds: 1, lastVerdict: round1[idx] ?? null }
     })
+
+    // A lens that returns nothing reviewed nothing. Surface it as a blocker so
+    // the record cannot claim a verdict no reviewer gave.
+    const silent = panel.filter((key) => !state[key].lastVerdict?.overall)
+    if (silent.length) {
+      log(
+        `Item ${i}: NO VERDICT from ${silent.join(', ')} — the change is unreviewed through ` +
+          `those lenses. Recorded CHANGES_REQUESTED; re-run them before merging.`,
+      )
+    }
 
     const objectors = panel.filter(
       (key) => state[key].lastVerdict?.overall === 'CHANGES_REQUESTED',
@@ -299,6 +335,9 @@ const results = await pipeline(
         ),
       )
       objectors.forEach((key, idx) => {
+        if (!recheck[idx]?.overall) {
+          log(`Item ${i}: re-check of ${key} returned no verdict — its round-1 objection stands.`)
+        }
         state[key] = { ran: true, rounds: 2, lastVerdict: recheck[idx] ?? state[key].lastVerdict }
       })
     }
@@ -311,7 +350,18 @@ const results = await pipeline(
     const unresolved = []
     for (const key of panel) {
       const v = state[key].lastVerdict
-      if (!v || v.overall === 'SHIP') continue
+      if (!v) {
+        unresolved.push({
+          specialist: key,
+          severity: 'blocker',
+          area: 'review panel',
+          summary: 'The lens returned no verdict, so the change is unreviewed through it.',
+          verdict: 'CONFIRMED',
+          required_change: `Re-run the ${key} specialist and record the verdict it returns.`,
+        })
+        continue
+      }
+      if (v.overall === 'SHIP') continue
       for (const f of v.findings) {
         if (f.verdict !== 'REFUTED') unresolved.push({ specialist: key, ...f })
       }

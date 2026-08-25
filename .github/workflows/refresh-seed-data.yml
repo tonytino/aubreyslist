@@ -18,13 +18,12 @@ name: Refresh seed data
 # short-lived `seed-refresh/<run_id>` branch and opens a PR instead. The PR is
 # pre-labeled to clear every PR-conventions gate on its own (no human fixing
 # required): `type:chore` / `size:s` / `safe:human` satisfy the required-labels
-# gate, `skip-review` bypasses the adversarial-review gate (this is a
-# mechanical data refresh with no code to review), and `skip-changelog`
-# bypasses the changelog-fragment gate (baked seed data isn't a
-# user-/propagation-facing change). `safe:human` (rather than `safe:agent`) is
-# deliberate even though no owner-gated path is touched: the data was bought
-# with billed Google Places API calls, so a human should be the one to glance
-# at it and merge.
+# gate, and `skip-changelog` bypasses the changelog-fragment gate (baked seed
+# data isn't a user-/propagation-facing change). The adversarial-review gate
+# needs no label — it exempts `github-actions[bot]`, the author of this PR.
+# `safe:human` (rather than `safe:agent`) is deliberate even though no
+# owner-gated path is touched: the data was bought with billed Google Places
+# API calls, so a human should be the one to glance at it and merge.
 on:
   workflow_dispatch: {}
 
@@ -101,9 +100,9 @@ jobs:
 
       # Branch protection blocks a direct push to main, so hand the regenerated
       # data off as a PR instead. Pre-label it so every pr-conventions.yml gate
-      # (required labels, TL;DR, adversarial-review) is satisfied without a
-      # human touching the PR first — see the header comment for why
-      # `safe:human` + `skip-review` + `skip-changelog` are the right trio here.
+      # (required labels, TL;DR, changelog) is satisfied without a human
+      # touching the PR first — see the header comment for why `safe:human` +
+      # `skip-changelog` are the right pair here.
       - name: Open a PR with the refreshed seed data
         if: steps.cfg.outputs.enabled == 'true' && steps.commit.outputs.changed == 'true'
         env:
@@ -116,7 +115,6 @@ jobs:
             --label "type:chore" \
             --label "size:s" \
             --label "safe:human" \
-            --label "skip-review" \
             --label "skip-changelog" \
             --body "$(cat <<'EOF'
           ## TL;DR
@@ -139,6 +137,6 @@ jobs:
 
           ## Adversarial review
 
-          Skipped via `skip-review` — automated, data-only refresh with no code to review (see docs/agents/orchestration.md).
+          Not run: this PR is authored by `github-actions[bot]`, and the adversarial-review gate exempts bot actors — a bot cannot run the specialist panel (see docs/agents/orchestration.md).
           EOF
           )"

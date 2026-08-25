@@ -26,13 +26,29 @@ point; the lens only scopes where it probes.
 
 ---
 
-## Tiny-task exception
+## Routing: which lenses a PR owes
 
-Orchestration is the default for **all real work**. Direct handling — no
-workers, no review panel — is allowed only for: answering questions that change
-no files, and typo-class / one-line doc fixes. Committed changes still ship as
-a conventional PR with the full label set and `## TL;DR`; `skip-review` (and
-`skip-changelog` where genuinely trivial) are the sanctioned bypass labels.
+The panel a PR owes is computed from its changed-file list, not decided per PR.
+A diff whose files are **all** prose routes two lenses: **conventions** and
+**copy**. Every other diff routes the full panel.
+
+Prose is an allowlist — a path is prose only if it matches one of:
+
+- `*.md` at the repo root, except `AGENTS.md` and `CLAUDE.md`
+- `docs/**`, except `docs/agents/**` and `docs/decisions/**`
+- `changelog.d/**`
+- `LICENSE`
+
+Because it is an allowlist, any unlisted path routes the full panel: a new
+top-level directory defaults to full review. Governing prose sits outside it on
+purpose — `AGENTS.md`, `CLAUDE.md`, `docs/agents/**`, and `.claude/**` steer
+every future session, and an ADR under `docs/decisions/**` binds how the repo is
+governed (ADR-015 is the owner-review guardrail itself). An empty changed-file
+list routes full.
+
+No diff, no gate: answering a question changes no files, so there is no PR and
+nothing to review. Every PR that does exist owes a verdict for each routed
+lens. There is no bypass label; bot-authored PRs are exempt by actor.
 
 ---
 
@@ -54,24 +70,24 @@ When unsure, default to inheriting the session model.
 
 ## The Review Panel
 
-Nine specialist lenses. Four always review; five are routed by the changed-file
-list. Routing is deterministic — the workflow applies these globs in code.
+Nine specialist lenses. On a full-panel diff, four lenses always review and
+five route by glob; a prose-only diff routes conventions and copy. Routing is
+deterministic — the workflow applies these rules in code.
 
 | Lens | What to attack | Routing |
 | --- | --- | --- |
-| **correctness** | Logic bugs, edge cases, wrong assumptions, broken behavior. Test honesty: no skipped/weakened/missing tests; `pnpm preflight` must pass. | Always |
-| **security** | Injection, secret exposure, missing authz, unsafe input handling. Trust-model invariants: ADR-007 (transparent evidence, no hidden scoring) and ADR-008 (intake/dedup) must hold. | Always |
-| **conventions** | `AGENTS.md` Hard Rules. Reuse/duplication — search `app/components/ui/` (vendored shadcn, ADR-011), `app/components/`, `app/lib/`, `app/server/`, `app/trust/` first. Scope creep. Documentation drift. URL-state hygiene (`docs/agents/url-state.md`). Prose terseness (`docs/agents/writing.md`). | Always |
-| **architecture** | The changes as a whole: cross-cutting cohesion, layering (server fns vs Hono per `docs/agents/api.md`, client/server boundaries), consistency with existing patterns — a coherent design, not local patches. | Always |
+| **correctness** | Logic bugs, edge cases, wrong assumptions, broken behavior. Test honesty: no skipped/weakened/missing tests; `pnpm preflight` must pass. | Full panel |
+| **security** | Injection, secret exposure, missing authz, unsafe input handling. Trust-model invariants: ADR-007 (transparent evidence, no hidden scoring) and ADR-008 (intake/dedup) must hold. | Full panel |
+| **conventions** | `AGENTS.md` Hard Rules. Reuse/duplication — search `app/components/ui/` (vendored shadcn, ADR-011), `app/components/`, `app/lib/`, `app/server/`, `app/trust/` first. Scope creep. Documentation drift. URL-state hygiene (`docs/agents/url-state.md`). Prose terseness (`docs/agents/writing.md`). | Full panel |
+| **architecture** | The changes as a whole: cross-cutting cohesion, layering (server fns vs Hono per `docs/agents/api.md`, client/server boundaries), consistency with existing patterns — a coherent design, not local patches. | Full panel |
 | **design** | Visual/UX quality per `docs/agents/design.md` + `docs/agents/styling.md`. | `app/components/**`, `app/routes/**/*.tsx`, `*.css`, `components.json` |
 | **accessibility** | Semantics, keyboard/focus, contrast, ARIA, screen-reader flow. | Same globs as design |
-| **copy** | User-facing copy voice/microcopy per `docs/agents/copy.md` + `writing.md`. | Same globs as design |
+| **copy** | User-facing copy voice/microcopy per `docs/agents/copy.md` + `writing.md`. | The design globs, or any prose path |
 | **performance** | Query efficiency, N+1s, loader waterfalls, bundle weight, unnecessary client work. | `app/server/**`, `db/**`, `package.json`, `vite.config.ts` |
 | **data** | Schema/migration safety per `docs/agents/database.md`: destructive migrations, missing indexes, schema/migration drift. | `db/**`, `drizzle.config.ts` |
 
-The Orchestrator may **force-add** conditional lenses (the workflow's
-`forceSpecialists` arg). Additive only — an always-on lens can never be
-removed.
+The Orchestrator may **force-add** lenses (the workflow's `forceSpecialists`
+arg). Additive only — a routed lens can never be removed.
 
 ---
 
@@ -136,7 +152,7 @@ Each specialist returns exactly this structure:
 ### The PR-body record
 
 Paste the panel record into the PR's `## Adversarial review` section — one line
-per lens (conditionals that did not route are `n/a`) plus `overall`:
+per lens (lenses that did not route are `n/a`) plus `overall`:
 
 ```md
 ## Adversarial review
@@ -176,29 +192,36 @@ after 2-round cap)" so in-flight PRs keep passing.)
 ## CI enforcement (the `adversarial-review` gate)
 
 The panel is enforced as a hard PR gate by the `adversarial-review` job in
-`.github/workflows/pr-conventions.yml`. (Dependabot PRs are exempt — a bot can't
-run the review panel; they remain covered by the `owner-review` gate and
-CODEOWNERS, see the job's comment.) To merge, any other PR must satisfy **one** of:
+`.github/workflows/pr-conventions.yml`. Bot-authored PRs (`dependabot[bot]`,
+`github-actions[bot]`) are exempt by actor — a bot can't run the review panel;
+they remain covered by the `owner-review` gate and CODEOWNERS. To merge, any
+other PR needs **both** the **`review:adversarial-passed` label** **and** a
+well-formed **`## Adversarial review`** section in the PR body.
 
-- **`skip-review` label** — bypasses the gate for a trivial or human-only change; **or**
-- **both** the **`review:adversarial-passed` label** **and** a well-formed
-  **`## Adversarial review`** section in the PR body. That section must contain
-  either the panel record above — a `SHIP` token for **each always-on lens**
-  (correctness, security, conventions, architecture) **plus** `overall: SHIP` —
-  or an escalation marker (`Unresolved review items (escalated after review
-  cap)`; the legacy `2-round cap` text also passes). A bare `overall: SHIP`
-  with no per-lens lines fails, as does an empty or template-placeholder
-  section. The exact rule lives in the header of
-  `.github/scripts/check-review-block.mjs` (`validateReviewBlock`). The job
-  re-evaluates on `labeled`/`unlabeled`/`edited`, so adding the label or pasting
-  the record re-runs it.
+The job routes the panel from the PR's changed files and checks that section
+against the routing:
 
-**Honest limitation.** CI cannot prove a genuine review occurred — the body block
-could be fabricated and the `review:adversarial-passed` label hand-applied. This
-gate is a **forcing function plus an auditable record**, not cryptographic proof.
-Likewise `skip-review` is a **human judgement call**: CI cannot enforce *who*
-applied it or that the change truly warranted skipping. Treat both as social
-contracts the gate makes visible, not guarantees.
+- Without the escalation marker: every routed lens must read `SHIP`, plus
+  `overall: SHIP`.
+- With the escalation marker (`Unresolved review items (escalated after review
+  cap)`; the legacy `2-round cap` text also passes): every routed lens must
+  carry an explicit `SHIP` or `CHANGES_REQUESTED`, and `overall:` must carry a
+  verdict. The marker permits unresolved findings, not absent lenses.
+- A routed lens with no verdict token fails, marker or not. A routed lens
+  written as `n/a` fails too — it routed, so it owes a verdict.
+- A lens that did not route may read `n/a` or be omitted.
+
+A bare `overall: SHIP` with no per-lens lines fails, as does an empty or
+template-placeholder section. The exact rule lives in the header of
+`.github/scripts/check-review-block.mjs` (`validateReviewBlock`). The job
+re-evaluates on `labeled`/`unlabeled`/`edited`, so adding the label or pasting
+the record re-runs it.
+
+**Honest limitation.** Routing and the presence of a verdict per routed lens are
+enforced in code. The *content* of a verdict is not: a fabricated `SHIP` line
+plus a hand-applied `review:adversarial-passed` label still passes. The gate is
+a **forcing function plus an auditable record**, not proof that a review
+happened.
 
 **Relationship to the owner-review gate.** The review panel is a self/peer
 check that any reviewer can clear. It does **not** replace the owner-review
@@ -224,8 +247,8 @@ PR once CI passes"). For `safe:human` PRs, see the next section.
    resolve, and re-drive CI — don't hand conflicts to the human.
 3. **Preconditions before merging** — verify all of:
    - All required checks are green.
-   - `review:adversarial-passed` plus a well-formed panel record (or
-     `skip-review`) satisfy the adversarial-review gate.
+   - `review:adversarial-passed` plus a panel record carrying a verdict for
+     every routed lens satisfy the adversarial-review gate.
    - No `CONFIRMED` blocker or major finding stands.
    - The `owner-review` job passed with the PR labeled `safe:agent`. If it
      flags the diff as owner-gated, relabel `safe:human` and switch to the

@@ -118,59 +118,56 @@ jobs:
     # re-evaluates on `labeled`/`unlabeled` (author added the gate label) and
     # `edited` (author pasted the record into the body) thanks to the triggers above.
     #
-    # `skip-review` bypasses the gate (trivial / human-only change). Otherwise BOTH
-    # must hold: the `review:adversarial-passed` label is present AND the PR body
-    # contains a well-formed panel record (validated by check-review-block.mjs):
-    # a SHIP token for each always-on lens plus `overall: SHIP` inside the
-    # `## Adversarial review` section, or an escalation marker — "Unresolved
+    # BOTH must hold: the `review:adversarial-passed` label is present AND the
+    # PR body carries a verdict for every lens its changed files route.
+    # check-review-block.mjs derives that routed set from the diff, so which
+    # lenses a PR owes is not the author's call and no label waives it. A lens
+    # that ends CHANGES_REQUESTED also needs the escalation marker — "Unresolved
     # review items (escalated after review cap)" or the legacy "2-round cap" text.
     #
-    # Dependabot is exempt: the specialist review panel is a worker/
-    # reviewer-subagent workflow step in docs/agents/orchestration.md that a bot
-    # has no way to run, and it has no author who could apply `skip-review`
-    # either — the gate would stay red on every Dependabot PR until a human
-    # hand-applied `skip-review` to each one.
-    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    # Bots are exempt by actor: the panel is a worker/reviewer-subagent workflow
+    # in docs/agents/orchestration.md that a bot has no way to run, and a bot PR
+    # has no author to run it either. `github-actions[bot]` covers the PRs this
+    # repo's own workflows open (.github/workflows/refresh-seed-data.yml).
+    if: >-
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.user.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     steps:
+      # The parser is a zero-dep ESM script; node is already on ubuntu-latest, so
+      # we only need a checkout to read the script file — no pnpm/setup-node/install.
+      # fetch-depth: 0 so the merge-base against the PR base resolves (routing
+      # needs this PR's changed files), exactly like owner-review below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
       # Same delimiting-comma boundary technique as pr-labels: wrap the joined
       # label list in commas so a label that merely contains the name as a
       # substring can't satisfy the gate.
-      - name: Short-circuit when skip-review is present
-        env:
-          HAS_SKIP: ${{ contains(format(',{0},', join(github.event.pull_request.labels.*.name, ',')), ',skip-review,') }}
-        run: |
-          if [ "$HAS_SKIP" = "true" ]; then
-            echo "✓ skip-review label present — adversarial-review gate bypassed (trivial/human-only change)."
-            echo "SKIP=true" >> "$GITHUB_ENV"
-          else
-            echo "SKIP=false" >> "$GITHUB_ENV"
-          fi
-
       - name: Require the review:adversarial-passed label
-        if: env.SKIP != 'true'
         env:
           HAS_REVIEWED: ${{ contains(format(',{0},', join(github.event.pull_request.labels.*.name, ',')), ',review:adversarial-passed,') }}
         run: |
           if [ "$HAS_REVIEWED" != "true" ]; then
-            echo "::error::Missing the \`review:adversarial-passed\` label. Run the specialist review panel, then apply the label — or apply \`skip-review\` for a trivial/human-only change (see docs/agents/orchestration.md)."
+            echo "::error::Missing the \`review:adversarial-passed\` label. Run the specialist review panel on this change, then apply the label (see docs/agents/orchestration.md)."
             exit 1
           fi
           echo "✓ review:adversarial-passed label present"
 
-      # The parser is a zero-dep ESM script; node is already on ubuntu-latest, so
-      # we only need a checkout to read the script file — no pnpm/setup-node/install.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: env.SKIP != 'true'
-
-      # Pass the body via env (not inline ${{ }}) to avoid shell injection via an
-      # attacker-controlled PR body — exactly like pr-title passes the title.
+      # Body and changed-file list reach the script through env, never inline
+      # ${{ }} or argv, so an attacker-controlled PR body or filename can't
+      # inject into the shell — exactly like pr-title passes the title.
+      # BASE_SHA drives the merge-base diff, mirroring owner-review.
       - name: Validate the adversarial-review block in the PR body
-        if: env.SKIP != 'true'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: node .github/scripts/check-review-block.mjs
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          base="$(git merge-base "$BASE_SHA" HEAD || echo "$BASE_SHA")"
+          CHANGED_FILES="$(git -c core.quotepath=false diff --name-only "$base" HEAD)" \
+            node .github/scripts/check-review-block.mjs
 
   owner-review:
     name: Owner-review gate
@@ -183,8 +180,8 @@ jobs:
     #
     # This is a forcing function; the ENFORCEMENT is Layer 1 (.github/CODEOWNERS
     # + branch protection), which makes an owned-path PR unmergeable until the
-    # owner approves. There is deliberately NO bypass label (unlike skip-review):
-    # the only way past a gated change is the owner's own review + merge.
+    # owner approves. The only way past a gated change is the owner's own
+    # review + merge.
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -52,10 +52,9 @@ If a gated surface is touched but the PR isn't labeled `safe:human`, CI fails
 with a "relabel `safe:human`" message — stopping an agent from self-labeling a
 gated change `safe:agent`.
 
-**There is no bypass label.** Unlike the adversarial-review gate
-(`skip-review`), the owner-review gate cannot be waved off — a label is
-appliable by any write collaborator or bot. The only way past a gated change is
-@tonytino's own review + merge.
+**There is no bypass label.** The owner-review gate cannot be waved off — a
+label is appliable by any write collaborator or bot. The only way past a gated
+change is @tonytino's own review + merge.
 
 ### Known limitations (honest)
 

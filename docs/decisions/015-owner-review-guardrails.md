@@ -42,8 +42,8 @@ merges `safe:human` PRs; agents never do.
 - **Agents must not merge or auto-merge a `safe:human` PR**, and must not take any
   human-impersonating action the human would disapprove of. This is now a Hard
   Rule in `AGENTS.md`.
-- **No bypass label exists** for the owner-review gate (unlike `skip-review`). The
-  only way past a gated change is the owner's own review + merge.
+- **No bypass label exists** for the owner-review gate. The only way past a gated
+  change is the owner's own review + merge.
 - **The guardrail is self-protecting:** CODEOWNERS, workflows, guard scripts, and
   the CI-config surface are owner-owned, so loosening any gate needs the owner's
   review.

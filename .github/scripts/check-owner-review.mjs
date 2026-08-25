@@ -12,8 +12,8 @@
 //
 // A forcing function + fast feedback, not the enforcement: branch protection +
 // CODEOWNERS (Layer 1) is what makes an owned-path PR unmergeable without the
-// owner. There is deliberately no bypass label (unlike skip-review): the only
-// way past a gated change is the owner's own GitHub review.
+// owner. There is no bypass label: the only way past a gated change is the
+// owner's own GitHub review.
 //
 // The matching logic is exported pure functions so it is unit-testable without
 // git or the filesystem (mirrors .github/scripts/check-hard-rules.mjs). Tests:

@@ -1,0 +1,1 @@
+- `[manual]` The adversarial-review gate now routes lenses from a PR's changed-file list — prose-only diffs owe conventions + copy, everything else the full panel — and fails any PR missing a verdict for a routed lens; the `skip-review` bypass label is gone, and bot-authored PRs are exempt by actor instead.

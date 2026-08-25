@@ -62,13 +62,14 @@ Every session in this repo **orchestrates by default** — read
 subagents at deliberately chosen model tiers, and run the specialist review
 panel on **all** worker output before shipping it. `safe:agent` PRs self-merge
 once CI is green; `safe:human` PRs stop at green for a human to review and
-merge (see the Hard Rules and `docs/agents/governance.md`). Tiny tasks —
-answering questions, typo-class doc fixes — may be handled directly, but any
-committed change still ships per the PR conventions. Prefer structured
-question tools (AskUserQuestion in Claude Code) over questions embedded in
-prose replies. Claude Code sessions get this automatically via `CLAUDE.md`, a
-SessionStart hook, and the `/orchestrate` skill — other harnesses must apply
-it manually.
+merge (see the Hard Rules and `docs/agents/governance.md`). The panel routes
+from the changed-file list: a prose-only diff routes conventions and copy,
+every other diff routes the full panel, and each routed lens owes a verdict in
+the PR body. Answering a question changes no files, so it opens no PR and owes
+no panel. Prefer structured question tools (AskUserQuestion in Claude Code)
+over questions embedded in prose replies. Claude Code sessions get this
+automatically via `CLAUDE.md`, a SessionStart hook, and the `/orchestrate`
+skill — other harnesses must apply it manually.
 
 ---
 

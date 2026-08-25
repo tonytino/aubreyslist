@@ -51,7 +51,8 @@ it, and the `owner-review` CI job will fail it if it's labeled `safe:agent`. -->
 
 ## Adversarial review
 <!-- Paste the specialist panel record from docs/agents/orchestration.md — one line per
-lens (`n/a` for lenses that did not route) plus overall:
+lens (`n/a` for lenses that did not route) plus overall. Every routed lens needs a
+verdict; a missing line, or `n/a` on a routed lens, fails CI:
 
 correctness: SHIP
 security: SHIP
@@ -65,8 +66,7 @@ data: n/a
 overall: SHIP
 
 — or the "Unresolved review items (escalated after review cap)" block, then apply the
-`review:adversarial-passed` label. For a trivial or human-only change, apply the
-`skip-review` label instead and leave this empty. -->
+`review:adversarial-passed` label. -->
 
 - [ ] Prose terseness: comments, docs, and this PR body follow docs/agents/writing.md
 
