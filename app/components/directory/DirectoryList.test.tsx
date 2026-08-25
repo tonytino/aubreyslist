@@ -44,7 +44,7 @@ const vms: RestaurantCardVM[] = [
     id: "listing-2",
     name: "Second Spot",
     city: "Boulder",
-    safetyState: "gluten-friendly",
+    safetyState: "stale",
     suggestedByBot: false,
     suggestedAttributes: [],
     confirmedAttributes: [],

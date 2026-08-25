@@ -3,18 +3,23 @@ import { describe, expect, it } from "vitest";
 import { safetyLabel } from "~/components/SafetySignal";
 import { SafetySummary } from "./SafetySummary";
 
+const GUIDANCE_TEXT =
+  "No one has confirmed this restaurant is celiac-safe yet. " +
+  "Verify cross-contamination practices with the restaurant directly.";
+
 describe("SafetySummary", () => {
-  it("renders an honest empty state when no trust data exists (no fabricated rating)", () => {
+  it("renders honest guidance prose when no trust data exists (no fabricated rating, no badge)", () => {
     render(<SafetySummary state={null} />);
-    expect(screen.getByText("Not yet attested")).toBeInTheDocument();
-    // The empty state must not claim a celiac-safe / gluten-friendly verdict.
+    expect(screen.getByTestId("safety-summary-guidance")).toHaveTextContent(GUIDANCE_TEXT);
+    // The empty state must not claim a celiac-safe verdict, and must not render
+    // any safety badge at all — an unattested and a disputed claim look alike.
     expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
-    expect(screen.queryByText("Gluten-friendly")).not.toBeInTheDocument();
+    expect(document.querySelector("[data-safety-state]")).not.toBeInTheDocument();
   });
 
-  it("treats undefined state the same as null (empty state)", () => {
+  it("treats undefined state the same as null (guidance prose)", () => {
     render(<SafetySummary />);
-    expect(screen.getByText("Not yet attested")).toBeInTheDocument();
+    expect(screen.getByTestId("safety-summary-guidance")).toHaveTextContent(GUIDANCE_TEXT);
   });
 
   it("renders the accessible SafetySignal (colour + icon + label) when a state is provided", () => {
@@ -24,15 +29,8 @@ describe("SafetySummary", () => {
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
     expect(svg).toHaveAttribute("aria-hidden", "true");
-    // The "Not yet attested" empty state is gone once we have a verdict.
-    expect(screen.queryByText("Not yet attested")).not.toBeInTheDocument();
-  });
-
-  it("renders distinct verdicts for celiac-safe vs gluten-friendly", () => {
-    const { rerender } = render(<SafetySummary state="celiac-safe" />);
-    expect(screen.getByText("Celiac-safe")).toBeInTheDocument();
-    rerender(<SafetySummary state="gluten-friendly" />);
-    expect(screen.getByText("Gluten-friendly")).toBeInTheDocument();
+    // The guidance prose is gone once we have a verdict.
+    expect(screen.queryByTestId("safety-summary-guidance")).not.toBeInTheDocument();
   });
 
   it("exposes an accessible heading for the section", () => {
@@ -50,9 +48,9 @@ describe("SafetySummary", () => {
     expect(screen.getByText("Celiac-safe")).toBeInTheDocument();
   });
 
-  it("keeps the honest empty state untouched in the hero variant", () => {
+  it("keeps the guidance prose untouched in the hero variant", () => {
     render(<SafetySummary state={null} variant="hero" />);
-    expect(screen.getByText("Not yet attested")).toBeInTheDocument();
+    expect(screen.getByTestId("safety-summary-guidance")).toHaveTextContent(GUIDANCE_TEXT);
     expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
   });
 
@@ -70,15 +68,6 @@ describe("SafetySummary", () => {
   it("renders ONLY the celiac-safe badge in hero when there's no incident", () => {
     render(<SafetySummary state="celiac-safe" variant="hero" hasRecentIncident={false} />);
     expect(screen.getByText(safetyLabel("celiac-safe"))).toBeInTheDocument();
-    expect(screen.queryByText(safetyLabel("gluten-friendly"))).not.toBeInTheDocument();
-    expect(screen.queryByText(safetyLabel("stale"))).not.toBeInTheDocument();
-    expect(screen.queryByText(safetyLabel("incident"))).not.toBeInTheDocument();
-  });
-
-  it("renders ONLY the gluten-friendly badge in hero when that's the headline state", () => {
-    render(<SafetySummary state="gluten-friendly" variant="hero" hasRecentIncident={false} />);
-    expect(screen.getByText(safetyLabel("gluten-friendly"))).toBeInTheDocument();
-    expect(screen.queryByText(safetyLabel("celiac-safe"))).not.toBeInTheDocument();
     expect(screen.queryByText(safetyLabel("stale"))).not.toBeInTheDocument();
     expect(screen.queryByText(safetyLabel("incident"))).not.toBeInTheDocument();
   });
@@ -87,7 +76,6 @@ describe("SafetySummary", () => {
     render(<SafetySummary state="stale" variant="hero" hasRecentIncident={false} />);
     expect(screen.getByText(safetyLabel("stale"))).toBeInTheDocument();
     expect(screen.queryByText(safetyLabel("celiac-safe"))).not.toBeInTheDocument();
-    expect(screen.queryByText(safetyLabel("gluten-friendly"))).not.toBeInTheDocument();
     expect(screen.queryByText(safetyLabel("incident"))).not.toBeInTheDocument();
   });
 
@@ -97,32 +85,31 @@ describe("SafetySummary", () => {
     expect(screen.getByText(safetyLabel("incident"))).toBeInTheDocument();
   });
 
-  it("renders ONLY the incident badge in hero when there's no headline state yet (unattested)", () => {
+  it("renders ONLY the incident badge in hero when there's no headline state yet (unattested/disputed)", () => {
     render(<SafetySummary state={null} variant="hero" hasRecentIncident={true} />);
     expect(screen.getByText(safetyLabel("incident"))).toBeInTheDocument();
-    expect(screen.getByText("Not yet attested")).toBeInTheDocument();
+    expect(screen.getByTestId("safety-summary-guidance")).toHaveTextContent(GUIDANCE_TEXT);
     expect(screen.queryByText(safetyLabel("celiac-safe"))).not.toBeInTheDocument();
-    expect(screen.queryByText(safetyLabel("gluten-friendly"))).not.toBeInTheDocument();
   });
 
-  it("compacts the empty state to a focusable chip when it shares the hero row with the incident badge", () => {
+  it("keeps the guidance prose visible in hero alongside the incident badge (no dashed empty-state chip)", () => {
     render(<SafetySummary state={null} variant="hero" hasRecentIncident={true} />);
-    // The honest "Not yet attested" label stays visible; its guidance sentence
-    // moves into a tooltip (so the never-wrapping row can't push the incident
-    // badge off-screen at 375px) on a keyboard-focusable button trigger.
-    const compactTrigger = screen.getByText("Not yet attested").closest("button");
-    expect(compactTrigger).not.toBeNull();
-    expect(
-      screen.queryByText(/No one has confirmed yet whether this restaurant/)
-    ).not.toBeInTheDocument();
+    // No "Not yet attested" badge of any kind — only the incident badge sits in
+    // the fieldset row, and guidance renders as plain prose below it.
+    expect(screen.queryByText("Not yet attested")).not.toBeInTheDocument();
+    expect(screen.getByTestId("safety-summary-guidance")).toHaveTextContent(GUIDANCE_TEXT);
   });
 
-  it("keeps the FULL empty-state guidance visible in hero when there is no incident badge to crowd out", () => {
+  it("keeps the FULL guidance prose visible in hero when there is no incident badge either", () => {
     render(<SafetySummary state={null} variant="hero" hasRecentIncident={false} />);
-    expect(screen.getByText("Not yet attested")).toBeInTheDocument();
-    expect(
-      screen.getByText(/No one has confirmed yet whether this restaurant/)
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("safety-summary-guidance")).toHaveTextContent(GUIDANCE_TEXT);
+  });
+
+  it("skips the 'Safety status' fieldset entirely when there is no badge to group (null state, no incident)", () => {
+    render(<SafetySummary state={null} variant="hero" hasRecentIncident={false} />);
+    // An empty labelled group would announce a "Safety status" region that holds
+    // nothing — so the fieldset itself must not render.
+    expect(screen.queryByRole("group", { name: "Safety status" })).not.toBeInTheDocument();
   });
 
   it("keeps the default-variant headline chip bare — no tooltip trigger button", () => {

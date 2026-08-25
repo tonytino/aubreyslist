@@ -17,10 +17,9 @@ import { waitForHydration } from "./helpers";
  * attestation (ADR-007) — and assert the transparent trust summary updates:
  * the per-claim roll-up shows "1 confirm / 0 dispute", the Celiac-safe badge
  * toggle reflects the viewer's own vote (`aria-pressed`), and the headline
- * summary flips from the honest "Not yet attested" empty state to
- * "Celiac-safe" (fresh confirm-majority → `deriveHeadlineSafetyState`). It
- * also persists a `claims` row that was never pre-seeded — proving the lazy
- * create.
+ * summary flips from its no-confirmation guidance prose to "Celiac-safe"
+ * (fresh confirm-majority → `deriveHeadlineSafetyState`). It also persists a
+ * `claims` row that was never pre-seeded — proving the lazy create.
  *
  * Self-skips without the CI E2E DB / session secret (see fixtures.ts).
  */
@@ -33,7 +32,8 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
     seeder = new Seeder();
 
     // A bare listing with no claims — every taxonomy attribute starts un-attested
-    // (the headline reads "Not yet attested"). The claim is created lazily below.
+    // (the headline shows no-confirmation guidance prose, never a badge). The
+    // claim is created lazily below.
     const listing = await seeder.createListing(uniqueToken("attest"));
     listingId = listing.id;
 
@@ -64,7 +64,9 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
     // would match both and trip strict mode.
     await expect(claimsSection.locator("p", { hasText: /^Celiac-safe$/ })).toBeVisible();
     const safety = page.getByRole("region", { name: "Gluten-free safety" });
-    await expect(safety.getByText("Not yet attested")).toBeVisible();
+    await expect(safety.getByTestId("safety-summary-guidance")).toContainText(
+      "No one has confirmed this restaurant is celiac-safe yet."
+    );
 
     // Confirm the headline attribute via its badge toggle — the confirm
     // control is the Celiac-safe badge (there is no generic "Confirm" button).

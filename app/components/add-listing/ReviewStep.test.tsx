@@ -4,8 +4,9 @@ import type { AnswerMap, WizardPlace } from "./AddListingWizard";
 import { ReviewStep } from "./ReviewStep";
 
 /**
- * ReviewStep tests: headline confirm → SafetySignal chip; fact confirm/dispute →
- * a per-attribute icon chip carrying the "Confirmed"/"Disputed" word in a neutral
+ * ReviewStep tests: headline confirm → celiac-safe SafetySignal chip; headline
+ * dispute → plain muted "Disputed" text, no badge; fact confirm/dispute → a
+ * per-attribute icon chip carrying the "Confirmed"/"Disputed" word in a neutral
  * (non-safety) tint; skip/untouched → "Not yet attested"; Edit jumps to the right
  * step.
  */
@@ -52,7 +53,21 @@ describe("ReviewStep", () => {
     });
     expect(screen.getByText("Confirmed")).toBeInTheDocument();
     // No safety chip anywhere — the headline is untouched and the fact chip must
-    // not borrow the celiac-safe / gluten-friendly safety colours.
+    // not borrow the celiac-safe safety colour.
+    expect(container.querySelector("[data-safety-state]")).toBeNull();
+  });
+
+  it("renders plain muted text (no badge) for a disputed HEADLINE attribute", () => {
+    // A disputed headline claim removes the badge; it never awards a lesser one,
+    // so the review row must not promise a safety chip of any kind.
+    const { container } = renderReviewContainer({
+      celiac_safe_vs_gluten_friendly: "dispute",
+      dedicated_fryer: undefined,
+      dedicated_gf_menu: undefined,
+      off_menu_gf_on_request: undefined,
+      gf_substitutes: undefined,
+    });
+    expect(screen.getByText("Disputed")).toBeInTheDocument();
     expect(container.querySelector("[data-safety-state]")).toBeNull();
   });
 

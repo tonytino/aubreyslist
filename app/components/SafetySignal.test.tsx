@@ -1,17 +1,10 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import {
-  SAFETY_STATES,
-  SAFETY_TOOLTIP,
-  SafetySignal,
-  type SafetyState,
-  safetyLabel,
-} from "./SafetySignal";
+import { SAFETY_STATES, SAFETY_TOOLTIP, SafetySignal, type SafetyState } from "./SafetySignal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 const EXPECTED_LABELS: Record<SafetyState, string> = {
   "celiac-safe": "Celiac-safe",
-  "gluten-friendly": "Gluten-friendly",
   stale: "Needs update",
   incident: "Recent incident",
 };
@@ -49,39 +42,23 @@ describe("SafetySignal", () => {
     expect(root).toHaveClass("shrink-0", "whitespace-nowrap");
   });
 
-  it("renders distinct labels for celiac-safe vs gluten-friendly", () => {
-    expect(safetyLabel("celiac-safe")).not.toBe(safetyLabel("gluten-friendly"));
-  });
-
   it("supports a custom label override", () => {
     render(<SafetySignal state="incident" label="Recent incident · 3 days ago" />);
     expect(screen.getByText("Recent incident · 3 days ago")).toBeInTheDocument();
   });
 
-  it("exposes all four taxonomy states", () => {
-    expect(SAFETY_STATES).toHaveLength(4);
+  it("exposes all three taxonomy states", () => {
+    expect(SAFETY_STATES).toHaveLength(3);
   });
 
-  it("renders the brand wheat-strike glyph (masked cutout) for gluten-friendly", () => {
-    const { container } = render(<SafetySignal state="gluten-friendly" />);
-    // The glyph is a masked cutout: a <mask> holding a strike <line>, with the
-    // wheat grouped under it. The icon stays decorative.
-    const svg = container.querySelector("svg");
-    expect(svg).toHaveAttribute("aria-hidden", "true");
-    expect(container.querySelector("mask line")).not.toBeNull();
-    expect(container.querySelector("g[mask]")).not.toBeNull();
-    // ...and the meaning still lives in the visible label.
-    expect(screen.getByText("Gluten-friendly")).toBeInTheDocument();
-  });
-
-  it("keeps a DISTINCT icon per state (no shared glyph across the four states)", () => {
-    // Only gluten-friendly uses the masked wheat cutout; the other three are
-    // plain lucide glyphs with no mask, so the four icons stay distinguishable
-    // even in greyscale.
+  it("keeps a DISTINCT icon per state (no shared glyph across the three states)", () => {
+    const seen = new Set<string>();
     for (const state of SAFETY_STATES) {
       const { container } = render(<SafetySignal state={state} />);
-      const hasMask = container.querySelector("g[mask]") !== null;
-      expect(hasMask).toBe(state === "gluten-friendly");
+      const svg = container.querySelector("svg");
+      const shape = svg?.innerHTML ?? "";
+      expect(seen.has(shape)).toBe(false);
+      seen.add(shape);
     }
   });
 });
@@ -96,9 +73,8 @@ describe("SAFETY_TOOLTIP (centralized explainer copy)", () => {
     expect(new Set(entries).size).toBe(SAFETY_STATES.length);
   });
 
-  it("keeps the celiac-safe vs gluten-friendly distinction in the copy", () => {
+  it("keeps the celiac-safe copy specific about cross-contamination", () => {
     expect(SAFETY_TOOLTIP["celiac-safe"]).toMatch(/celiac/i);
-    expect(SAFETY_TOOLTIP["gluten-friendly"]).toMatch(/not a celiac-safe promise/i);
   });
 
   it("wraps a SafetySignal as a Tooltip trigger with the content associated", () => {
