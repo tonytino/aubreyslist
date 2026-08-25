@@ -65,7 +65,7 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
     await expect(claimsSection.locator("p", { hasText: /^Celiac-safe$/ })).toBeVisible();
     const safety = page.getByRole("region", { name: "Gluten-free safety" });
     await expect(safety.getByTestId("safety-summary-guidance")).toContainText(
-      "No one has confirmed this restaurant is celiac-safe yet."
+      "This restaurant isn't confirmed celiac-safe."
     );
 
     // Confirm the headline attribute via its badge toggle — the confirm

@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import { safetyLabel } from "~/components/SafetySignal";
 import { SafetySummary } from "./SafetySummary";
 
+// One constant, no branch on WHY there is no verdict: the wording must be true
+// of a disputed claim as well as an unattested one, so it states only that the
+// listing is not confirmed celiac-safe.
 const GUIDANCE_TEXT =
-  "No one has confirmed this restaurant is celiac-safe yet. " +
+  "This restaurant isn't confirmed celiac-safe. " +
   "Verify cross-contamination practices with the restaurant directly.";
 
 describe("SafetySummary", () => {

@@ -12,9 +12,9 @@
  * Faceted selection: tokens belong to groups. Members of an exclusive group
  * are mutually exclusive (pick one or none); other groups are additive, and
  * selections AND-compose across groups. `safety` = {celiac} is exclusive (a
- * degenerate single-member group since AUB-295, kept so a second safety token
- * slots back in without re-deriving the rules); `recency` = {recent} is a
- * standalone additive toggle. A new additive group slots in by adding its
+ * degenerate single-member group, so a second safety token slots in without
+ * re-deriving the rules); `recency` = {recent} is a standalone additive
+ * toggle. A new additive group slots in by adding its
  * tokens + group here and leaving the group out of `EXCLUSIVE_QUICK_GROUPS`.
  *
  * Client-safe + pure: no db/server imports, so the client (schema + chips +
@@ -74,8 +74,9 @@ function canonicalize(values: readonly QuickFilterValue[]): QuickFilterValue[] {
  * the survivor by vocab order (not URL order) is deterministic and keeps a
  * hand-typed or stale link from resolving to a contradictory selection.
  *
- * Dropping unknown tokens is load-bearing: a shared pre-AUB-295
- * `?quick=friendly` link degrades to no filter rather than erroring.
+ * Dropping unknown tokens is load-bearing: the vocabulary is `celiac` +
+ * `recent`, and `friendly` arrives only from old shared links, which must
+ * degrade to no filter rather than erroring.
  */
 export function parseQuick(value: string): QuickFilterSelection {
   const valid = new Set<QuickFilterValue>();

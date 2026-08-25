@@ -5,8 +5,8 @@ import { ReviewStep } from "./ReviewStep";
 
 /**
  * ReviewStep tests: headline confirm → celiac-safe SafetySignal chip; headline
- * dispute → plain muted "Disputed" text, no badge; fact confirm/dispute → a
- * per-attribute icon chip carrying the "Confirmed"/"Disputed" word in a neutral
+ * dispute → the neutral X + "Disputed" chip, no safety badge; fact
+ * confirm/dispute → a per-attribute icon chip carrying the word in a neutral
  * (non-safety) tint; skip/untouched → "Not yet attested"; Edit jumps to the right
  * step.
  */
@@ -57,9 +57,10 @@ describe("ReviewStep", () => {
     expect(container.querySelector("[data-safety-state]")).toBeNull();
   });
 
-  it("renders plain muted text (no badge) for a disputed HEADLINE attribute", () => {
+  it("renders the neutral Disputed chip (no safety badge) for a disputed HEADLINE attribute", () => {
     // A disputed headline claim removes the badge; it never awards a lesser one,
-    // so the review row must not promise a safety chip of any kind.
+    // so the review row must not promise a safety chip of any kind — it uses the
+    // same neutral chip language a disputed fact does.
     const { container } = renderReviewContainer({
       celiac_safe_vs_gluten_friendly: "dispute",
       dedicated_fryer: undefined,
@@ -69,6 +70,12 @@ describe("ReviewStep", () => {
     });
     expect(screen.getByText("Disputed")).toBeInTheDocument();
     expect(container.querySelector("[data-safety-state]")).toBeNull();
+    // The neutral fact tint, not a safety token.
+    const chip = container.querySelector<HTMLElement>('[data-testid="headline-disputed"]');
+    expect(chip?.getAttribute("class")).toContain("bg-muted");
+    for (const safetyToken of ["celiac-safe", "stale", "incident"]) {
+      expect(chip?.getAttribute("class")).not.toContain(safetyToken);
+    }
   });
 
   it("renders a neutral fact chip (no safety chip) for a disputed fact attribute", () => {

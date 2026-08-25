@@ -167,7 +167,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         claimId: "c-contested",
         lastConfirmedAt: new Date("2026-06-20T00:00:00Z"), // 8d ago → fresh cue
         confirmCount: "2",
-        disputeCount: "5", // disputes lead → no safety badge (AUB-295)
+        disputeCount: "5", // disputes lead → the unattested glance, no badge
         contributors: "7",
       },
       {
@@ -223,15 +223,16 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         suggestedAttributes: [],
         confirmedAttributes: [],
       },
-      // contested: disputes lead → NO safety badge, identical to the
-      // unattested card's `safetyState` (AUB-295). The evidence counts and the
-      // "Verified" freshness cue still surface, so the card never hides that
-      // the community weighed in — it just makes no safety claim.
+      // contested: disputes lead → the UNATTESTED glance, byte-for-byte. No
+      // badge, no "Verified 8d ago" cue, no evidence counts: any one of those
+      // surviving would be a cue the unattested card (below) cannot show, and
+      // would read as a downgrade the community never voted for. The counts
+      // stay legible on the detail page's claim row instead.
       {
         safetyState: null,
         hasRecentIncident: false,
-        evidence: { confirmations: 2, contributors: 7 },
-        freshness: { kind: "fresh", label: "Verified 8d ago" },
+        evidence: null,
+        freshness: null,
         suggestedByBot: false,
         suggestedAttributes: [],
         confirmedAttributes: [],

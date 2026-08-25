@@ -70,7 +70,7 @@ describe("ClaimCardDeck", () => {
     expect(screen.getByText("What your answer records")).toBeInTheDocument();
     expect(container.querySelector('[data-safety-state="celiac-safe"]')).not.toBeNull();
     expect(
-      screen.getByText("Dispute counts against Celiac-safe. Enough disputes remove the badge.")
+      screen.getByText("Dispute counts against the Celiac-safe badge. Enough disputes remove it.")
     ).toBeInTheDocument();
     // Text counter — never dots alone.
     expect(screen.getByText("Card 1 of 5")).toBeInTheDocument();

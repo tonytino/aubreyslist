@@ -14,12 +14,17 @@ import { stalenessCutoff } from "~/trust/summary";
  *
  *   - `celiac` → `safetyState === "celiac-safe"` (has evidence, confirms
  *                strictly outnumber disputes, and the confirmation is fresh)
- *   - `recent` → `freshness.kind === "fresh"` (a within-window confirmation
- *                and no recent incident — the incident cue outranks
- *                freshness, ADR-007)
+ *   - `recent` → `freshness.kind === "fresh"` (a within-window confirmation on
+ *                an uncontested claim, and no recent incident — the incident
+ *                cue outranks freshness, ADR-007)
+ *
+ * Both tokens carry the `confirmCount > disputeCount` guard, so neither can
+ * return a listing whose card shows no badge and no glance cues: a contested
+ * claim is suppressed to the unattested glance, and a filter must not surface
+ * what the card refuses to show.
  *
  * These must stay in lockstep with the pure derivations they mirror
- * (`deriveHeadlineSafetyState` / `formatFreshness` in `app/trust`) — the same
+ * (`deriveHeadlineSafetyState` / `deriveListingTrustGlance` in `app/trust`) — the same
  * `confirmCount > disputeCount`, `hasEvidence`, staleness-cutoff and
  * recent-incident boundaries the card and the "trust" sort use.
  * `quick-filter.test.ts` pins these boundaries against a weakening regression.
@@ -106,25 +111,38 @@ function celiacSafeExists(cutoff: Date, includeSuggested: boolean): SQL {
 }
 
 /**
- * `freshness.kind === "fresh"`: a within-window confirmation and no recent
- * incident (the incident cue outranks freshness — ADR-007 — so a listing with
- * a recent incident is not "fresh" even if recently confirmed).
+ * `freshness.kind === "fresh"`: a within-window confirmation on an uncontested
+ * claim, and no recent incident (the incident cue outranks freshness — ADR-007
+ * — so a listing with a recent incident is not "fresh" even if recently
+ * confirmed).
  *
  *  - fresh confirmation: a visible celiac claim with a non-null
  *    `lastConfirmedAt` on/after the staleness cutoff (a never-confirmed claim
  *    has no timestamp to phrase, so it is not "fresh" — matching
  *    `formatFreshness` returning `null`);
+ *  - uncontested: confirms strictly outnumber disputes (`>`, never `>=`).
+ *    `deriveListingTrustGlance` withholds a contested claim's confirmation
+ *    recency along with its badge, so a contested listing has no fresh cue to
+ *    match. Without this guard the filter would surface badge-less cards under
+ *    a "Recently verified" chip — a match the user cannot reproduce from the
+ *    visible card. The zero-vote case needs no separate arm: `lastConfirmedAt`
+ *    is recomputed from surviving confirms and cleared when none remain, so a
+ *    non-null timestamp implies at least one confirm;
  *  - no recent incident: no visible incident whose `occurredOn` falls inside
  *    the inclusive {@link RECENT_INCIDENT_WINDOW_DAYS} window ending today
  *    (UTC calendar, matching `isRecentIncident`).
  */
 function recentExists(cutoff: Date, now: Date): SQL {
+  const { confirmCount, disputeCount } = tallies();
   const freshConfirmation = sql`exists (
     select 1
     from ${claims}
+    left join ${attestations} on ${eq(attestations.claimId, claims.id)}
     where ${celiacClaimForListing()}
       and ${claims.lastConfirmedAt} is not null
       and ${claims.lastConfirmedAt} >= ${cutoff}
+    group by ${claims.id}
+    having ${confirmCount} > ${disputeCount}
   )`;
 
   // The recency window as UTC calendar-date bounds, matching

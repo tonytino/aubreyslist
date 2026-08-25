@@ -1336,9 +1336,9 @@ describe("browse visibility filtering (#41)", () => {
  * confirms-coalesce `>` disputes-coalesce lead, and a `lastConfirmedAt IS
  * NULL OR >= cutoff` freshness test (inclusive edge, null = fresh).
  *
- * Three branches since AUB-295 (4 / 3 / else 1): contested evidence falls
- * through to the same bottom tier as no evidence at all, because both display
- * no badge. Tier 2 is deliberately vacant.
+ * Three branches (4 / 3 / else 1): contested evidence falls through to the
+ * same bottom tier as no evidence at all, because both display no badge. Tier
+ * 2 is deliberately vacant so the SQL mirror stays diffable.
  *
  * This mirror is only trustworthy because the sibling "pins the rendered SQL
  * CASE structure" test asserts the real rendered SQL matches this arithmetic.
@@ -1419,8 +1419,8 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
       tier: 3,
     },
     // tier 1 — no badge: contested (disputes tie or outnumber confirms) OR
-    // unattested. AUB-295 collapsed these into one tier: both render no safety
-    // badge, so the sort must not claim to tell them apart. Tier 2 is vacant.
+    // unattested. One tier for both: they render the same glance, so the sort
+    // must not claim to tell them apart. Tier 2 is vacant.
     {
       label: "tie (contested ≠ affirmed)",
       confirms: 2,
@@ -1457,9 +1457,9 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
     expect(tierSql).toContain("then 4");
     expect(tierSql).toContain("then 3");
     expect(tierSql).toContain("else 1");
-    // Tier 2 is retired (AUB-295): a re-introduced "contested" rank would mean
-    // the sort distinguishes a disputed listing from an unattested one, which
-    // the displayed glance deliberately does not.
+    // Tier 2 is deliberately vacant: a "contested" rank would mean the sort
+    // distinguishes a disputed listing from an unattested one, which the
+    // displayed glance deliberately does not.
     expect(tierSql).not.toContain("then 2");
     // Evidence = coalesced confirm + dispute > 0 (strict, so 0/0 → no evidence),
     // matching the JS mirror's `hasEvidence`.
@@ -1548,7 +1548,7 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
  * shows — a `quick` filter can never surface a listing whose card reads
  * differently (ADR-007).
  *
- * The `friendly` mirror is gone with its token (AUB-295).
+ * There is no `friendly` mirror: the token is not in the vocabulary.
  */
 function quickCeliacMatches(
   confirms: number,
@@ -1606,8 +1606,8 @@ describe("quick filter composition (AUB-135)", () => {
 
     const where = renderArg(state.pageWhere);
     expect(where).toMatch(/'confirm'\)\s*>\s*count\(\*\)\s*filter/);
-    // The retired `friendly` token's contested `<=` direction must not survive
-    // anywhere in the browse WHERE (AUB-295).
+    // No contested `<=` direction may appear anywhere in the browse WHERE:
+    // that reading has no token and no SQL.
     expect(where).not.toMatch(/'confirm'\)\s*<=\s*count\(\*\)\s*filter/);
   });
 
@@ -1615,7 +1615,7 @@ describe("quick filter composition (AUB-135)", () => {
     state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
     state.total = 1;
 
-    // A shared pre-AUB-295 link. `parseQuick` already drops the token, so the
+    // An old shared link. `parseQuick` already drops the token, so the
     // loader hands `getBrowseListings` an empty selection; this pins that the
     // browse layer then applies no quick constraint at all rather than
     // erroring or falling back to some other safety filter.

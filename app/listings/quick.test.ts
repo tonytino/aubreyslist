@@ -14,8 +14,8 @@ import {
  * `serializeQuick` (canonical order), and `applyQuickToggle` (the group-aware
  * toggle reducer).
  *
- * AUB-295 retired the `friendly` token: the vocabulary is `celiac` + `recent`,
- * and an old `?quick=friendly` link degrades to no filter.
+ * The vocabulary is `celiac` + `recent`; `friendly` arrives only from old
+ * shared links and must degrade to no filter.
  */
 
 describe("vocabulary", () => {
@@ -26,8 +26,8 @@ describe("vocabulary", () => {
 
 describe("group model", () => {
   it("maps the safety token to an exclusive group and recency to an additive one", () => {
-    // `safety` is a degenerate single-member exclusive group since AUB-295 —
-    // kept so a second safety token slots back in without re-deriving the rules.
+    // `safety` is a degenerate single-member exclusive group, so a second
+    // safety token slots in without re-deriving the rules.
     expect(QUICK_FILTER_GROUPS.celiac).toBe("safety");
     expect(QUICK_FILTER_GROUPS.recent).toBe("recency");
     expect(EXCLUSIVE_QUICK_GROUPS.has("safety")).toBe(true);

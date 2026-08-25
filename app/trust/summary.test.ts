@@ -26,9 +26,9 @@ import {
  * headline safety derivation (including the no-evidence empty case, which must
  * stay honest — a celiac could be hurt by a fabricated verdict).
  *
- * Owner decision, 2026-08-25 (AUB-295): the "gluten-friendly" state is gone.
- * The headline is celiac-safe, stale, or nothing — a disputed claim and an
- * unattested one render identically (both `null`), by design.
+ * Owner decision, 2026-08-25: the headline is celiac-safe, stale, or nothing.
+ * A disputed claim and an unattested one render identically (both `null`), by
+ * design.
  */
 
 const NOW = new Date("2026-06-28T12:00:00Z");
@@ -278,7 +278,7 @@ describe("deriveHeadlineSafetyState — celiac-safe, stale, or no badge at all",
   it("returns null when disputes tie or outnumber confirms (suppressed, never overstated)", () => {
     // A tie is contested, not affirmed; a dispute majority even less so. Both
     // suppress the badge entirely — there is no consolation state to fall back
-    // to since AUB-295.
+    // to.
     expect(
       deriveHeadlineSafetyState(
         { confirmCount: 2, disputeCount: 2, lastConfirmedAt: ago(1 * WEEK) },
@@ -367,7 +367,8 @@ describe("safetyTierRank — the browse 'Most trusted' sort contract (#36)", () 
     expect(safetyTierRank(freshSafe, NOW)).toBe(4);
     expect(safetyTierRank(staleHighNet, NOW)).toBe(3);
     // Contested and unattested share the bottom tier: both display no badge,
-    // so the sort cannot tell them apart either (AUB-295). Tier 2 is vacant.
+    // so the sort cannot tell them apart either. Tier 2 is deliberately vacant
+    // so the SQL mirror stays diffable.
     expect(safetyTierRank(bigContested, NOW)).toBe(1);
     expect(safetyTierRank(unattested, NOW)).toBe(1);
     expect(safetyTierRank(null, NOW)).toBe(1);

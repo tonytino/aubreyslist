@@ -35,8 +35,8 @@ import type { ClaimAggregate } from "~/server/attestations";
  * The `celiac_safe_vs_gluten_friendly` enum key is surfaced as "Celiac-safe":
  * every listing is assumed to have gluten-free options, so the only community
  * safety question is "is it celiac-safe?" — confirm ⇒ celiac-safe, dispute ⇒
- * no badge. The key and label deliberately differ (renaming the enum would
- * force a type-recreate migration for no user-visible gain; AUB-297).
+ * no badge. The key and label deliberately differ: renaming the persisted enum
+ * key would force a type-recreate migration for no user-visible gain.
  */
 export const CLAIM_ATTRIBUTE_LABELS: Record<ClaimAttribute, string> = {
   celiac_safe_vs_gluten_friendly: "Celiac-safe",

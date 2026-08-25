@@ -31,12 +31,15 @@ interface SafetySummaryProps {
 }
 
 /**
- * Plain-language guidance for the no-verdict state — one constant so every
- * render reads the same. Covers an unattested claim and a disputed one alike:
- * the two are indistinguishable by design (owner decision 2026-08-25).
+ * Plain-language guidance for the no-verdict state — one constant, no branch on
+ * WHY there is no verdict. It states only what the app can stand behind (this
+ * listing is not confirmed celiac-safe), which is true of an unattested claim
+ * and a disputed one alike, so the two stay indistinguishable (owner decision
+ * 2026-08-25). Wording that implied "nobody has voted" would be a false
+ * statement on a contested listing.
  */
 const NO_CONFIRMATION_GUIDANCE =
-  "No one has confirmed this restaurant is celiac-safe yet. " +
+  "This restaurant isn't confirmed celiac-safe. " +
   "Verify cross-contamination practices with the restaurant directly.";
 
 /**
@@ -98,19 +101,6 @@ export function SafetySummary({
     )
   ) : null;
 
-  // No verdict: prose, never a chip. A dashed "Not yet attested" badge would
-  // still be a safety indicator, and a disputed claim has to look exactly like
-  // an unattested one. Rendered below the badge row so a recent incident keeps
-  // the row's leading position and stays visible at 375px (ADR-007).
-  const guidance = state ? null : (
-    <p
-      data-testid="safety-summary-guidance"
-      className={`max-w-prose text-body-sm text-muted-foreground${isHero ? " mt-2" : ""}`}
-    >
-      {NO_CONFIRMATION_GUIDANCE}
-    </p>
-  );
-
   const incidentBadge =
     isHero && hasRecentIncident ? (
       <Tooltip>
@@ -122,6 +112,24 @@ export function SafetySummary({
         <TooltipContent>{SAFETY_TOOLTIP.incident}</TooltipContent>
       </Tooltip>
     ) : null;
+
+  // The hero's badge row renders only when it has a badge to hold; an empty
+  // labelled group would announce a "Safety status" that holds nothing.
+  const badgeRow = isHero && (headlineBadge || incidentBadge) !== null;
+
+  // No verdict: prose, never a chip. A dashed "Not yet attested" badge would
+  // still be a safety indicator, and a disputed claim has to look exactly like
+  // an unattested one. Rendered below the badge row so a recent incident keeps
+  // the row's leading position and stays visible at 375px (ADR-007). The top
+  // margin is the gap to that row, so it applies only when the row is there.
+  const guidance = state ? null : (
+    <p
+      data-testid="safety-summary-guidance"
+      className={`max-w-prose text-body-sm text-muted-foreground${badgeRow ? " mt-2" : ""}`}
+    >
+      {NO_CONFIRMATION_GUIDANCE}
+    </p>
+  );
 
   return (
     <section
@@ -148,9 +156,7 @@ export function SafetySummary({
           // instead of forcing the hero wider at 375px. The `p-1` (compensated by
           // `-m-1`) keeps each trigger's focus-visible ring inside the scroll
           // container — without it, `overflow-x-auto` clips the ring's box-shadow.
-          // Skipped entirely when there is no badge to group: an empty labelled
-          // group announces a "Safety status" that holds nothing.
-          (headlineBadge || incidentBadge) && (
+          badgeRow && (
             <fieldset className="-m-1 flex min-w-0 items-center gap-2 overflow-x-auto border-0 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <legend className="sr-only">Safety status</legend>
               {headlineBadge}

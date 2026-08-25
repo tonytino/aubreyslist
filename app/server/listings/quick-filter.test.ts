@@ -14,8 +14,8 @@ import { buildQuickFilterPredicate } from "./quick-filter";
  * faithfully so a weakening regression fails here. No live database
  * (docs/agents/testing.md).
  *
- * The vocabulary is `celiac` + `recent` since AUB-295; the retired `friendly`
- * token has no SQL at all (see "retired / unknown tokens" below).
+ * The vocabulary is `celiac` + `recent`; `friendly` has no SQL at all (see
+ * "retired / unknown tokens" below).
  */
 
 const NOW = new Date("2026-06-28T00:00:00Z");
@@ -105,7 +105,7 @@ describe("buildQuickFilterPredicate", () => {
     const unknown = (token: string) => [token] as unknown as QuickFilterValue[];
 
     it("builds NO predicate for the retired `friendly` token (an old ?quick=friendly link)", () => {
-      // AUB-295 deleted the gluten-friendly safety state and its SQL. A stale
+      // `friendly` is outside the live vocabulary and has no SQL. A stale
       // shared link must degrade to an unfiltered directory — never to a
       // silently different safety reading, and never to a thrown loader.
       expect(
@@ -167,6 +167,23 @@ describe("buildQuickFilterPredicate", () => {
       );
       expect(dateParams).toContain("2026-06-28"); // today (UTC)
       expect(dateParams).toContain("2026-03-30"); // today − 90 days (UTC)
+    });
+
+    it("requires confirms to OUTNUMBER disputes — never returns a badge-less card", () => {
+      // The glance withholds a contested claim's freshness cue along with its
+      // badge, so "Recently verified" must not match one either: a filtered
+      // page may never contain a card showing no badge and no cues, because
+      // that is a match the user cannot reproduce from what they can see.
+      // Strict `>` — a tie is contested, not affirmed. Relaxing this to `>=`,
+      // or dropping the HAVING entirely, is the regression this pins.
+      const { lower } = render(
+        buildQuickFilterPredicate(["recent"], NOW, DEFAULT_STALENESS_MONTHS) as SQL
+      );
+
+      expect(lower).toContain("having");
+      expect(lower).toMatch(/'confirm'\)\s*>\s*count\(\*\)\s*filter/);
+      expect(lower).not.toMatch(/'confirm'\)\s*>=\s*count\(\*\)\s*filter/);
+      expect(lower).not.toMatch(/'confirm'\)\s*<=\s*count\(\*\)\s*filter/);
     });
 
     it("ignores the suggestion flag: a suggestion is not a verification", () => {

@@ -204,7 +204,7 @@ export function ClaimCardBody({
               Confirm records <SafetySignal state="celiac-safe" />
             </span>
             <span className="text-body-sm text-muted-foreground">
-              Dispute counts against Celiac-safe. Enough disputes remove the badge.
+              Dispute counts against the Celiac-safe badge. Enough disputes remove it.
             </span>
           </div>
         </div>
