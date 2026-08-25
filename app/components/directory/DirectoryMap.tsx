@@ -125,12 +125,21 @@ export const DirectoryMap = memo(function DirectoryMap({
   loadMore,
   onSearchArea,
   areaSearchStatus = "idle",
+  restoreSelectedId,
+  resultSetPending,
 }: {
   entries: readonly DirectoryMapEntry[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   /** Carousel "Load more" wiring — shared by both render paths. */
   loadMore?: MapLoadMore;
+  /** The URL-restored selection to scroll the carousel to instantly on
+   * mount (see `MapCarousel`). */
+  restoreSelectedId?: string | null;
+  /** True while the entries may still be replaced without a navigation for
+   * a reason `loadMore` cannot see (the distance anchor resolving) — the
+   * carousel composes the full settle signal from both. */
+  resultSetPending?: boolean;
   /**
    * Re-run the browse anchored on the given map center ("Search near here").
    * Live path only: the placeholder has no camera, so it never surfaces the
@@ -202,6 +211,8 @@ export const DirectoryMap = memo(function DirectoryMap({
         selectedId={selectedId}
         onSelect={onSelect}
         {...(loadMore ? { loadMore } : {})}
+        {...(restoreSelectedId ? { restoreSelectedId } : {})}
+        {...(resultSetPending !== undefined ? { resultSetPending } : {})}
       />
 
       {/* The map view's one polite status region. Always mounted with only

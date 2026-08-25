@@ -1,28 +1,27 @@
-import { hashKey, type UseQueryResult, useQueries, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { type UseQueryResult, useQueries, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 import { BROWSE_LISTINGS_QUERY_KEY, type browseQueryOptions } from "~/listings/browse-query";
+import { MAX_MAP_EXTRA_PAGES } from "~/listings/browse-search";
 import type { BrowseListingCard, BrowseListingsPage } from "~/server/listings/browse";
 
 /**
  * Accumulated "Load more" pages for the directory Map view: this hook owns
- * the whole concern — how many extra pages are appended, fetching them,
- * merging them with the base page, and the carousel card's wiring — so the
- * route makes one call.
+ * fetching the extra pages, merging them with the base page, and the carousel
+ * card's wiring, so the route makes one call.
  *
- * Ephemeral by design (docs/agents/url-state.md): how many extra pages the
- * visitor has appended is progressive-loading progress, like a scroll
- * position — not a view worth sharing. A pasted link or a refresh honestly
- * restarts at the base page, and the list view's `?page=` param keeps its
- * existing contract (one page at a time) untouched.
+ * The URL owns the count (docs/agents/url-state.md): `extraPages` is the
+ * validated `?pages=` param and `onAdvance` writes the next count back to it,
+ * so the hook holds no page-count state of its own. Because the result-set
+ * params and `?pages=` travel in the same URL, Back/forward and a pasted link
+ * restore the accumulation coherently, and a result-set change resets it by
+ * stripping the param at the navigation that changes the set. One sanctioned
+ * exception: the visitor's reading arriving for the "near me" anchor changes
+ * the result set with no navigation, so nothing is stripped — the same count
+ * refetches under the new anchor, and the route re-judges `?sel=` against
+ * the re-anchored set (`isBrowseAnchorPending` holds that judgement until
+ * the anchor settles). Extra pages mount as one `useQueries` batch, so a
+ * URL-seeded count fetches every page in parallel — never a waterfall.
  */
-
-/**
- * Cap on appended pages. With the base page that bounds the map at
- * `(1 + cap) * pageSize` pins/mini-cards — enough to sweep a wide radius,
- * small enough to keep marker count and memory sane. Someone who exhausts it
- * can narrow the radius or search near a different spot.
- */
-export const MAX_MAP_EXTRA_PAGES = 5;
 
 /**
  * The carousel's "Load more" wiring. The card renders while a further page
@@ -32,7 +31,8 @@ export const MAX_MAP_EXTRA_PAGES = 5;
 export interface MapLoadMore {
   /** A further page exists after the loaded ones (honest total, capped). */
   hasNext: boolean;
-  /** A page is being fetched — the card shows its busy state. */
+  /** A requested page is still unresolved — dataless and not settled in an
+   * error, or retrying one — so the card shows its busy state. */
   pending: boolean;
   /**
    * A page request failed. The card offers a retry, and `onLoadMore` retries
@@ -56,9 +56,17 @@ interface FetchedPage {
  * `useQueries` can memoize its output — a fresh function per render would
  * defeat that and churn the map entries' identity every render.
  *
- * `pending` is "a page with no data yet is fetching": first loads and error
- * retries show the busy card, background revalidation of an already-shown
- * page does not.
+ * `pending` is "a requested page is still unresolved": no data, and either
+ * not errored (whatever the fetch's dispatch state) or actively refetching
+ * — so first loads and error retries show the busy card. Deliberately not
+ * bare `isFetching`: a real browser holds an enabled, dataless query in a
+ * non-fetching state (fetchStatus "paused" on a connectivity blip, or
+ * before the dispatch), and reading that window as settled lets consumers —
+ * the stale-sel strip, the restore wait, the append disarm, the status
+ * region — judge the URL against a set that is still missing its pages. The
+ * refetch check keeps an error retry busy even when the query still reports
+ * `isError` during it. Background revalidation of an already-shown page
+ * still does not count (it has data).
  */
 function combineExtraPages(results: UseQueryResult<BrowseListingsPage>[]): {
   pages: FetchedPage[];
@@ -69,7 +77,7 @@ function combineExtraPages(results: UseQueryResult<BrowseListingsPage>[]): {
     pages: results.flatMap((result) =>
       result.data ? [{ cards: result.data.cards, updatedAt: result.dataUpdatedAt }] : []
     ),
-    pending: results.some((result) => !result.data && result.isFetching),
+    pending: results.some((result) => !result.data && (!result.isError || result.isFetching)),
     failed: results.some((result) => result.isError),
   };
 }
@@ -110,6 +118,8 @@ export function useMapPages({
   total,
   base,
   optionsForPage,
+  extraPages: requestedExtraPages,
+  onAdvance,
 }: {
   /** Whether the map view is showing — extra pages only fetch while it is. */
   active: boolean;
@@ -124,32 +134,26 @@ export function useMapPages({
    * Query options for one server page — the same `browseQueryOptions` the
    * route's loader uses, so extra pages share the pager's cache entries (no
    * bespoke fetch path, no duplicate base-page fetch). Must be memoized on
-   * every result-set param: the base page's hashed query key doubles as the
-   * accumulation's reset identity below.
+   * every result-set param.
    */
   optionsForPage: (page: number) => BrowsePageQueryOptions;
+  /** The URL's `?pages=` count (0 when absent). Clamped below to what the
+   * honest total supports, so a stale link never fetches pages past the end. */
+  extraPages: number;
+  /** Advance `?pages=` by one (a `replace` navigate at the route). Must be
+   * identity-stable — it feeds the memoized `loadMore` value. */
+  onAdvance: () => void;
 }): { cards: BrowseListingCard[]; loadMore: MapLoadMore } {
   const queryClient = useQueryClient();
 
-  // The identity of the result set being accumulated onto: the base page's
-  // hashed React Query key. Any change that refetches the base page —
-  // filters, sort, search text, radius, quick chips, saved mode, coords, an
-  // area search, or the base `?page=` itself — changes it, so the reset below
-  // can never drift from what actually changes the results.
-  const resultSetKey = useMemo(
-    () => hashKey(optionsForPage(page).queryKey),
-    [optionsForPage, page]
+  // Clamp to the cap and to the pages the honest total actually holds: the
+  // `hasNext` math below must stay exact when a restored `?pages=` outruns a
+  // result set that shrank since the link was made.
+  const lastPage = Math.ceil(total / pageSize);
+  const extraPages = Math.max(
+    0,
+    Math.min(requestedExtraPages, MAX_MAP_EXTRA_PAGES, lastPage - page)
   );
-
-  const [loaded, setLoaded] = useState({ key: resultSetKey, extra: 0 });
-  // Render-time reconcile (the React "adjust state during render" pattern):
-  // a key change writes the reset into state in the same render, so a round
-  // trip back to an earlier result set starts at zero rather than
-  // resurrecting the old count.
-  if (loaded.key !== resultSetKey) {
-    setLoaded({ key: resultSetKey, extra: 0 });
-  }
-  const extraPages = loaded.key === resultSetKey ? loaded.extra : 0;
 
   const queries = useMemo(
     () =>
@@ -191,12 +195,9 @@ export function useMapPages({
       });
       return;
     }
-    setLoaded((prev) =>
-      prev.key === resultSetKey && prev.extra < MAX_MAP_EXTRA_PAGES
-        ? { key: resultSetKey, extra: prev.extra + 1 }
-        : prev
-    );
-  }, [pending, failed, queryClient, resultSetKey]);
+    if (!hasNext) return;
+    onAdvance();
+  }, [pending, failed, queryClient, hasNext, onAdvance]);
 
   const loadMore = useMemo<MapLoadMore>(
     () => ({ hasNext, pending, failed, onLoadMore }),

@@ -21,6 +21,9 @@ import {
   BROWSE_SEARCH_DEFAULTS,
   browseSearchSchema,
   isAnyBrowseFilterActive,
+  isBrowseAnchorPending,
+  MAP_VIEW_PARAMS_CLEARED,
+  MAX_MAP_EXTRA_PAGES,
 } from "~/listings/browse-search";
 import { coarsenCoords } from "~/listings/distance";
 import {
@@ -69,8 +72,12 @@ import { fetchBrowsePhotos } from "~/server/places-photos.fn";
  * shareable/restorable UI state.
  *
  * Map view extras: the carousel's "Load more" card appends further server
- * pages as extra pins (ephemeral accumulation — see use-map-pages.ts; the
- * list view keeps its one-page pager), and "Search near here" re-anchors the
+ * pages as extra pins, with the count in `?pages=` and the selected pin in
+ * `?sel=` — both client-only view params (absent from `loaderDeps`), written
+ * with `replace: true` + `resetScroll: false` and stripped by every
+ * result-set change (`MAP_VIEW_PARAMS_CLEARED`), so Back and a pasted link
+ * restore the accumulated carousel and selection while the list view keeps
+ * its one-page pager (use-map-pages.ts). "Search near here" re-anchors the
  * browse — radius origin, distance ordering, and distance labels — on the
  * framed map center via `?areaLat=`/`?areaLng=` (browse-query.ts). The
  * active area shows as a dismissible chip in the filter row.
@@ -151,6 +158,20 @@ function areaFromParams(
     : undefined;
 }
 
+type BrowseSearch = ReturnType<typeof Route.useSearch>;
+
+/**
+ * Search updater for any navigation that changes the result set: page 1, the
+ * changed params, and the map view's `?pages=`/`?sel=` stripped
+ * (`MAP_VIEW_PARAMS_CLEARED`), with every other param carried forward. The
+ * one seam for the strip invariant — result-set call sites go through it so
+ * none can forget the strip. (The pager's page links restate it: they set a
+ * specific page, not page 1.)
+ */
+function resultSetSearch(prev: BrowseSearch, patch: Partial<BrowseSearch>) {
+  return { ...prev, page: 1, ...patch, ...MAP_VIEW_PARAMS_CLEARED };
+}
+
 /**
  * The one browse-card → VM mapping, shared by the list and the map so the
  * two views can never diverge on how a card reads. The photo is an explicit
@@ -173,6 +194,8 @@ function BrowseListings() {
     view,
     areaLat,
     areaLng,
+    pages: pagesParam,
+    sel,
   } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   // Memoized (not just derived): these feed `optionsForPage` below, whose
@@ -206,8 +229,8 @@ function BrowseListings() {
   // One definition of "a server page of this result set" — the loader, the
   // suspense read below, and the map view's extra pages all go through it.
   // Stable across unrelated re-renders; a new identity whenever any
-  // result-set param changes, which is also what resets the map accumulation
-  // (use-map-pages.ts keys on the base page's query key).
+  // result-set param changes. (The map accumulation resets separately:
+  // result-set navigations strip `?pages=`/`?sel=` via `resultSetSearch`.)
   const optionsForPage = useCallback(
     (pageToLoad: number) =>
       browseQueryOptions(pageToLoad, attrs, sort, coords, qParam, radius, saved, quick, bot, area),
@@ -275,9 +298,9 @@ function BrowseListings() {
   // placeholder otherwise (`DirectoryMap.tsx`). Do not delete the
   // `view === "map"` branch, `ViewToggle`'s Map segment, or `DirectoryMap`.
   //
-  // The map's selected pin stays genuinely ephemeral local state — a
-  // transient in-view selection, not shareable.
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The map's selection lives in the URL (`?sel=`) — a chosen view of the
+  // directory that Back and a pasted link must restore. It is derived below
+  // (`selectedId`), never mirrored into state.
 
   /**
    * Write the List/Map choice to `?view=`. Client-only: `view` is absent from
@@ -319,7 +342,7 @@ function BrowseListings() {
       lastPushedQ.current = next;
       // Functional updater: carry every other param forward and only touch
       // what changes. stripSearchParams drops `q` from the URL when it's "".
-      navigate({ search: (prev) => ({ ...prev, page: 1, q: next }) });
+      navigate({ search: (prev) => resultSetSearch(prev, { q: next }) });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [searchInput, qParam, navigate]);
@@ -358,10 +381,28 @@ function BrowseListings() {
     [data.cards, photosById]
   );
 
+  // "Load more" advances the map's `?pages=` accumulation count. Client-only
+  // view param (absent from `loaderDeps`): it appends to what is shown
+  // without changing the base result set, so it must not reset `page`.
+  // `replace: true` keeps Back pointing at the previous route instead of
+  // replaying every accumulation step; `resetScroll: false` because the
+  // control lives inside the carousel band. Stable identity — it feeds the
+  // memoized `loadMore` the DirectoryMap memo boundary receives.
+  const advanceMapPages = useCallback(() => {
+    navigate({
+      search: (prev) => ({ ...prev, pages: Math.min((prev.pages ?? 0) + 1, MAX_MAP_EXTRA_PAGES) }),
+      replace: true,
+      resetScroll: false,
+    });
+  }, [navigate]);
+
   // Map-view "Load more" accumulation, owned end-to-end by `useMapPages`:
   // fetching extra pages through the same `optionsForPage` as the pager,
   // merging them after the base page, and the carousel card's wiring. The
-  // list view never reads it and keeps its one-page `?page=` pager contract.
+  // URL's `?pages=` is the one source of the count, so Back/forward and a
+  // pasted link restore the accumulation together with the result-set params.
+  // The list view never reads it and keeps its one-page `?page=` pager
+  // contract.
   const { cards: mapCards, loadMore } = useMapPages({
     active: view === "map",
     page,
@@ -369,6 +410,8 @@ function BrowseListings() {
     total: data.total,
     base: { cards: data.cards, updatedAt: browseResult.dataUpdatedAt },
     optionsForPage,
+    extraPages: pagesParam ?? 0,
+    onAdvance: advanceMapPages,
   });
 
   // Map entries pair each VM with its real coordinates to project (never
@@ -388,25 +431,72 @@ function BrowseListings() {
     [mapCards]
   );
 
-  // Default the map selection to the first visible entry, and keep the selection
-  // valid as the filtered set changes (so a pin never points at a hidden card).
-  //
-  // Contract: this effect reassigns `selectedId` ONLY when the current
-  // selection is missing from `mapEntries` (or on the initial null). The map's
-  // selection-sync surfaces depend on that to tell a user tap from a
-  // reassign — `useUserSelectionChange` in `map-ui.tsx` (the carousel's
-  // scroll-into-view and the live map's pan) treats a change whose previous
-  // selection vanished from the entries as this effect's doing, not a tap.
+  // The map selection, derived straight from the URL's `?sel=` — never
+  // mirrored into state, so Back/refresh/a pasted link restore it by
+  // construction. Without a `sel` the first visible entry is the default
+  // (so a pin never points at a hidden card). A `sel` not yet in the merged
+  // entries selects nothing: either its URL-seeded page is still loading, or
+  // the link went stale — the effect below strips the stale case. The
+  // null-while-unresolved step matters for the selection-sync surfaces:
+  // `useUserSelectionChange` (`map-ui.tsx`) treats a selection appearing from
+  // null as initial, so a late-resolving restore never pans the camera.
+  const selectedId = useMemo(() => {
+    if (sel !== undefined) {
+      return mapEntries.some((entry) => entry.vm.id === sel) ? sel : null;
+    }
+    return mapEntries[0]?.vm.id ?? null;
+  }, [sel, mapEntries]);
+
+  // A pin/mini-card tap writes the selection to `?sel=`. `replace: true` so
+  // Back never replays a tap trail; `resetScroll: false` so selecting on the
+  // map never jumps the page. Stable identity for the DirectoryMap memo
+  // boundary.
+  const selectListing = useCallback(
+    (id: string) => {
+      navigate({
+        search: (prev) => ({ ...prev, sel: id }),
+        replace: true,
+        resetScroll: false,
+      });
+    },
+    [navigate]
+  );
+
+  // Whether the distance anchor is still resolving: until the browser's
+  // geolocation answer settles, the visible result set is transient — a
+  // reading re-anchors it with no navigation (the sanctioned case that keeps
+  // `?pages=`/`?sel=`, see use-map-pages.ts) — so nothing may judge `?sel=`
+  // against it yet.
+  const anchorPending = isBrowseAnchorPending({
+    sort,
+    areaActive: area !== undefined,
+    coordsKnown: coords !== undefined,
+    geoStatus: geo.status,
+  });
+
+  // A `sel` that matches no card once every requested page has settled and
+  // the anchor question is answered is a dead link (the results drifted
+  // since it was shared): drop it silently — no error UI, the carousel lands
+  // at its start with `?pages=` intact — and strip the param with a
+  // `replace` so the URL stays honest. Map view only: the list view neither
+  // fetches the extra pages nor renders the selection, so it cannot judge
+  // staleness.
   useEffect(() => {
-    if (mapEntries.length === 0) {
-      if (selectedId !== null) setSelectedId(null);
-      return;
-    }
-    const stillVisible = mapEntries.some((entry) => entry.vm.id === selectedId);
-    if (!stillVisible) {
-      setSelectedId(mapEntries[0]?.vm.id ?? null);
-    }
-  }, [mapEntries, selectedId]);
+    if (view !== "map" || sel === undefined) return;
+    if (anchorPending || loadMore.pending || loadMore.failed) return;
+    if (mapEntries.some((entry) => entry.vm.id === sel)) return;
+    navigate({
+      search: (prev) => ({ ...prev, sel: undefined }),
+      replace: true,
+      resetScroll: false,
+    });
+  }, [view, sel, anchorPending, loadMore.pending, loadMore.failed, mapEntries, navigate]);
+
+  // The deep-link restore target for the carousel's instant scroll, latched
+  // at mount: later `sel` writes (taps, the stale strip) must not churn the
+  // DirectoryMap memo boundary, and the carousel treats the prop as
+  // mount-only anyway.
+  const [restoreSelectedId] = useState<string | null>(() => sel ?? null);
 
   // Toggle a quick chip, honoring the faceted group rules: a `safety` chip
   // replaces its sibling; `recent` toggles additively. The set serializes to
@@ -415,7 +505,7 @@ function BrowseListings() {
   // serializes to "" and is stripped from the URL.
   function toggleQuick(value: QuickFilterValue) {
     const next = applyQuickToggle(quick, value);
-    navigate({ search: (prev) => ({ ...prev, page: 1, quick: serializeQuick(next) }) });
+    navigate({ search: (prev) => resultSetSearch(prev, { quick: serializeQuick(next) }) });
   }
 
   // Toggling a taxonomy attribute resets to page 1 and preserves the search
@@ -424,7 +514,7 @@ function BrowseListings() {
     const next = attrs.includes(attribute)
       ? attrs.filter((a) => a !== attribute)
       : [...attrs, attribute];
-    navigate({ search: (prev) => ({ ...prev, page: 1, attrs: serializeAttrs(next) }) });
+    navigate({ search: (prev) => resultSetSearch(prev, { attrs: serializeAttrs(next) }) });
   }
 
   /**
@@ -438,7 +528,7 @@ function BrowseListings() {
    * selection the visitor just made.
    */
   function changeSort(next: BrowseSort) {
-    navigate({ search: (prev) => ({ ...prev, page: 1, sort: next }) });
+    navigate({ search: (prev) => resultSetSearch(prev, { sort: next }) });
     if (next !== "distance") {
       geo.reset();
       return;
@@ -452,7 +542,7 @@ function BrowseListings() {
    * the visitor's coords (or Union Station), so only the radius travels here.
    */
   function changeRadius(nextRadius: number) {
-    navigate({ search: (prev) => ({ ...prev, page: 1, radius: nextRadius }) });
+    navigate({ search: (prev) => resultSetSearch(prev, { radius: nextRadius }) });
   }
 
   // The area search's lifecycle, for the map view's status region: pending
@@ -481,7 +571,7 @@ function BrowseListings() {
       const rounded = coarsenCoords(center);
       setAreaSearchStatus("pending");
       return navigate({
-        search: (prev) => ({ ...prev, page: 1, areaLat: rounded.lat, areaLng: rounded.lng }),
+        search: (prev) => resultSetSearch(prev, { areaLat: rounded.lat, areaLng: rounded.lng }),
       }).then(
         () => setAreaSearchStatus("idle"),
         (error: unknown) => {
@@ -498,7 +588,7 @@ function BrowseListings() {
   function clearArea() {
     setAreaSearchStatus("idle");
     navigate({
-      search: (prev) => ({ ...prev, page: 1, areaLat: undefined, areaLng: undefined }),
+      search: (prev) => resultSetSearch(prev, { areaLat: undefined, areaLng: undefined }),
     });
   }
 
@@ -509,7 +599,7 @@ function BrowseListings() {
    * reaches here, so no `savedOnly` request is made for an anonymous viewer.
    */
   function toggleSaved() {
-    navigate({ search: (prev) => ({ ...prev, page: 1, saved: !saved }) });
+    navigate({ search: (prev) => resultSetSearch(prev, { saved: !saved }) });
   }
 
   /**
@@ -521,7 +611,7 @@ function BrowseListings() {
    * total both reflect it. Resets to page 1 and preserves every other param.
    */
   function toggleBot() {
-    navigate({ search: (prev) => ({ ...prev, page: 1, bot: !bot }) });
+    navigate({ search: (prev) => resultSetSearch(prev, { bot: !bot }) });
   }
 
   // The no-results CTA clears every filter — quick chips, search, taxonomy
@@ -534,16 +624,15 @@ function BrowseListings() {
     setSearchInput("");
     lastPushedQ.current = "";
     navigate({
-      search: (prev) => ({
-        ...prev,
-        page: 1,
-        attrs: "",
-        q: "",
-        quick: "",
-        bot: true,
-        areaLat: undefined,
-        areaLng: undefined,
-      }),
+      search: (prev) =>
+        resultSetSearch(prev, {
+          attrs: "",
+          q: "",
+          quick: "",
+          bot: true,
+          areaLat: undefined,
+          areaLng: undefined,
+        }),
     });
   }
 
@@ -720,7 +809,15 @@ function BrowseListings() {
             <DirectoryMap
               entries={mapEntries}
               selectedId={selectedId}
-              onSelect={setSelectedId}
+              onSelect={selectListing}
+              // The mount-latched URL selection: the carousel scrolls to it
+              // instantly (no animation, no focus move) once its card exists.
+              restoreSelectedId={restoreSelectedId}
+              // The anchor half of the "entries are transient" signal — the
+              // carousel composes it with the loadMore state it already
+              // holds. While transient, the restore snaps provisionally and
+              // takes its final position from the settled set.
+              resultSetPending={anchorPending}
               // "Load more" appends the next page as extra pins/cards
               // (wiring built by useMapPages from the honest total). New
               // pins join the map without focus moves; the camera re-fits to

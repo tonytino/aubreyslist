@@ -12,6 +12,7 @@
 import { z } from "zod";
 import { DEFAULT_RADIUS_MILES, parseRadiusMiles } from "~/listings/distance";
 import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/listings/sort";
+import type { GeolocationStatus } from "~/listings/use-geolocation";
 
 /**
  * The directory's content-view vocabulary (List vs Map). Kept here so the
@@ -19,6 +20,56 @@ import { BROWSE_SORT_VALUES, type BrowseSort, DEFAULT_BROWSE_SORT } from "~/list
  * `"list" | "map"` literals drifting apart.
  */
 export const DIRECTORY_VIEW_VALUES = ["list", "map"] as const;
+
+/**
+ * Cap on the map view's appended "Load more" pages (`?pages=`). With the base
+ * page that bounds the map at `(1 + cap) * pageSize` pins/mini-cards — enough
+ * to sweep a wide radius, small enough to keep marker count and memory sane.
+ * Someone who exhausts it can narrow the radius or search near a different
+ * spot. Lives here so the schema's clamp and the accumulation hook
+ * (`use-map-pages.ts`) share one bound.
+ */
+export const MAX_MAP_EXTRA_PAGES = 5;
+
+/**
+ * The shape of a `?sel=` listing id: id characters only (UUID alphabet plus
+ * headroom for a future id scheme), bounded length, never freeform text —
+ * anything else is garbage and degrades to absent.
+ */
+const SELECTED_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The map-view params that describe cards of the current result set: the
+ * `?pages=` accumulation and the `?sel=` selection. Spread into every
+ * navigation that changes the result set — anything that resets `page: 1`,
+ * plus the pager's page links — so a new set never inherits an accumulation
+ * or a selection that belonged to the old one.
+ */
+export const MAP_VIEW_PARAMS_CLEARED = { pages: undefined, sel: undefined } as const;
+
+/**
+ * True while the browse result set's distance anchor is still resolving
+ * client-side: the "near me" sort with no searched area and no reading yet,
+ * and the browser's geolocation answer still possible (anything short of an
+ * error can still deliver coords). While true, the visible result set is
+ * transient — a reading will re-anchor it without any navigation — so
+ * judgements about what the set contains must wait. The map route gates its
+ * stale-`?sel=` strip on this: judging a restored selection against the
+ * pre-reading window would destroy a restore that succeeds moments later.
+ */
+export function isBrowseAnchorPending(input: {
+  sort: BrowseSort;
+  areaActive: boolean;
+  coordsKnown: boolean;
+  geoStatus: GeolocationStatus;
+}): boolean {
+  return (
+    input.sort === "distance" &&
+    !input.areaActive &&
+    !input.coordsKnown &&
+    input.geoStatus !== "error"
+  );
+}
 
 /** One directory content view: the results list or the (placeholder) map. */
 export type DirectoryView = (typeof DIRECTORY_VIEW_VALUES)[number];
@@ -190,6 +241,29 @@ const rawBrowseSearchSchema = z.object({
   // as the radius-filter origin (`originLat`/`originLng`).
   areaLat: z.number().finite().min(-90).max(90).optional().catch(undefined),
   areaLng: z.number().finite().min(-180).max(180).optional().catch(undefined),
+  // Map view only: how many extra "Load more" pages ride on top of the base
+  // page. In the URL because the accumulated carousel is a chosen view of the
+  // directory — Back and a pasted link must restore all of it, not just page
+  // one. Client-only (the base server page is still `?page=`): excluded from
+  // `loaderDeps`, written with `replace: true` + `resetScroll: false`, and
+  // stripped alongside `sel` by every navigation that changes the result set.
+  // No default: absent means no extra pages and needs no strip entry. Values
+  // past the cap clamp to it; garbage degrades to absent.
+  pages: z
+    .number()
+    .int()
+    .min(0)
+    .transform((value) => Math.min(value, MAX_MAP_EXTRA_PAGES))
+    .optional()
+    .catch(undefined),
+  // Map view only: the selected listing's id. A selection is a chosen view of
+  // the directory (shareable, restorable on Back), so it lives in the URL —
+  // written on every pin/card tap with `replace: true` + `resetScroll: false`
+  // and stripped alongside `pages` on result-set changes. Untrusted input:
+  // only a bounded id-shaped string passes (`SELECTED_ID_PATTERN`); anything
+  // else degrades to absent, and an id that matches no loaded listing is
+  // dropped by the route.
+  sel: z.string().regex(SELECTED_ID_PATTERN).optional().catch(undefined),
 });
 
 export const browseSearchSchema = rawBrowseSearchSchema.transform((search) => {

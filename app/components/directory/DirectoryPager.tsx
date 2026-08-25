@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { MAP_VIEW_PARAMS_CLEARED } from "~/listings/browse-search";
 
 /**
  * Visible pagination for the browse list.
@@ -14,7 +15,10 @@ import { Button } from "~/components/ui/button";
  * functional search updater, so every other param (filters, sort, radius,
  * quick, saved) is carried forward, the paged view is
  * shareable/back-forward-correct, and `stripSearchParams` drops `page=1` from
- * the URL at rest. Changing any filter resets `page: 1` at the route.
+ * the URL at rest. Changing any filter resets `page: 1` at the route. A page
+ * change is a result-set change, so the links also strip the map view's
+ * `?pages=`/`?sel=` (`MAP_VIEW_PARAMS_CLEARED`) — a new base page never
+ * inherits the old page's accumulation or selection.
  *
  * Honest disabled states: at a boundary (page 1 / last page) the control
  * renders as a real `<button disabled>` — not focusable, announced as
@@ -50,7 +54,7 @@ export function DirectoryPager({
     <nav aria-label="Pagination" className="mt-section flex items-center justify-between gap-3">
       {hasPrev ? (
         <Button variant="outline" asChild>
-          <Link to="/" search={(prev) => ({ ...prev, page: page - 1 })}>
+          <Link to="/" search={(prev) => ({ ...prev, page: page - 1, ...MAP_VIEW_PARAMS_CLEARED })}>
             <ChevronLeft aria-hidden="true" />
             Previous
           </Link>
@@ -68,7 +72,7 @@ export function DirectoryPager({
 
       {hasNext ? (
         <Button variant="outline" asChild>
-          <Link to="/" search={(prev) => ({ ...prev, page: page + 1 })}>
+          <Link to="/" search={(prev) => ({ ...prev, page: page + 1, ...MAP_VIEW_PARAMS_CLEARED })}>
             Next
             <ChevronRight aria-hidden="true" />
           </Link>

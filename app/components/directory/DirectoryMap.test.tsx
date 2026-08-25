@@ -132,7 +132,12 @@ const entries: DirectoryMapEntry[] = [
  * external re-render signal, so `rerenderWith` updates the same mounted tree —
  * the selection discriminator lives in refs that a remount would reset.
  */
-async function renderMap(selectedId: string | null = "a", loadMore?: MapLoadMore) {
+async function renderMap(
+  selectedId: string | null = "a",
+  loadMore?: MapLoadMore,
+  restoreSelectedId: string | null = null,
+  resultSetPending = false
+) {
   const onSelect = vi.fn();
   // Always wired so the fallback tests can prove the placeholder path never
   // surfaces the "Search near here" pill (it has no camera).
@@ -148,11 +153,15 @@ async function renderMap(selectedId: string | null = "a", loadMore?: MapLoadMore
     entries: readonly DirectoryMapEntry[];
     loadMore: MapLoadMore | undefined;
     areaSearchStatus: AreaSearchStatus;
+    restoreSelectedId: string | null;
+    resultSetPending: boolean;
   } = {
     selectedId,
     entries,
     loadMore,
     areaSearchStatus: "idle",
+    restoreSelectedId,
+    resultSetPending,
   };
   const listeners = new Set<() => void>();
   function Harness() {
@@ -171,6 +180,8 @@ async function renderMap(selectedId: string | null = "a", loadMore?: MapLoadMore
           onSelect={onSelect}
           onSearchArea={onSearchArea}
           areaSearchStatus={box.areaSearchStatus}
+          restoreSelectedId={box.restoreSelectedId}
+          resultSetPending={box.resultSetPending}
           {...(box.loadMore ? { loadMore: box.loadMore } : {})}
         />
       </QueryClientProvider>
@@ -203,12 +214,14 @@ async function renderMap(selectedId: string | null = "a", loadMore?: MapLoadMore
       sel: string | null,
       ents: readonly DirectoryMapEntry[] = entries,
       nextLoadMore: MapLoadMore | null | undefined = box.loadMore,
-      nextAreaStatus: AreaSearchStatus = box.areaSearchStatus
+      nextAreaStatus: AreaSearchStatus = box.areaSearchStatus,
+      nextResultSetPending: boolean = box.resultSetPending
     ) => {
       box.selectedId = sel;
       box.entries = ents;
       box.loadMore = nextLoadMore ?? undefined;
       box.areaSearchStatus = nextAreaStatus;
+      box.resultSetPending = nextResultSetPending;
       act(() => {
         for (const listener of listeners) listener();
       });
@@ -839,10 +852,21 @@ describe("DirectoryMap — append scroll (AUB-284)", () => {
     },
   ];
 
-  it("scrolls the band to the first appended card when Load more delivers", async () => {
-    const { rerenderWith } = await renderMap("a");
+  const loadMoreWiring = (over: Partial<MapLoadMore> = {}): MapLoadMore => ({
+    hasNext: true,
+    pending: false,
+    failed: false,
+    onLoadMore: vi.fn(),
+    ...over,
+  });
+
+  it("scrolls the band to the first appended card when a requested Load more delivers", async () => {
+    const { rerenderWith } = await renderMap("a", loadMoreWiring());
     const carousel = screen.getByTestId("map-carousel");
-    // Every previous id keeps its slot and new ones follow — an append.
+    // The visitor asks for the page…
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    // …and every previous id keeps its slot with new ones following — an
+    // append the visitor requested.
     rerenderWith("a", appended);
     expect(scrollTo).toHaveBeenCalledTimes(1);
     // The one scroller this may ever move is the band itself; the flush-left
@@ -850,12 +874,279 @@ describe("DirectoryMap — append scroll (AUB-284)", () => {
     expect(scrollTo.mock.contexts[0]).toBe(carousel);
   });
 
+  it("does not scroll for a URL-seeded append (a restored ?pages= arriving post-mount)", async () => {
+    // The same append with no Load more click behind it: a deep link's extra
+    // pages landing must not yank the band away from its start.
+    const { rerenderWith } = await renderMap("a", loadMoreWiring());
+    rerenderWith("a", appended);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
   it("does not scroll when the entries are replaced (filter or area change), only on appends", async () => {
-    const { rerenderWith } = await renderMap("a");
+    const { rerenderWith } = await renderMap("a", loadMoreWiring());
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     // Same length, different order — a replacement, not an append.
     const replaced = [...entries.slice(1), entries[0] as DirectoryMapEntry];
     rerenderWith("a", replaced);
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("disarms the click when a replacement lands before the page: the next append is unrequested", async () => {
+    const { rerenderWith } = await renderMap("a", loadMoreWiring());
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    // A result-set change replaces the entries mid-flight…
+    const replaced = [...entries.slice(1), entries[0] as DirectoryMapEntry];
+    rerenderWith("a", replaced);
+    // …so a later pure append (e.g. Back refilling ?pages= into the still-
+    // mounted band) arrives with no click behind it and must not scroll.
+    rerenderWith("a", [...replaced, appended[appended.length - 1] as DirectoryMapEntry]);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("disarms the click once the requested fetch settles without growing the strip", async () => {
+    // The requested page turns out fully deduped: pending settles, entries
+    // unchanged.
+    const { rerenderWith } = await renderMap("a", loadMoreWiring());
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    rerenderWith("a", entries, loadMoreWiring({ pending: true }));
+    rerenderWith("a", entries, loadMoreWiring());
+    // A later unrequested append (URL-seeded hydration) must not scroll.
+    rerenderWith("a", appended);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("DirectoryMap — deep-link selection restore (?sel=)", () => {
+  // jsdom doesn't implement element scrolling; the spy doubles as the
+  // implementation (same pattern as the flush-left suite above).
+  const scrollTo = vi.fn();
+  beforeAll(() => {
+    Element.prototype.scrollTo = scrollTo as unknown as Element["scrollTo"];
+  });
+  afterEach(() => {
+    scrollTo.mockClear();
+  });
+
+  const idleLoadMore = (over: Partial<MapLoadMore> = {}): MapLoadMore => ({
+    hasNext: true,
+    pending: false,
+    failed: false,
+    onLoadMore: vi.fn(),
+    ...over,
+  });
+
+  const withF: DirectoryMapEntry[] = [
+    ...entries,
+    {
+      vm: vm({ id: "f", name: "Fresh Find", safetyState: "celiac-safe" }),
+      lat: 39.77,
+      lng: -104.91,
+    },
+  ];
+
+  it("scrolls the restored card flush-left instantly at mount, keeping focus where it was", async () => {
+    await renderMap("b", undefined, "b");
+    const carousel = screen.getByTestId("map-carousel");
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo.mock.contexts[0]).toBe(carousel);
+    // A restored position is state, not motion: always instant, never smooth.
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "instant" });
+    // Scroll only — the restore never steals keyboard focus.
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("waits for the restored card's URL-seeded page, then scrolls instantly when it lands", async () => {
+    // The restored selection sits on an extra page still in flight at mount.
+    const { rerenderWith } = await renderMap(null, idleLoadMore({ pending: true }), "f");
+    expect(scrollTo).not.toHaveBeenCalled();
+    // The page lands: the card exists now, and the selection resolves.
+    rerenderWith("f", withF, idleLoadMore());
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "instant" });
+  });
+
+  it("restores at most once: a later tap animates as a user selection", async () => {
+    const { rerenderWith } = await renderMap("a", undefined, "a");
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "instant" });
+    scrollTo.mockClear();
+    rerenderWith("b");
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
+  });
+
+  it("yields to a user tap made while the restored card's page is still loading", async () => {
+    // Deep link ?sel=f with f's seeded page in flight: nothing is selected
+    // yet. The visitor taps another card before the page lands.
+    const { rerenderWith } = await renderMap(null, idleLoadMore({ pending: true }), "f");
+    fireEvent.click(cardOf("Lucia Trattoria, Recent incident"));
+    rerenderWith("b", entries, idleLoadMore({ pending: true }));
+    scrollTo.mockClear();
+    // The seeded page finally lands, target card included: the visitor took
+    // over, so the stale restore must not move the band.
+    rerenderWith("b", withF, idleLoadMore());
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("abandons a restore the selection has moved past: a later append never jumps to it", async () => {
+    // The selection sits elsewhere (the route's fallback after stripping a
+    // stale ?sel=f), so the target dies. When Load more later delivers a
+    // page that happens to contain "f", the band scrolls to the append
+    // (smooth), never to the abandoned restore (instant).
+    const { rerenderWith } = await renderMap("a", idleLoadMore(), "f");
+    expect(scrollTo).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    rerenderWith("a", withF, idleLoadMore());
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
+  });
+
+  it("re-snaps at the settled offsets when a provisional restore's set is re-anchored", async () => {
+    // The Back-navigation reality: the first set renders before the distance
+    // anchor resolves (resultSetPending). The restored card is present, so
+    // the band snaps provisionally — but stays armed, because the reading
+    // will reshuffle the offsets without any navigation.
+    const { rerenderWith } = await renderMap("b", undefined, "b", true);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "instant" });
+
+    // The reading lands: same cards, new order, anchor settled. The restore
+    // must snap once more so the band shows the card at its real offset.
+    const reanchored = [...entries].reverse();
+    rerenderWith("b", reanchored, undefined, "idle", false);
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+
+    // Consumed: later entry changes never snap back.
+    rerenderWith("b", [...reanchored]);
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not re-yank a provisional restore on a content-only refresh (same id sequence)", async () => {
+    const { rerenderWith } = await renderMap("b", undefined, "b", true);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    // A background revalidation replaces identities but not the sequence —
+    // the visitor may have scrolled away, so nothing moves the band again.
+    rerenderWith(
+      "b",
+      entries.map((entry) => ({ ...entry }))
+    );
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it("retires without re-snapping when the set settles unchanged (denied location prompt)", async () => {
+    // Geolocation denied or timed out: the anchor settles over the identical
+    // sequence. Re-snapping would yank a band the visitor may have scrolled.
+    const { rerenderWith } = await renderMap("b", undefined, "b", true);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    rerenderWith("b", entries, undefined, "idle", false);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    // Retired at settle: a later reshuffle never snaps back.
+    rerenderWith("b", [...entries].reverse());
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-snaps when seeded pages land out of order (compressed set, then the full set)", async () => {
+    // Cache-cold restore: the later seeded page (holding the target) lands
+    // first, so the merged set is compressed while the earlier page is
+    // still pending — the pending page alone keeps the set transient.
+    const { rerenderWith } = await renderMap(null, idleLoadMore({ pending: true }), "f");
+    const fEntry = withF[withF.length - 1] as DirectoryMapEntry;
+    const compressed = [...entries, fEntry];
+    rerenderWith("f", compressed, idleLoadMore({ pending: true }));
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+
+    // The earlier page arrives and slots in ahead of the target, shifting
+    // its offset: the settled set owns the final snap.
+    const earlier: DirectoryMapEntry = {
+      vm: vm({ id: "g", name: "Garden Gate", safetyState: "celiac-safe" }),
+      lat: 39.75,
+      lng: -104.92,
+    };
+    rerenderWith("f", [...entries, earlier, fEntry], idleLoadMore());
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+  });
+
+  it("retires the armed restore when the visitor touches the band before it resolves", async () => {
+    // The target's page is still loading when the visitor starts reading by
+    // swiping the band: the restore must never yank them when it lands.
+    const { rerenderWith } = await renderMap(null, idleLoadMore({ pending: true }), "f");
+    fireEvent.pointerDown(screen.getByTestId("map-carousel"));
+    rerenderWith("f", withF, idleLoadMore());
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("retires a provisional restore on wheel input: a genuine reshuffle no longer re-snaps", async () => {
+    const { rerenderWith } = await renderMap("b", undefined, "b", true);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    fireEvent.wheel(screen.getByTestId("map-carousel"));
+    // The reading lands and reshuffles the set: with the restore retired,
+    // nothing moves the band the visitor is holding.
+    rerenderWith("b", [...entries].reverse(), undefined, "idle", false);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it("retires the restore when the visitor clicks Load more before it resolves", async () => {
+    const { rerenderWith } = await renderMap(null, idleLoadMore(), "f");
+    expect(scrollTo).not.toHaveBeenCalled();
+    // The visitor asks for more while the restore still waits for its card:
+    // the click owns the band now.
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    // The append delivers the page holding the restored card. The requested
+    // append scroll (smooth) runs; the retired restore never snaps.
+    rerenderWith("f", withF, idleLoadMore());
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
+  });
+
+  it("keeps waiting through a failed page: a successful retry still restores instantly", async () => {
+    // The seeded page fails; the restore target must survive (the route
+    // keeps ?sel= while a retry can deliver it), so Try again completes the
+    // restore.
+    const { rerenderWith } = await renderMap(null, idleLoadMore({ pending: true }), "f");
+    rerenderWith(null, entries, idleLoadMore({ failed: true }));
+    expect(scrollTo).not.toHaveBeenCalled();
+    rerenderWith(null, entries, idleLoadMore({ pending: true }));
+    rerenderWith("f", withF, idleLoadMore());
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "instant" });
+  });
+});
+
+describe("DirectoryMap — selection reset on a result-set change", () => {
+  const scrollTo = vi.fn();
+  beforeAll(() => {
+    Element.prototype.scrollTo = scrollTo as unknown as Element["scrollTo"];
+  });
+  afterEach(() => {
+    scrollTo.mockClear();
+  });
+
+  it("does not animate when the selection resets with new entries, even if the old one survives", async () => {
+    const { rerenderWith } = await renderMap("a");
+    // A real tap first, so the discriminator is past its initial-selection skip.
+    rerenderWith("b");
+    scrollTo.mockClear();
+    // A result-set change strips `?sel=`: the selection falls back to the new
+    // first entry while "b" still exists in the new set. A tap never replaces
+    // the entries, so this must read as a reset, not a tap.
+    const reordered = [...entries].reverse();
+    rerenderWith(reordered[0]?.vm.id ?? null, reordered);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("still animates a tap batched with a content-only refresh (same entry-id sequence)", async () => {
+    const { rerenderWith } = await renderMap("a");
+    rerenderWith("b");
+    scrollTo.mockClear();
+    // A background revalidation gives every entry a new identity without
+    // changing which cards are shown; the tap that lands in the same commit
+    // is still a tap.
+    const refreshed = entries.map((entry) => ({ ...entry }));
+    rerenderWith("d", refreshed);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "smooth" });
   });
 });
 

@@ -6,6 +6,9 @@ import {
   type BrowseSearchLike,
   browseSearchSchema,
   isAnyBrowseFilterActive,
+  isBrowseAnchorPending,
+  MAP_VIEW_PARAMS_CLEARED,
+  MAX_MAP_EXTRA_PAGES,
 } from "./browse-search";
 
 /**
@@ -154,6 +157,57 @@ describe("browseSearchSchema", () => {
     expect(lngOnly.areaLng).toBeUndefined();
   });
 
+  it("accepts a map accumulation count within the cap and keeps it absent when unset", () => {
+    expect(browseSearchSchema.parse({ pages: 3 }).pages).toBe(3);
+    expect(browseSearchSchema.parse({ pages: MAX_MAP_EXTRA_PAGES }).pages).toBe(
+      MAX_MAP_EXTRA_PAGES
+    );
+    expect(browseSearchSchema.parse({}).pages).toBeUndefined();
+  });
+
+  it("clamps a map accumulation count past the cap", () => {
+    // A hand-edited count keeps the restore but never exceeds the pin cap.
+    expect(browseSearchSchema.parse({ pages: 99 }).pages).toBe(MAX_MAP_EXTRA_PAGES);
+  });
+
+  it("degrades a garbage map accumulation count to absent", () => {
+    expect(browseSearchSchema.parse({ pages: -1 }).pages).toBeUndefined();
+    expect(browseSearchSchema.parse({ pages: 2.5 }).pages).toBeUndefined();
+    expect(browseSearchSchema.parse({ pages: "lots" }).pages).toBeUndefined();
+  });
+
+  it("accepts a bounded selected-listing id and keeps it absent when unset", () => {
+    // Ids are app-generated UUIDs; the schema only guards shape — whether the
+    // id matches a loaded listing is the route's judgement.
+    const uuid = "6f9619ff-8b86-4d01-b42d-00cf4fc964ff";
+    expect(browseSearchSchema.parse({ sel: uuid }).sel).toBe(uuid);
+    expect(browseSearchSchema.parse({}).sel).toBeUndefined();
+  });
+
+  it("degrades a garbage selected-listing id to absent (untrusted URL input)", () => {
+    expect(browseSearchSchema.parse({ sel: "" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "x".repeat(65) }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: 42 }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: { nested: true } }).sel).toBeUndefined();
+  });
+
+  it("rejects injection-shaped sel values: only id characters pass", () => {
+    // The id alphabet (letters, digits, hyphen, underscore) is the whole
+    // grammar — markup, quotes, spaces, and path characters all degrade.
+    expect(browseSearchSchema.parse({ sel: "<script>alert(1)</script>" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "a'; drop table listings--" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "two words" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "../listings/1" }).sel).toBeUndefined();
+    expect(browseSearchSchema.parse({ sel: "id%00" }).sel).toBeUndefined();
+  });
+
+  it("clears exactly the map view params in MAP_VIEW_PARAMS_CLEARED", () => {
+    // Spread into every result-set-changing navigation: both params — and
+    // only these — must leave the URL with the outgoing set.
+    expect(MAP_VIEW_PARAMS_CLEARED).toEqual({ pages: undefined, sel: undefined });
+    expect(Object.keys(MAP_VIEW_PARAMS_CLEARED).sort()).toEqual(["pages", "sel"]);
+  });
+
   it("coerces radius to a valid option, falling back to the default", () => {
     // An on-list radius passes through the transform unchanged...
     expect(browseSearchSchema.parse({ radius: 5 }).radius).toBe(5);
@@ -161,6 +215,47 @@ describe("browseSearchSchema", () => {
     expect(browseSearchSchema.parse({ radius: 7 }).radius).toBe(DEFAULT_RADIUS_MILES);
     // ...and a non-numeric value trips `.catch` back to the default.
     expect(browseSearchSchema.parse({ radius: "far" }).radius).toBe(DEFAULT_RADIUS_MILES);
+  });
+});
+
+/**
+ * {@link isBrowseAnchorPending} gates the map route's stale-`?sel=` strip.
+ * The regression it pins: on Back, coords die with the route, so the first
+ * result set renders un-anchored — judging a restored selection against that
+ * transient window would strip a `?sel=` that becomes valid the moment the
+ * reading lands.
+ */
+describe("isBrowseAnchorPending", () => {
+  const RESOLVING = {
+    sort: "distance",
+    areaActive: false,
+    coordsKnown: false,
+    geoStatus: "prompting",
+  } as const;
+
+  it("holds judgement while the near-me anchor awaits the browser (late-arriving coords)", () => {
+    // The Back-navigation window: distance sort, no reading yet, the request
+    // in flight (or about to fire from idle). The set is transient.
+    expect(isBrowseAnchorPending(RESOLVING)).toBe(true);
+    expect(isBrowseAnchorPending({ ...RESOLVING, geoStatus: "idle" })).toBe(true);
+    // Success reported but the reading not yet applied: still transient.
+    expect(isBrowseAnchorPending({ ...RESOLVING, geoStatus: "success" })).toBe(true);
+  });
+
+  it("settles once the reading lands", () => {
+    expect(isBrowseAnchorPending({ ...RESOLVING, coordsKnown: true })).toBe(false);
+    expect(isBrowseAnchorPending({ ...RESOLVING, coordsKnown: true, geoStatus: "success" })).toBe(
+      false
+    );
+  });
+
+  it("settles when geolocation answers with an error (no reading is coming)", () => {
+    expect(isBrowseAnchorPending({ ...RESOLVING, geoStatus: "error" })).toBe(false);
+  });
+
+  it("never holds when the anchor cannot change the set: non-distance sort or a searched area", () => {
+    expect(isBrowseAnchorPending({ ...RESOLVING, sort: "alpha" })).toBe(false);
+    expect(isBrowseAnchorPending({ ...RESOLVING, areaActive: true })).toBe(false);
   });
 });
 

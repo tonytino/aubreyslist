@@ -1,0 +1,1 @@
+- `[manual]` Map view: going Back from a listing page now brings back the extra loaded places and your selected card. A shared or refreshed map link reopens with the same places and selection.

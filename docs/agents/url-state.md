@@ -7,7 +7,7 @@ keep it in `useState`.
 
 | Belongs in the URL (`?param=`)                          | Stays ephemeral (`useState`)                     |
 | ------------------------------------------------------- | ------------------------------------------------ |
-| Filters, sort, page, free-text search, selected tab, a distance/radius, a "quick" preset | Toasts (`sonner`), loading shimmers, transient hover/focus, an open/closed menu or sheet, the map's selected pin |
+| Filters, sort, page, free-text search, selected tab, a distance/radius, a "quick" preset, the map's selected pin (`?sel=`) and loaded-pages count (`?pages=`) | Toasts (`sonner`), loading shimmers, transient hover/focus, an open/closed menu or sheet |
 
 This is a **Hard Rule** (see `AGENTS.md`), enforced by the **conventions**
 lens (URL-state hygiene) of the specialist review panel
@@ -142,3 +142,21 @@ navigate({
 Don't blanket-apply this — a control at the very top of the page has no
 scroll-jump to fix, and a param that DOES change the result set generally wants
 the default reset. Judge per call site.
+
+The directory map's `?sel=` (selected pin) and `?pages=` (loaded-pages count)
+are the high-frequency case of this class: a chosen view of the directory —
+shareable, and restored by Back after visiting a listing — but written on
+every pin/card tap and every "Load more". Both write with `replace: true` +
+`resetScroll: false` (`app/routes/index.tsx`), so a tap trail never pollutes
+history and the page never jumps. Because they describe cards of the current
+result set, every navigation that changes the set strips them in the same
+`navigate` — the route's `resultSetSearch` updater is the one seam
+(`MAP_VIEW_PARAMS_CLEARED` in `app/listings/browse-search.ts`).
+
+One sanctioned exception to that strip: the visitor's own reading arriving
+for the "near me" anchor changes the result set with **no** navigation, and
+deliberately keeps both params — the accumulation refetches under the new
+anchor, and the selection survives when its listing is still shown. The
+stale-`?sel=` judgement waits for the anchor to settle
+(`isBrowseAnchorPending`) so a transient pre-reading set can never destroy a
+restore that succeeds moments later.

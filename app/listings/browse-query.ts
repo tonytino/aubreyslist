@@ -51,11 +51,12 @@ export function browseQueryOptions(
     // The radius filter changes the result set + honest total, so it is part
     // of a page's identity.
     //
-    // This key's shape is load-bearing beyond caching: the map view's
-    // "Load more" accumulation uses the base page's hashed key as its
-    // result-set identity (use-map-pages.ts), so anything that changes what
-    // the server returns must appear here — a param that changes the response
-    // but not the key would leave stale accumulated pins standing.
+    // This key's shape is load-bearing beyond caching: the map view's extra
+    // pages (use-map-pages.ts) are cached and restored per page under it,
+    // and the strip of the accumulation params (`MAP_VIEW_PARAMS_CLEARED` in
+    // browse-search.ts) is keyed to the same inputs changing — so anything
+    // that changes what the server returns must appear here, or a stale
+    // cached page would be served as current.
     queryKey: [
       BROWSE_LISTINGS_QUERY_KEY,
       page,
