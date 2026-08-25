@@ -54,11 +54,8 @@ confirm/dispute, tracked in
   shape.
 - **Staff knowledge & attitude** — not crisp enough to attest reliably.
 
-The headline attribute's enum key was renamed
-`celiac_safe_vs_gluten_friendly → celiac_safe` in AUB-297 (no longer deferred),
-via the data-preserving enum-recreate migration
-`db/migrations/0006_wide_sprite.sql`. Nothing user-visible changed; the label
-was already "Celiac-safe".
+Enum-value renames need a data-preserving enum-recreate migration; see
+`db/migrations/0006_wide_sprite.sql` for the shape.
 
 ---
 

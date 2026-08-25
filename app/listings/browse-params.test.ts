@@ -35,12 +35,8 @@ describe("parseAttrs", () => {
   });
 
   it("BACK-COMPAT: drops the pre-AUB-297 headline key instead of erroring", () => {
-    // The headline attribute's enum value was renamed
-    // `celiac_safe_vs_gluten_friendly → celiac_safe` (AUB-297). An old shared
-    // link carrying the retired token must degrade gracefully — the token is
-    // simply unknown now, so it drops and any sibling filters still apply
-    // (same reading as any other garbage token; cf. the AUB-198 back-compat
-    // chip test in FilterChips.test.tsx).
+    // An old shared link may still carry the retired headline token; it must
+    // read as any unknown token — dropped, with sibling filters intact.
     expect(parseAttrs("celiac_safe_vs_gluten_friendly")).toEqual([]);
     expect(parseAttrs("celiac_safe_vs_gluten_friendly,dedicated_fryer")).toEqual([
       "dedicated_fryer",
