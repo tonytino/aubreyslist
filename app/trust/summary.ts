@@ -372,6 +372,43 @@ export function deriveHeadlineSafetyState(
   return "celiac-safe";
 }
 
+/**
+ * The confirmation-derived cues the listing-detail hero shows beside the
+ * headline badge: the "Verified …" recency phrase and the confirmation count.
+ *
+ * Gated on {@link hasPositiveConsensus} — the same rule
+ * `deriveListingTrustGlance` applies to the browse card's freshness cue and
+ * evidence meta, so the two surfaces suppress in lockstep. A contested claim
+ * yields `{ verifiedRelative: null, confirmations: 0 }`: byte-identical to an
+ * unattested listing, which is what makes the hero honest. Suppressing only
+ * the badge would leak the withheld verdict straight back through this strip
+ * — "Verified 3 days ago · 3 confirmations" sitting where a badge is missing
+ * reads as reassurance the community never gave.
+ *
+ * Scope: these hero cues only. The detail page's per-claim rows keep the full
+ * confirm/dispute distribution (`summarizeClaim`) — that is where a contest is
+ * meant to be legible — and incident signals are untouched.
+ *
+ * `null`/`undefined` (a listing with no celiac claim) yields the same empty
+ * pair, so the caller never branches on the claim's existence.
+ */
+export function deriveHeadlineMeta(
+  aggregate:
+    | Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt">
+    | null
+    | undefined,
+  now: Date = new Date()
+): { verifiedRelative: string | null; confirmations: number } {
+  const affirmed = aggregate !== null && aggregate !== undefined && hasPositiveConsensus(aggregate);
+  if (!affirmed) {
+    return { verifiedRelative: null, confirmations: 0 };
+  }
+  return {
+    verifiedRelative: formatRelativeTime(aggregate.lastConfirmedAt, now),
+    confirmations: aggregate.confirmCount,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Safety tier — the displayed headline state as a sortable rank
 // ---------------------------------------------------------------------------

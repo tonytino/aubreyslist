@@ -32,8 +32,8 @@ import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
 import { findRecentIncident } from "~/trust/incident-recency";
 import {
+  deriveHeadlineMeta,
   deriveHeadlineSafetyState,
-  formatRelativeTime,
   hasEvidence,
   hasPositiveConsensus,
 } from "~/trust/summary";
@@ -214,16 +214,14 @@ function ListingDetail() {
     ? deriveHeadlineSafetyState(headlineClaim, now, stalenessMonths)
     : null;
 
-  // At-a-glance metadata mirrored from the browse card, derived only from
-  // data already in hand. Honest: an item is omitted rather than fabricated
-  // when its value isn't available — "Verified …" only with a real
-  // last-confirmed timestamp, "N confirmations" only when > 0. A
+  // At-a-glance metadata mirrored from the browse card, through the shared
+  // trust seam so the two surfaces suppress in lockstep: a contested headline
+  // claim yields neither cue, exactly as `deriveListingTrustGlance` withholds
+  // the card's freshness cue and evidence meta. Honest either way — an item is
+  // omitted rather than fabricated when its value isn't available. A
   // distinct-contributor count is not loaded on this route, so it is omitted
   // rather than invented.
-  const verifiedRelative = headlineClaim
-    ? formatRelativeTime(headlineClaim.lastConfirmedAt, now)
-    : null;
-  const confirmations = headlineClaim?.confirmCount ?? 0;
+  const { verifiedRelative, confirmations } = deriveHeadlineMeta(headlineClaim, now);
 
   // The non-headline claim badges relevant to this listing (e.g. "Off-menu GF
   // on request"): every attribute besides the headline that either has real

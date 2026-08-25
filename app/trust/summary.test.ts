@@ -5,6 +5,7 @@ import {
   claimAttributeDescription,
   claimAttributeLabel,
   DEFAULT_STALENESS_MONTHS,
+  deriveHeadlineMeta,
   deriveHeadlineSafetyState,
   formatLastConfirmed,
   formatRelativeTime,
@@ -446,5 +447,54 @@ describe("hasPositiveConsensus — the taxonomy filter match rule (#35)", () => 
     const fresh = { confirmCount: 5, disputeCount: 1, lastConfirmedAt: new Date() };
     expect(deriveHeadlineSafetyState(fresh)).toBe("celiac-safe");
     expect(hasPositiveConsensus(fresh)).toBe(true);
+  });
+});
+
+describe("deriveHeadlineMeta (the detail hero's confirmation-derived cues)", () => {
+  const affirmed = { confirmCount: 8, disputeCount: 1, lastConfirmedAt: ago(3 * WEEK) };
+
+  it("surfaces the recency phrase and the confirmation count for an affirmed claim", () => {
+    expect(deriveHeadlineMeta(affirmed, NOW)).toEqual({
+      verifiedRelative: "3 weeks ago",
+      confirmations: 8,
+    });
+  });
+
+  it("withholds BOTH cues on a contested claim — the hero matches an unattested one", () => {
+    // The suppression the badge already applies has to cover this strip too, or
+    // the withheld verdict leaks straight back: "Verified 3 days ago · 3
+    // confirmations" beside a missing badge reads as reassurance the community
+    // never gave. Same `hasPositiveConsensus` gate the browse glance uses.
+    const empty = { verifiedRelative: null, confirmations: 0 };
+
+    // Dispute majority, recently confirmed (the raw timestamp still looks fresh).
+    expect(deriveHeadlineMeta({ ...affirmed, disputeCount: 12 }, NOW)).toEqual(empty);
+    // A tie is contested too.
+    expect(
+      deriveHeadlineMeta({ confirmCount: 4, disputeCount: 4, lastConfirmedAt: ago(DAY) }, NOW)
+    ).toEqual(empty);
+    // …and it equals the unattested reading exactly.
+    expect(
+      deriveHeadlineMeta({ confirmCount: 0, disputeCount: 0, lastConfirmedAt: null }, NOW)
+    ).toEqual(empty);
+  });
+
+  it("yields the empty pair for a listing with no celiac claim at all", () => {
+    expect(deriveHeadlineMeta(null, NOW)).toEqual({ verifiedRelative: null, confirmations: 0 });
+    expect(deriveHeadlineMeta(undefined, NOW)).toEqual({
+      verifiedRelative: null,
+      confirmations: 0,
+    });
+  });
+
+  it("keeps the count for a STALE but uncontested claim (aged, not contested)", () => {
+    // Staleness is flagged by the badge, not by blanking the evidence: an
+    // uncontested consensus still has a real count and a real recency to show.
+    const stale = { confirmCount: 30, disputeCount: 2, lastConfirmedAt: ago(9 * MONTH) };
+    expect(deriveHeadlineSafetyState(stale, NOW)).toBe("stale");
+    expect(deriveHeadlineMeta(stale, NOW)).toEqual({
+      verifiedRelative: "9 months ago",
+      confirmations: 30,
+    });
   });
 });

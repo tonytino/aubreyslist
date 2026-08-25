@@ -5,6 +5,7 @@ import { findRecentIncident, isRecentIncident } from "~/trust/incident-recency";
 import {
   type ClaimTrustSummary,
   DEFAULT_STALENESS_MONTHS,
+  deriveHeadlineMeta,
   deriveHeadlineSafetyState,
   hasPositiveConsensus,
   isStale,
@@ -38,11 +39,14 @@ import {
  * badge it can stand behind, or it shows none.
  *
  * Scope of that suppression, exactly:
- *   - SUPPRESSED at glance level — the safety badge, the freshness cue, and
- *     the evidence meta ("N confirmations · M neighbors"). All three are
- *     withheld together, because any one of them surviving would leak the
- *     verdict the badge withholds and would distinguish a contested card from
- *     a never-reviewed one.
+ *   - SUPPRESSED wherever the headline verdict is glanced — on the browse card
+ *     and map mini-card, the safety badge, the freshness cue and the evidence
+ *     meta ("N confirmations · M neighbors") (`deriveListingTrustGlance`); in
+ *     the detail hero, the badge plus the "Verified … ago" phrase and the
+ *     confirmation count (`deriveHeadlineMeta`). Each set is withheld
+ *     together, because any one cue surviving would leak the verdict the badge
+ *     withholds and would distinguish a contested listing from a never-
+ *     reviewed one.
  *   - KEPT — the confirm/dispute counts on the detail-page claim row
  *     (`summarizeClaim`), and every incident signal. The claim row is where a
  *     contest is legible; recent harm outranks the whole rule.
@@ -565,6 +569,48 @@ describe("INVARIANT 6 — a tie or dispute-majority NEVER yields a safety badge"
           expect(glance.safetyState, where).toBe(unattestedGlance.safetyState);
           expect(glance.freshness, where).toBe(unattestedGlance.freshness);
           expect(glance.evidence, where).toBe(unattestedGlance.evidence);
+        }
+      }
+    }
+  });
+
+  it("suppresses the DETAIL HERO's cues too, not just the browse card's", () => {
+    // The hero is a second glance at the same verdict, so it needs the same
+    // gate: a contested listing that showed "Verified 3 days ago · 3
+    // confirmations" beside a missing badge would leak the withheld verdict
+    // through a different surface, and would read as reassurance the community
+    // never gave. Pinned as an equality against the unattested hero.
+    const unattestedMeta = deriveHeadlineMeta(aggregate(0, 0, null), NOW);
+    expect(unattestedMeta).toEqual({ verifiedRelative: null, confirmations: 0 });
+
+    for (const confirmCount of COUNT_GRID) {
+      for (const disputeCount of COUNT_GRID.filter((d) => d >= confirmCount && d > 0)) {
+        for (const ageMs of [...AGE_GRID_MS, null]) {
+          const lastConfirmedAt = ageMs === null ? null : new Date(NOW.getTime() - ageMs);
+          const agg = aggregate(confirmCount, disputeCount, lastConfirmedAt);
+          const where = `${confirmCount}c/${disputeCount}d @ ${String(ageMs)}`;
+
+          expect(deriveHeadlineSafetyState(agg, NOW), where).toBeNull();
+          expect(deriveHeadlineMeta(agg, NOW), where).toEqual(unattestedMeta);
+        }
+      }
+    }
+  });
+
+  it("keeps the DETAIL HERO's cues wherever a badge IS shown (suppression is not a blanket)", () => {
+    // The converse, so the gate cannot be over-tightened into hiding real
+    // evidence: whenever the headline earns a badge — celiac-safe or stale —
+    // the hero still reports its confirmation count.
+    for (const confirmCount of COUNT_GRID) {
+      for (const disputeCount of COUNT_GRID) {
+        for (const ageMs of [...AGE_GRID_MS, null]) {
+          const lastConfirmedAt = ageMs === null ? null : new Date(NOW.getTime() - ageMs);
+          const agg = aggregate(confirmCount, disputeCount, lastConfirmedAt);
+          if (deriveHeadlineSafetyState(agg, NOW) === null) {
+            continue;
+          }
+          const where = `${confirmCount}c/${disputeCount}d @ ${String(ageMs)}`;
+          expect(deriveHeadlineMeta(agg, NOW).confirmations, where).toBe(confirmCount);
         }
       }
     }
