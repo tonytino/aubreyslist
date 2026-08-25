@@ -16,8 +16,8 @@ import { DEFAULT_STALENESS_MONTHS, deriveHeadlineSafetyState } from "~/trust/sum
  *
  * - **Headline safety state** — derived from the celiac claim's visible
  *   aggregate via {@link deriveHeadlineSafetyState}. `null` when there is no
- *   claim or no evidence: the card renders an honest "Not yet attested",
- *   never a fabricated verdict (a celiac could be hurt).
+ *   claim, no evidence, or the claim is disputed: the card renders no safety
+ *   badge at all, never a fabricated verdict (a celiac could be hurt).
  * - **Recent-incident flag** — recent harm flags the card regardless of older
  *   confirmations (ADR-007, domain.md → Trust Model).
  * - **Evidence counts** — celiac-claim confirmations and distinct
@@ -46,9 +46,9 @@ export interface ListingEvidence {
 /** The minimal, render-ready trust glance one browse card needs. */
 export interface ListingTrustGlance {
   /**
-   * The headline celiac-safe vs. gluten-friendly (or stale) state, or `null`
-   * when there is no celiac claim / no attestation evidence. `null` drives the
-   * card's honest "Not yet attested" empty state — never a fabricated verdict.
+   * The headline celiac-safe (or stale) state, or `null` when there is no
+   * celiac claim, no attestation evidence, or disputes tie/outnumber confirms.
+   * `null` means the card renders no safety badge — never a fabricated verdict.
    */
   safetyState: SafetyState | null;
   /** Whether a recent "got glutened" incident flags this listing. */
@@ -104,8 +104,8 @@ function normalizeAttributes(attributes: readonly ClaimAttribute[]): ClaimAttrib
  * incident's instant.
  *
  * The aggregate is optional (not every listing has a celiac claim row);
- * `null`/`undefined` yields a `null` `safetyState` (the honest empty state)
- * and `null` `evidence`, exactly as a claim with no evidence would.
+ * `null`/`undefined` yields a `null` `safetyState` (no badge) and `null`
+ * `evidence`, exactly as a claim with no evidence would.
  *
  * `hasRecentIncident` is derived from `recentIncidentAt` so the two can never
  * disagree; the freshness cue phrases the incident from its own recency.
@@ -172,8 +172,7 @@ export function deriveListingTrustGlance(
       : null,
     hasRecentIncident: recentIncidentAt !== null,
     // Only surface counts when there is real evidence — a claim row with zero
-    // votes (or no claim at all) shows the honest "Not yet attested" empty
-    // state, never "0 confirmations".
+    // votes (or no claim at all) surfaces nothing, never "0 confirmations".
     evidence: hasEvidence ? { confirmations: celiacAggregate.confirmCount, contributors } : null,
     freshness: formatFreshness(lastConfirmedAt, recentIncidentAt, now, stalenessMonths),
     // Provenance, not a verdict (ADR-007): the label tracks live suggestions

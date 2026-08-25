@@ -203,10 +203,10 @@ function ListingDetail() {
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
   const recentIncident = findRecentIncident(incidents, now);
 
-  // Headline celiac-safe vs gluten-friendly cue, derived from the
-  // `celiac_safe_vs_gluten_friendly` claim's visible aggregate (ADR-007).
-  // No such claim / no attestation evidence → `null`, so SafetySummary keeps
-  // its honest "Not yet attested" empty state (never a fabricated rating).
+  // Headline celiac-safe cue, derived from the `celiac_safe_vs_gluten_friendly`
+  // claim's visible aggregate (ADR-007). No such claim, no attestation
+  // evidence, or a dispute majority → `null`, so SafetySummary shows honest
+  // guidance and no badge (never a fabricated rating).
   const headlineClaim = claims.find(
     (claim) => claim.attribute === "celiac_safe_vs_gluten_friendly"
   );
@@ -343,9 +343,9 @@ function ListingDetail() {
         {/* Solid bar below the media: the one safety-badge row for this
             listing plus the at-a-glance metadata strip mirrored from the
             browse card. `SafetySummary`'s hero variant owns the whole row:
-            the headline celiac-safe/gluten-friendly/stale badge (or the
-            honest "Not yet attested" empty state) plus the recent-incident
-            badge, scrolling horizontally on overflow rather than wrapping. */}
+            the headline celiac-safe/stale badge (or, with no verdict, honest
+            guidance and no badge at all) plus the recent-incident badge,
+            scrolling horizontally on overflow rather than wrapping. */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-card">
           <SafetySummary
             state={safetyState}

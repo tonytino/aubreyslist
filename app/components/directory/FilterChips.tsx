@@ -5,7 +5,6 @@ import { useState } from "react";
 import { currentUserQuery } from "~/auth/current-user-query";
 import { SearchChip } from "~/components/directory/SearchChip";
 import { SortSelector } from "~/components/directory/SortSelector";
-import { WheatStrike } from "~/components/icons/WheatStrike";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -23,13 +22,13 @@ import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
 /**
  * Horizontal-scroll filter chip row. Every control is URL-driven and
  * server-side — nothing here refines the loaded page client-side:
- *   - **Quick chips** (Celiac-safe / Gluten-friendly / Recently verified)
- *     drive `?quick=` as a faceted set: the `safety` pair (celiac / friendly)
- *     is mutually exclusive, while `recent` toggles additively. Exclusivity is
- *     enforced by the parent's `applyQuickToggle` reducer — this component
- *     renders whatever set it's handed and reports each click via
- *     `onQuickToggle`. Real `<button>`s carrying `aria-pressed` so the toggle
- *     state is announced — never colour alone.
+ *   - **Quick chips** (Celiac-safe / Recently verified) drive `?quick=` as a
+ *     faceted set: `celiac` sits in the exclusive `safety` group, while
+ *     `recent` toggles additively. Exclusivity is enforced by the parent's
+ *     `applyQuickToggle` reducer — this component renders whatever set it's
+ *     handed and reports each click via `onQuickToggle`. Real `<button>`s
+ *     carrying `aria-pressed` so the toggle state is announced — never colour
+ *     alone.
  *   - **Taxonomy chips** are the server-side consensus filter (`?attrs=`). One
  *     toggle chip per attribute, labelled from `CLAIM_ATTRIBUTE_LABELS` with
  *     that attribute's distinct `CLAIM_ATTRIBUTE_ICONS` glyph (shape, not
@@ -55,7 +54,7 @@ import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
  * there).
  *
  * Layout: one horizontal scroll row on mobile (the mobile-first base); from
- * `sm:` up the chips wrap into multiple lines instead of scrolling, so all ~10
+ * `sm:` up the chips wrap into multiple lines instead of scrolling, so all
  * controls stay visible on wider screens without a long sideways drag.
  */
 
@@ -67,11 +66,6 @@ interface QuickChipDef {
 
 const QUICK_CHIPS: readonly QuickChipDef[] = [
   { value: "celiac", label: "Celiac-safe", Icon: ShieldCheck },
-  // Brand "gluten struck out" glyph — matches SafetySignal's `gluten-friendly`
-  // icon so the same state reads with the same shape everywhere. Drop-in
-  // compatible: typed as `LucideIcon`, same 24×24 box, sized/stroked
-  // identically to the other chips.
-  { value: "friendly", label: "Gluten-friendly", Icon: WheatStrike },
   { value: "recent", label: "Recently verified", Icon: Check },
 ];
 

@@ -2,18 +2,18 @@ import { Clock, type LucideIcon, ShieldCheck, TriangleAlert } from "lucide-react
 import type * as React from "react";
 import { cn } from "~/lib/utils";
 import { BADGE_FAMILY_SIZE } from "./badge-size";
-import { WheatStrike } from "./icons/WheatStrike";
-import { Badge } from "./ui/badge";
 
 /**
- * The four safety/trust states surfaced across the app. See
+ * The three safety/trust states surfaced across the app. See
  * docs/agents/domain.md (GF taxonomy + trust model):
- *   - celiac-safe      — takes cross-contamination seriously (headline trust)
- *   - gluten-friendly  — GF-ish options only; deliberately not "safe"
- *   - stale            — claim not confirmed within the staleness window
- *   - incident         — a recent "got glutened" report flags the listing
+ *   - celiac-safe — takes cross-contamination seriously (headline trust)
+ *   - stale       — claim not confirmed within the staleness window
+ *   - incident    — a recent "got glutened" report flags the listing
+ *
+ * A listing with no surfaced state (unattested, or a disputed headline claim)
+ * renders no signal at all — `null` is the absence of a badge, not a state.
  */
-export type SafetyState = "celiac-safe" | "gluten-friendly" | "stale" | "incident";
+export type SafetyState = "celiac-safe" | "stale" | "incident";
 
 interface SafetyStateConfig {
   /** Always-visible text label. Safety meaning is never colour-only. */
@@ -39,14 +39,6 @@ const STATES: Record<SafetyState, SafetyStateConfig> = {
     soft: "bg-celiac-safe-soft text-celiac-safe border border-celiac-safe/30",
     // shield + check — headline trust
     icon: ShieldCheck,
-  },
-  "gluten-friendly": {
-    label: "Gluten-friendly",
-    solid: "bg-gluten-friendly text-gluten-friendly-foreground border border-transparent",
-    soft: "bg-gluten-friendly-soft text-gluten-friendly border border-gluten-friendly/30",
-    // Ear-of-wheat with a diagonal strike ("gluten struck out"). Distinct from
-    // the other three glyphs even in greyscale.
-    icon: WheatStrike,
   },
   stale: {
     label: "Needs update",
@@ -135,8 +127,6 @@ export function SafetySignal({
 export const SAFETY_TOOLTIP: Record<SafetyState, string> = {
   "celiac-safe":
     "Takes cross-contamination seriously. The kitchen is set up to serve people with celiac disease safely.",
-  "gluten-friendly":
-    "Offers gluten-free options but doesn't guarantee against cross-contamination. Not a celiac-safe promise.",
   stale:
     "Not confirmed in the last six months, so this may be out of date. We show that rather than hide it.",
   incident:
@@ -144,12 +134,7 @@ export const SAFETY_TOOLTIP: Record<SafetyState, string> = {
 };
 
 /** Exposed so consumers (filters, legends, the style guide) can enumerate states. */
-export const SAFETY_STATES: readonly SafetyState[] = [
-  "celiac-safe",
-  "gluten-friendly",
-  "stale",
-  "incident",
-];
+export const SAFETY_STATES: readonly SafetyState[] = ["celiac-safe", "stale", "incident"];
 
 export function safetyLabel(state: SafetyState): string {
   return STATES[state].label;
@@ -162,26 +147,4 @@ export function safetyLabel(state: SafetyState): string {
  */
 export function safetyIcon(state: SafetyState): LucideIcon {
   return STATES[state].icon;
-}
-
-/**
- * The honest empty-state chip for a `null` safety verdict — dashed, neutral,
- * plain text, never a fabricated signal. The ONE implementation both the
- * browse list card (`ListingCard`) and the map mini-card (`map-ui`) render, so
- * the empty state can't drift between surfaces. Callers apply the same
- * `suggestedByBot` gate `ListingCard` documents: a bot-suggested listing with
- * no verdict shows provenance instead of this chip.
- */
-export function UnattestedBadge({ className }: { className?: string }) {
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "border-dashed px-2.5 py-1 text-body-sm font-medium text-muted-foreground",
-        className
-      )}
-    >
-      Not yet attested
-    </Badge>
-  );
 }

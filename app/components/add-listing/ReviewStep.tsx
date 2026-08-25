@@ -11,7 +11,7 @@ import type { Answer, AnswerMap, WizardPlace } from "./AddListingWizard";
 /**
  * Review & submit. One row per attribute, honest about what each answer records:
  *
- *   headline confirm/dispute → a `SafetySignal` chip (celiac-safe / gluten-friendly)
+ *   headline confirm → a celiac-safe `SafetySignal` chip, headline dispute → plain text
  *   fact confirm/dispute     → a per-attribute icon chip in a neutral, non-safety
  *                              tint (brand-soft "Confirmed" / muted "Disputed") so a
  *                              plain fact never borrows the celiac-safe/GF safety colours
@@ -135,8 +135,10 @@ export function ReviewStep({
 
 /**
  * The per-row outcome chip/text, differentiated by attribute + answer:
- * headline confirm/dispute → SafetySignal; fact confirm/dispute →
- * {@link FactOutcomeChip}; skip/untouched → the dashed "Not yet attested" pill.
+ * headline confirm → the celiac-safe SafetySignal; headline dispute → plain
+ * muted text, since a dispute removes the badge rather than awarding a lesser
+ * one; fact confirm/dispute → {@link FactOutcomeChip}; skip/untouched → the
+ * dashed "Not yet attested" pill.
  *
  * Exported so the ClaimCardDeck's end-state summary
  * (`app/components/claims/DeckSummary.tsx`) renders the same outcome chips as
@@ -151,7 +153,13 @@ export function ReviewOutcome({
 }) {
   if (answer === "confirm" || answer === "dispute") {
     if (attribute === HEADLINE) {
-      return <SafetySignal state={answer === "confirm" ? "celiac-safe" : "gluten-friendly"} />;
+      return answer === "confirm" ? (
+        <SafetySignal state="celiac-safe" />
+      ) : (
+        // No safety colour and no badge: a disputed headline claim shows
+        // nothing on the listing, so its review row must not promise one.
+        <span className="text-body-sm text-muted-foreground">Disputed</span>
+      );
     }
     return <FactOutcomeChip attribute={attribute} confirmed={answer === "confirm"} />;
   }
@@ -168,8 +176,8 @@ export function ReviewOutcome({
  * Its content stays distinct on purpose: it carries the confirm/dispute
  * outcome word, not the plain attribute label.
  *
- * Deliberately avoids the celiac-safe green / gluten-friendly amber safety
- * tokens — a plain fact must never read as a safety verdict. Confirmed uses a
+ * Deliberately avoids the celiac-safe green safety token — a plain fact must
+ * never read as a safety verdict. Confirmed uses a
  * neutral-positive brand tint, Disputed a muted/neutral one. Colour + icon +
  * the visible "Confirmed"/"Disputed" word keep the two states distinguishable
  * without resting on colour alone; the icon is `aria-hidden` so meaning lives

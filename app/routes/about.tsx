@@ -94,11 +94,12 @@ function AboutPage() {
           Safety signals never rely on color alone. Each state gets its own icon and text label, so
           the meaning survives greyscale and color-vision differences.
         </p>
-        {/* The concrete legend behind that claim: the headline trust verdicts
+        {/* The concrete legend behind that claim: every surfaced safety state
             plus one neutral GF taxonomy-attribute example. Each is icon +
             text, never color alone (styling.md). `stale` is a freshness
             meta-state, not a headline verdict, so it is omitted here on
-            purpose. */}
+            purpose. Mapped from SAFETY_STATES, so retiring a state drops its
+            chip here automatically. */}
         <div className="flex flex-wrap items-center gap-2">
           {SAFETY_STATES.filter((state) => state !== "stale").map((state) => (
             // The chip is the tooltip trigger (colour + icon + label already
@@ -127,11 +128,12 @@ function AboutPage() {
           What the community attests
         </h2>
         <p className="text-body text-muted-foreground">
-          The headline distinction is{" "}
-          <strong className="font-semibold text-foreground">celiac-safe vs. gluten-friendly</strong>
-          : a kitchen that takes cross-contamination seriously versus one that just offers GF
-          options. Mixing those up is the failure this site exists to prevent, so we surface it
-          first. Every listing also tracks the same fixed attributes, so listings stay comparable:
+          The headline claim is{" "}
+          <strong className="font-semibold text-foreground">celiac-safe</strong>: whether the
+          kitchen takes cross-contamination seriously. Everything here is assumed to have
+          gluten-free options, so celiac-safe is the only safety claim the community attests. Enough
+          disputes remove the badge, and no lesser badge takes its place. Every listing also tracks
+          the same fixed attributes, so listings stay comparable:
         </p>
         <ul className="flex list-disc flex-col gap-1.5 pl-5 text-body text-muted-foreground">
           <li>Dedicated or separate fryer (yes, no, or shared oil).</li>

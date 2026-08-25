@@ -173,8 +173,9 @@ export function ClaimCard({
  * The static card anatomy, shared by the interactive top card and the
  * decorative peek card behind it: brand-soft icon well, display-face label,
  * shared taxonomy description, optional host caption, and — on the headline
- * card only — the "What your answer records" SafetySignal preview (confirm →
- * Celiac-safe, dispute → Gluten-friendly). Fact cards get no safety signal.
+ * card only — the "What your answer records" preview (confirm → the Celiac-safe
+ * badge, dispute → plain text: a dispute removes a badge, it never awards a
+ * lesser one). Fact cards get no safety signal.
  */
 export function ClaimCardBody({
   attribute,
@@ -202,8 +203,8 @@ export function ClaimCardBody({
             <span className="flex flex-wrap items-center gap-1.5 text-body-sm text-muted-foreground">
               Confirm records <SafetySignal state="celiac-safe" />
             </span>
-            <span className="flex flex-wrap items-center gap-1.5 text-body-sm text-muted-foreground">
-              Dispute records <SafetySignal state="gluten-friendly" />
+            <span className="text-body-sm text-muted-foreground">
+              Dispute counts against Celiac-safe. Enough disputes remove the badge.
             </span>
           </div>
         </div>

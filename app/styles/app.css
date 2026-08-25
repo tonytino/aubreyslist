@@ -67,11 +67,6 @@
   --color-celiac-safe-foreground: oklch(0.99 0 0);
   --color-celiac-safe-soft: oklch(0.95 0.04 160);
 
-  /* gluten-friendly — caution / "GF-ish", deliberately distinct from safe */
-  --color-gluten-friendly: oklch(0.47 0.12 75); /* warm amber-brown, ~5.5:1 */
-  --color-gluten-friendly-foreground: oklch(0.99 0 0);
-  --color-gluten-friendly-soft: oklch(0.95 0.05 80);
-
   /* stale — "may be stale" freshness flag (slate/blue-grey, neutral) */
   --color-stale: oklch(0.45 0.04 255); /* ~6.1:1 on white */
   --color-stale-foreground: oklch(0.99 0 0);
@@ -275,7 +270,6 @@
      on these (L0.90) gives ~6–8:1, comfortably AA. Each hue stays distinct so
      the chip still reads at a glance on the dark surface. */
   --color-celiac-safe-soft: oklch(0.9 0.07 160);
-  --color-gluten-friendly-soft: oklch(0.9 0.08 80);
   --color-stale-soft: oklch(0.9 0.03 255);
   --color-incident-soft: oklch(0.9 0.06 25);
 

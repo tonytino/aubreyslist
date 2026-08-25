@@ -33,10 +33,10 @@ import type { ClaimAggregate } from "~/server/attestations";
  * is exhaustive at compile time — a new taxonomy value forces a label here.
  *
  * The `celiac_safe_vs_gluten_friendly` enum key is surfaced as "Celiac-safe":
- * every listing is assumed gluten-free-friendly, so the useful community
- * question is just "is it celiac-safe?" — confirm ⇒ celiac-safe, dispute ⇒
- * gluten-friendly only. The key and label deliberately differ (renaming the
- * enum would force a type-recreate migration for no user-visible gain).
+ * every listing is assumed to have gluten-free options, so the only community
+ * safety question is "is it celiac-safe?" — confirm ⇒ celiac-safe, dispute ⇒
+ * no badge. The key and label deliberately differ (renaming the enum would
+ * force a type-recreate migration for no user-visible gain; AUB-297).
  */
 export const CLAIM_ATTRIBUTE_LABELS: Record<ClaimAttribute, string> = {
   celiac_safe_vs_gluten_friendly: "Celiac-safe",
@@ -68,13 +68,13 @@ export const CLAIM_ATTRIBUTE_ICONS: Record<ClaimAttribute, LucideIcon> = {
  * One-line clarifier for what confirm vs dispute means on an attribute — one
  * source of truth for the Community-claims surface and the add-listing
  * attestation step. Keyed by the `claim_attribute` enum so the mapping is
- * exhaustive at compile time. The headline gloss names the two states rather
- * than button captions, because the two surfaces label their controls
- * differently.
+ * exhaustive at compile time. The headline gloss describes what celiac-safe
+ * means rather than button captions, because the two surfaces label their
+ * controls differently.
  */
 export const CLAIM_ATTRIBUTE_DESCRIPTIONS: Record<ClaimAttribute, string> = {
   celiac_safe_vs_gluten_friendly:
-    "Celiac-safe means the kitchen takes cross-contamination seriously. Gluten-friendly means gluten-free options without that guarantee.",
+    "Celiac-safe means the kitchen takes cross-contamination seriously, not just gluten-free options on the menu.",
   dedicated_fryer:
     "A separate fryer for gluten-free food (shared fryer oil is a major cross-contamination risk).",
   dedicated_gf_menu: "A dedicated gluten-free menu, not just a few marked items on the main one.",
@@ -326,7 +326,7 @@ export function hasPositiveConsensus(
 }
 
 // ---------------------------------------------------------------------------
-// Headline safety state — celiac-safe vs gluten-friendly, from visible evidence
+// Headline safety state — celiac-safe or nothing, from visible evidence
 // ---------------------------------------------------------------------------
 
 /**
@@ -334,14 +334,14 @@ export function hasPositiveConsensus(
  * claim from its aggregate — the single seam the headline `SafetySummary` wires.
  *
  * Honest by construction (a celiac could get hurt by a fabricated rating):
- * - **No evidence** (zero confirms and disputes) → `null`. The headline
- *   renders its "Not yet attested" empty state; never an invented verdict.
- * - **Disputes tie or outnumber confirms** → `"gluten-friendly"`: the safer,
- *   lower claim. Checked first — a live dispute majority must never be masked
- *   by staleness. `lastConfirmedAt` is only bumped by confirms, so a claim
- *   confirmed long ago then freshly disputed would otherwise read as a
- *   neutral "may be stale" and bury contested fresh evidence. Contested
- *   evidence falls back to the less reassuring state — never overstate safety.
+ * - **No evidence** (zero confirms and disputes) → `null`. No badge.
+ * - **Disputes tie or outnumber confirms** → `null`. Disputes suppress the
+ *   badge; a disputed claim and an unattested one are indistinguishable on
+ *   every surface by design (owner decision 2026-08-25). Checked first — a
+ *   live dispute majority must never be masked by staleness, since
+ *   `lastConfirmedAt` is only bumped by confirms, so a claim confirmed long
+ *   ago then freshly disputed would otherwise read as a neutral "may be
+ *   stale". The dispute counts stay visible on the claim row.
  * - **Stale** confirmation (older than the window) while confirms lead →
  *   `"stale"`. Recency is weighted (ADR-007): an aged, uncontested consensus
  *   is flagged, not trusted as fresh.
@@ -363,7 +363,7 @@ export function deriveHeadlineSafetyState(
   // is never hidden behind an "outdated" chip (the confirm-only recency
   // signal can be stale even as disputes pile up).
   if (aggregate.confirmCount <= aggregate.disputeCount) {
-    return "gluten-friendly";
+    return null;
   }
   // Confirms lead, but an aged consensus is flagged rather than trusted.
   if (isStale(aggregate.lastConfirmedAt, now, stalenessMonths)) {
@@ -384,12 +384,13 @@ export function deriveHeadlineSafetyState(
  * exact tiers in SQL (`buildOrderBy` in `app/server/listings/browse.ts`);
  * this pure function is the single, testable specification of the contract.
  *
- *   4  celiac-safe  — fresh, uncontested confirm-majority (the safest, first)
- *   3  stale        — confirm-majority but past the staleness window
- *   2  gluten-friendly — contested (disputes tie/outnumber confirms)
- *   1  unattested   — no evidence (`null` state)
+ *   4  celiac-safe — fresh, uncontested confirm-majority (the safest, first)
+ *   3  stale       — confirm-majority but past the staleness window
+ *   1  no badge    — `null` state: unattested OR disputed
  *
- * `null`/`undefined` (a listing with no celiac claim) ranks lowest (1).
+ * Tier 2 is deliberately vacant: the numbers are kept as-is so the SQL mirror
+ * stays a minimal diff. `null`/`undefined` (a listing with no celiac claim)
+ * ranks lowest (1).
  */
 export function safetyTierRank(
   aggregate:
@@ -405,9 +406,7 @@ export function safetyTierRank(
       return 4;
     case "stale":
       return 3;
-    case "gluten-friendly":
-      return 2;
     default:
-      return 1; // null → unattested
+      return 1; // null → unattested or disputed
   }
 }

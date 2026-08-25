@@ -17,13 +17,7 @@ import {
   cardLocationParts,
   type RestaurantCardVM,
 } from "~/components/listing/ListingCard";
-import {
-  SafetySignal,
-  type SafetyState,
-  safetyIcon,
-  safetyLabel,
-  UnattestedBadge,
-} from "~/components/SafetySignal";
+import { SafetySignal, type SafetyState, safetyIcon, safetyLabel } from "~/components/SafetySignal";
 import { prefersReducedMotion } from "~/lib/motion";
 import type { MapLoadMore } from "~/listings/use-map-pages";
 
@@ -147,13 +141,14 @@ export function useUserSelectionChange(
  */
 const PIN_FILLS: Record<SafetyState, string> = {
   "celiac-safe": "bg-celiac-safe text-celiac-safe-foreground",
-  "gluten-friendly": "bg-gluten-friendly text-gluten-friendly-foreground",
   stale: "bg-stale text-stale-foreground",
   incident: "bg-incident text-incident-foreground",
 };
 
 /**
- * The "Not yet attested" pin — neutral, still labelled, never a fake verdict.
+ * The no-verdict pin — neutral, unlabelled, never a fake verdict. Covers both
+ * an unattested listing and a disputed headline claim: the two are
+ * indistinguishable by design, so neither gets a safety label.
  * `CircleDashed` (an "unknown" ring) is deliberately unshareable with any
  * verdict glyph: at dot size a shield outline reads celiac-safe under
  * greyscale/CVD, so this state must not borrow `ShieldCheck`. `text-background`
@@ -164,7 +159,8 @@ const PIN_FILLS: Record<SafetyState, string> = {
 const UNATTESTED_PIN = {
   fill: "bg-muted-foreground text-background",
   Icon: CircleDashed,
-  label: "Not yet attested",
+  /** No safety wording at all — there is no verdict to announce. */
+  label: null,
 } as const;
 
 export function pinStyleFor(state: SafetyState | null) {
@@ -191,13 +187,16 @@ function indexNumberClass(index: number): string {
  * like the incident add-on chip — is invisible to AT unless folded in here).
  * A recent incident is appended whenever the headline state isn't already
  * "incident": what sighted users see (headline chip + red incident chip) is
- * exactly what screen readers hear.
+ * exactly what screen readers hear. A `null` state contributes no safety
+ * wording — sighted users see no badge either.
  */
 function pinAccessibleName(vm: RestaurantCardVM): string {
-  const base = `${vm.name}, ${pinStyleFor(vm.safetyState).label}`;
-  return vm.hasRecentIncident && vm.safetyState !== "incident"
-    ? `${base}, ${safetyLabel("incident")}`
-    : base;
+  const label = pinStyleFor(vm.safetyState).label;
+  const parts = [vm.name, ...(label === null ? [] : [label])];
+  if (vm.hasRecentIncident && vm.safetyState !== "incident") {
+    parts.push(safetyLabel("incident"));
+  }
+  return parts.join(", ");
 }
 
 /**
@@ -381,9 +380,9 @@ function scrollCardFlushLeft(
  * Text-dense slim cards: name, the shared "city · distance" location line, and
  * the same trust row rules as the browse list card (`ListingCard`): headline
  * `SafetySignal` (or the bot-provenance hint when there is no verdict but a
- * live bot suggestion, or the shared dashed `UnattestedBadge` when neither),
- * plus the incident add-on chip whenever `hasRecentIncident` — recent harm
- * must flag the mini-card no matter the headline verdict.
+ * live bot suggestion, or nothing at all when neither), plus the incident
+ * add-on chip whenever `hasRecentIncident` — recent harm must flag the
+ * mini-card no matter the headline verdict.
  *
  * Selection scroll: a user selection (the shared `useUserSelectionChange`
  * discriminator) scrolls the selected card flush-left via
@@ -659,13 +658,11 @@ export function MapCarousel({
                   <SafetySignal state={vm.safetyState} />
                 ) : vm.suggestedByBot ? (
                   // No verdict but a live bot suggestion: the shared provenance
-                  // label, not the dashed empty-state chip and not a blank row.
-                  // Provenance, never a verdict (ADR-007) — the card's
-                  // accessible name carries the same context for AT.
+                  // label, not a blank row. Provenance, never a verdict
+                  // (ADR-007) — the card's accessible name carries the same
+                  // context for AT.
                   <BotProvenanceLabel size="compact" data-testid="carousel-bot-provenance" />
-                ) : (
-                  <UnattestedBadge />
-                )}
+                ) : null}
                 {/* Recent harm flags the mini-card regardless of the headline
                     verdict (mirrors ListingCard) — an incident must never read
                     clean on the map. */}
