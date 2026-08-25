@@ -1,0 +1,1 @@
+- `[manual]` Docs now describe the celiac-only claims model: celiac-safe is the only community safety claim, a disputed headline claim shows nothing at glance level, and ADR-016 records the decision.

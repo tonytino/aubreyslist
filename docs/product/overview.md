@@ -17,8 +17,8 @@ reviews:
 - Do they use a **dedicated fryer**, or share oil with breaded food?
 - Will they make an off-menu dish gluten-free **on request**?
 - Does the staff **actually understand** cross-contamination, or just nod?
-- Is the place **celiac-safe**, or merely "gluten-friendly" (the trap that
-  causes real harm)?
+- Is the kitchen **celiac-safe**, or does it just put gluten-free items on the
+  menu (the trap that causes real harm)?
 
 There's no API to scrape this from, and generic reviews bury it. The
 information is **inherently community-knowledge**, and it **decays** — a place
@@ -78,9 +78,12 @@ which gates any paid-tier spend).
 
 ## Stance & Non-Negotiables (product-level)
 
-- **Celiac-safe vs. gluten-friendly is the headline distinction**, surfaced
-  everywhere. Conflating them is the exact failure mode this product exists to
-  prevent.
+- **Celiac-safe is the only safety claim.** Presence on the platform already
+  implies gluten-free options, so the one question the community answers is
+  whether the kitchen is celiac-safe. A listing either earns that badge or
+  shows nothing. We never award a lesser badge, because reading a merely
+  gluten-free menu as celiac-safe is the exact failure mode this product exists
+  to prevent.
 - **Safety signals never rely on color alone.** Purple/pastel branding (see
   ADR for design) must not compromise accessible, high-contrast, icon+label
   safety cues.

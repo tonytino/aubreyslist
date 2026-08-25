@@ -27,12 +27,13 @@ The set is **curated, not user-extensible** in v1 — consistent, comparable,
 filterable data. New attributes are added by us, never by contributors at
 runtime.
 
-1. **Celiac-safe** — the headline distinction, surfaced most prominently. Does
-   the restaurant take cross-contamination seriously (confirm ⇒ celiac-safe), or
-   merely offer GF-ish options (dispute ⇒ gluten-friendly)? Every listing is
-   assumed gluten-free-friendly already, so the community question is just "is
-   it celiac-safe?" The enum key is `celiac_safe_vs_gluten_friendly` (rename
-   deferred — see below); only its label is "Celiac-safe".
+1. **Celiac-safe** — the only community safety claim, surfaced most
+   prominently. Every listing is assumed to have gluten-free options already,
+   so the single question worth attesting is whether the kitchen takes
+   cross-contamination seriously. Confirm ⇒ celiac-safe. Dispute suppresses the
+   badge; it never awards a lesser state. The enum key is
+   `celiac_safe_vs_gluten_friendly` (rename deferred — see below); its label is
+   "Celiac-safe".
 2. **Dedicated / separate fryer** — yes / no / shared.
 3. **Dedicated GF menu** — labeled GF items exist.
 4. **Off-menu GF on request** — will make non-GF-labeled dishes GF when asked.
@@ -54,7 +55,9 @@ confirm/dispute, tracked in
 - **Staff knowledge & attitude** — not crisp enough to attest reliably.
 
 Also deferred: renaming the enum key `celiac_safe_vs_gluten_friendly →
-celiac_safe` (cosmetic; would force an enum type-recreate migration).
+celiac_safe`. The key predates the celiac-only model and is cosmetic — the
+label is already "Celiac-safe" — while renaming it forces an enum
+type-recreate migration.
 
 ---
 
@@ -78,6 +81,11 @@ Rules every trust-related feature must honor:
   a prominent warning on the listing (e.g. "⚠️ recent incident reported 3 days
   ago") **regardless of** how many older confirmations exist. Never let old
   confirmations bury fresh harm.
+- **A disputed headline claim shows nothing.** When disputes tie or outnumber
+  confirms on the celiac claim, the listing renders no badge, no freshness cue
+  and no evidence counts at glance level (cards, map pins, detail hero,
+  filters) — indistinguishable from an unattested listing. The confirm/dispute
+  counts stay visible on the claim row, and incident signals are exempt.
 - **One vote per user per claim.** No ballot-stuffing. A user may change or
   retract their own attestation.
 - **The summary must remain explainable.** Anything shown in the roll-up must be
