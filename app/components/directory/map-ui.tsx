@@ -453,7 +453,8 @@ export function MapCarousel({
   // click, pointer or wheel input on the band) or when the selection lands
   // on a different card — the route's first-entry fallback after it strips
   // a stale `?sel=` arrives here that way — and always once a settled set
-  // has been judged, so it can never linger armed past settle.
+  // holding the target has been judged; a settled set missing it retires
+  // via the route's strip-then-fallback.
   const restoreTarget = useRef(restoreSelectedId ?? null);
   const restoreSnappedIds = useRef<string | null>(null);
   useLayoutEffect(() => {

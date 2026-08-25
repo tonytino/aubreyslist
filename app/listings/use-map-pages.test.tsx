@@ -277,10 +277,11 @@ describe("useMapPages — failed pages", () => {
     await waitFor(() => expect(result.current.loadMore.failed).toBe(true));
     expect(result.current.loadMore.pending).toBe(false);
 
-    // Retry with the response held open: the errored query keeps isError
-    // through its refetch, and the refetch must still read as busy — the
-    // busy card, the click guard, and the append disarm's rising edge all
-    // depend on it.
+    // Retry with the response held open: the refetch must read as busy
+    // whether or not the query still reports isError during it (this React
+    // Query version resets a dataless retry to pending; the isFetching arm
+    // guards a version that keeps the error). The busy card, the click
+    // guard, and the append disarm's rising edge all depend on it.
     let deliver: ((page: BrowseListingsPage) => void) | undefined;
     fetchMock.impl = () =>
       new Promise((resolve) => {
