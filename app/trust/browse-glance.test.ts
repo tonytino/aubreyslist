@@ -173,15 +173,27 @@ describe("deriveListingTrustGlance", () => {
     expect(glance.freshness).toEqual({ kind: "fresh", label: "Verified 3d ago" });
   });
 
-  it("derives gluten-friendly when disputes tie or outnumber confirms", () => {
+  it("derives NO safety badge when disputes tie or outnumber confirms — counts stay visible", () => {
+    // AUB-295: a contested headline claim renders no badge at all (the same
+    // glance an unattested listing gets). The evidence counts are still
+    // surfaced, so the card never hides that people weighed in.
     const glance = deriveListingTrustGlance(
       { confirmCount: 2, disputeCount: 5, lastConfirmedAt: new Date("2026-06-01T00:00:00Z") },
       6,
       null,
       NOW
     );
-    expect(glance.safetyState).toBe("gluten-friendly");
+    expect(glance.safetyState).toBeNull();
     expect(glance.evidence).toEqual({ confirmations: 2, contributors: 6 });
+
+    // A tie is contested too — same null badge.
+    const tied = deriveListingTrustGlance(
+      { confirmCount: 3, disputeCount: 3, lastConfirmedAt: new Date("2026-06-01T00:00:00Z") },
+      6,
+      null,
+      NOW
+    );
+    expect(tied.safetyState).toBeNull();
   });
 
   it("derives stale + stale cue when confirms lead but the confirmation aged out", () => {

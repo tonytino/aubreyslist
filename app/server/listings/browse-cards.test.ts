@@ -131,7 +131,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
     // A representative set spanning every trust state the derivation can produce:
     //  - fresh celiac-safe   (fresh confirm-majority)
     //  - stale               (confirm-majority aged past the window)
-    //  - contested           (disputes tie/lead → gluten-friendly)
+    //  - contested           (disputes tie/lead → no badge, counts still shown)
     //  - recent-incident     (a recent report flags the card, incident cue wins)
     //  - unattested          (no celiac claim → honest empty state)
     const fresh = mkListing({ id: "l-fresh", name: "Fresh Cafe" });
@@ -167,7 +167,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         claimId: "c-contested",
         lastConfirmedAt: new Date("2026-06-20T00:00:00Z"), // 8d ago → fresh cue
         confirmCount: "2",
-        disputeCount: "5", // disputes lead → gluten-friendly
+        disputeCount: "5", // disputes lead → no safety badge (AUB-295)
         contributors: "7",
       },
       {
@@ -223,10 +223,12 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         suggestedAttributes: [],
         confirmedAttributes: [],
       },
-      // contested: disputes lead → gluten-friendly; the fresh confirm still
-      // reads as a "Verified" freshness cue (an independent display signal).
+      // contested: disputes lead → NO safety badge, identical to the
+      // unattested card's `safetyState` (AUB-295). The evidence counts and the
+      // "Verified" freshness cue still surface, so the card never hides that
+      // the community weighed in — it just makes no safety claim.
       {
-        safetyState: "gluten-friendly",
+        safetyState: null,
         hasRecentIncident: false,
         evidence: { confirmations: 2, contributors: 7 },
         freshness: { kind: "fresh", label: "Verified 8d ago" },
