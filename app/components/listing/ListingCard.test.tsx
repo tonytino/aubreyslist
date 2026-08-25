@@ -33,11 +33,11 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
 
 /**
  * Tests for the browse-list card. Covers the trust-glance render across states —
- * celiac-safe, gluten-friendly, the honest "Not yet attested" empty state, the
- * recent-incident flag — plus the attributed (non-safety) save-count pill, the
- * city/distance location line, evidence counts, and the photo placeholder vs
- * `<img>`. The accessible signals (colour + icon + text label) are asserted via
- * their visible text, never colour.
+ * celiac-safe, the null (unattested/disputed) state that renders no safety badge
+ * at all, the recent-incident flag — plus the attributed (non-safety) save-count
+ * pill, the city/distance location line, evidence counts, and the photo
+ * placeholder vs `<img>`. The accessible signals (colour + icon + text label) are
+ * asserted via their visible text, never colour.
  *
  * The card uses TanStack Router's `Link`, so it must render inside a router: a
  * tiny in-memory router whose tree includes the `/listings/$id` target lets `Link`
@@ -220,15 +220,12 @@ describe("RestaurantCard", () => {
     expect(await screen.findByText("Celiac-safe")).toBeInTheDocument();
   });
 
-  it("shows the gluten-friendly label", async () => {
-    renderCard({ safetyState: "gluten-friendly" });
-    expect(await screen.findByText("Gluten-friendly")).toBeInTheDocument();
-  });
-
-  it("renders an honest Not yet attested state when safetyState is null", async () => {
+  it("renders NO safety badge when safetyState is null", async () => {
     renderCard({ safetyState: null });
-    expect(await screen.findByText("Not yet attested")).toBeInTheDocument();
+    await screen.findByTestId("card-claim-row");
+    expect(screen.queryByText("Not yet attested")).not.toBeInTheDocument();
     expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
+    expect(document.querySelector("[data-safety-state]")).not.toBeInTheDocument();
   });
 
   it("labels a bot-suggested card 'Suggested by Aubrey's Bot' in the META ROW's freshness slot (owner nits 7+8)", async () => {
@@ -242,7 +239,7 @@ describe("RestaurantCard", () => {
     // The label lives in the meta row (the freshness slot), not the safety row —
     // bot-suggested cards read uniformly with verified ones.
     expect(screen.getByTestId("card-meta-row")).toContainElement(label);
-    // The suggestion replaces the bare empty state — never a fabricated verdict.
+    // The suggestion replaces the (absent) safety badge — never a fabricated verdict.
     expect(screen.queryByText("Not yet attested")).not.toBeInTheDocument();
     expect(screen.queryByText("Celiac-safe")).not.toBeInTheDocument();
   });
@@ -505,7 +502,7 @@ describe("RestaurantCard", () => {
     // attested card — the meta row always renders, swapping in an invisible
     // height-reserving line.
     renderCard({ safetyState: null, suggestedByBot: false });
-    await screen.findByText("Not yet attested");
+    await screen.findByTestId("card-claim-row");
 
     const metaRow = screen.getByTestId("card-meta-row");
     expect(metaRow).toBeInTheDocument();
@@ -743,9 +740,11 @@ describe("ListingCard (mapping wrapper)", () => {
     expect(link).toHaveAttribute("href", "/listings/listing-1");
   });
 
-  it("passes the null safetyState through to the honest Not yet attested chip", async () => {
+  it("passes the null safetyState through, rendering no safety badge", async () => {
     renderWrapper({ safetyState: null });
-    expect(await screen.findByText("Not yet attested")).toBeInTheDocument();
+    await screen.findByTestId("card-claim-row");
+    expect(screen.queryByText("Not yet attested")).not.toBeInTheDocument();
+    expect(document.querySelector("[data-safety-state]")).not.toBeInTheDocument();
   });
 
   it("passes the recent-incident flag through", async () => {

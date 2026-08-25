@@ -12,16 +12,19 @@ import { stalenessCutoff } from "~/trust/summary";
  * filtering can never overstate safety (a celiac could be hurt by a false
  * match):
  *
- *   - `celiac`   → `safetyState === "celiac-safe"` (has evidence, confirms
- *                  strictly outnumber disputes, and the confirmation is fresh)
- *   - `friendly` → `safetyState === "gluten-friendly"` (has evidence, disputes
- *                  tie or outnumber confirms — the contested reading)
- *   - `recent`   → `freshness.kind === "fresh"` (a within-window confirmation
- *                  and no recent incident — the incident cue outranks
- *                  freshness, ADR-007)
+ *   - `celiac` → `safetyState === "celiac-safe"` (has evidence, confirms
+ *                strictly outnumber disputes, and the confirmation is fresh)
+ *   - `recent` → `freshness.kind === "fresh"` (a within-window confirmation on
+ *                an uncontested claim, and no recent incident — the incident
+ *                cue outranks freshness, ADR-007)
+ *
+ * Both tokens carry the `confirmCount > disputeCount` guard, so neither can
+ * return a listing whose card shows no badge and no glance cues: a contested
+ * claim is suppressed to the unattested glance, and a filter must not surface
+ * what the card refuses to show.
  *
  * These must stay in lockstep with the pure derivations they mirror
- * (`deriveHeadlineSafetyState` / `formatFreshness` in `app/trust`) — the same
+ * (`deriveHeadlineSafetyState` / `deriveListingTrustGlance` in `app/trust`) — the same
  * `confirmCount > disputeCount`, `hasEvidence`, staleness-cutoff and
  * recent-incident boundaries the card and the "trust" sort use.
  * `quick-filter.test.ts` pins these boundaries against a weakening regression.
@@ -31,9 +34,9 @@ import { stalenessCutoff } from "~/trust/summary";
  * rule from `./filter.ts` — dateless, so no freshness bound; any real vote
  * kills it). The `?bot=false` param (`includeSuggested: false`) reverts this
  * token to community-evidence-only; hiding bot-suggested-only listings from
- * the result set is `buildBrowseWhere`'s concern, not this module's.
- * `friendly` and `recent` deliberately ignore suggestions: a suggestion
- * asserts celiac-safe, not the contested reading, and is not a verification.
+ * the result set is `buildBrowseWhere`'s concern, not this module's. `recent`
+ * deliberately ignores suggestions: a suggestion is provenance, not a
+ * verification.
  *
  * Each token is a self-contained correlated subquery over `listings.id`
  * (mirroring the taxonomy filter in `./filter.ts`). A faceted selection
@@ -108,45 +111,38 @@ function celiacSafeExists(cutoff: Date, includeSuggested: boolean): SQL {
 }
 
 /**
- * `safetyState === "gluten-friendly"` (tier 2): a visible celiac claim with
- * evidence (at least one attestation) whose disputes tie or outnumber
- * confirms (`confirms <= disputes`). Contested-first, mirroring
- * `deriveHeadlineSafetyState`: a live dispute majority is the safer, lower
- * reading and must never be masked.
- */
-function glutenFriendlyExists(): SQL {
-  const { confirmCount, disputeCount } = tallies();
-  return sql`exists (
-    select 1
-    from ${claims}
-    left join ${attestations} on ${eq(attestations.claimId, claims.id)}
-    where ${celiacClaimForListing()}
-    group by ${claims.id}
-    having ${confirmCount} + ${disputeCount} > 0
-      and ${confirmCount} <= ${disputeCount}
-  )`;
-}
-
-/**
- * `freshness.kind === "fresh"`: a within-window confirmation and no recent
- * incident (the incident cue outranks freshness — ADR-007 — so a listing with
- * a recent incident is not "fresh" even if recently confirmed).
+ * `freshness.kind === "fresh"`: a within-window confirmation on an uncontested
+ * claim, and no recent incident (the incident cue outranks freshness — ADR-007
+ * — so a listing with a recent incident is not "fresh" even if recently
+ * confirmed).
  *
  *  - fresh confirmation: a visible celiac claim with a non-null
  *    `lastConfirmedAt` on/after the staleness cutoff (a never-confirmed claim
  *    has no timestamp to phrase, so it is not "fresh" — matching
  *    `formatFreshness` returning `null`);
+ *  - uncontested: confirms strictly outnumber disputes (`>`, never `>=`).
+ *    `deriveListingTrustGlance` withholds a contested claim's confirmation
+ *    recency along with its badge, so a contested listing has no fresh cue to
+ *    match. Without this guard the filter would surface badge-less cards under
+ *    a "Recently verified" chip — a match the user cannot reproduce from the
+ *    visible card. The zero-vote case needs no separate arm: `lastConfirmedAt`
+ *    is recomputed from surviving confirms and cleared when none remain, so a
+ *    non-null timestamp implies at least one confirm;
  *  - no recent incident: no visible incident whose `occurredOn` falls inside
  *    the inclusive {@link RECENT_INCIDENT_WINDOW_DAYS} window ending today
  *    (UTC calendar, matching `isRecentIncident`).
  */
 function recentExists(cutoff: Date, now: Date): SQL {
+  const { confirmCount, disputeCount } = tallies();
   const freshConfirmation = sql`exists (
     select 1
     from ${claims}
+    left join ${attestations} on ${eq(attestations.claimId, claims.id)}
     where ${celiacClaimForListing()}
       and ${claims.lastConfirmedAt} is not null
       and ${claims.lastConfirmedAt} >= ${cutoff}
+    group by ${claims.id}
+    having ${confirmCount} > ${disputeCount}
   )`;
 
   // The recency window as UTC calendar-date bounds, matching
@@ -177,11 +173,8 @@ function utcDay(ms: number): string {
 /**
  * The correlated `exists` predicate for a single quick token.
  *
- * `includeSuggested` affects only the `celiac` token. A bot suggestion of the
- * headline claim asserts "celiac-safe": matching `friendly` would fabricate a
- * contested verdict the bot never made, and a suggestion is not a
- * verification, so `recent` stays community-only. Both deliberately ignore
- * the flag.
+ * `includeSuggested` affects only the `celiac` token. A suggestion is not a
+ * verification, so `recent` stays community-only and ignores the flag.
  */
 function quickTokenPredicate(
   token: QuickFilterValue,
@@ -192,8 +185,6 @@ function quickTokenPredicate(
   switch (token) {
     case "celiac":
       return celiacSafeExists(cutoff, includeSuggested);
-    case "friendly":
-      return glutenFriendlyExists();
     case "recent":
       return recentExists(cutoff, now);
     default: {

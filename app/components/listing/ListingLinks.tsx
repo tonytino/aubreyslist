@@ -47,8 +47,8 @@ export function listingLinksQueryKey(listingId: string) {
  * One distinct glyph per link kind, next to the visible text label (never colour/icon
  * alone). `BookOpenText` marks the menu link — never lucide's `Menu` hamburger, which
  * reads as app navigation. `WheatOff` marks the gluten-free menu link — a document
- * pointer, not the gluten-friendly safety state, so the `WheatStrike` safety glyph
- * contract (styling.md) does not apply here.
+ * pointer, not a safety verdict, so it borrows nothing from the safety-state glyph
+ * contract (styling.md).
  */
 const LINK_KIND_ICONS: Record<LinkKind, LucideIcon> = {
   menu: BookOpenText,

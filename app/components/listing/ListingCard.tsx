@@ -4,7 +4,7 @@ import { type ComponentProps, useState } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
-import { SafetySignal, type SafetyState, UnattestedBadge } from "~/components/SafetySignal";
+import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
 import { cn } from "~/lib/utils";
@@ -32,8 +32,8 @@ export type RestaurantCardAccent = "lavender" | "peach" | "mint" | "sky";
  * The render-ready view-model a {@link RestaurantCard} consumes. Flat and presentational,
  * never the raw DB row, so the card stays client-safe and testable.
  *
- * ADR-007: `safetyState` is the only safety verdict. `null` renders the honest
- * "Not yet attested" chip, never a fabricated verdict.
+ * ADR-007: `safetyState` is the only safety verdict. `null` (unattested or
+ * disputed) renders no safety badge at all, never a fabricated verdict.
  */
 export interface RestaurantCardVM {
   id: string;
@@ -47,7 +47,7 @@ export interface RestaurantCardVM {
   city?: string;
   /** e.g. "0.4 mi" — rendered only when provided. */
   distanceLabel?: string;
-  /** The headline safety verdict, or `null` for the honest "Not yet attested" chip. */
+  /** The headline safety verdict, or `null` (unattested or disputed) for no badge. */
   safetyState: SafetyState | null;
   /**
    * True when the listing carries any live (unvoted) curator-bot suggestion.
@@ -199,9 +199,9 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  * a single {@link Link} to `/listings/$id` — one large, mobile-friendly tap target.
  *
  * Trust glance (styling.md): the safety state renders via {@link SafetySignal}
- * (colour + icon + text, never colour alone). `safetyState === null` shows an honest
- * "Not yet attested" chip, never a fabricated verdict. A recent incident adds the
- * `incident` signal.
+ * (colour + icon + text, never colour alone). `safetyState === null` — unattested or
+ * disputed — shows no safety badge, never a fabricated verdict. A recent incident adds
+ * the `incident` signal.
  *
  * ADR-007: the save-count pill is an attributed community signal, not a safety score;
  * all safety meaning stays in {@link SafetySignal}. Bot suggestions are provenance,
@@ -368,14 +368,10 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           data-testid="card-claim-row"
           className="relative z-10 -mx-1 mt-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {vm.safetyState ? (
-            <SafetySignal state={vm.safetyState} />
-          ) : vm.suggestedByBot ? null : (
-            // Honest empty state: no evidence and nothing bot-suggested. Plain text —
-            // meaning never rests on colour (styling.md). A bot-suggested empty listing
-            // instead shows suggested badges plus the bot label in the meta row.
-            <UnattestedBadge />
-          )}
+          {/* No verdict (unattested or disputed) renders nothing here: the two are
+              indistinguishable by design. A bot-suggested listing still shows its
+              suggested badges plus the bot label in the meta row. */}
+          {vm.safetyState ? <SafetySignal state={vm.safetyState} /> : null}
 
           {/* Recent harm flags the card regardless of older confirmations. */}
           {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}

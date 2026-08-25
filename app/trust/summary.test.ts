@@ -5,6 +5,7 @@ import {
   claimAttributeDescription,
   claimAttributeLabel,
   DEFAULT_STALENESS_MONTHS,
+  deriveHeadlineMeta,
   deriveHeadlineSafetyState,
   formatLastConfirmed,
   formatRelativeTime,
@@ -23,9 +24,12 @@ import {
  * The whole point is that every value is a reproducible reading of visible
  * evidence (confirm/dispute counts + recency) — never a hidden score. These
  * tests pin the count formatting, relative-time rendering, staleness, and the
- * celiac-safe vs gluten-friendly headline derivation (including the no-evidence
- * empty case, which must stay honest — a celiac could be hurt by a fabricated
- * verdict).
+ * headline safety derivation (including the no-evidence empty case, which must
+ * stay honest — a celiac could be hurt by a fabricated verdict).
+ *
+ * Owner decision, 2026-08-25: the headline is celiac-safe, stale, or nothing.
+ * A disputed claim and an unattested one render identically (both `null`), by
+ * design.
  */
 
 const NOW = new Date("2026-06-28T12:00:00Z");
@@ -53,13 +57,14 @@ describe("claimAttributeLabel", () => {
 });
 
 describe("claimAttributeDescription", () => {
-  it("returns the two-state clarifier for the ambiguous headline attribute (Celiac-safe, #175)", () => {
-    // The gloss names both states (the vote toggles are the badges themselves),
-    // so a headline vote is never ambiguous on either surface.
+  it("explains what celiac-safe means on the headline attribute (Celiac-safe, #175)", () => {
+    // The gloss defines the one thing the headline vote decides — a kitchen
+    // that takes cross-contamination seriously, not merely one with GF items
+    // — so a headline vote is never ambiguous on either surface.
     const description = claimAttributeDescription("celiac_safe_vs_gluten_friendly");
     expect(description).toMatch(/celiac-safe/i);
-    expect(description).toMatch(/gluten-friendly/i);
     expect(description).toMatch(/cross-contamination/i);
+    expect(description).toMatch(/gluten-free options/i);
   });
 
   it("returns the honest one-line fact for the other four attributes", () => {
@@ -255,7 +260,7 @@ describe("summarizeClaim", () => {
   });
 });
 
-describe("deriveHeadlineSafetyState — honest celiac-safe vs gluten-friendly", () => {
+describe("deriveHeadlineSafetyState — celiac-safe, stale, or no badge at all", () => {
   it("returns null when there is NO evidence (keeps the 'Not yet attested' empty state)", () => {
     expect(
       deriveHeadlineSafetyState({ confirmCount: 0, disputeCount: 0, lastConfirmedAt: null }, NOW)
@@ -271,19 +276,38 @@ describe("deriveHeadlineSafetyState — honest celiac-safe vs gluten-friendly", 
     ).toBe("celiac-safe");
   });
 
-  it("falls back to gluten-friendly when disputes tie or outnumber confirms (never overstate)", () => {
+  it("returns null when disputes tie or outnumber confirms (suppressed, never overstated)", () => {
+    // A tie is contested, not affirmed; a dispute majority even less so. Both
+    // suppress the badge entirely — there is no consolation state to fall back
+    // to.
     expect(
       deriveHeadlineSafetyState(
         { confirmCount: 2, disputeCount: 2, lastConfirmedAt: ago(1 * WEEK) },
         NOW
       )
-    ).toBe("gluten-friendly");
+    ).toBeNull();
     expect(
       deriveHeadlineSafetyState(
         { confirmCount: 1, disputeCount: 5, lastConfirmedAt: ago(1 * WEEK) },
         NOW
       )
-    ).toBe("gluten-friendly");
+    ).toBeNull();
+  });
+
+  it("renders a disputed claim IDENTICALLY to an unattested one (owner decision 2026-08-25)", () => {
+    // Deliberate: the app must not advertise "the community says this place is
+    // NOT celiac-safe" — it simply shows no badge. The dispute counts stay
+    // visible on the claim row, which is where the contest is legible.
+    const disputed = deriveHeadlineSafetyState(
+      { confirmCount: 1, disputeCount: 9, lastConfirmedAt: ago(1 * WEEK) },
+      NOW
+    );
+    const unattested = deriveHeadlineSafetyState(
+      { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null },
+      NOW
+    );
+    expect(disputed).toBeNull();
+    expect(disputed).toBe(unattested);
   });
 
   it("flags a stale consensus rather than trusting it as fresh", () => {
@@ -298,20 +322,21 @@ describe("deriveHeadlineSafetyState — honest celiac-safe vs gluten-friendly", 
 
   it("never lets staleness mask a live dispute majority (contested-first)", () => {
     // Confirmed long ago (lastConfirmedAt only moves on confirms), then heavily
-    // disputed since. A "may be stale" chip here would bury fresh contested
-    // evidence — the dispute majority must win and read as gluten-friendly.
+    // disputed since. A "may be stale" chip here would read as a neutral
+    // "needs a refresh" and bury fresh contested evidence — the dispute
+    // majority wins and suppresses the badge outright.
     expect(
       deriveHeadlineSafetyState(
         { confirmCount: 1, disputeCount: 10, lastConfirmedAt: ago(8 * MONTH) },
         NOW
       )
-    ).toBe("gluten-friendly");
+    ).toBeNull();
   });
 
-  it("treats a dispute-only claim as gluten-friendly, not null (it has evidence)", () => {
+  it("returns null for a dispute-only claim (evidence exists, but none of it affirms)", () => {
     expect(
       deriveHeadlineSafetyState({ confirmCount: 0, disputeCount: 3, lastConfirmedAt: null }, NOW)
-    ).toBe("gluten-friendly");
+    ).toBeNull();
   });
 
   it("treats a confirm-majority with NULL recency as celiac-safe, NOT stale (ADR-007)", () => {
@@ -333,18 +358,32 @@ describe("safetyTierRank — the browse 'Most trusted' sort contract (#36)", () 
   const freshSafe = { confirmCount: 3, disputeCount: 0, lastConfirmedAt: ago(2 * MONTH) };
   // Big confirm count but confirmed 2+ years ago — displayed "may be stale".
   const staleHighNet = { confirmCount: 30, disputeCount: 0, lastConfirmedAt: ago(2 * YEAR) };
-  // Lots of votes but disputes outnumber confirms (contested) — the displayed
-  // state is gluten-friendly, not celiac-safe, even with a high confirm count.
+  // Lots of votes but disputes outnumber confirms (contested) — no badge at
+  // all, even with a high confirm count.
   const bigContested = { confirmCount: 18, disputeCount: 20, lastConfirmedAt: ago(1 * MONTH) };
   // No evidence at all.
   const unattested = { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null };
 
-  it("ranks the displayed tiers: celiac-safe > stale > contested > unattested", () => {
+  it("ranks the displayed tiers: celiac-safe (4) > stale (3) > no badge (1)", () => {
     expect(safetyTierRank(freshSafe, NOW)).toBe(4);
     expect(safetyTierRank(staleHighNet, NOW)).toBe(3);
-    expect(safetyTierRank(bigContested, NOW)).toBe(2);
+    // Contested and unattested share the bottom tier: both display no badge,
+    // so the sort cannot tell them apart either. Tier 2 is deliberately vacant
+    // so the SQL mirror stays diffable.
+    expect(safetyTierRank(bigContested, NOW)).toBe(1);
     expect(safetyTierRank(unattested, NOW)).toBe(1);
     expect(safetyTierRank(null, NOW)).toBe(1);
+  });
+
+  it("never emits the retired tier 2 across a wide grid of aggregates", () => {
+    for (const confirmCount of [0, 1, 2, 5, 40]) {
+      for (const disputeCount of [0, 1, 2, 5, 40]) {
+        for (const lastConfirmedAt of [null, ago(1 * MONTH), ago(2 * YEAR)]) {
+          const rank = safetyTierRank({ confirmCount, disputeCount, lastConfirmedAt }, NOW);
+          expect([1, 3, 4]).toContain(rank);
+        }
+      }
+    }
   });
 
   it("BLOCKER GUARD: a fresh celiac-safe listing outranks a high-net stale one", () => {
@@ -359,7 +398,11 @@ describe("safetyTierRank — the browse 'Most trusted' sort contract (#36)", () 
   it("sorts a mixed set by tier (desc) so the safest listing ranks first", () => {
     const set = [staleHighNet, unattested, bigContested, freshSafe];
     const ordered = [...set].sort((a, b) => safetyTierRank(b, NOW) - safetyTierRank(a, NOW));
-    expect(ordered).toEqual([freshSafe, staleHighNet, bigContested, unattested]);
+    // The two badged tiers lead, in safety order. The remaining pair both
+    // display no badge and therefore tie at tier 1 — the sort makes no claim
+    // about which of a contested and an unattested listing comes first.
+    expect(ordered.slice(0, 2)).toEqual([freshSafe, staleHighNet]);
+    expect(ordered.slice(2).map((c) => safetyTierRank(c, NOW))).toEqual([1, 1]);
   });
 
   it("never drifts from deriveHeadlineSafetyState (single source of truth)", () => {
@@ -368,7 +411,6 @@ describe("safetyTierRank — the browse 'Most trusted' sort contract (#36)", () 
     const expected: Record<string, number> = {
       "celiac-safe": 4,
       stale: 3,
-      "gluten-friendly": 2,
       null: 1,
     };
     for (const c of cases) {
@@ -405,5 +447,54 @@ describe("hasPositiveConsensus — the taxonomy filter match rule (#35)", () => 
     const fresh = { confirmCount: 5, disputeCount: 1, lastConfirmedAt: new Date() };
     expect(deriveHeadlineSafetyState(fresh)).toBe("celiac-safe");
     expect(hasPositiveConsensus(fresh)).toBe(true);
+  });
+});
+
+describe("deriveHeadlineMeta (the detail hero's confirmation-derived cues)", () => {
+  const affirmed = { confirmCount: 8, disputeCount: 1, lastConfirmedAt: ago(3 * WEEK) };
+
+  it("surfaces the recency phrase and the confirmation count for an affirmed claim", () => {
+    expect(deriveHeadlineMeta(affirmed, NOW)).toEqual({
+      verifiedRelative: "3 weeks ago",
+      confirmations: 8,
+    });
+  });
+
+  it("withholds BOTH cues on a contested claim — the hero matches an unattested one", () => {
+    // The suppression the badge already applies has to cover this strip too, or
+    // the withheld verdict leaks straight back: "Verified 3 days ago · 3
+    // confirmations" beside a missing badge reads as reassurance the community
+    // never gave. Same `hasPositiveConsensus` gate the browse glance uses.
+    const empty = { verifiedRelative: null, confirmations: 0 };
+
+    // Dispute majority, recently confirmed (the raw timestamp still looks fresh).
+    expect(deriveHeadlineMeta({ ...affirmed, disputeCount: 12 }, NOW)).toEqual(empty);
+    // A tie is contested too.
+    expect(
+      deriveHeadlineMeta({ confirmCount: 4, disputeCount: 4, lastConfirmedAt: ago(DAY) }, NOW)
+    ).toEqual(empty);
+    // …and it equals the unattested reading exactly.
+    expect(
+      deriveHeadlineMeta({ confirmCount: 0, disputeCount: 0, lastConfirmedAt: null }, NOW)
+    ).toEqual(empty);
+  });
+
+  it("yields the empty pair for a listing with no celiac claim at all", () => {
+    expect(deriveHeadlineMeta(null, NOW)).toEqual({ verifiedRelative: null, confirmations: 0 });
+    expect(deriveHeadlineMeta(undefined, NOW)).toEqual({
+      verifiedRelative: null,
+      confirmations: 0,
+    });
+  });
+
+  it("keeps the count for a STALE but uncontested claim (aged, not contested)", () => {
+    // Staleness is flagged by the badge, not by blanking the evidence: an
+    // uncontested consensus still has a real count and a real recency to show.
+    const stale = { confirmCount: 30, disputeCount: 2, lastConfirmedAt: ago(9 * MONTH) };
+    expect(deriveHeadlineSafetyState(stale, NOW)).toBe("stale");
+    expect(deriveHeadlineMeta(stale, NOW)).toEqual({
+      verifiedRelative: "9 months ago",
+      confirmations: 30,
+    });
   });
 });

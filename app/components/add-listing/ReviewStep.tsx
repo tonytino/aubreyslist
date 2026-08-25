@@ -1,4 +1,4 @@
-import { ArrowLeft, HelpCircle, Pencil } from "lucide-react";
+import { ArrowLeft, HelpCircle, Pencil, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { ClaimChip } from "~/components/listing/ClaimChip";
 import { SafetySignal } from "~/components/SafetySignal";
@@ -11,10 +11,12 @@ import type { Answer, AnswerMap, WizardPlace } from "./AddListingWizard";
 /**
  * Review & submit. One row per attribute, honest about what each answer records:
  *
- *   headline confirm/dispute → a `SafetySignal` chip (celiac-safe / gluten-friendly)
+ *   headline confirm         → a celiac-safe `SafetySignal` chip
+ *   headline dispute         → an X + "Disputed" chip in the same neutral muted
+ *                              tint the facts use, never a safety colour
  *   fact confirm/dispute     → a per-attribute icon chip in a neutral, non-safety
  *                              tint (brand-soft "Confirmed" / muted "Disputed") so a
- *                              plain fact never borrows the celiac-safe/GF safety colours
+ *                              plain fact never borrows the celiac-safe safety colour
  *   skip / untouched         → a dashed "Not yet attested" pill, for all attributes
  *
  * Every row has an Edit that jumps back to its step (the place row → step 0). The
@@ -23,6 +25,13 @@ import type { Answer, AnswerMap, WizardPlace } from "./AddListingWizard";
  */
 
 const HEADLINE = "celiac_safe_vs_gluten_friendly" as const;
+
+/**
+ * The neutral "Disputed" chip fill, shared by the headline dispute row and
+ * {@link FactOutcomeChip} so a dispute reads the same everywhere on this step
+ * and never borrows a safety token.
+ */
+const DISPUTED_TINT = "border-transparent bg-muted text-muted-foreground";
 
 function placeName(place: WizardPlace): string {
   return place.mode === "places" ? place.description : place.name;
@@ -135,8 +144,10 @@ export function ReviewStep({
 
 /**
  * The per-row outcome chip/text, differentiated by attribute + answer:
- * headline confirm/dispute → SafetySignal; fact confirm/dispute →
- * {@link FactOutcomeChip}; skip/untouched → the dashed "Not yet attested" pill.
+ * headline confirm → the celiac-safe SafetySignal; headline dispute → the
+ * neutral X + "Disputed" chip, since a dispute removes the badge rather than
+ * awarding a lesser one; fact confirm/dispute → {@link FactOutcomeChip};
+ * skip/untouched → the dashed "Not yet attested" pill.
  *
  * Exported so the ClaimCardDeck's end-state summary
  * (`app/components/claims/DeckSummary.tsx`) renders the same outcome chips as
@@ -151,7 +162,20 @@ export function ReviewOutcome({
 }) {
   if (answer === "confirm" || answer === "dispute") {
     if (attribute === HEADLINE) {
-      return <SafetySignal state={answer === "confirm" ? "celiac-safe" : "gluten-friendly"} />;
+      return answer === "confirm" ? (
+        <SafetySignal state="celiac-safe" />
+      ) : (
+        // The neutral chip language, never a safety one: a disputed headline
+        // claim puts no badge on the listing, so its review row must not
+        // promise one. `X` rather than the headline's own ShieldCheck — the
+        // verdict glyph beside "Disputed" would read as a safety verdict.
+        <ClaimChip
+          icon={X}
+          label="Disputed"
+          data-testid="headline-disputed"
+          className={DISPUTED_TINT}
+        />
+      );
     }
     return <FactOutcomeChip attribute={attribute} confirmed={answer === "confirm"} />;
   }
@@ -168,8 +192,8 @@ export function ReviewOutcome({
  * Its content stays distinct on purpose: it carries the confirm/dispute
  * outcome word, not the plain attribute label.
  *
- * Deliberately avoids the celiac-safe green / gluten-friendly amber safety
- * tokens — a plain fact must never read as a safety verdict. Confirmed uses a
+ * Deliberately avoids the celiac-safe green safety token — a plain fact must
+ * never read as a safety verdict. Confirmed uses a
  * neutral-positive brand tint, Disputed a muted/neutral one. Colour + icon +
  * the visible "Confirmed"/"Disputed" word keep the two states distinguishable
  * without resting on colour alone; the icon is `aria-hidden` so meaning lives
@@ -186,9 +210,7 @@ export function FactOutcomeChip({
   // `text-brand-strong` (not `text-brand`) so the chip clears WCAG AA on the
   // light `brand-soft` fill in both themes (dark `text-brand` on `brand-soft`
   // is only 3.78:1); matches how brand-soft is paired elsewhere in the app.
-  const tint = confirmed
-    ? "border-transparent bg-brand-soft text-brand-strong"
-    : "border-transparent bg-muted text-muted-foreground";
+  const tint = confirmed ? "border-transparent bg-brand-soft text-brand-strong" : DISPUTED_TINT;
   return (
     <ClaimChip
       icon={Icon}

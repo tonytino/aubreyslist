@@ -80,11 +80,11 @@ function renderChips(
 }
 
 describe("FilterChips — quick chips", () => {
-  it("renders the three quick chips (no Filters sheet trigger — AUB-198)", () => {
+  it("renders EXACTLY the two quick chips — Celiac-safe and Recently verified (no Gluten-friendly, no Filters sheet trigger — AUB-198/AUB-295)", () => {
     renderChips();
     expect(screen.getByRole("button", { name: "Celiac-safe" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Gluten-friendly" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Recently verified" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Gluten-friendly" })).not.toBeInTheDocument();
     // The taxonomy filter renders as chips; there is no sheet entry point.
     expect(screen.queryByRole("button", { name: "Filters" })).not.toBeInTheDocument();
   });
@@ -95,10 +95,6 @@ describe("FilterChips — quick chips", () => {
       "aria-pressed",
       "true"
     );
-    expect(screen.getByRole("button", { name: "Gluten-friendly" })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    );
     expect(screen.getByRole("button", { name: "Recently verified" })).toHaveAttribute(
       "aria-pressed",
       "false"
@@ -107,7 +103,7 @@ describe("FilterChips — quick chips", () => {
 
   it("renders an additive combination (safety + recency) as multiple pressed chips", () => {
     // The faceted model allows a safety choice and recently-verified at once — both
-    // read as pressed, while the unselected safety sibling stays off.
+    // read as pressed.
     renderChips({ quick: ["celiac", "recent"] });
     expect(screen.getByRole("button", { name: "Celiac-safe" })).toHaveAttribute(
       "aria-pressed",
@@ -117,16 +113,12 @@ describe("FilterChips — quick chips", () => {
       "aria-pressed",
       "true"
     );
-    expect(screen.getByRole("button", { name: "Gluten-friendly" })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    );
   });
 
   it("clicking a chip reports its value (the parent reducer computes the next set)", () => {
     const { onQuickToggle } = renderChips({ quick: [] });
-    fireEvent.click(screen.getByRole("button", { name: "Gluten-friendly" }));
-    expect(onQuickToggle).toHaveBeenCalledWith("friendly");
+    fireEvent.click(screen.getByRole("button", { name: "Celiac-safe" }));
+    expect(onQuickToggle).toHaveBeenCalledWith("celiac");
   });
 
   it("clicking an already-active chip still reports its value (toggle-off is the parent's job)", () => {

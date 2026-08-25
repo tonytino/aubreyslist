@@ -1,7 +1,6 @@
 import { ArrowLeft, Check, HelpCircle, type LucideIcon, ShieldCheck, X } from "lucide-react";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import { useState } from "react";
-import { WheatStrike } from "~/components/icons/WheatStrike";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { CLAIM_ATTRIBUTES, type ClaimAttribute } from "~/listings/taxonomy";
@@ -221,12 +220,7 @@ export function ClaimCardDeck({
       {/* The equal-footing accessibility path: always-visible native buttons
           (≥44px targets) that trigger the same exits as the swipes. */}
       <div className="flex items-stretch gap-2">
-        <AnswerButton
-          label="Dispute"
-          icon={isHeadline ? WheatStrike : X}
-          iconClassName={isHeadline ? "text-gluten-friendly" : undefined}
-          onClick={() => handleAnswer("dispute")}
-        />
+        <AnswerButton label="Dispute" icon={X} onClick={() => handleAnswer("dispute")} />
         <AnswerButton
           label="Not sure"
           icon={HelpCircle}

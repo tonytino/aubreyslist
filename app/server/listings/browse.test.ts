@@ -206,6 +206,7 @@ vi.mock("~/server/favorites/index", () => ({
 }));
 
 import { UNION_STATION } from "~/listings/distance";
+import { parseQuick } from "~/listings/quick";
 import { formatFreshness } from "~/trust/browse-card-format";
 import {
   DEFAULT_STALENESS_MONTHS,
@@ -1335,6 +1336,10 @@ describe("browse visibility filtering (#41)", () => {
  * confirms-coalesce `>` disputes-coalesce lead, and a `lastConfirmedAt IS
  * NULL OR >= cutoff` freshness test (inclusive edge, null = fresh).
  *
+ * Three branches (4 / 3 / else 1): contested evidence falls through to the
+ * same bottom tier as no evidence at all, because both display no badge. Tier
+ * 2 is deliberately vacant so the SQL mirror stays diffable.
+ *
  * This mirror is only trustworthy because the sibling "pins the rendered SQL
  * CASE structure" test asserts the real rendered SQL matches this arithmetic.
  * Deleting that structural-pin test turns the equivalence test into a
@@ -1351,7 +1356,6 @@ function sqlTierFor(
   const fresh = lastConfirmedAt === null || lastConfirmedAt.getTime() >= cutoff.getTime();
   if (hasEvidence && confirmsLead && fresh) return 4;
   if (hasEvidence && confirmsLead) return 3;
-  if (hasEvidence) return 2;
   return 1;
 }
 
@@ -1414,30 +1418,31 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
       lastConfirmedAt: ago(windowMs + 1),
       tier: 3,
     },
-    // tier 2 — contested: disputes tie or outnumber confirms (gluten-friendly).
+    // tier 1 — no badge: contested (disputes tie or outnumber confirms) OR
+    // unattested. One tier for both: they render the same glance, so the sort
+    // must not claim to tell them apart. Tier 2 is vacant.
     {
       label: "tie (contested ≠ affirmed)",
       confirms: 2,
       disputes: 2,
       lastConfirmedAt: ago(1 * MONTH),
-      tier: 2,
+      tier: 1,
     },
     {
       label: "big contested (disputes lead despite many confirms)",
       confirms: 18,
       disputes: 20,
       lastConfirmedAt: ago(1 * MONTH),
-      tier: 2,
+      tier: 1,
     },
     {
-      label: "stale + contested (still tier 2, contested-first)",
+      label: "stale + contested (contested-first, never a neutral stale chip)",
       confirms: 1,
       disputes: 10,
       lastConfirmedAt: ago(8 * MONTH),
-      tier: 2,
+      tier: 1,
     },
-    { label: "dispute-only", confirms: 0, disputes: 4, lastConfirmedAt: null, tier: 2 },
-    // tier 1 — no evidence (unattested).
+    { label: "dispute-only", confirms: 0, disputes: 4, lastConfirmedAt: null, tier: 1 },
     { label: "no evidence", confirms: 0, disputes: 0, lastConfirmedAt: null, tier: 1 },
   ];
 
@@ -1447,12 +1452,15 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
     await getBrowseListings({ ...baseInput, sort: "trust" }, NOW);
 
     const tierSql = renderArg(state.orderByArgs[0]);
-    // A four-way CASE over the same signals the spec reads.
+    // A three-way CASE over the same signals the spec reads.
     expect(tierSql).toContain("case");
     expect(tierSql).toContain("then 4");
     expect(tierSql).toContain("then 3");
-    expect(tierSql).toContain("then 2");
     expect(tierSql).toContain("else 1");
+    // Tier 2 is deliberately vacant: a "contested" rank would mean the sort
+    // distinguishes a disputed listing from an unattested one, which the
+    // displayed glance deliberately does not.
+    expect(tierSql).not.toContain("then 2");
     // Evidence = coalesced confirm + dispute > 0 (strict, so 0/0 → no evidence),
     // matching the JS mirror's `hasEvidence`.
     expect(tierSql).toMatch(/coalesce\([^)]*\)\s*\+\s*coalesce\([^)]*\)\s*>\s*0/);
@@ -1511,8 +1519,7 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
     const stateToTier: Record<string, number> = {
       "celiac-safe": 4,
       stale: 3,
-      "gluten-friendly": 2,
-      null: 1,
+      null: 1, // no badge — contested and unattested alike
     };
     for (const c of cases) {
       const headline = deriveHeadlineSafetyState(
@@ -1535,11 +1542,13 @@ describe("trust-tier SQL ↔ JS spec equivalence (#114)", () => {
 /**
  * Faithful JS mirrors of the correlated `quick` predicates in
  * `./quick-filter.ts`, kept tiny and literal so they can't drift from the
- * SQL. Their exact SQL rendering (strict `>`, `<=`, `>=` cutoff, `not exists`
+ * SQL. Their exact SQL rendering (strict `>`, `>=` cutoff, `not exists`
  * incident window) is pinned structurally in `quick-filter.test.ts`; here we
  * prove that same boolean logic lands on the same row the displayed glance
  * shows — a `quick` filter can never surface a listing whose card reads
  * differently (ADR-007).
+ *
+ * There is no `friendly` mirror: the token is not in the vocabulary.
  */
 function quickCeliacMatches(
   confirms: number,
@@ -1551,9 +1560,6 @@ function quickCeliacMatches(
   const confirmsLead = confirms > disputes;
   const fresh = lastConfirmedAt === null || lastConfirmedAt.getTime() >= cutoff.getTime();
   return hasEvidence && confirmsLead && fresh;
-}
-function quickFriendlyMatches(confirms: number, disputes: number): boolean {
-  return confirms + disputes > 0 && confirms <= disputes;
 }
 function quickRecentMatches(
   lastConfirmedAt: Date | null,
@@ -1592,13 +1598,30 @@ describe("quick filter composition (AUB-135)", () => {
 
   // One `getBrowseListings` call per test — the mock's leftJoin call-counter
   // (trust subquery vs celiac aggregate) only resets in `beforeEach`.
-  it("friendly encodes the contested (confirms <= disputes) direction", async () => {
+  it("celiac encodes the strict confirms > disputes direction (a tie never matches)", async () => {
     state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
     state.total = 1;
 
-    await getBrowseListings({ ...baseInput, quick: ["friendly"] }, NOW);
+    await getBrowseListings({ ...baseInput, quick: ["celiac"] }, NOW);
 
-    expect(renderArg(state.pageWhere)).toContain("<=");
+    const where = renderArg(state.pageWhere);
+    expect(where).toMatch(/'confirm'\)\s*>\s*count\(\*\)\s*filter/);
+    // No contested `<=` direction may appear anywhere in the browse WHERE:
+    // that reading has no token and no SQL.
+    expect(where).not.toMatch(/'confirm'\)\s*<=\s*count\(\*\)\s*filter/);
+  });
+
+  it("degrades an old ?quick=friendly link to an UNFILTERED page (never a silent re-reading)", async () => {
+    state.pageListings = [{ id: "l1", name: "A", address: "1 St" }];
+    state.total = 1;
+
+    // An old shared link. `parseQuick` already drops the token, so the
+    // loader hands `getBrowseListings` an empty selection; this pins that the
+    // browse layer then applies no quick constraint at all rather than
+    // erroring or falling back to some other safety filter.
+    await getBrowseListings({ ...baseInput, quick: parseQuick("friendly") }, NOW);
+
+    expect(renderArg(state.pageWhere)).not.toContain("exists");
   });
 
   it("recent adds a NOT EXISTS recent-incident window", async () => {
@@ -1644,11 +1667,11 @@ describe("quick filter composition (AUB-135)", () => {
 
 describe("quick filter ↔ glance spec equivalence (AUB-135/AUB-140)", () => {
   // Do not weaken. Each quick token must select exactly the rows whose
-  // displayed glance matches — `celiac`→"celiac-safe",
-  // `friendly`→"gluten-friendly", `recent`→freshness "fresh" — and a faceted
-  // set must select exactly the rows matching every selected token
-  // (conjunction). The same evidence shapes the trust-tier suite uses drive
-  // the assertion: the quick predicate's boolean ⟺ the pure glance reading.
+  // displayed glance matches — `celiac`→"celiac-safe", `recent`→freshness
+  // "fresh" — and a faceted set must select exactly the rows matching every
+  // selected token (conjunction). The same evidence shapes the trust-tier
+  // suite uses drive the assertion: the quick predicate's boolean ⟺ the pure
+  // glance reading.
   const MONTH = 30 * 24 * 60 * 60 * 1000;
   const cutoff = stalenessCutoff(NOW, DEFAULT_STALENESS_MONTHS);
   const ago = (ms: number) => new Date(NOW.getTime() - ms);
@@ -1672,20 +1695,20 @@ describe("quick filter ↔ glance spec equivalence (AUB-135/AUB-140)", () => {
     { label: "no evidence", confirms: 0, disputes: 0, lastConfirmedAt: null },
   ];
 
-  it("celiac ⟺ safetyState 'celiac-safe' and friendly ⟺ 'gluten-friendly'", () => {
+  it("celiac ⟺ safetyState 'celiac-safe', and NEVER matches a contested claim", () => {
     for (const c of evidence) {
       const headline = deriveHeadlineSafetyState(
         { confirmCount: c.confirms, disputeCount: c.disputes, lastConfirmedAt: c.lastConfirmedAt },
         NOW,
         DEFAULT_STALENESS_MONTHS
       );
-      expect(
-        quickCeliacMatches(c.confirms, c.disputes, c.lastConfirmedAt, cutoff),
-        `${c.label}: celiac vs headline`
-      ).toBe(headline === "celiac-safe");
-      expect(quickFriendlyMatches(c.confirms, c.disputes), `${c.label}: friendly vs headline`).toBe(
-        headline === "gluten-friendly"
-      );
+      const matches = quickCeliacMatches(c.confirms, c.disputes, c.lastConfirmedAt, cutoff);
+      expect(matches, `${c.label}: celiac vs headline`).toBe(headline === "celiac-safe");
+      // The safety half stated directly: a listing whose disputes tie or lead
+      // is never in the celiac-filtered result set, whatever its confirm count.
+      if (c.disputes >= c.confirms) {
+        expect(matches, `${c.label}: contested must not match celiac`).toBe(false);
+      }
     }
   });
 

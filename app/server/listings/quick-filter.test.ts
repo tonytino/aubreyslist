@@ -1,6 +1,7 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
+import type { QuickFilterValue } from "~/listings/quick";
 import { DEFAULT_STALENESS_MONTHS } from "~/trust/summary";
 import { buildQuickFilterPredicate } from "./quick-filter";
 
@@ -9,9 +10,12 @@ import { buildQuickFilterPredicate } from "./quick-filter";
  * `app/trust/summary.test.ts` and the freshness formatter. Here we assert
  * their SQL expression — each token becomes a correlated subquery over
  * `listings.id`, and the trust-relevant boundaries (strict `>` for
- * celiac-safe, `<=` for gluten-friendly, the staleness cutoff, the
- * recent-incident window) are encoded faithfully so a weakening regression
- * fails here. No live database (docs/agents/testing.md).
+ * celiac-safe, the staleness cutoff, the recent-incident window) are encoded
+ * faithfully so a weakening regression fails here. No live database
+ * (docs/agents/testing.md).
+ *
+ * The vocabulary is `celiac` + `recent`; `friendly` has no SQL at all (see
+ * "retired / unknown tokens" below).
  */
 
 const NOW = new Date("2026-06-28T00:00:00Z");
@@ -94,33 +98,48 @@ describe("buildQuickFilterPredicate", () => {
     });
   });
 
-  describe("friendly (safetyState === 'gluten-friendly')", () => {
-    it("LOCK: has evidence AND confirms <= disputes (contested / dispute-majority)", () => {
-      const predicate = buildQuickFilterPredicate(["friendly"], NOW, DEFAULT_STALENESS_MONTHS);
-      const { lower, params } = render(predicate as SQL);
+  describe("retired / unknown tokens (AUB-295)", () => {
+    // `parseQuick` drops unknown tokens before the loader ever reaches here, so
+    // these arrive only via a hand-built call. The cast models exactly that:
+    // a token outside the live vocabulary.
+    const unknown = (token: string) => [token] as unknown as QuickFilterValue[];
 
-      expect(lower).toContain("exists");
-      expect(lower).toContain("having");
-      // hasEvidence: at least one attestation.
-      expect(lower).toContain("> 0");
-      // The direction lock: `count(… 'confirm') <= count(… 'dispute')` — disputes
-      // tie or outnumber confirms → gluten-friendly (contested, never affirmed).
-      expect(lower).toMatch(/'confirm'\)\s*<=\s*count\(\*\)\s*filter/);
-      expect(params).toContain("celiac_safe_vs_gluten_friendly");
-      expect(params).toContain("visible");
+    it("builds NO predicate for the retired `friendly` token (an old ?quick=friendly link)", () => {
+      // `friendly` is outside the live vocabulary and has no SQL. A stale
+      // shared link must degrade to an unfiltered directory — never to a
+      // silently different safety reading, and never to a thrown loader.
+      expect(
+        buildQuickFilterPredicate(unknown("friendly"), NOW, DEFAULT_STALENESS_MONTHS)
+      ).toBeUndefined();
+      expect(
+        buildQuickFilterPredicate(unknown("friendly"), NOW, DEFAULT_STALENESS_MONTHS, false)
+      ).toBeUndefined();
     });
 
-    it("ignores the suggestion flag: a bot suggestion asserts celiac-safe, never the contested reading", () => {
-      // Matching `friendly` via a suggestion would fabricate a "gluten-friendly
-      // only" verdict the bot never made — the flag must not change this SQL.
-      const withFlag = render(
-        buildQuickFilterPredicate(["friendly"], NOW, DEFAULT_STALENESS_MONTHS, true) as SQL
+    it("builds NO predicate for any other unknown token", () => {
+      expect(
+        buildQuickFilterPredicate(unknown("bogus"), NOW, DEFAULT_STALENESS_MONTHS)
+      ).toBeUndefined();
+    });
+
+    it("ignores an unknown token beside a live one rather than poisoning the filter", () => {
+      const mixed = buildQuickFilterPredicate(
+        ["celiac", "friendly"] as unknown as QuickFilterValue[],
+        NOW,
+        DEFAULT_STALENESS_MONTHS
       );
-      const withoutFlag = render(
-        buildQuickFilterPredicate(["friendly"], NOW, DEFAULT_STALENESS_MONTHS, false) as SQL
+      const celiacOnly = buildQuickFilterPredicate(["celiac"], NOW, DEFAULT_STALENESS_MONTHS);
+      expect(render(mixed as SQL).sql).toBe(render(celiacOnly as SQL).sql);
+    });
+
+    it("emits no gluten-friendly `<=` direction anywhere in the live vocabulary", () => {
+      // The contested-direction tally comparison was the whole of the retired
+      // token's SQL. Nothing in the surviving vocabulary may resurrect it —
+      // a `<=` here would mean some filter affirms a contested claim.
+      const { lower } = render(
+        buildQuickFilterPredicate(["celiac", "recent"], NOW, DEFAULT_STALENESS_MONTHS) as SQL
       );
-      expect(withFlag.sql).toBe(withoutFlag.sql);
-      expect(withFlag.lower).not.toContain("suggested_by");
+      expect(lower).not.toMatch(/'confirm'\)\s*<=\s*count\(\*\)\s*filter/);
     });
   });
 
@@ -148,6 +167,23 @@ describe("buildQuickFilterPredicate", () => {
       );
       expect(dateParams).toContain("2026-06-28"); // today (UTC)
       expect(dateParams).toContain("2026-03-30"); // today − 90 days (UTC)
+    });
+
+    it("requires confirms to OUTNUMBER disputes — never returns a badge-less card", () => {
+      // The glance withholds a contested claim's freshness cue along with its
+      // badge, so "Recently verified" must not match one either: a filtered
+      // page may never contain a card showing no badge and no cues, because
+      // that is a match the user cannot reproduce from what they can see.
+      // Strict `>` — a tie is contested, not affirmed. Relaxing this to `>=`,
+      // or dropping the HAVING entirely, is the regression this pins.
+      const { lower } = render(
+        buildQuickFilterPredicate(["recent"], NOW, DEFAULT_STALENESS_MONTHS) as SQL
+      );
+
+      expect(lower).toContain("having");
+      expect(lower).toMatch(/'confirm'\)\s*>\s*count\(\*\)\s*filter/);
+      expect(lower).not.toMatch(/'confirm'\)\s*>=\s*count\(\*\)\s*filter/);
+      expect(lower).not.toMatch(/'confirm'\)\s*<=\s*count\(\*\)\s*filter/);
     });
 
     it("ignores the suggestion flag: a suggestion is not a verification", () => {

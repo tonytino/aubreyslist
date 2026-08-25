@@ -153,10 +153,13 @@ describe("claim-chip parity (add-listing review ⇄ listing detail)", () => {
     expect(disputedChip?.querySelector("svg")).not.toBeNull();
     expect(confirmedChip?.getAttribute("class")).toContain("bg-brand-soft");
     expect(disputedChip?.getAttribute("class")).toContain("bg-muted");
-    // Neither borrows the celiac-safe / gluten-friendly safety colours — a plain
-    // fact must never read as a safety verdict.
-    expect(confirmedChip?.getAttribute("class")).not.toContain("celiac-safe");
-    expect(disputedChip?.getAttribute("class")).not.toContain("gluten-friendly");
+    // Neither borrows a live safety colour (`celiac-safe`, `stale`,
+    // `incident`) — a plain fact must never read as a safety verdict.
+    for (const chip of [confirmedChip, disputedChip]) {
+      for (const safetyToken of ["celiac-safe", "stale", "incident"]) {
+        expect(chip?.getAttribute("class")).not.toContain(safetyToken);
+      }
+    }
   });
 
   // The interactive vote toggle renders through the same `ClaimChip` primitive as

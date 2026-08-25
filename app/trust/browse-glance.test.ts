@@ -173,15 +173,54 @@ describe("deriveListingTrustGlance", () => {
     expect(glance.freshness).toEqual({ kind: "fresh", label: "Verified 3d ago" });
   });
 
-  it("derives gluten-friendly when disputes tie or outnumber confirms", () => {
+  it("collapses a contested claim to the UNATTESTED glance — no badge, no cue, no counts", () => {
+    // A contested headline claim renders exactly the glance an unattested
+    // listing gets. The suppression covers all three confirmation-derived
+    // signals: leaving the freshness cue or the evidence meta in place would
+    // show a cue an unattested card cannot, turning "no verdict" into a
+    // legible downgrade the community never voted for. The counts stay
+    // readable on the detail page's claim row instead.
+    const unattested = deriveListingTrustGlance(
+      { confirmCount: 0, disputeCount: 0, lastConfirmedAt: null },
+      0,
+      null,
+      NOW
+    );
+
     const glance = deriveListingTrustGlance(
       { confirmCount: 2, disputeCount: 5, lastConfirmedAt: new Date("2026-06-01T00:00:00Z") },
       6,
       null,
       NOW
     );
-    expect(glance.safetyState).toBe("gluten-friendly");
-    expect(glance.evidence).toEqual({ confirmations: 2, contributors: 6 });
+    expect(glance.safetyState).toBeNull();
+    expect(glance.evidence).toBeNull();
+    expect(glance.freshness).toBeNull();
+    expect(glance).toEqual(unattested);
+
+    // A tie is contested too — same empty glance.
+    const tied = deriveListingTrustGlance(
+      { confirmCount: 3, disputeCount: 3, lastConfirmedAt: new Date("2026-06-01T00:00:00Z") },
+      6,
+      null,
+      NOW
+    );
+    expect(tied).toEqual(unattested);
+  });
+
+  it("keeps the INCIDENT cue on a contested listing (harm outranks the suppression)", () => {
+    // The suppression withholds a verdict the app will not make; it must never
+    // withhold a warning the community did make.
+    const glance = deriveListingTrustGlance(
+      { confirmCount: 2, disputeCount: 5, lastConfirmedAt: new Date("2026-06-01T00:00:00Z") },
+      6,
+      new Date("2026-06-26T00:00:00Z"),
+      NOW
+    );
+    expect(glance.safetyState).toBeNull();
+    expect(glance.evidence).toBeNull();
+    expect(glance.hasRecentIncident).toBe(true);
+    expect(glance.freshness?.kind).toBe("incident");
   });
 
   it("derives stale + stale cue when confirms lead but the confirmation aged out", () => {

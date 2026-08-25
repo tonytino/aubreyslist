@@ -187,7 +187,7 @@ describe("ClaimVoteControls", () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 
-  it("presents the headline claim as Celiac-safe / Gluten-friendly badge toggles", () => {
+  it("presents the headline claim as a Celiac-safe confirm badge + a standard Dispute badge", () => {
     renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
@@ -197,19 +197,19 @@ describe("ClaimVoteControls", () => {
       />
     );
     const confirm = screen.getByRole("button", { name: "Celiac-safe" });
-    const dispute = screen.getByRole("button", { name: "Gluten-friendly" });
+    const dispute = screen.getByRole("button", { name: "Dispute" });
     // Icon + visible text label on both — meaning never rests on colour alone.
     expect(confirm.querySelector("svg")).not.toBeNull();
     expect(dispute.querySelector("svg")).not.toBeNull();
     // The viewer's own confirm is filled with the celiac-safe colour; the
-    // unpressed gluten-friendly side stays a neutral outline badge.
+    // unpressed dispute side stays a neutral outline badge.
     expect(confirm).toHaveAttribute("aria-pressed", "true");
     expect(confirm.className).toContain("bg-celiac-safe");
     expect(dispute).toHaveAttribute("aria-pressed", "false");
-    expect(dispute.className).not.toContain("bg-gluten-friendly");
+    expect(dispute.className).not.toContain("bg-incident");
   });
 
-  it("fills a pressed headline dispute with the gluten-friendly colour", () => {
+  it("fills a pressed headline dispute with the SAME standard dispute colour as any other attribute", () => {
     renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
@@ -218,9 +218,9 @@ describe("ClaimVoteControls", () => {
         isSignedIn={true}
       />
     );
-    const dispute = screen.getByRole("button", { name: "Gluten-friendly" });
+    const dispute = screen.getByRole("button", { name: "Dispute" });
     expect(dispute).toHaveAttribute("aria-pressed", "true");
-    expect(dispute.className).toContain("bg-gluten-friendly");
+    expect(dispute.className).toContain("bg-incident");
   });
 
   it("presents a non-headline claim as its attribute badge + a consistent Dispute badge", () => {
@@ -281,12 +281,13 @@ describe("ClaimVoteControls", () => {
       />
     );
     expect(screen.getByText("You disputed this.")).toBeInTheDocument();
-    expect(screen.queryByText("You marked this gluten-friendly.")).not.toBeInTheDocument();
   });
 
-  it("names the safety STATE in the caption for the HEADLINE claim (not confirm/dispute)", () => {
-    // "You confirmed this." reads awkwardly next to the Celiac-safe / Gluten-
-    // friendly badges, so the headline caption names the state the vote records.
+  it("names the CONFIRM state in the caption for the HEADLINE claim, but keeps the standard dispute caption", () => {
+    // "You confirmed this." reads awkwardly next to the Celiac-safe badge, so the
+    // headline confirm caption names the state the vote records. The headline
+    // dispute caption is identical to every other attribute's: a dispute records
+    // "not celiac-safe", not a lesser state of its own.
     renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
@@ -307,8 +308,7 @@ describe("ClaimVoteControls", () => {
         isSignedIn={true}
       />
     );
-    expect(screen.getByText("You marked this gluten-friendly.")).toBeInTheDocument();
-    expect(screen.queryByText("You disputed this.")).not.toBeInTheDocument();
+    expect(screen.getByText("You disputed this.")).toBeInTheDocument();
   });
 
   it("keeps both buttons disabled until the roll-up invalidation settles", async () => {

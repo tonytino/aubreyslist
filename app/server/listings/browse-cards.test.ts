@@ -131,7 +131,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
     // A representative set spanning every trust state the derivation can produce:
     //  - fresh celiac-safe   (fresh confirm-majority)
     //  - stale               (confirm-majority aged past the window)
-    //  - contested           (disputes tie/lead → gluten-friendly)
+    //  - contested           (disputes tie/lead → no badge, counts still shown)
     //  - recent-incident     (a recent report flags the card, incident cue wins)
     //  - unattested          (no celiac claim → honest empty state)
     const fresh = mkListing({ id: "l-fresh", name: "Fresh Cafe" });
@@ -167,7 +167,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         claimId: "c-contested",
         lastConfirmedAt: new Date("2026-06-20T00:00:00Z"), // 8d ago → fresh cue
         confirmCount: "2",
-        disputeCount: "5", // disputes lead → gluten-friendly
+        disputeCount: "5", // disputes lead → the unattested glance, no badge
         contributors: "7",
       },
       {
@@ -223,13 +223,16 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         suggestedAttributes: [],
         confirmedAttributes: [],
       },
-      // contested: disputes lead → gluten-friendly; the fresh confirm still
-      // reads as a "Verified" freshness cue (an independent display signal).
+      // contested: disputes lead → the UNATTESTED glance, byte-for-byte. No
+      // badge, no "Verified 8d ago" cue, no evidence counts: any one of those
+      // surviving would be a cue the unattested card (below) cannot show, and
+      // would read as a downgrade the community never voted for. The counts
+      // stay legible on the detail page's claim row instead.
       {
-        safetyState: "gluten-friendly",
+        safetyState: null,
         hasRecentIncident: false,
-        evidence: { confirmations: 2, contributors: 7 },
-        freshness: { kind: "fresh", label: "Verified 8d ago" },
+        evidence: null,
+        freshness: null,
         suggestedByBot: false,
         suggestedAttributes: [],
         confirmedAttributes: [],

@@ -64,10 +64,14 @@ describe("ClaimCardDeck", () => {
 
     expect(screen.getByRole("heading", { name: "Celiac-safe" })).toBeInTheDocument();
     expect(screen.getByText(/kitchen takes cross-contamination seriously/)).toBeInTheDocument();
-    // The headline-only "What your answer records" SafetySignal preview.
+    // The headline-only "What your answer records" preview: confirm shows the
+    // celiac-safe SafetySignal, dispute is plain text (a dispute removes the
+    // badge, it never awards a lesser one).
     expect(screen.getByText("What your answer records")).toBeInTheDocument();
     expect(container.querySelector('[data-safety-state="celiac-safe"]')).not.toBeNull();
-    expect(container.querySelector('[data-safety-state="gluten-friendly"]')).not.toBeNull();
+    expect(
+      screen.getByText("Dispute counts against the Celiac-safe badge. Enough disputes remove it.")
+    ).toBeInTheDocument();
     // Text counter — never dots alone.
     expect(screen.getByText("Card 1 of 5")).toBeInTheDocument();
     // The next card peeks behind the top card, decoratively.
@@ -300,11 +304,9 @@ describe("ClaimCardDeck", () => {
     }
   });
 
-  it("uses the branded WheatStrike (never a leaf) on the headline dispute affordances", () => {
+  it("renders an icon on the headline dispute affordance (never a leaf glyph)", () => {
     render(<Host />);
     const dispute = screen.getByRole("button", { name: "Dispute" });
-    // WheatStrike is a bespoke glyph (no lucide- class); assert it is not a
-    // generic lucide leaf and is present as an svg.
     const svg = dispute.querySelector("svg");
     expect(svg).not.toBeNull();
     expect(svg?.getAttribute("class") ?? "").not.toContain("lucide-leaf");

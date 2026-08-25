@@ -33,8 +33,8 @@ import { buildSearchPredicate } from "./search";
  * Browse-list loader: every listing with its at-a-glance trust.
  *
  * The default browse view is list-first: a page of listing cards, each
- * showing the headline celiac-safe vs. gluten-friendly state and a
- * recent-incident flag at a glance. Reads are open/anonymous.
+ * showing the headline celiac-safe state (when the community has confirmed
+ * it) and a recent-incident flag at a glance. Reads are open/anonymous.
  *
  * No N+1: the page assembles from a small, fixed number of batched queries
  * regardless of page size —
@@ -127,8 +127,8 @@ export const browseListingsInputSchema = z.object({
   savedOnly: z.boolean().default(false),
   /**
    * Prebuilt "quick" filters over the displayed safety glance — `celiac`
-   * (celiac-safe), `friendly` (gluten-friendly), `recent` (freshly verified,
-   * no recent incident). A faceted set: each selected token's correlated
+   * (celiac-safe) and `recent` (freshly verified, no recent incident). A
+   * faceted set: each selected token's correlated
    * predicate AND-composes into the same `where` as search/taxonomy/radius,
    * so page, total and pagination all reflect the conjunction (see
    * `./quick-filter.ts`). Empty means no quick constraint. Composes with
@@ -319,7 +319,7 @@ export async function getBrowseListings(
   const resolvedStalenessMonths = stalenessMonths ?? DEFAULT_STALENESS_MONTHS;
 
   // Prebuilt quick filter: a correlated predicate over the displayed safety
-  // glance (celiac-safe / gluten-friendly / freshly-verified). Undefined when
+  // glance (celiac-safe / freshly-verified). Undefined when
   // no chip is active. AND-folded into the shared `where` below, so it
   // constrains the page and count queries alike — the total reflects it.
   const quickPredicate = buildQuickFilterPredicate(
@@ -556,14 +556,16 @@ type CeliacTrustSubquery = ReturnType<typeof celiacTrustSubquery>;
  * glance). A naive "net confirms desc" would rank a stale 30-confirm listing
  * — or a contested 20/18 one — above a fresh, uncontested 3/0 celiac-safe
  * listing, sending a celiac to a place the product down-ranks. So the trust
- * sort orders by tier first, mirroring `deriveHeadlineSafetyState` over the
- * same signals (`confirmCount`, `disputeCount`, staleness against
- * `lastConfirmedAt`):
+ * sort orders by tier first, mirroring `deriveHeadlineSafetyState` /
+ * `safetyTierRank` over the same signals (`confirmCount`, `disputeCount`,
+ * staleness against `lastConfirmedAt`):
  *
- *   tier 4  celiac-safe  — has evidence, confirms > disputes, fresh
- *   tier 3  stale        — has evidence, confirms > disputes, past the window
- *   tier 2  contested    — has evidence, confirms <= disputes
- *   tier 1  unattested   — no celiac claim / no attestation evidence
+ *   tier 4  celiac-safe — has evidence, confirms > disputes, fresh
+ *   tier 3  stale       — has evidence, confirms > disputes, past the window
+ *   tier 1  no badge    — unattested, or contested (confirms <= disputes)
+ *
+ * Tier 2 is vacant: the numbers match `safetyTierRank` exactly so the two
+ * expressions of the contract stay diffable.
  *
  * Within a tier: net confirms (confirms − disputes) desc, then most recently
  * confirmed (`lastConfirmedAt DESC NULLS LAST`), then name. The staleness
@@ -623,7 +625,6 @@ function buildOrderBy(
   const safetyTier = sql<number>`case
     when ${hasEvidence} and ${confirmsLead} and ${fresh} then 4
     when ${hasEvidence} and ${confirmsLead} then 3
-    when ${hasEvidence} then 2
     else 1
   end`;
 

@@ -32,8 +32,8 @@ import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
 import { findRecentIncident } from "~/trust/incident-recency";
 import {
+  deriveHeadlineMeta,
   deriveHeadlineSafetyState,
-  formatRelativeTime,
   hasEvidence,
   hasPositiveConsensus,
 } from "~/trust/summary";
@@ -203,10 +203,10 @@ function ListingDetail() {
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
   const recentIncident = findRecentIncident(incidents, now);
 
-  // Headline celiac-safe vs gluten-friendly cue, derived from the
-  // `celiac_safe_vs_gluten_friendly` claim's visible aggregate (ADR-007).
-  // No such claim / no attestation evidence → `null`, so SafetySummary keeps
-  // its honest "Not yet attested" empty state (never a fabricated rating).
+  // Headline celiac-safe cue, derived from the `celiac_safe_vs_gluten_friendly`
+  // claim's visible aggregate (ADR-007). No such claim, no attestation
+  // evidence, or a dispute majority → `null`, so SafetySummary shows honest
+  // guidance and no badge (never a fabricated rating).
   const headlineClaim = claims.find(
     (claim) => claim.attribute === "celiac_safe_vs_gluten_friendly"
   );
@@ -214,16 +214,14 @@ function ListingDetail() {
     ? deriveHeadlineSafetyState(headlineClaim, now, stalenessMonths)
     : null;
 
-  // At-a-glance metadata mirrored from the browse card, derived only from
-  // data already in hand. Honest: an item is omitted rather than fabricated
-  // when its value isn't available — "Verified …" only with a real
-  // last-confirmed timestamp, "N confirmations" only when > 0. A
+  // At-a-glance metadata mirrored from the browse card, through the shared
+  // trust seam so the two surfaces suppress in lockstep: a contested headline
+  // claim yields neither cue, exactly as `deriveListingTrustGlance` withholds
+  // the card's freshness cue and evidence meta. Honest either way — an item is
+  // omitted rather than fabricated when its value isn't available. A
   // distinct-contributor count is not loaded on this route, so it is omitted
   // rather than invented.
-  const verifiedRelative = headlineClaim
-    ? formatRelativeTime(headlineClaim.lastConfirmedAt, now)
-    : null;
-  const confirmations = headlineClaim?.confirmCount ?? 0;
+  const { verifiedRelative, confirmations } = deriveHeadlineMeta(headlineClaim, now);
 
   // The non-headline claim badges relevant to this listing (e.g. "Off-menu GF
   // on request"): every attribute besides the headline that either has real
@@ -343,9 +341,9 @@ function ListingDetail() {
         {/* Solid bar below the media: the one safety-badge row for this
             listing plus the at-a-glance metadata strip mirrored from the
             browse card. `SafetySummary`'s hero variant owns the whole row:
-            the headline celiac-safe/gluten-friendly/stale badge (or the
-            honest "Not yet attested" empty state) plus the recent-incident
-            badge, scrolling horizontally on overflow rather than wrapping. */}
+            the headline celiac-safe/stale badge (or, with no verdict, honest
+            guidance and no badge at all) plus the recent-incident badge,
+            scrolling horizontally on overflow rather than wrapping. */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-card">
           <SafetySummary
             state={safetyState}

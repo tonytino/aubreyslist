@@ -276,12 +276,10 @@ describe("DirectoryMap — pins", () => {
     );
   });
 
-  it("renders an honest 'Not yet attested' label for a null safety state (no fake verdict)", async () => {
+  it("omits any safety label for a null safety state (no fake verdict, never 'Not yet attested')", async () => {
     await renderMap();
-    expect(pinOf("New Spot, Not yet attested")).toHaveAccessibleName("New Spot, Not yet attested");
-    expect(cardOf("New Spot, Not yet attested")).toHaveAccessibleName(
-      "New Spot, Not yet attested, Denver"
-    );
+    expect(pinOf("New Spot")).toHaveAccessibleName("New Spot");
+    expect(cardOf("New Spot")).toHaveAccessibleName("New Spot, Denver");
   });
 
   it("marks the selected entry via aria-pressed on both its pin and mini-card", async () => {
@@ -334,14 +332,14 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
       pin: "Lucia Trattoria, Recent incident",
       card: "Lucia Trattoria, Recent incident, Denver",
     },
-    { pin: "New Spot, Not yet attested", card: "New Spot, Not yet attested, Denver" },
+    { pin: "New Spot", card: "New Spot, Denver" },
     {
       pin: "Harvest Table, Celiac-safe, Recent incident",
       card: "Harvest Table, Celiac-safe, Recent incident, Denver",
     },
     {
-      pin: "Bot Bistro, Not yet attested",
-      card: "Bot Bistro, Not yet attested, Denver, suggested by Aubrey's Bot",
+      pin: "Bot Bistro",
+      card: "Bot Bistro, Denver, suggested by Aubrey's Bot",
     },
   ];
 
@@ -358,7 +356,7 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
 
   it("numbers the unattested pin too (grey fill, no fake verdict — still a numbered dot)", async () => {
     await renderMap();
-    const pin = pinOf("New Spot, Not yet attested");
+    const pin = pinOf("New Spot");
     expect(pin.textContent).toBe("3");
     // Still the neutral unattested pairing, never a safety-state fill.
     expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-muted-foreground");
@@ -457,12 +455,12 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
     );
   });
 
-  it("shows the bot-provenance hint (never the dashed chip) for a bot-suggested listing with no verdict", async () => {
+  it("shows the bot-provenance hint (never a safety badge) for a bot-suggested listing with no verdict", async () => {
     await renderMap();
-    // Same gate as ListingCard: bot-suggested + null verdict never shows a
-    // fabricated-looking empty-state chip. The trust row carries the list
-    // card's exact provenance wording instead of sitting empty…
-    const botCard = cardOf("Bot Bistro, Not yet attested");
+    // Same gate as ListingCard: bot-suggested + null verdict renders no safety
+    // badge at all. The trust row carries the list card's exact provenance
+    // wording instead of sitting empty…
+    const botCard = cardOf("Bot Bistro");
     expect(within(botCard).queryByText("Not yet attested")).not.toBeInTheDocument();
     const provenance = within(botCard).getByTestId("carousel-bot-provenance");
     // The map surface names the agent alone — noun-shaped, short enough to
@@ -473,27 +471,24 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
     // The scroll row fades at its right edge so the long label reads as
     // scrollable rather than hard-clipped.
     expect((provenance.parentElement as HTMLElement).className).toContain("mask-image");
-    // …and the card's accessible name gives AT the honest verdict state PLUS
-    // the provenance sighted users see, mirroring the browse list card.
-    expect(botCard).toHaveAccessibleName(
-      "Bot Bistro, Not yet attested, Denver, suggested by Aubrey's Bot"
-    );
+    // …and the card's accessible name gives AT no safety label (there is none)
+    // plus the provenance sighted users see, mirroring the browse list card.
+    expect(botCard).toHaveAccessibleName("Bot Bistro, Denver, suggested by Aubrey's Bot");
   });
 
   it("keeps the pin announcement terse: provenance joins the card name only", async () => {
     await renderMap();
-    expect(pinOf("Bot Bistro, Not yet attested")).toHaveAccessibleName(
-      "Bot Bistro, Not yet attested"
-    );
+    expect(pinOf("Bot Bistro")).toHaveAccessibleName("Bot Bistro");
     // Exactly one button carries the terse pin name — the card's adds location.
-    expect(screen.getAllByRole("button", { name: "Bot Bistro, Not yet attested" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Bot Bistro" })).toHaveLength(1);
   });
 
-  it("keeps the honest dashed chip (and no provenance hint) for a plain unattested listing", async () => {
+  it("renders NO safety badge and no provenance hint for a plain unattested listing", async () => {
     await renderMap();
-    const plainCard = cardOf("New Spot, Not yet attested");
-    expect(within(plainCard).getByText("Not yet attested")).toBeInTheDocument();
+    const plainCard = cardOf("New Spot");
+    expect(within(plainCard).queryByText("Not yet attested")).not.toBeInTheDocument();
     expect(within(plainCard).queryByTestId("carousel-bot-provenance")).not.toBeInTheDocument();
+    expect(plainCard.querySelector("[data-safety-state]")).toBeNull();
   });
 });
 
@@ -507,7 +502,7 @@ describe("DirectoryMap — mini-card location line", () => {
 
   it("shows the city alone when no distance exists (never an empty row)", async () => {
     await renderMap();
-    const card = cardOf("New Spot, Not yet attested");
+    const card = cardOf("New Spot");
     expect(within(card).getByTestId("card-location")).toHaveTextContent(/^Denver$/);
   });
 

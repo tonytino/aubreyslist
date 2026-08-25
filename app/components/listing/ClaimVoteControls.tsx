@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { WheatStrike } from "~/components/icons/WheatStrike";
 import type { AttestationValue, ClaimAttribute } from "~/db/schema";
 import { cn } from "~/lib/utils";
 import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
@@ -33,11 +32,10 @@ interface ClaimVoteControlsProps {
  * Each button presents as the claim's badge, so a pressed vote reads as the same
  * badge language the rest of the app uses:
  *
- * - Headline claim (`celiac_safe_vs_gluten_friendly`): confirm renders as the
- *   Celiac-safe badge, dispute as the Gluten-friendly badge — matching the claim's
- *   meaning.
- * - Every other attribute: confirm renders as that attribute's badge; dispute is a
- *   consistent X + "Dispute" badge.
+ * Confirm renders as that attribute's own badge (the headline claim's is the
+ * Celiac-safe badge); dispute is the same X + "Dispute" badge on every
+ * attribute, headline included — a dispute records "not this", never a lesser
+ * safety state.
  *
  * Meaning never rests on colour alone (styling.md): every state pairs an icon +
  * visible text label, and `aria-pressed` announces the toggle. Writes are re-gated
@@ -106,20 +104,17 @@ export function ClaimVoteControls({
     }
   };
 
-  // The headline claim's two sides are the two safety states, so its buttons
-  // present as the Celiac-safe / Gluten-friendly badges.
+  // Only the headline claim's confirm caption differs: "You confirmed this."
+  // reads awkwardly beside the Celiac-safe badge, so name the state it records.
   const isHeadline = attribute === "celiac_safe_vs_gluten_friendly";
 
-  // Ownership caption for a pressed vote. For the headline claim,
-  // "You confirmed/disputed this." reads awkwardly beside its safety-state badges,
-  // so name the state the vote records instead. Rendered only when the viewer has
+  // Ownership caption for a pressed vote. Rendered only when the viewer has
   // voted; meaning is also carried by each toggle's `aria-pressed`.
-  const ownershipCaption = isHeadline
-    ? viewerVote === "confirm"
-      ? "You marked this celiac-safe."
-      : "You marked this gluten-friendly."
-    : viewerVote === "confirm"
-      ? "You confirmed this."
+  const ownershipCaption =
+    viewerVote === "confirm"
+      ? isHeadline
+        ? "You marked this celiac-safe."
+        : "You confirmed this."
       : "You disputed this.";
 
   return (
@@ -134,14 +129,10 @@ export function ClaimVoteControls({
           onClick={() => toggle("confirm")}
         />
         <VoteBadgeButton
-          icon={isHeadline ? WheatStrike : X}
-          label={isHeadline ? "Gluten-friendly" : "Dispute"}
+          icon={X}
+          label="Dispute"
           pressed={viewerVote === "dispute"}
-          pressedClassName={
-            isHeadline
-              ? "border-gluten-friendly bg-gluten-friendly text-gluten-friendly-foreground hover:bg-gluten-friendly/90"
-              : "border-incident bg-incident text-incident-foreground hover:bg-incident/90"
-          }
+          pressedClassName="border-incident bg-incident text-incident-foreground hover:bg-incident/90"
           disabled={busy}
           onClick={() => toggle("dispute")}
         />

@@ -111,10 +111,9 @@ describe("CommunityClaims", () => {
     for (const name of CONFIRM_BADGE_NAMES) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
-    // ...and disputes: the headline's dispute is the Gluten-friendly badge; the
-    // other four share the consistent X + "Dispute" badge.
-    expect(screen.getByRole("button", { name: "Gluten-friendly" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Dispute" })).toHaveLength(TAXONOMY.length - 1);
+    // ...and disputes: every attribute, headline included, shares the consistent
+    // X + "Dispute" badge — a dispute records "not this", never a lesser state.
+    expect(screen.getAllByRole("button", { name: "Dispute" })).toHaveLength(TAXONOMY.length);
     // No claim row exists yet, so no "Flag claim" control is offered.
     expect(screen.queryByRole("button", { name: "Flag claim" })).not.toBeInTheDocument();
   });

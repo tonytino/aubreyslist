@@ -1,6 +1,5 @@
 import { Check, type LucideIcon, ShieldCheck, X } from "lucide-react";
 import { type MotionValue, motion } from "motion/react";
-import { WheatStrike } from "~/components/icons/WheatStrike";
 import { cn } from "~/lib/utils";
 
 /**
@@ -10,8 +9,9 @@ import { cn } from "~/lib/utils";
  * the stamp.
  *
  * Tints follow the safety rules:
- *   - Headline card only: Confirm = celiac-safe green + ShieldCheck, Dispute =
- *     gluten-friendly amber + the branded WheatStrike (never a leaf).
+ *   - Headline card: Confirm = celiac-safe green + ShieldCheck. Dispute takes
+ *     the neutral fact treatment — a dispute records "not celiac-safe", not a
+ *     lesser safety state, so it must not carry a verdict colour of its own.
  *   - Fact cards: neutral foreground/brand tints with plain Check / X glyphs —
  *     a plain fact must never borrow the safety verdict colours.
  *
@@ -36,15 +36,15 @@ export function SwipeStamp({
   dragOpacity?: MotionValue<number> | undefined;
 }) {
   const confirm = kind === "confirm";
-  const Icon: LucideIcon = isHeadline ? (confirm ? ShieldCheck : WheatStrike) : confirm ? Check : X;
-  // Headline stamps ride on the soft safety fills (kept light in both themes —
-  // styling.md dark-mode rule) so the strong-colour text stays WCAG AA in dark
-  // mode too; `text-celiac-safe` on the dark surface would not be. Fact stamps
-  // are neutral on the card surface — never the safety verdict colours.
-  const tint = isHeadline
-    ? confirm
-      ? "border-celiac-safe bg-celiac-safe-soft text-celiac-safe"
-      : "border-gluten-friendly bg-gluten-friendly-soft text-gluten-friendly"
+  const headlineConfirm = isHeadline && confirm;
+  const Icon: LucideIcon = headlineConfirm ? ShieldCheck : confirm ? Check : X;
+  // The headline confirm stamp rides on the soft celiac-safe fill (kept light
+  // in both themes — styling.md dark-mode rule) so the strong-colour text stays
+  // WCAG AA in dark mode too; `text-celiac-safe` on the dark surface would not
+  // be. Every other stamp is neutral on the card surface — never a safety
+  // verdict colour.
+  const tint = headlineConfirm
+    ? "border-celiac-safe bg-celiac-safe-soft text-celiac-safe"
     : "border-foreground/70 bg-surface/90 text-foreground";
 
   const box = cn(

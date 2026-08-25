@@ -1,0 +1,1 @@
+- `[manual]` Celiac-safe is now the only community safety claim. A disputed or unattested listing shows no safety badge and no glance cues, and the Gluten-friendly quick filter, amber badge, wheat-strike icon, and "Not yet attested" chip are gone. Confirm/dispute votes and claim-row counts are unchanged.

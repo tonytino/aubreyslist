@@ -6,16 +6,16 @@
  * the selection persists across refresh / back-forward / share, and the count
  * + pagination stay honest. The SQL expression of each token lives in
  * `app/server/listings/quick-filter.ts`; the mapping to the displayed glance:
- *   - `celiac`   → `safetyState === "celiac-safe"`
- *   - `friendly` → `safetyState === "gluten-friendly"`
- *   - `recent`   → `freshness.kind === "fresh"`
+ *   - `celiac` → `safetyState === "celiac-safe"`
+ *   - `recent` → `freshness.kind === "fresh"`
  *
  * Faceted selection: tokens belong to groups. Members of an exclusive group
  * are mutually exclusive (pick one or none); other groups are additive, and
- * selections AND-compose across groups. `safety` = {celiac, friendly} is
- * exclusive; `recency` = {recent} is a standalone additive toggle. A new
- * additive group slots in by adding its tokens + group here and leaving the
- * group out of `EXCLUSIVE_QUICK_GROUPS`.
+ * selections AND-compose across groups. `safety` = {celiac} is exclusive (a
+ * degenerate single-member group, so a second safety token slots in without
+ * re-deriving the rules); `recency` = {recent} is a standalone additive
+ * toggle. A new additive group slots in by adding its
+ * tokens + group here and leaving the group out of `EXCLUSIVE_QUICK_GROUPS`.
  *
  * Client-safe + pure: no db/server imports, so the client (schema + chips +
  * route) and the server (the SQL predicate builder) share one definition of
@@ -23,7 +23,7 @@
  */
 
 /** The quick-filter tokens, in chip / canonical order. The single source of the vocabulary. */
-export const QUICK_FILTER_VALUES = ["celiac", "friendly", "recent"] as const;
+export const QUICK_FILTER_VALUES = ["celiac", "recent"] as const;
 
 /** One quick-filter token. */
 export type QuickFilterValue = (typeof QUICK_FILTER_VALUES)[number];
@@ -40,7 +40,6 @@ export type QuickFilterGroup = "safety" | "recency";
 /** Which group each token belongs to. */
 export const QUICK_FILTER_GROUPS: Record<QuickFilterValue, QuickFilterGroup> = {
   celiac: "safety",
-  friendly: "safety",
   recent: "recency",
 };
 
@@ -72,8 +71,12 @@ function canonicalize(values: readonly QuickFilterValue[]): QuickFilterValue[] {
  * Parse a raw `?quick=` comma string into a valid, canonical selection: keep
  * only known tokens, de-dupe, then collapse each exclusive group to at most
  * one member — the first in canonical (`QUICK_FILTER_VALUES`) order. Choosing
- * the survivor by vocab order (not URL order) is deterministic and avoids an
- * always-empty `celiac AND friendly` from a hand-typed or stale link.
+ * the survivor by vocab order (not URL order) is deterministic and keeps a
+ * hand-typed or stale link from resolving to a contradictory selection.
+ *
+ * Dropping unknown tokens is load-bearing: the vocabulary is `celiac` +
+ * `recent`, and `friendly` arrives only from old shared links, which must
+ * degrade to no filter rather than erroring.
  */
 export function parseQuick(value: string): QuickFilterSelection {
   const valid = new Set<QuickFilterValue>();

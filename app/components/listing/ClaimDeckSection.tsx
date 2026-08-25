@@ -157,12 +157,14 @@ export function ClaimDeckSection({
     if (standing === null) {
       return null;
     }
-    if (attribute === "celiac_safe_vs_gluten_friendly") {
-      return standing === "confirm"
-        ? "You marked this celiac-safe."
-        : "You marked this gluten-friendly.";
+    if (standing === "dispute") {
+      return "You disputed this.";
     }
-    return standing === "confirm" ? "You confirmed this." : "You disputed this.";
+    // The headline claim's confirm names the state it records; "You confirmed
+    // this." reads awkwardly beside the Celiac-safe badge.
+    return attribute === "celiac_safe_vs_gluten_friendly"
+      ? "You marked this celiac-safe."
+      : "You confirmed this.";
   };
 
   return (
