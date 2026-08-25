@@ -38,8 +38,8 @@ import { CLAIM_ATTRIBUTE_ICONS, CLAIM_ATTRIBUTE_LABELS } from "~/trust/summary";
  *     (a native `<select>` styled as a chip) and drives `?sort=` via the
  *     route's `changeSort` — including the "Near me" geolocation opt-in flow.
  *
- * One Celiac-safe chip: the headline taxonomy attribute
- * (`celiac_safe_vs_gluten_friendly`) is excluded from the default taxonomy
+ * One Celiac-safe chip: the headline taxonomy attribute (`celiac_safe`) is
+ * excluded from the default taxonomy
  * chip set because the quick `celiac` chip covers the same user question with
  * a strictly safer reading — both require confirms to strictly outnumber
  * disputes on the headline claim, and the quick chip additionally requires the
@@ -74,7 +74,7 @@ const QUICK_CHIPS: readonly QuickChipDef[] = [
  * chip set — the quick `celiac` chip is the one visible "Celiac-safe" control
  * (see the module doc). Still valid in `?attrs=` for back-compat.
  */
-const HEADLINE_ATTRIBUTE: ClaimAttribute = "celiac_safe_vs_gluten_friendly";
+const HEADLINE_ATTRIBUTE: ClaimAttribute = "celiac_safe";
 
 /** Shared pill classes; `active` swaps to the filled brand treatment. */
 function chipClasses(active: boolean): string {

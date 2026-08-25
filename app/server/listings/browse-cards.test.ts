@@ -349,14 +349,14 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
     state.celiacRows = [];
     state.suggestionRows = [
       { suggestedListingId: "l-multi", suggestedAttribute: "gf_substitutes" },
-      { suggestedListingId: "l-multi", suggestedAttribute: "celiac_safe_vs_gluten_friendly" },
+      { suggestedListingId: "l-multi", suggestedAttribute: "celiac_safe" },
       { suggestedListingId: "l-multi", suggestedAttribute: "dedicated_fryer" },
     ];
 
     const cards = await buildBrowseCards([listing], NOW, 6);
 
     expect(cards[0]?.glance.suggestedAttributes).toEqual([
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_fryer",
       "gf_substitutes",
     ]);
@@ -470,7 +470,7 @@ describe("buildBrowseCards — CONFIRMED non-headline claim badges (AUB-226)", (
 
     // Headline excluded: the WHERE filters the celiac attribute out (`<>`).
     expect(whereSql).toContain("<>");
-    expect(whereSql).toContain("celiac_safe_vs_gluten_friendly");
+    expect(whereSql).toContain("celiac_safe");
     // Only `visible` claims count toward consensus.
     expect(whereSql).toContain("moderation_status");
     // Strict positive consensus: confirms `>` disputes, never `>=` — a tie or

@@ -191,7 +191,7 @@ describe("ClaimVoteControls", () => {
     renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
-        attribute="celiac_safe_vs_gluten_friendly"
+        attribute="celiac_safe"
         viewerVote="confirm"
         isSignedIn={true}
       />
@@ -213,7 +213,7 @@ describe("ClaimVoteControls", () => {
     renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
-        attribute="celiac_safe_vs_gluten_friendly"
+        attribute="celiac_safe"
         viewerVote="dispute"
         isSignedIn={true}
       />
@@ -291,7 +291,7 @@ describe("ClaimVoteControls", () => {
     renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
-        attribute="celiac_safe_vs_gluten_friendly"
+        attribute="celiac_safe"
         viewerVote="confirm"
         isSignedIn={true}
       />
@@ -303,7 +303,7 @@ describe("ClaimVoteControls", () => {
     renderWithQuery(
       <ClaimVoteControls
         listingId="listing-1"
-        attribute="celiac_safe_vs_gluten_friendly"
+        attribute="celiac_safe"
         viewerVote="dispute"
         isSignedIn={true}
       />

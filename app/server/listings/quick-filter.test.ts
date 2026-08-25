@@ -46,7 +46,7 @@ describe("buildQuickFilterPredicate", () => {
       // Visibility + the single headline attribute, bound as params.
       expect(lower).toContain("moderation_status");
       expect(params).toContain("visible");
-      expect(params).toContain("celiac_safe_vs_gluten_friendly");
+      expect(params).toContain("celiac_safe");
       // Freshness cutoff is bound as a Date param (staleness boundary).
       expect(params.some((p) => p instanceof Date)).toBe(true);
     });

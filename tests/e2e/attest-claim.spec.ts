@@ -12,7 +12,7 @@ import { waitForHydration } from "./helpers";
  * vote; pre-seeding one would bypass the path under test). The "Community
  * claims" surface always renders the full fixed taxonomy as attestable, so a
  * signed-in user can begin attesting an attribute that has no claim row yet.
- * We sign in, confirm the headline `celiac_safe_vs_gluten_friendly` attribute
+ * We sign in, confirm the headline `celiac_safe` attribute
  * — a real `submitVote` write that creates the claim then records the
  * attestation (ADR-007) — and assert the transparent trust summary updates:
  * the per-claim roll-up shows "1 confirm / 0 dispute", the Celiac-safe badge
@@ -88,10 +88,7 @@ test.describe("attest a claim — lazy-create on first vote (#150)", () => {
       .select()
       .from(schema.claims)
       .where(
-        and(
-          eq(schema.claims.listingId, listingId),
-          eq(schema.claims.attribute, "celiac_safe_vs_gluten_friendly")
-        )
+        and(eq(schema.claims.listingId, listingId), eq(schema.claims.attribute, "celiac_safe"))
       );
     expect(created).toHaveLength(1);
   });

@@ -100,7 +100,7 @@ export interface ListingTrustGlance {
    * consensus (`hasPositiveConsensus`), deduped and in taxonomy order. Each
    * renders as a non-suggested claim badge — real community evidence, matching
    * the listing-detail page's `confirmed` badges. The headline
-   * `celiac_safe_vs_gluten_friendly` attribute is excluded (it is the
+   * `celiac_safe` attribute is excluded (it is the
    * {@link safetyState} verdict, not a badge). Deduped against
    * {@link suggestedAttributes} so an attribute is never both confirmed and
    * suggested at once. Empty when nothing is confirmed.
@@ -114,7 +114,7 @@ function normalizeAttributes(attributes: readonly ClaimAttribute[]): ClaimAttrib
 }
 
 /**
- * Derive a listing's at-a-glance trust from its `celiac_safe_vs_gluten_friendly`
+ * Derive a listing's at-a-glance trust from its `celiac_safe`
  * aggregate, a distinct-contributor count, and the most recent in-window
  * incident's instant.
  *
@@ -193,9 +193,7 @@ export function deriveListingTrustGlance(
   // gate on the label itself.
   const celiacSuggested = (celiacAggregate?.suggested ?? false) && !hasEvidence;
   const suggested = normalizeAttributes(
-    celiacSuggested
-      ? [...suggestedAttributes, "celiac_safe_vs_gluten_friendly"]
-      : suggestedAttributes
+    celiacSuggested ? [...suggestedAttributes, "celiac_safe"] : suggestedAttributes
   );
 
   // Confirmed non-headline attributes, taxonomy-ordered and deduped against

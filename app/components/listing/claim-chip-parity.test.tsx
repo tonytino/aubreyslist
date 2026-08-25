@@ -44,9 +44,7 @@ function renderVoteControls(attribute: ClaimAttribute): ReactElement {
 }
 
 /** The four non-headline "fact" attributes (the headline uses a SafetySignal). */
-const FACT_ATTRIBUTES = CLAIM_ATTRIBUTES.filter(
-  (a): a is ClaimAttribute => a !== "celiac_safe_vs_gluten_friendly"
-);
+const FACT_ATTRIBUTES = CLAIM_ATTRIBUTES.filter((a): a is ClaimAttribute => a !== "celiac_safe");
 
 /** Extract the `lucide-<glyph>` token lucide stamps onto every icon's svg class. */
 function lucideToken(svg: SVGElement | null): string {

@@ -32,8 +32,8 @@ runtime.
    so the single question worth attesting is whether the kitchen takes
    cross-contamination seriously. Confirm ⇒ celiac-safe. Disputes count against
    the badge; once they tie or outnumber confirms it disappears entirely —
-   never a lesser state. The enum key is `celiac_safe_vs_gluten_friendly`
-   (rename deferred — see below); its label is "Celiac-safe".
+   never a lesser state. The enum key is `celiac_safe`; its label is
+   "Celiac-safe".
 2. **Dedicated / separate fryer** — yes / no / shared.
 3. **Dedicated GF menu** — labeled GF items exist.
 4. **Off-menu GF on request** — will make non-GF-labeled dishes GF when asked.
@@ -54,9 +54,11 @@ confirm/dispute, tracked in
   shape.
 - **Staff knowledge & attitude** — not crisp enough to attest reliably.
 
-Also deferred: renaming the enum key `celiac_safe_vs_gluten_friendly →
-celiac_safe`. The key is cosmetic — the label is already "Celiac-safe" — and
-renaming it forces an enum type-recreate migration.
+The headline attribute's enum key was renamed
+`celiac_safe_vs_gluten_friendly → celiac_safe` in AUB-297 (no longer deferred),
+via the data-preserving enum-recreate migration
+`db/migrations/0006_wide_sprite.sql`. Nothing user-visible changed; the label
+was already "Celiac-safe".
 
 ---
 

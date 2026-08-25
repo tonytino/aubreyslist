@@ -34,7 +34,7 @@ function renderReview(
 describe("ReviewStep", () => {
   it("renders a SafetySignal chip for a confirmed headline attribute", () => {
     const { container } = renderReviewContainer({
-      celiac_safe_vs_gluten_friendly: "confirm",
+      celiac_safe: "confirm",
       dedicated_fryer: undefined,
       dedicated_gf_menu: undefined,
       off_menu_gf_on_request: undefined,
@@ -45,7 +45,7 @@ describe("ReviewStep", () => {
 
   it("renders a neutral fact chip (no safety chip) for a confirmed fact attribute", () => {
     const { container } = renderReviewContainer({
-      celiac_safe_vs_gluten_friendly: undefined,
+      celiac_safe: undefined,
       dedicated_fryer: "confirm",
       dedicated_gf_menu: undefined,
       off_menu_gf_on_request: undefined,
@@ -62,7 +62,7 @@ describe("ReviewStep", () => {
     // so the review row must not promise a safety chip of any kind — it uses the
     // same neutral chip language a disputed fact does.
     const { container } = renderReviewContainer({
-      celiac_safe_vs_gluten_friendly: "dispute",
+      celiac_safe: "dispute",
       dedicated_fryer: undefined,
       dedicated_gf_menu: undefined,
       off_menu_gf_on_request: undefined,
@@ -80,7 +80,7 @@ describe("ReviewStep", () => {
 
   it("renders a neutral fact chip (no safety chip) for a disputed fact attribute", () => {
     const { container } = renderReviewContainer({
-      celiac_safe_vs_gluten_friendly: undefined,
+      celiac_safe: undefined,
       dedicated_fryer: undefined,
       dedicated_gf_menu: "dispute",
       off_menu_gf_on_request: undefined,
@@ -92,7 +92,7 @@ describe("ReviewStep", () => {
 
   it("shows 'Not yet attested' for skipped and untouched attributes", () => {
     renderReview({
-      celiac_safe_vs_gluten_friendly: "skip",
+      celiac_safe: "skip",
       dedicated_fryer: undefined,
       dedicated_gf_menu: undefined,
       off_menu_gf_on_request: undefined,
@@ -104,7 +104,7 @@ describe("ReviewStep", () => {
 
   it("edits jump to the right step for a place and an attribute", () => {
     const props = renderReview({
-      celiac_safe_vs_gluten_friendly: "confirm",
+      celiac_safe: "confirm",
       dedicated_fryer: undefined,
       dedicated_gf_menu: undefined,
       off_menu_gf_on_request: undefined,
@@ -119,7 +119,7 @@ describe("ReviewStep", () => {
 
   it("submits via the primary button", () => {
     const props = renderReview({
-      celiac_safe_vs_gluten_friendly: "confirm",
+      celiac_safe: "confirm",
       dedicated_fryer: undefined,
       dedicated_gf_menu: undefined,
       off_menu_gf_on_request: undefined,

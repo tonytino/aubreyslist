@@ -117,7 +117,7 @@ describe("ClaimCardDeck", () => {
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
     expect(onAnswerSpy.mock.calls).toEqual([
-      ["celiac_safe_vs_gluten_friendly", "confirm"],
+      ["celiac_safe", "confirm"],
       ["dedicated_fryer", "skip"],
       ["dedicated_gf_menu", "dispute"],
       ["off_menu_gf_on_request", "skip"],
@@ -171,7 +171,7 @@ describe("ClaimCardDeck", () => {
   it("seeds from the host's answer map (progress dots reflect prior answers)", () => {
     const initial: DeckAnswerMap = {
       ...emptyDeckAnswers(),
-      celiac_safe_vs_gluten_friendly: "confirm",
+      celiac_safe: "confirm",
       dedicated_fryer: "skip",
     };
     render(<Host initial={initial} initialAttribute="dedicated_gf_menu" />);
@@ -184,7 +184,7 @@ describe("ClaimCardDeck", () => {
     render(
       <Host
         cardCaption={(attribute) =>
-          attribute === "celiac_safe_vs_gluten_friendly" ? "You marked this celiac-safe." : null
+          attribute === "celiac_safe" ? "You marked this celiac-safe." : null
         }
       />
     );
@@ -230,7 +230,7 @@ describe("ClaimCardDeck", () => {
   it("resolves to the deck-internal summary (showSummary) with the shared outcome chips", async () => {
     const onDone = vi.fn();
     const initial: DeckAnswerMap = {
-      celiac_safe_vs_gluten_friendly: "confirm",
+      celiac_safe: "confirm",
       dedicated_fryer: "dispute",
       dedicated_gf_menu: "skip",
       off_menu_gf_on_request: undefined,

@@ -24,7 +24,7 @@ import type { Answer, AnswerMap, WizardPlace } from "./AddListingWizard";
  * celiacs rely on those honest gaps.
  */
 
-const HEADLINE = "celiac_safe_vs_gluten_friendly" as const;
+const HEADLINE = "celiac_safe" as const;
 
 /**
  * The neutral "Disputed" chip fill, shared by the headline dispute row and

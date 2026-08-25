@@ -17,7 +17,7 @@ import type { ClaimAttribute } from "~/db/schema";
  * Honest by construction: `suggestedAttributes` are grounded in each spot's
  * public GF reputation — community reports (findmeglutenfree, NCA Denver
  * Celiacs), local press, and official menus/allergen pages.
- * `celiac_safe_vs_gluten_friendly` applies only to
+ * `celiac_safe` applies only to
  * genuinely dedicated or strongly celiac-reputed places; merely
  * gluten-friendly spots get the specific attributes instead. These are
  * suggestions, not verdicts — the community owns the truth. No incidents are
@@ -69,155 +69,150 @@ export const SEED_SOURCES: SeedSource[] = [
   // --- Dedicated / 100% gluten-free facilities (highest-confidence celiac-safe)
   {
     query: "Moore Cafe and Bakery, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.moorebreadbakery.com/",
   },
   {
     query: "Just BE Kitchen, LoHi, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.justbekitchen.com/",
   },
   {
     query: "Vital Root, Tennyson Street, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_fryer", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_fryer", "dedicated_gf_menu"],
     menuUrl: "https://ediblebeats.com/restaurants/vital-root/",
   },
   {
     query: "Rivers and Roads Coffee, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.riversandroadscoffee.com/",
   },
   {
     query: "Green Bus Cafe, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.greenbuscafe.com/locations-menus",
   },
   {
     query: "Quiero Arepas, Avanti, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu"],
     menuUrl: "https://quieroarepas.com/",
   },
   {
     query: "Teocalli Cocina, LoHi, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu"],
     menuUrl: "https://www.teocallicocina.com/",
     chain: true,
   },
   {
     query: "Sweet Izzy, Cherry Creek North, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu"],
     menuUrl: "https://www.sweetizzy.co/",
   },
   {
     query: "Wave the Grain, Littleton, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://wavethegrain.com/",
   },
   {
     query: "Blue Hummingbird GF Foods, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://bluehummingbirdfoods.com/",
   },
   {
     query: "Gluten Free Things, Arvada, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://glutenfreethings.com/",
   },
   {
     query: "Crestone Bakery, Westminster, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu"],
     menuUrl: "https://crestonebakery.com/",
   },
   {
     query: "Rheinlander Bakery, Arvada, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "gf_substitutes"],
     menuUrl: "https://www.rheinlanderbakery.com/",
   },
   {
     query: "Denver Poke Company, LoHi, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu"],
     menuUrl: "https://denverpokecompany.com/",
   },
   {
     query: "Sweet Sisters Bake Shop, Boulder, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu"],
     menuUrl: "https://www.sweetsistersboulder.com/",
   },
   {
     query: "Dedicated Bistro and Bakery, Golden, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu"],
   },
   {
     query: "Starfish Bakery, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu"],
     menuUrl: "https://starfishbysarah.com/",
   },
   // --- Dedicated GF beverages (celiac-safe drinks; food cross-contact varies)
   {
     query: "Holidaily Brewing Company, Golden, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
+    suggestedAttributes: ["celiac_safe"],
     menuUrl: "https://holidailybrewing.com/",
   },
   {
     query: "Stem Ciders, RiNo, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
+    suggestedAttributes: ["celiac_safe"],
     menuUrl: "https://www.stemciders.com/",
     chain: true,
   },
   {
     query: "Waldschanke Ciders and Coffee, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
+    suggestedAttributes: ["celiac_safe"],
     menuUrl: "https://waldschankeciders.com/",
   },
   // --- Celiac owners / strong celiac reputation (strict cross-contact protocols)
   {
     query: "Acova, Highland, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_fryer", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_fryer", "dedicated_gf_menu"],
     menuUrl: "https://acovarestaurant.com/menu/",
   },
   {
     query: "Federal Bar and Grill, Jefferson Park, Denver, CO",
-    suggestedAttributes: [
-      "celiac_safe_vs_gluten_friendly",
-      "dedicated_fryer",
-      "dedicated_gf_menu",
-      "gf_substitutes",
-    ],
+    suggestedAttributes: ["celiac_safe", "dedicated_fryer", "dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.thefedbar.com/",
   },
   {
     query: "GB Fish and Chips, South Broadway, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_fryer", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_fryer", "dedicated_gf_menu"],
     menuUrl: "https://gbfishandchips.com/",
     chain: true,
   },
   {
     query: "Marco's Coal Fired, Ballpark, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu"],
     menuUrl: "https://www.marcoscfp.com/gluten-free",
   },
   {
     query: "Bamboo Sushi, LoHi, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_fryer", "dedicated_gf_menu"],
+    suggestedAttributes: ["celiac_safe", "dedicated_fryer", "dedicated_gf_menu"],
     menuUrl: "https://bamboosushi.com/location/lohi/menu",
     chain: true,
   },
   {
     query: "Urban Egg, Cherry Creek North, Denver, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "dedicated_gf_menu", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "dedicated_gf_menu", "gf_substitutes"],
     chain: true,
   },
   {
     query: "HashTAG Restaurant, Aurora, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "off_menu_gf_on_request"],
+    suggestedAttributes: ["celiac_safe", "off_menu_gf_on_request"],
   },
   {
     query: "Cozobi Fonda Fina, Boulder, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
+    suggestedAttributes: ["celiac_safe"],
   },
   {
     query: "Holy Crepe, Boulder, CO",
-    suggestedAttributes: ["celiac_safe_vs_gluten_friendly", "gf_substitutes"],
+    suggestedAttributes: ["celiac_safe", "gf_substitutes"],
   },
   {
     query: "The Ginger Pig, Berkeley, Denver, CO",

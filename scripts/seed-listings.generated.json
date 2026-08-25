@@ -6,7 +6,7 @@
     "lat": 39.763211299999995,
     "lng": -104.9735206,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu",
       "gf_substitutes"
     ],
@@ -20,7 +20,7 @@
     "lat": 39.7561111,
     "lng": -105.0091111,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu",
       "gf_substitutes"
     ],
@@ -34,7 +34,7 @@
     "lat": 39.771426399999996,
     "lng": -105.0443229,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_fryer",
       "dedicated_gf_menu"
     ],
@@ -48,7 +48,7 @@
     "lat": 39.7647228,
     "lng": -104.9564247,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu",
       "gf_substitutes"
     ],
@@ -62,7 +62,7 @@
     "lat": 39.7493043,
     "lng": -104.9701224,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu",
       "gf_substitutes"
     ],
@@ -76,7 +76,7 @@
     "lat": 39.762246,
     "lng": -105.006119,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu"
     ],
     "menuUrl": "https://quieroarepas.com/",
@@ -89,7 +89,7 @@
     "lat": 39.759240999999996,
     "lng": -105.01092849999999,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu"
     ],
     "menuUrl": "https://www.teocallicocina.com/",
@@ -102,7 +102,7 @@
     "lat": 39.7210957,
     "lng": -104.95199699999999,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu"
     ],
     "menuUrl": "https://www.sweetizzy.co/",
@@ -115,7 +115,7 @@
     "lat": 39.6081212,
     "lng": -105.0986001,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu",
       "gf_substitutes"
     ],
@@ -129,7 +129,7 @@
     "lat": 39.6735452,
     "lng": -104.89732479999999,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu",
       "gf_substitutes"
     ],
@@ -143,7 +143,7 @@
     "lat": 39.8138198,
     "lng": -105.1304943,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu",
       "gf_substitutes"
     ],
@@ -157,7 +157,7 @@
     "lat": 39.9149386,
     "lng": -105.0076897,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu"
     ],
     "menuUrl": "https://crestonebakery.com/",
@@ -170,7 +170,7 @@
     "lat": 39.8007839,
     "lng": -105.0815944,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "gf_substitutes"
     ],
     "menuUrl": "https://www.rheinlanderbakery.com/",
@@ -183,7 +183,7 @@
     "lat": 39.756929,
     "lng": -105.00847739999999,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu"
     ],
     "menuUrl": "https://denverpokecompany.com/",
@@ -196,7 +196,7 @@
     "lat": 39.9838966,
     "lng": -105.2501784,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu"
     ],
     "menuUrl": "https://www.sweetsistersboulder.com/",
@@ -209,7 +209,7 @@
     "lat": 39.739134,
     "lng": -105.15004169999999,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu"
     ],
     "menuUrl": null,
@@ -222,7 +222,7 @@
     "lat": 39.7493043,
     "lng": -104.9701224,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu"
     ],
     "menuUrl": "https://starfishbysarah.com/",
@@ -235,7 +235,7 @@
     "lat": 39.7803676,
     "lng": -105.2328209,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly"
+      "celiac_safe"
     ],
     "menuUrl": "https://holidailybrewing.com/",
     "googleMapsUri": "https://maps.google.com/?cid=12521899065642257350&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
@@ -247,7 +247,7 @@
     "lat": 39.7641691,
     "lng": -104.9813152,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly"
+      "celiac_safe"
     ],
     "menuUrl": "https://www.stemciders.com/",
     "googleMapsUri": "https://maps.google.com/?cid=14948853403840338868&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
@@ -259,7 +259,7 @@
     "lat": 39.7731922,
     "lng": -104.9990363,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly"
+      "celiac_safe"
     ],
     "menuUrl": "https://waldschankeciders.com/",
     "googleMapsUri": "https://maps.google.com/?cid=3792908827817809808&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
@@ -271,7 +271,7 @@
     "lat": 39.7677844,
     "lng": -105.0042601,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_fryer",
       "dedicated_gf_menu"
     ],
@@ -285,7 +285,7 @@
     "lat": 39.7545092,
     "lng": -105.0250102,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_fryer",
       "dedicated_gf_menu",
       "gf_substitutes"
@@ -300,7 +300,7 @@
     "lat": 39.692625,
     "lng": -104.987715,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_fryer",
       "dedicated_gf_menu"
     ],
@@ -314,7 +314,7 @@
     "lat": 39.7545109,
     "lng": -104.99098529999999,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu"
     ],
     "menuUrl": "https://www.marcoscfp.com/gluten-free",
@@ -327,7 +327,7 @@
     "lat": 39.761572099999995,
     "lng": -105.01057209999999,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_fryer",
       "dedicated_gf_menu"
     ],
@@ -341,7 +341,7 @@
     "lat": 39.7184598,
     "lng": -104.9513717,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_gf_menu",
       "gf_substitutes"
     ],
@@ -355,7 +355,7 @@
     "lat": 39.759745699999996,
     "lng": -104.8689627,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "off_menu_gf_on_request"
     ],
     "menuUrl": null,
@@ -368,7 +368,7 @@
     "lat": 40.016380399999996,
     "lng": -105.28325679999999,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly"
+      "celiac_safe"
     ],
     "menuUrl": null,
     "googleMapsUri": "https://maps.google.com/?cid=14044314846269585460&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
@@ -380,7 +380,7 @@
     "lat": 40.013950799999996,
     "lng": -105.2782063,
     "suggestedAttributes": [
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "gf_substitutes"
     ],
     "menuUrl": null,

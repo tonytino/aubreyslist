@@ -35,7 +35,9 @@ still governs the transparent-roll-up model this reading derives from.
   says.
 - "Most trusted" sort ranks celiac-safe (4) above stale (3) above everything
   else (1); tier 2 is vacant. Quick filters are `celiac` and `recent` only.
-- The persisted enum key `celiac_safe_vs_gluten_friendly` stays. Renaming it
-  forces an enum type-recreate migration for no user-visible gain.
+- The persisted enum key, `celiac_safe_vs_gluten_friendly` when this ADR was
+  accepted, is now `celiac_safe` (AUB-297): the cosmetic rename shipped
+  separately as the data-preserving enum-recreate migration
+  `db/migrations/0006_wide_sprite.sql`, with no user-visible change.
 - Seed catalog curation is unchanged: the curator bot still suggests the
   headline claim, and a suggestion stays provenance, never evidence.

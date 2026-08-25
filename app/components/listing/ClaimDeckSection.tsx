@@ -162,9 +162,7 @@ export function ClaimDeckSection({
     }
     // The headline claim's confirm names the state it records; "You confirmed
     // this." reads awkwardly beside the Celiac-safe badge.
-    return attribute === "celiac_safe_vs_gluten_friendly"
-      ? "You marked this celiac-safe."
-      : "You confirmed this.";
+    return attribute === "celiac_safe" ? "You marked this celiac-safe." : "You confirmed this.";
   };
 
   return (
@@ -239,7 +237,7 @@ export function ClaimDeckSection({
 
 function emptyVotes(): Record<ClaimAttribute, AttestationValue | null> {
   return {
-    celiac_safe_vs_gluten_friendly: null,
+    celiac_safe: null,
     dedicated_fryer: null,
     dedicated_gf_menu: null,
     off_menu_gf_on_request: null,

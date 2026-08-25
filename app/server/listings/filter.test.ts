@@ -52,10 +52,7 @@ describe("buildTaxonomyFilterPredicate", () => {
   });
 
   it("AND-combines one EXISTS per attribute for a multi-attribute selection", () => {
-    const predicate = buildTaxonomyFilterPredicate([
-      "dedicated_fryer",
-      "celiac_safe_vs_gluten_friendly",
-    ]);
+    const predicate = buildTaxonomyFilterPredicate(["dedicated_fryer", "celiac_safe"]);
     const { sql, params } = renderSql(predicate as SQL);
     const lower = sql.toLowerCase();
 
@@ -64,7 +61,7 @@ describe("buildTaxonomyFilterPredicate", () => {
     expect(lower).toContain(" and ");
     // One bound attribute parameter per selected attribute.
     expect(params).toContain("dedicated_fryer");
-    expect(params).toContain("celiac_safe_vs_gluten_friendly");
+    expect(params).toContain("celiac_safe");
   });
 
   it("de-duplicates a repeated attribute into a single EXISTS", () => {
@@ -214,7 +211,7 @@ describe("buildBrowseWhere — search + taxonomy composition", () => {
   it("ANDs search and taxonomy together when both are present", () => {
     const where = buildBrowseWhere(buildSearchPredicate("taco"), [
       "dedicated_fryer",
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
     ]);
     const { sql, params } = renderSql(where as SQL);
     const lower = sql.toLowerCase();

@@ -9,7 +9,7 @@ import { waitForBrowseReady } from "./helpers";
  * `browse.spec.ts` asserts the filter/sort URL wiring but never that a filter
  * narrows the list to matching listings — it can't, since it assumes no seeded
  * data. This spec seeds a listing the community has affirmed for both
- * `celiac_safe_vs_gluten_friendly` and `dedicated_fryer`, applies the visible
+ * `celiac_safe` and `dedicated_fryer`, applies the visible
  * "Celiac-safe + Dedicated fryer" combination from the chip row, and asserts
  * the URL carries both params and the seeded listing is in the results. A
  * second listing affirmed only for celiac-safe is seeded so the
@@ -52,7 +52,7 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     const both = await seeder.createListing(bothToken, { name: `0000-${bothToken} Diner` });
     bothName = both.name;
     bothId = both.id;
-    const celiacClaim = await seeder.createClaim(both.id, "celiac_safe_vs_gluten_friendly");
+    const celiacClaim = await seeder.createClaim(both.id, "celiac_safe");
     const fryerClaim = await seeder.createClaim(both.id, "dedicated_fryer");
     await seeder.attest(celiacClaim.id, "confirm", uniqueToken("v"));
     await seeder.attest(fryerClaim.id, "confirm", uniqueToken("v"));
@@ -60,10 +60,7 @@ test.describe("browse + GF taxonomy filter (seeded results)", () => {
     // Listing B: celiac-safe only — must be filtered out by the fryer constraint.
     const celiacOnly = await seeder.createListing(uniqueToken("celiaconly"));
     celiacOnlyName = celiacOnly.name;
-    const onlyCeliacClaim = await seeder.createClaim(
-      celiacOnly.id,
-      "celiac_safe_vs_gluten_friendly"
-    );
+    const onlyCeliacClaim = await seeder.createClaim(celiacOnly.id, "celiac_safe");
     await seeder.attest(onlyCeliacClaim.id, "confirm", uniqueToken("v"));
   });
 

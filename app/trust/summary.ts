@@ -32,14 +32,13 @@ import type { ClaimAggregate } from "~/server/attestations";
  * docs/agents/domain.md). Keyed by the `claim_attribute` enum so the mapping
  * is exhaustive at compile time — a new taxonomy value forces a label here.
  *
- * The `celiac_safe_vs_gluten_friendly` enum key is surfaced as "Celiac-safe":
- * every listing is assumed to have gluten-free options, so the only community
+ * The headline `celiac_safe` attribute is labelled "Celiac-safe": every
+ * listing is assumed to have gluten-free options, so the only community
  * safety question is "is it celiac-safe?" — confirm ⇒ celiac-safe, dispute ⇒
- * no badge. The key and label deliberately differ: renaming the persisted enum
- * key would force a type-recreate migration for no user-visible gain.
+ * no badge.
  */
 export const CLAIM_ATTRIBUTE_LABELS: Record<ClaimAttribute, string> = {
-  celiac_safe_vs_gluten_friendly: "Celiac-safe",
+  celiac_safe: "Celiac-safe",
   dedicated_fryer: "Dedicated fryer",
   dedicated_gf_menu: "Dedicated GF menu",
   off_menu_gf_on_request: "Off-menu GF on request",
@@ -57,7 +56,7 @@ export function claimAttributeLabel(attribute: ClaimAttribute): string {
  * `ClaimAttribute` key, so a new taxonomy value forces an icon here too.
  */
 export const CLAIM_ATTRIBUTE_ICONS: Record<ClaimAttribute, LucideIcon> = {
-  celiac_safe_vs_gluten_friendly: ShieldCheck,
+  celiac_safe: ShieldCheck,
   dedicated_fryer: Flame,
   dedicated_gf_menu: BookOpen,
   off_menu_gf_on_request: ConciergeBell,
@@ -73,7 +72,7 @@ export const CLAIM_ATTRIBUTE_ICONS: Record<ClaimAttribute, LucideIcon> = {
  * controls differently.
  */
 export const CLAIM_ATTRIBUTE_DESCRIPTIONS: Record<ClaimAttribute, string> = {
-  celiac_safe_vs_gluten_friendly:
+  celiac_safe:
     "Celiac-safe means the kitchen takes cross-contamination seriously, not just gluten-free options on the menu.",
   dedicated_fryer:
     "A separate fryer for gluten-free food (shared fryer oil is a major cross-contamination risk).",
@@ -330,7 +329,7 @@ export function hasPositiveConsensus(
 // ---------------------------------------------------------------------------
 
 /**
- * Derive the headline {@link SafetyState} for the `celiac_safe_vs_gluten_friendly`
+ * Derive the headline {@link SafetyState} for the `celiac_safe`
  * claim from its aggregate — the single seam the headline `SafetySummary` wires.
  *
  * Honest by construction (a celiac could get hurt by a fabricated rating):

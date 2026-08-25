@@ -625,7 +625,7 @@ describe("INVARIANT 6 — a tie or dispute-majority NEVER yields a safety badge"
     for (const confirmCount of COUNT_GRID) {
       for (const disputeCount of COUNT_GRID.filter((d) => d >= confirmCount && d > 0)) {
         const agg = aggregate(confirmCount, disputeCount, new Date(NOW.getTime() - DAY_MS));
-        const summary = summarizeClaim("celiac_safe_vs_gluten_friendly", agg, NOW);
+        const summary = summarizeClaim("celiac_safe", agg, NOW);
 
         expect(deriveHeadlineSafetyState(agg, NOW)).toBeNull(); // no badge…
         expect(summary.confirmCount).toBe(confirmCount); // …but full counts
@@ -772,7 +772,7 @@ describe("INVARIANT 7 — a filter never matches a claim whose disputes >= confi
     for (const confirmCount of COUNT_GRID) {
       for (const disputeCount of COUNT_GRID) {
         const summary = summarizeClaim(
-          "celiac_safe_vs_gluten_friendly",
+          "celiac_safe",
           {
             ...aggregate(confirmCount, disputeCount, null),
             suggested: true,

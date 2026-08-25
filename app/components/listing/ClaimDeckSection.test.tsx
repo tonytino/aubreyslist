@@ -44,7 +44,7 @@ const claim = (overrides: Partial<ListingClaimAggregate>): ListingClaimAggregate
 });
 
 const TAXONOMY = [
-  "celiac_safe_vs_gluten_friendly",
+  "celiac_safe",
   "dedicated_fryer",
   "dedicated_gf_menu",
   "off_menu_gf_on_request",
@@ -77,7 +77,7 @@ describe("ClaimDeckSection", () => {
       <ClaimDeckSection
         listingId="listing-1"
         claims={fullTaxonomy({
-          celiac_safe_vs_gluten_friendly: { claimId: "c1", viewerVote: "confirm" },
+          celiac_safe: { claimId: "c1", viewerVote: "confirm" },
         })}
         isSignedIn
       />
@@ -107,7 +107,7 @@ describe("ClaimDeckSection", () => {
     expect(submitVoteMock).toHaveBeenCalledWith({
       data: {
         listingId: "listing-1",
-        attribute: "celiac_safe_vs_gluten_friendly",
+        attribute: "celiac_safe",
         value: "confirm",
       },
     });
@@ -126,7 +126,7 @@ describe("ClaimDeckSection", () => {
       <ClaimDeckSection
         listingId="listing-1"
         claims={fullTaxonomy({
-          celiac_safe_vs_gluten_friendly: { claimId: "c1", viewerVote: "confirm" },
+          celiac_safe: { claimId: "c1", viewerVote: "confirm" },
         })}
         isSignedIn
       />
@@ -165,7 +165,7 @@ describe("ClaimDeckSection", () => {
       expect(removeVoteMock).toHaveBeenCalledTimes(1);
     });
     expect(removeVoteMock).toHaveBeenCalledWith({
-      data: { listingId: "listing-1", attribute: "celiac_safe_vs_gluten_friendly" },
+      data: { listingId: "listing-1", attribute: "celiac_safe" },
     });
     // The affordance retires itself once used.
     await waitFor(() => {
@@ -181,7 +181,7 @@ describe("ClaimDeckSection", () => {
       <ClaimDeckSection
         listingId="listing-1"
         claims={fullTaxonomy({
-          celiac_safe_vs_gluten_friendly: { claimId: "c1", viewerVote: "dispute" },
+          celiac_safe: { claimId: "c1", viewerVote: "dispute" },
         })}
         isSignedIn
       />
@@ -203,7 +203,7 @@ describe("ClaimDeckSection", () => {
     expect(submitVoteMock).toHaveBeenLastCalledWith({
       data: {
         listingId: "listing-1",
-        attribute: "celiac_safe_vs_gluten_friendly",
+        attribute: "celiac_safe",
         value: "dispute",
       },
     });

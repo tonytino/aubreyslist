@@ -39,7 +39,7 @@ import { buildSearchPredicate } from "./search";
  * No N+1: the page assembles from a small, fixed number of batched queries
  * regardless of page size —
  *   1. the page of listings (paginated),
- *   2. the `celiac_safe_vs_gluten_friendly` claim aggregate for that page,
+ *   2. the `celiac_safe` claim aggregate for that page,
  *      one grouped query scoped by `listingId IN (…)`,
  *   3. each page-listing's incidents, one `IN (…)` query reduced to a
  *      recent-incident boolean per listing via `findRecentIncident`, and
@@ -511,7 +511,7 @@ export async function buildBrowseCards(
  * `deriveHeadlineSafetyState` reads (ADR-007).
  *
  * - `confirmCount` / `disputeCount` — confirm and dispute tallies on the
- *   `celiac_safe_vs_gluten_friendly` claim.
+ *   `celiac_safe` claim.
  * - `lastConfirmedAt` — the claim's stored recency signal (null until first
  *   confirm; only confirms bump it).
  *
@@ -536,9 +536,7 @@ function celiacTrustSubquery() {
       .leftJoin(attestations, eq(attestations.claimId, claims.id))
       // Only visible claims feed the trust sort, so a hidden/removed claim
       // cannot influence ordering (matches the displayed glance).
-      .where(
-        sql`${claims.attribute} = 'celiac_safe_vs_gluten_friendly' and ${claims.moderationStatus} = 'visible'`
-      )
+      .where(sql`${claims.attribute} = 'celiac_safe' and ${claims.moderationStatus} = 'visible'`)
       .groupBy(claims.listingId, claims.lastConfirmedAt)
       .as("celiac_trust")
   );
@@ -720,7 +718,7 @@ interface CeliacAggregateWithContributors {
 }
 
 /**
- * Batch-load the `celiac_safe_vs_gluten_friendly` claim aggregate
+ * Batch-load the `celiac_safe` claim aggregate
  * (confirm/dispute counts + recency) and the distinct-contributor count for
  * each of `listingIds`, in one grouped query — one query for all cards, not
  * one per card (no N+1).
@@ -760,7 +758,7 @@ async function getCeliacAggregatesByListing(
     // so a hidden/removed claim drops out and the confirm/dispute counts
     // recompute from the survivors.
     .where(
-      sql`${claims.listingId} in ${listingIds} and ${claims.attribute} = 'celiac_safe_vs_gluten_friendly' and ${claims.moderationStatus} = 'visible'`
+      sql`${claims.listingId} in ${listingIds} and ${claims.attribute} = 'celiac_safe' and ${claims.moderationStatus} = 'visible'`
     )
     .groupBy(claims.listingId, claims.id, claims.lastConfirmedAt, claims.suggestedBy);
 
@@ -838,7 +836,7 @@ async function getBotSuggestedAttributesByListing(
 /**
  * Batch-load which non-headline claim attributes of each of `listingIds` have
  * confirmed positive community consensus: a visible claim — on any taxonomy
- * attribute except the headline `celiac_safe_vs_gluten_friendly` (which
+ * attribute except the headline `celiac_safe` (which
  * drives the SafetySignal verdict, not a claim badge) — whose attestations
  * have strictly more confirms than disputes. One grouped `IN (…)` query for
  * the whole page (no N+1), with the same visibility bound as the sibling
@@ -878,7 +876,7 @@ async function getConfirmedAttributesByListing(
       and(
         inArray(claims.listingId, listingIds),
         // Non-headline only: the celiac headline is the SafetySignal verdict.
-        sql`${claims.attribute} <> 'celiac_safe_vs_gluten_friendly'`,
+        sql`${claims.attribute} <> 'celiac_safe'`,
         // Only visible claims count toward consensus.
         eq(claims.moderationStatus, "visible")
       )

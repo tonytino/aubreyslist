@@ -106,7 +106,7 @@ export function ClaimVoteControls({
 
   // Only the headline claim's confirm caption differs: "You confirmed this."
   // reads awkwardly beside the Celiac-safe badge, so name the state it records.
-  const isHeadline = attribute === "celiac_safe_vs_gluten_friendly";
+  const isHeadline = attribute === "celiac_safe";
 
   // Ownership caption for a pressed vote. Rendered only when the viewer has
   // voted; meaning is also carried by each toggle's `aria-pressed`.

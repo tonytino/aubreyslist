@@ -80,7 +80,7 @@ afterEach(() => {
 // The fixed GF taxonomy (db/schema.ts `claim_attribute`). The loader always
 // returns one entry per attribute, in this canonical order.
 const TAXONOMY = [
-  "celiac_safe_vs_gluten_friendly",
+  "celiac_safe",
   "dedicated_fryer",
   "dedicated_gf_menu",
   "off_menu_gf_on_request",

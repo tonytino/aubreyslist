@@ -11,7 +11,7 @@ import { deriveStepperNodes, ProgressStepper } from "./ProgressStepper";
  */
 
 const NO_ANSWERS: AnswerMap = {
-  celiac_safe_vs_gluten_friendly: undefined,
+  celiac_safe: undefined,
   dedicated_fryer: undefined,
   dedicated_gf_menu: undefined,
   off_menu_gf_on_request: undefined,
@@ -19,7 +19,7 @@ const NO_ANSWERS: AnswerMap = {
 };
 
 const ALL_ATTESTED: AnswerMap = {
-  celiac_safe_vs_gluten_friendly: "confirm",
+  celiac_safe: "confirm",
   dedicated_fryer: "dispute",
   dedicated_gf_menu: "confirm",
   off_menu_gf_on_request: "confirm",
@@ -36,7 +36,7 @@ describe("deriveStepperNodes", () => {
   });
 
   it("keeps the attest node todo while ANY attribute is still unanswered", () => {
-    const partial: AnswerMap = { ...NO_ANSWERS, celiac_safe_vs_gluten_friendly: "confirm" };
+    const partial: AnswerMap = { ...NO_ANSWERS, celiac_safe: "confirm" };
     const nodes = deriveStepperNodes(2, true, partial);
     expect(nodes[0]?.status).toBe("done"); // place chosen
     expect(nodes[1]?.status).toBe("todo"); // deck not finished

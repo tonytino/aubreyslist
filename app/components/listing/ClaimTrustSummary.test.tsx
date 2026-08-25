@@ -105,7 +105,7 @@ describe("ClaimTrustSummaryRow", () => {
   it("renders the two-state clarifier for the headline attribute (Celiac-safe, #175)", () => {
     render(
       <ClaimTrustSummaryRow
-        attribute="celiac_safe_vs_gluten_friendly"
+        attribute="celiac_safe"
         aggregate={{ confirmCount: 0, disputeCount: 0, lastConfirmedAt: null }}
         now={NOW}
       />
