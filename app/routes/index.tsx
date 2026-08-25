@@ -813,9 +813,10 @@ function BrowseListings() {
               // The mount-latched URL selection: the carousel scrolls to it
               // instantly (no animation, no focus move) once its card exists.
               restoreSelectedId={restoreSelectedId}
-              // While the distance anchor resolves, the entries are a
-              // transient set: the restore snaps provisionally and takes its
-              // final position from the re-anchored set.
+              // The anchor half of the "entries are transient" signal — the
+              // carousel composes it with the loadMore state it already
+              // holds. While transient, the restore snaps provisionally and
+              // takes its final position from the settled set.
               resultSetPending={anchorPending}
               // "Load more" appends the next page as extra pins/cards
               // (wiring built by useMapPages from the honest total). New

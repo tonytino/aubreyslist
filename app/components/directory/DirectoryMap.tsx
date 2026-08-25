@@ -136,8 +136,9 @@ export const DirectoryMap = memo(function DirectoryMap({
   /** The URL-restored selection to scroll the carousel to instantly on
    * mount (see `MapCarousel`). */
   restoreSelectedId?: string | null;
-  /** True while the entries may still be replaced without a navigation
-   * (the distance anchor resolving) — the restore's settle signal. */
+  /** True while the entries may still be replaced without a navigation for
+   * a reason `loadMore` cannot see (the distance anchor resolving) — the
+   * carousel composes the full settle signal from both. */
   resultSetPending?: boolean;
   /**
    * Re-run the browse anchored on the given map center ("Search near here").

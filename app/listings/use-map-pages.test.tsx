@@ -269,4 +269,29 @@ describe("useMapPages — failed pages", () => {
     expect(result.current.cards.map((c) => c.listing.id)).toEqual(["a1", "a2", "p2-1"]);
     expect(fetchMock.calls).toEqual([2, 2]);
   });
+
+  it("stays busy while an errored page's retry is in flight", async () => {
+    fetchMock.impl = () => Promise.reject(new Error("network down"));
+    const { result } = renderMapPages();
+    act(() => result.current.loadMore.onLoadMore());
+    await waitFor(() => expect(result.current.loadMore.failed).toBe(true));
+    expect(result.current.loadMore.pending).toBe(false);
+
+    // Retry with the response held open: the errored query keeps isError
+    // through its refetch, and the refetch must still read as busy — the
+    // busy card, the click guard, and the append disarm's rising edge all
+    // depend on it.
+    let deliver: ((page: BrowseListingsPage) => void) | undefined;
+    fetchMock.impl = () =>
+      new Promise((resolve) => {
+        deliver = resolve;
+      });
+    act(() => result.current.loadMore.onLoadMore());
+    await waitFor(() => expect(result.current.loadMore.pending).toBe(true));
+
+    act(() => deliver?.(pageResponse(2, [card("p2-1")])));
+    await waitFor(() => expect(result.current.loadMore.pending).toBe(false));
+    expect(result.current.loadMore.failed).toBe(false);
+    expect(result.current.cards.map((c) => c.listing.id)).toEqual(["a1", "a2", "p2-1"]);
+  });
 });

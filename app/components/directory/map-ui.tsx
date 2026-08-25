@@ -416,9 +416,9 @@ export function MapCarousel({
   restoreSelectedId?: string | null;
   /**
    * True while the current entries may still be replaced without any
-   * navigation (the route's distance anchor is still resolving). The restore
-   * snaps provisionally but stays armed, so the settled set gets the final
-   * snap at its real card offsets.
+   * navigation for a reason `loadMore` cannot see (the route's distance
+   * anchor is still resolving). The restore composes this with `loadMore`'s
+   * own pending/failed state to decide when the set is settled.
    */
   resultSetPending?: boolean;
 }) {
@@ -432,18 +432,28 @@ export function MapCarousel({
     scrollCardFlushLeft(container, card);
   });
 
+  // The full "entries may still change without a navigation" signal: the
+  // anchor half from the route, composed with the pages the hook itself is
+  // still resolving. A failed page counts too — it is an unresolved hole in
+  // the sequence the visitor can still retry, so offsets are as provisional
+  // as during a load (mirrors the route's stale-sel strip gate).
+  const entriesTransient =
+    resultSetPending || (loadMore ? loadMore.pending || loadMore.failed : false);
+
   // Deep-link restore: put the restored selection's card flush-left the
   // moment it exists — instantly (a restored position is state, not motion),
   // before paint (useLayoutEffect: a cache-warm Back must never flash the
-  // band at its start and then teleport), and without touching focus. The
-  // target survives loading and failed pages (a retry may still deliver its
-  // card) and dies the moment the visitor takes the band over — a card tap,
-  // a Load more click, or the route's fallback after it strips a stale
-  // `?sel=`. While the result set is still transient (`resultSetPending`)
-  // a hit snaps but stays armed: the re-anchored set may put the same card
-  // at a different offset, and the settled set owns the final snap. The
-  // sequence guard keeps a content-only refresh from re-yanking the band
-  // between those two snaps.
+  // band at its start and then teleport), and without touching focus. While
+  // the set is transient (`entriesTransient`) a hit snaps but stays armed:
+  // a re-anchored or completed set may put the same card at a different
+  // offset, and the settled set owns the final snap — skipped when its id
+  // sequence matches the last provisional snap, so an unchanged set (e.g. a
+  // denied geolocation prompt settling) never re-yanks the band. The target
+  // dies when the visitor takes the band over (a card tap, a Load more
+  // click, pointer or wheel input on the band) or when the selection lands
+  // on a different card — the route's first-entry fallback after it strips
+  // a stale `?sel=` arrives here that way — and always once a settled set
+  // has been judged, so it can never linger armed past settle.
   const restoreTarget = useRef(restoreSelectedId ?? null);
   const restoreSnappedIds = useRef<string | null>(null);
   useLayoutEffect(() => {
@@ -457,15 +467,30 @@ export function MapCarousel({
     const container = containerEl.current;
     const card = cardEls.current.get(target);
     if (!container || !card) return;
-    if (resultSetPending) {
-      const sequence = entries.map((entry) => entry.vm.id).join("\n");
+    const sequence = entries.map((entry) => entry.vm.id).join("\n");
+    if (entriesTransient) {
       if (restoreSnappedIds.current === sequence) return;
       restoreSnappedIds.current = sequence;
-    } else {
-      restoreTarget.current = null;
+      scrollCardFlushLeft(container, card, "instant");
+      return;
     }
-    scrollCardFlushLeft(container, card, "instant");
-  }, [entries, selectedId, resultSetPending]);
+    restoreTarget.current = null;
+    if (restoreSnappedIds.current !== sequence) {
+      scrollCardFlushLeft(container, card, "instant");
+    }
+  }, [entries, selectedId, entriesTransient]);
+
+  // Reading by scrolling is a takeover too: pointer or wheel input on the
+  // band retires the armed restore, so a later settle or page arrival can
+  // never yank the band mid-read. Input events rather than scroll events on
+  // purpose: the programmatic scrolls here (selection sync, append scroll,
+  // the restore itself — instant reduced-motion variants included) fire
+  // scroll events but never input events, so no programmatic-scroll flag is
+  // needed and an interrupted smooth scroll cannot wedge the discriminator.
+  // The scrollbar is hidden, so there is no scrollbar-drag path to miss.
+  const onUserBandInput = () => {
+    restoreTarget.current = null;
+  };
 
   // Bring the first appended page into view: when new entries arrive as a
   // pure append (every previous id keeps its slot — a filter/sort/area
@@ -537,6 +562,8 @@ export function MapCarousel({
       // tabIndex -1: a programmatic focus target only (the Load more focus
       // hand-off above) — never a tab stop.
       tabIndex={-1}
+      onPointerDown={onUserBandInput}
+      onWheel={onUserBandInput}
       className="absolute inset-x-0 bottom-0 z-10 flex gap-3 overflow-x-auto bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {entries.map(({ vm }, entryIndex) => {

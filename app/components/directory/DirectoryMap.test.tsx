@@ -982,6 +982,60 @@ describe("DirectoryMap — deep-link selection restore (?sel=)", () => {
     expect(scrollTo).toHaveBeenCalledTimes(1);
   });
 
+  it("retires without re-snapping when the set settles unchanged (denied location prompt)", async () => {
+    // Geolocation denied or timed out: the anchor settles over the identical
+    // sequence. Re-snapping would yank a band the visitor may have scrolled.
+    const { rerenderWith } = await renderMap("b", undefined, "b", true);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    rerenderWith("b", entries, undefined, "idle", false);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    // Retired at settle: a later reshuffle never snaps back.
+    rerenderWith("b", [...entries].reverse());
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-snaps when seeded pages land out of order (compressed set, then the full set)", async () => {
+    // Cache-cold restore: the later seeded page (holding the target) lands
+    // first, so the merged set is compressed while the earlier page is
+    // still pending — the pending page alone keeps the set transient.
+    const { rerenderWith } = await renderMap(null, idleLoadMore({ pending: true }), "f");
+    const fEntry = withF[withF.length - 1] as DirectoryMapEntry;
+    const compressed = [...entries, fEntry];
+    rerenderWith("f", compressed, idleLoadMore({ pending: true }));
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+
+    // The earlier page arrives and slots in ahead of the target, shifting
+    // its offset: the settled set owns the final snap.
+    const earlier: DirectoryMapEntry = {
+      vm: vm({ id: "g", name: "Garden Gate", safetyState: "celiac-safe" }),
+      lat: 39.75,
+      lng: -104.92,
+    };
+    rerenderWith("f", [...entries, earlier, fEntry], idleLoadMore());
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 0, behavior: "instant" });
+  });
+
+  it("retires the armed restore when the visitor touches the band before it resolves", async () => {
+    // The target's page is still loading when the visitor starts reading by
+    // swiping the band: the restore must never yank them when it lands.
+    const { rerenderWith } = await renderMap(null, idleLoadMore({ pending: true }), "f");
+    fireEvent.pointerDown(screen.getByTestId("map-carousel"));
+    rerenderWith("f", withF, idleLoadMore());
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("retires a provisional restore on wheel input: a genuine reshuffle no longer re-snaps", async () => {
+    const { rerenderWith } = await renderMap("b", undefined, "b", true);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    fireEvent.wheel(screen.getByTestId("map-carousel"));
+    // The reading lands and reshuffles the set: with the restore retired,
+    // nothing moves the band the visitor is holding.
+    rerenderWith("b", [...entries].reverse(), undefined, "idle", false);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
   it("retires the restore when the visitor clicks Load more before it resolves", async () => {
     const { rerenderWith } = await renderMap(null, idleLoadMore(), "f");
     expect(scrollTo).not.toHaveBeenCalled();
