@@ -38,8 +38,7 @@ Plain and concrete. Contractions are fine. Write like a knowledgeable friend,
 not a brochure.
 
 Keep domain terms exact (see [`domain.md`](./domain.md)): **celiac-safe**,
-**gluten-friendly**, **Not yet attested**, **Confirm/Dispute**, **attest**,
-**got glutened**.
+**Not yet attested**, **Confirm/Dispute**, **attest**, **got glutened**.
 
 ## Hard constraint: brevity never trumps safety-critical meaning
 
@@ -48,6 +47,10 @@ This is a celiac-safety product. Trim words, never these facts:
 - Trust summaries are transparent roll-ups of visible evidence, never hidden
   scores (ADR-007).
 - Empty states stay honest: "Not yet attested" means not yet attested.
+- Celiac-safe is the only safety claim a listing can earn. A listing that
+  hasn't earned it shows nothing at glance level, never a lesser label. Claim
+  rows still carry their confirm/dispute counts (see
+  [`domain.md`](./domain.md)).
 - A recent "got glutened" report flags a listing regardless of older
   confirmations.
 - Safety labels carry their meaning in text, without relying on color.

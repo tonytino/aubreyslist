@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted. Refined by ADR-016 (celiac-safe is the only community safety claim).
 
 ## Context
 

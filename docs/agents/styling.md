@@ -102,25 +102,27 @@ they surface as Tailwind v4 utilities — never reach for inline styles or
 | Brand | `--color-brand`, `-foreground`, `-strong`, `-soft`, `-ring` | `bg-brand`, `text-brand`, `hover:bg-brand-strong`, `bg-brand-soft` |
 | Pastel accents (decorative only) | `--color-accent-{lavender,mint,peach,sky}` | `bg-accent-mint` |
 | Neutrals | `--color-{background,foreground,surface,border}`, `--color-muted-foreground` | `bg-background`, `text-foreground`, `border-border` |
-| Safety states | `--color-{celiac-safe,gluten-friendly,stale,incident}` + `-foreground` + `-soft` | use the `SafetySignal` component, not raw classes |
+| Safety states | `--color-{celiac-safe,stale,incident}` + `-foreground` + `-soft` | use the `SafetySignal` component, not raw classes |
 | Type scale | `--text-{caption,body-sm,body,lead,title,headline,display}` | `text-display`, `text-body` |
 | Spacing | `--spacing-{gutter,card,section}` | `p-gutter`, `gap-section` |
 | Radii | `--radius-{chip,card}` | `rounded-chip`, `rounded-card` |
 
 ### Accessible safety-signal pattern (NON-NEGOTIABLE)
 
-The celiac-safe vs. gluten-friendly distinction (and every status cue) **must
-never rely on colour alone** (see `docs/product/overview.md` → Stance &
-Non-Negotiables, and `docs/agents/domain.md`). Use the `SafetySignal` component
+Every safety state (and every status cue) **must never rely on colour alone**
+(see `docs/product/overview.md` → Stance & Non-Negotiables, and
+`docs/agents/domain.md`). Use the `SafetySignal` component
 (`app/components/SafetySignal.tsx`) — it guarantees **colour + icon + text
-label** for all four states:
+label** for all three states:
 
 | State | Label | Icon shape | Meaning |
 | --- | --- | --- | --- |
 | `celiac-safe` | "Celiac-safe" | shield + check | headline trust state |
-| `gluten-friendly` | "Gluten-friendly" | struck-out wheat (brand `WheatStrike`) | GF-ish only — *not* safe |
 | `stale` | "Needs update" | clock | outside the staleness window |
 | `incident` | "Recent incident" | warning triangle | recent "got glutened" harm |
+
+A listing with no state (unattested, or a disputed headline claim) renders no
+chip at all. `null` is the absence of a badge, not a fourth state.
 
 ```tsx
 import { SafetySignal } from "~/components/SafetySignal";
@@ -250,9 +252,21 @@ Conventions:
   ```
 
 `SafetySignal` uses one distinct, greyscale-survivable shape per state
-(`ShieldCheck` / the branded `WheatStrike` glyph (AUB-133) / `Clock` /
-`TriangleAlert`). Keep them distinct if you revisit the mapping; the shape is
-load-bearing, not just the colour. Any OTHER surface that represents the
-gluten-friendly state with an icon (map pins, quick chips, wizard buttons) must
-use the same `WheatStrike` glyph
-(`app/components/icons/WheatStrike.tsx`) — never a generic lucide `Leaf`.
+(`ShieldCheck` / `Clock` / `TriangleAlert`). Keep them distinct if you revisit
+the mapping; the shape is load-bearing, not just the colour.
+
+Two icon sources, keyed by two different concepts — don't cross them:
+
+- **Safety STATE** → `safetyIcon()` in `app/components/SafetySignal.tsx`. The
+  map pins (`app/components/directory/map-ui.tsx`) draw their glyph from it;
+  any new surface rendering a state should too, so the shape mapping can't
+  drift.
+- **Taxonomy ATTRIBUTE** → `CLAIM_ATTRIBUTE_ICONS` in `~/trust/summary`, keyed
+  by attribute rather than by state. `ClaimBadge` and the add-listing review
+  chip read from it.
+
+Some surfaces sit outside both maps: the `celiac` quick chip
+(`FilterChips.tsx`) and the deck's headline-confirm affordance
+(`ClaimCardDeck.tsx`, `SwipeStamp.tsx`) name `ShieldCheck` inline. That glyph
+has to stay in step with the two maps by hand, so prefer the shared source when
+you touch one of them.

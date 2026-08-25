@@ -72,7 +72,6 @@ The palette is fixed; the energy comes from how you use it:
 - **Decorative accents:** lavender, mint, peach, sky (fills only).
 - **Safety states** (color + icon + label, AA-tuned; see `domain.md`):
   - `celiac-safe` — trustworthy green
-  - `gluten-friendly` — caution amber/brown, deliberately distinct from safe
   - `stale` — neutral slate (a freshness/recency flag)
   - `incident` — strong red, highest urgency ("got glutened")
 - **Type scale:** caption → body → lead → title → headline → display.
