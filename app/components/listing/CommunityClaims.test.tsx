@@ -36,7 +36,7 @@ const claim = (overrides: Partial<ListingClaimAggregate>): ListingClaimAggregate
 // The full fixed taxonomy as the loader returns it: one entry per attribute,
 // all empty (claimId null, zero votes) unless overridden.
 const TAXONOMY = [
-  "celiac_safe_vs_gluten_friendly",
+  "celiac_safe",
   "dedicated_fryer",
   "dedicated_gf_menu",
   "off_menu_gf_on_request",

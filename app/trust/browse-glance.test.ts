@@ -56,7 +56,7 @@ describe("deriveListingTrustGlance", () => {
     expect(glance.suggestedByBot).toBe(true);
     // The celiac fallback flag folds into the attribute set, so the card can
     // badge the suggested claim even without the batched per-attribute set.
-    expect(glance.suggestedAttributes).toEqual(["celiac_safe_vs_gluten_friendly"]);
+    expect(glance.suggestedAttributes).toEqual(["celiac_safe"]);
     expect(glance.safetyState).toBeNull();
     expect(glance.evidence).toBeNull();
   });
@@ -152,10 +152,10 @@ describe("deriveListingTrustGlance", () => {
       undefined,
       // Out of order + a duplicate + celiac already present (so the fallback
       // fold-in must not double it).
-      ["gf_substitutes", "dedicated_fryer", "gf_substitutes", "celiac_safe_vs_gluten_friendly"]
+      ["gf_substitutes", "dedicated_fryer", "gf_substitutes", "celiac_safe"]
     );
     expect(glance.suggestedAttributes).toEqual([
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_fryer",
       "gf_substitutes",
     ]);

@@ -51,7 +51,7 @@ export function emptyDeckAnswers(): DeckAnswerMap {
   ) as DeckAnswerMap;
 }
 
-const HEADLINE = "celiac_safe_vs_gluten_friendly" as const;
+const HEADLINE = "celiac_safe" as const;
 
 export interface ClaimCardDeckProps {
   /** The host-owned answer map (controls seeding + the progress dots). */

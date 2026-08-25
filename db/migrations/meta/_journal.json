@@ -43,6 +43,13 @@
       "when": 1783369618941,
       "tag": "0005_rare_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787651383664,
+      "tag": "0006_wide_sprite",
+      "breakpoints": true
     }
   ]
 }

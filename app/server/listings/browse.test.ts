@@ -930,7 +930,7 @@ describe("getBrowseListings", () => {
       {
         ...baseInput,
         q: "taco",
-        attrs: ["dedicated_fryer", "celiac_safe_vs_gluten_friendly"],
+        attrs: ["dedicated_fryer", "celiac_safe"],
       },
       NOW
     );

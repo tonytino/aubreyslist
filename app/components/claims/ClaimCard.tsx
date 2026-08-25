@@ -30,7 +30,7 @@ import { SwipeStamp } from "./SwipeStamp";
  * path is the deck's real `<button>` row below the stack.
  */
 
-const HEADLINE = "celiac_safe_vs_gluten_friendly" as const;
+const HEADLINE = "celiac_safe" as const;
 
 /** Horizontal drag distance (px) past which release commits the answer. */
 const SWIPE_THRESHOLD_PX = 96;

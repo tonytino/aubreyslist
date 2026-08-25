@@ -5,7 +5,7 @@ import { CLAIM_ATTRIBUTES } from "./taxonomy";
 describe("GF taxonomy constant", () => {
   it("declares the FIXED v1 taxonomy in order", () => {
     expect(CLAIM_ATTRIBUTES).toEqual([
-      "celiac_safe_vs_gluten_friendly",
+      "celiac_safe",
       "dedicated_fryer",
       "dedicated_gf_menu",
       "off_menu_gf_on_request",

@@ -33,6 +33,15 @@ describe("parseAttrs", () => {
   it("returns an empty list for the empty string", () => {
     expect(parseAttrs("")).toEqual([]);
   });
+
+  it("BACK-COMPAT: drops the pre-AUB-297 headline key instead of erroring", () => {
+    // An old shared link may still carry the retired headline token; it must
+    // read as any unknown token — dropped, with sibling filters intact.
+    expect(parseAttrs("celiac_safe_vs_gluten_friendly")).toEqual([]);
+    expect(parseAttrs("celiac_safe_vs_gluten_friendly,dedicated_fryer")).toEqual([
+      "dedicated_fryer",
+    ]);
+  });
 });
 
 describe("serializeAttrs", () => {

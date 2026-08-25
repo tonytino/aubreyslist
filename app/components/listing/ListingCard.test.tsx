@@ -302,7 +302,7 @@ describe("RestaurantCard", () => {
     renderCard({
       safetyState: null,
       suggestedByBot: true,
-      suggestedAttributes: ["celiac_safe_vs_gluten_friendly"],
+      suggestedAttributes: ["celiac_safe"],
     });
     const badge = await screen.findByTestId("suggested-attribute");
     expect(badge).toHaveTextContent("Celiac-safe");

@@ -15,13 +15,14 @@
  * Order is meaningful: it is the order the attributes appear in the filter UI
  * and the persisted enum. Do not reorder without intent.
  *
- * The headline attribute's enum key is `celiac_safe_vs_gluten_friendly`, but
- * it is surfaced simply as "Celiac-safe" (every listing is assumed
- * gluten-free-friendly, so the useful question is "is it celiac-safe?"). The
- * key is persisted — do not rename it; see `app/trust/summary.ts`.
+ * The headline attribute is `celiac_safe`, labelled "Celiac-safe" (every
+ * listing is assumed gluten-free-friendly, so the useful question is "is it
+ * celiac-safe?"). The key is persisted as a `claim_attribute` enum value —
+ * renaming one needs a data-preserving enum-recreate migration (see
+ * `db/migrations/0006_wide_sprite.sql`); labels live in `app/trust/summary.ts`.
  */
 export const CLAIM_ATTRIBUTES = [
-  "celiac_safe_vs_gluten_friendly",
+  "celiac_safe",
   "dedicated_fryer",
   "dedicated_gf_menu",
   "off_menu_gf_on_request",

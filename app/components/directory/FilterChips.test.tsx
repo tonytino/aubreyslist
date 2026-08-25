@@ -170,10 +170,10 @@ describe("FilterChips — taxonomy chips (AUB-198)", () => {
   });
 
   it("BACK-COMPAT: a URL carrying the headline attr renders its chip pressed and toggleable", () => {
-    // A shared link may carry `?attrs=celiac_safe_vs_gluten_friendly`. The
-    // active filter must stay visible (an invisible active filter is dishonest)
+    // A shared link may carry `?attrs=celiac_safe`. The active filter must
+    // stay visible (an invisible active filter is dishonest)
     // and removable — so the otherwise-hidden headline chip renders, pressed.
-    const { onToggleAttr } = renderChips({ attrs: ["celiac_safe_vs_gluten_friendly"] });
+    const { onToggleAttr } = renderChips({ attrs: ["celiac_safe"] });
     const celiacChips = screen.getAllByRole("button", { name: "Celiac-safe" });
     expect(celiacChips).toHaveLength(2); // the quick chip + the back-compat attr chip
     const attrChip = celiacChips.find((chip) => chip.getAttribute("aria-pressed") === "true");
@@ -181,7 +181,7 @@ describe("FilterChips — taxonomy chips (AUB-198)", () => {
     if (attrChip) {
       fireEvent.click(attrChip);
     }
-    expect(onToggleAttr).toHaveBeenCalledWith("celiac_safe_vs_gluten_friendly");
+    expect(onToggleAttr).toHaveBeenCalledWith("celiac_safe");
   });
 });
 

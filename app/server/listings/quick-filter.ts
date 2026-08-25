@@ -52,7 +52,7 @@ import { stalenessCutoff } from "~/trust/summary";
  */
 
 /** The single headline celiac claim attribute the glance derives from. */
-const CELIAC_ATTRIBUTE: ClaimAttribute = "celiac_safe_vs_gluten_friendly";
+const CELIAC_ATTRIBUTE: ClaimAttribute = "celiac_safe";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

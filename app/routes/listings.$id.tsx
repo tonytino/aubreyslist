@@ -203,13 +203,11 @@ function ListingDetail() {
   // Recent harm flags the listing regardless of older confirmations (ADR-007).
   const recentIncident = findRecentIncident(incidents, now);
 
-  // Headline celiac-safe cue, derived from the `celiac_safe_vs_gluten_friendly`
+  // Headline celiac-safe cue, derived from the `celiac_safe`
   // claim's visible aggregate (ADR-007). No such claim, no attestation
   // evidence, or a dispute majority → `null`, so SafetySummary shows honest
   // guidance and no badge (never a fabricated rating).
-  const headlineClaim = claims.find(
-    (claim) => claim.attribute === "celiac_safe_vs_gluten_friendly"
-  );
+  const headlineClaim = claims.find((claim) => claim.attribute === "celiac_safe");
   const safetyState = headlineClaim
     ? deriveHeadlineSafetyState(headlineClaim, now, stalenessMonths)
     : null;
@@ -231,7 +229,7 @@ function ListingDetail() {
   // `summarizeClaim` does). Rendered via the shared `ClaimBadge` so this row
   // and the browse cards' suggested badges stay visually consistent.
   const nonHeadlineClaimBadges = claims
-    .filter((claim) => claim.attribute !== "celiac_safe_vs_gluten_friendly")
+    .filter((claim) => claim.attribute !== "celiac_safe")
     .map((claim) => ({
       attribute: claim.attribute,
       confirmed: hasPositiveConsensus(claim),

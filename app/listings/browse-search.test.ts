@@ -47,7 +47,7 @@ describe("browseSearchSchema", () => {
     expect(
       browseSearchSchema.parse({
         page: 3,
-        attrs: "celiac_safe_vs_gluten_friendly",
+        attrs: "celiac_safe",
         q: "pizza",
         sort: "trust",
         radius: 10,
@@ -58,7 +58,7 @@ describe("browseSearchSchema", () => {
       })
     ).toEqual({
       page: 3,
-      attrs: "celiac_safe_vs_gluten_friendly",
+      attrs: "celiac_safe",
       q: "pizza",
       sort: "trust",
       radius: 10,
@@ -282,7 +282,7 @@ describe("isAnyBrowseFilterActive", () => {
 
   it.each<[string, Partial<BrowseSearchLike>]>([
     ["page", { page: 2 }],
-    ["attrs", { attrs: "celiac_safe_vs_gluten_friendly" }],
+    ["attrs", { attrs: "celiac_safe" }],
     ["q", { q: "pizza" }],
     ["sort", { sort: "trust" }],
     ["radius", { radius: 10 }],

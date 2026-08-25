@@ -33,12 +33,12 @@ import { waitForBrowseSearchApplied, waitForHydration } from "./helpers";
 
 /** The first seeded entry without a celiac suggestion. */
 const nonCeliacTarget: SeededListing | undefined = SEED_LISTINGS.find(
-  (entry) => !entry.suggestedAttributes.includes("celiac_safe_vs_gluten_friendly")
+  (entry) => !entry.suggestedAttributes.includes("celiac_safe")
 );
 
 /** The first seeded entry with a celiac suggestion. */
 const celiacTarget: SeededListing | undefined = SEED_LISTINGS.find((entry) =>
-  entry.suggestedAttributes.includes("celiac_safe_vs_gluten_friendly")
+  entry.suggestedAttributes.includes("celiac_safe")
 );
 
 test.describe("seeded listings — badge + detail page (AUB-196)", () => {

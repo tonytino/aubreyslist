@@ -118,7 +118,7 @@ describe("AddListingWizard", () => {
     expect(submitVoteMock).toHaveBeenCalledTimes(3);
     const votes = submitVoteMock.mock.calls.map((call) => (call[0] as { data: unknown }).data);
     expect(votes).toEqual([
-      { listingId: "l1", attribute: "celiac_safe_vs_gluten_friendly", value: "confirm" },
+      { listingId: "l1", attribute: "celiac_safe", value: "confirm" },
       { listingId: "l1", attribute: "dedicated_gf_menu", value: "dispute" },
       { listingId: "l1", attribute: "gf_substitutes", value: "confirm" },
     ]);

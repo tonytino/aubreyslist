@@ -44,9 +44,8 @@ const YEAR = 365 * DAY;
 describe("claimAttributeLabel", () => {
   it("maps each taxonomy attribute to a human label", () => {
     expect(claimAttributeLabel("dedicated_fryer")).toBe("Dedicated fryer");
-    // The `celiac_safe_vs_gluten_friendly` enum key surfaces simply as
-    // "Celiac-safe" — key and label deliberately differ.
-    expect(claimAttributeLabel("celiac_safe_vs_gluten_friendly")).toBe("Celiac-safe");
+    // The headline attribute surfaces simply as "Celiac-safe".
+    expect(claimAttributeLabel("celiac_safe")).toBe("Celiac-safe");
   });
 
   it("has a label for every attribute (exhaustive)", () => {
@@ -61,7 +60,7 @@ describe("claimAttributeDescription", () => {
     // The gloss defines the one thing the headline vote decides — a kitchen
     // that takes cross-contamination seriously, not merely one with GF items
     // — so a headline vote is never ambiguous on either surface.
-    const description = claimAttributeDescription("celiac_safe_vs_gluten_friendly");
+    const description = claimAttributeDescription("celiac_safe");
     expect(description).toMatch(/celiac-safe/i);
     expect(description).toMatch(/cross-contamination/i);
     expect(description).toMatch(/gluten-free options/i);
