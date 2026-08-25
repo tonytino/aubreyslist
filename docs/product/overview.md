@@ -78,10 +78,12 @@ which gates any paid-tier spend).
 
 ## Stance & Non-Negotiables (product-level)
 
-- **Celiac-safe is the only safety claim.** Presence on the platform already
-  implies gluten-free options, so the one question the community answers is
-  whether the kitchen is celiac-safe. A listing either earns that badge or
-  shows nothing. We never award a lesser badge, because reading a merely
+- **Celiac-safe is the only safety claim** (ADR-016). Presence on the platform
+  already implies gluten-free options, so the one question the community
+  answers is whether the kitchen is celiac-safe. A listing either earns that
+  badge or shows nothing at a glance — an aged consensus is flagged "Needs
+  update" rather than downgraded, and a claim's own confirm/dispute counts stay
+  on its detail row. We never award a lesser badge, because reading a merely
   gluten-free menu as celiac-safe is the exact failure mode this product exists
   to prevent.
 - **Safety signals never rely on color alone.** Purple/pastel branding (see

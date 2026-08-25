@@ -253,7 +253,20 @@ Conventions:
 
 `SafetySignal` uses one distinct, greyscale-survivable shape per state
 (`ShieldCheck` / `Clock` / `TriangleAlert`). Keep them distinct if you revisit
-the mapping; the shape is load-bearing, not just the colour. Any OTHER surface
-that draws a safety state with an icon (map pins, quick chips, wizard buttons)
-must source it from `safetyIcon()` in `app/components/SafetySignal.tsx`, so the
-shape mapping cannot drift between surfaces.
+the mapping; the shape is load-bearing, not just the colour.
+
+Two icon sources, keyed by two different concepts — don't cross them:
+
+- **Safety STATE** → `safetyIcon()` in `app/components/SafetySignal.tsx`. The
+  map pins (`app/components/directory/map-ui.tsx`) draw their glyph from it;
+  any new surface rendering a state should too, so the shape mapping can't
+  drift.
+- **Taxonomy ATTRIBUTE** → `CLAIM_ATTRIBUTE_ICONS` in `~/trust/summary`, keyed
+  by attribute rather than by state. `ClaimBadge` and the add-listing review
+  chip read from it.
+
+Some surfaces sit outside both maps: the `celiac` quick chip
+(`FilterChips.tsx`) and the deck's headline-confirm affordance
+(`ClaimCardDeck.tsx`, `SwipeStamp.tsx`) name `ShieldCheck` inline. That glyph
+has to stay in step with the two maps by hand, so prefer the shared source when
+you touch one of them.

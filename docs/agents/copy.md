@@ -48,7 +48,9 @@ This is a celiac-safety product. Trim words, never these facts:
   scores (ADR-007).
 - Empty states stay honest: "Not yet attested" means not yet attested.
 - Celiac-safe is the only safety claim a listing can earn. A listing that
-  hasn't earned it shows nothing, never a lesser label.
+  hasn't earned it shows nothing at glance level, never a lesser label. Claim
+  rows still carry their confirm/dispute counts (see
+  [`domain.md`](./domain.md)).
 - A recent "got glutened" report flags a listing regardless of older
   confirmations.
 - Safety labels carry their meaning in text, without relying on color.
