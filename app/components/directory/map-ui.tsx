@@ -21,6 +21,7 @@ import {
 import { SafetySignal, type SafetyState, safetyIcon, safetyLabel } from "~/components/SafetySignal";
 import { prefersReducedMotion } from "~/lib/motion";
 import type { MapLoadMore } from "~/listings/use-map-pages";
+import { ACTIVITY_NAME_CLARIFIER } from "~/trust/summary";
 
 /**
  * Shared presentational pieces of the directory Map view: the safety-pin
@@ -214,10 +215,13 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
 function cardAccessibleName(vm: RestaurantCardVM): string {
   const parts = [pinAccessibleName(vm), ...cardLocationParts(vm)];
   if (!vm.safetyState && vm.suggestedByBot) parts.push("suggested by Aubrey's Bot");
-  // The meta row's activity line, which `aria-label` would otherwise hide. It
-  // is neutral by construction ("Updated 3 days ago" / "No activity yet"), so
-  // it adds recency without asserting anything about safety.
+  // The meta row's activity line, which `aria-label` would otherwise hide.
+  // A dated line gets the short clarifier appended, because "Updated 3 days
+  // ago" announced right after a safety label is the one phrasing that could
+  // be heard as a verification. The empty state asserts nothing, so it stays
+  // bare rather than adding a sentence to every unattested card in the band.
   parts.push(vm.activity.updatedLabel);
+  if (vm.activity.hasActivity) parts.push(ACTIVITY_NAME_CLARIFIER);
   return parts.join(", ");
 }
 
@@ -679,11 +683,11 @@ export function MapCarousel({
                   only, since the happy-patron count cannot share this width with
                   it. Plain text, not the tooltip trigger the browse card and the
                   detail hero use: a <button> inside this card's own <button>
-                  would be invalid HTML and a nested-interactive a11y defect, and
-                  the clarifier is one tap away on the detail page. Folded into
-                  `cardAccessibleName` so AT hears it too (`aria-label` hides
-                  button content). `mr-12` clears the chevron overlay (`right-3`
-                  + `size-9` = 48px), which sits at this row's height. */}
+                  would be invalid HTML and a nested-interactive a11y defect. The
+                  clarifier reaches AT through `cardAccessibleName` instead,
+                  which also folds in the line itself (`aria-label` hides button
+                  content). `mr-12` clears the chevron overlay (`right-3` +
+                  `size-9` = 48px), which sits at this row's height. */}
               <span
                 data-testid="carousel-activity"
                 className="mr-12 mt-1.5 flex items-center gap-1.5 border-t border-border pt-1.5 text-caption text-muted-foreground"
@@ -696,9 +700,10 @@ export function MapCarousel({
             <FavoriteButton
               listingId={vm.id}
               listingName={vm.name}
-              // The default overlay chrome with `top-2` instead of `top-3`:
-              // on the ~92px mini-card the heart and the chevron below it
-              // would otherwise touch, so the heart gives the pair its gap.
+              // The default overlay chrome with `top-2` instead of `top-3`: the
+              // heart and the chevron below it would otherwise touch on a card
+              // this short (see {@link CAROUSEL_BAND_PX} for the card's height
+              // breakdown), so the heart gives the pair its gap.
               className="absolute right-3 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand"
             />
 

@@ -450,11 +450,46 @@ describe("DirectoryMap — mini-card meta row mirrors ListingCard (AUB-298)", ()
   it("keeps the activity line PLAIN TEXT, never a nested interactive trigger", async () => {
     await renderMap();
     // The whole mini-card is a <button>; a tooltip trigger inside it would be
-    // invalid HTML and a nested-interactive a11y defect. The clarifier lives on
-    // the detail page the chevron opens.
+    // invalid HTML and a nested-interactive a11y defect.
     const row = within(cardOf("New Spot")).getByTestId("carousel-activity");
     expect(row.tagName).toBe("SPAN");
     expect(row.querySelector("button")).toBeNull();
+  });
+
+  it("carries the clarifier in the ACCESSIBLE NAME of a card that has a dated line", async () => {
+    // Without a trigger to host the tooltip, the accessible name is the only
+    // place AT can hear that "Updated 3 days ago" is not a verification — and
+    // it is announced right after a safety label, which is exactly the pairing
+    // that could otherwise be misheard.
+    const { rerenderWith } = await renderMap();
+    rerenderWith(null, [
+      {
+        vm: vm({
+          id: "active",
+          name: "Active Spot",
+          safetyState: "celiac-safe",
+          activity: deriveListingActivityMeta({
+            lastActivityAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+            happyPatrons: 4,
+          }),
+        }),
+        lat: 39.74,
+        lng: -104.99,
+      },
+    ]);
+
+    expect(
+      screen.getByRole("button", {
+        name: "Active Spot, Celiac-safe, Denver, Updated 3 days ago, claim activity, not a safety verification",
+      })
+    ).toBeInTheDocument();
+  });
+
+  it("leaves the honest empty state bare, with no clarifier to append", async () => {
+    // "No activity yet" asserts nothing, so a sentence per unattested card
+    // would be noise in a band that announces many cards in a row.
+    await renderMap();
+    expect(cardOf("New Spot")).toHaveAccessibleName("New Spot, Denver, No activity yet");
   });
 });
 

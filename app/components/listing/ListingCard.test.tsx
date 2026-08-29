@@ -565,8 +565,11 @@ describe("RestaurantCard", () => {
     fireEvent.pointerDown(line);
 
     const tip = await screen.findByRole("tooltip");
+    // Pinned verbatim, both sentences: the clarifier disclaims safety AND
+    // defines the count sitting next to it.
     expect(tip).toHaveTextContent(
-      "Reflects recent claim activity on this listing, not a safety verification."
+      "Reflects recent claim activity on this listing, not a safety verification. " +
+        "Happy patrons counts people who confirmed a claim here and reported no incident."
     );
 
     // A second tap closes it: Radix's own pointer-down close is suppressed

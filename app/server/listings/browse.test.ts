@@ -168,8 +168,14 @@ const h = vi.hoisted(() => {
     state.activityWhere = predicate;
     return { groupBy: activityGroupByMock };
   });
-  const activityInnerJoinMock = vi.fn(() => ({ where: activityWhereMock }));
-  const activityFromMock = vi.fn(() => ({ innerJoin: activityInnerJoinMock }));
+  // Two chained inner joins (attestations, then the parent listing).
+  const activityChain: { innerJoin: unknown; where: unknown } = {
+    innerJoin: null,
+    where: activityWhereMock,
+  };
+  const activityInnerJoinMock = vi.fn(() => activityChain);
+  activityChain.innerJoin = activityInnerJoinMock;
+  const activityFromMock = vi.fn(() => activityChain);
 
   // The count chain: select({ total }).from().where()  (awaited)
   const countWhereMock = vi.fn((predicate?: unknown) => {

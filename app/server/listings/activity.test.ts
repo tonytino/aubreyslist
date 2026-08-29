@@ -12,8 +12,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *  - the recency is `max(created_at)`, not `updated_at` and not an incident date,
  *  - "happy patrons" counts DISTINCT users, filtered to confirms, minus anyone
  *    who filed a visible incident on the same listing, and
- *  - only visible claims contribute (the same bound the neighbouring browse
- *    aggregates apply).
+ *  - only visible claims of a visible PARENT LISTING contribute. Both halves
+ *    matter: the loader is wired into a public, anonymous, id-addressable read,
+ *    and `moderationStatus` has no parent-to-child propagation, so the claim
+ *    bound alone would still leak a moderated-away listing's activity.
  *
  * The db client is mocked the way `browse.test.ts` does it: a `getDb()` whose
  * `select()` chain records its projection + predicate and resolves to fixture
@@ -32,8 +34,15 @@ const h = vi.hoisted(() => {
     state.where = predicate;
     return { groupBy: groupByMock };
   });
-  const innerJoinMock = vi.fn(() => ({ where: whereMock }));
-  const fromMock = vi.fn(() => ({ innerJoin: innerJoinMock }));
+  // Two chained inner joins (attestations, then the parent listing), so the
+  // stub returns itself as well as the terminal `where`.
+  const chain: { innerJoin: unknown; where: unknown } = {
+    innerJoin: null,
+    where: whereMock,
+  };
+  const innerJoinMock = vi.fn(() => chain);
+  chain.innerJoin = innerJoinMock;
+  const fromMock = vi.fn(() => chain);
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
     state.projection = projection;
     return { from: fromMock };
@@ -48,6 +57,7 @@ vi.mock("~/db/client", () => ({
 
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { deriveListingActivityMeta } from "~/trust/summary";
 import { getListingActivity, getListingActivityByListing } from "./activity";
 
 const { state } = h;
@@ -106,6 +116,25 @@ describe("getListingActivityByListing (batching + mapping)", () => {
     state.rows = [];
     const byListing = await getListingActivityByListing(["l1"]);
     expect(byListing.has("l1")).toBe(false);
+  });
+
+  it("reports recency for a DISPUTE-ONLY listing, with no happy patrons", async () => {
+    // A dispute is activity: the line moves. But a dispute is not happiness, so
+    // the count stays at zero and its label is withheld entirely.
+    state.rows = [
+      { listingId: "l1", lastActivityAt: new Date("2026-06-20T00:00:00Z"), happyPatrons: "0" },
+    ];
+
+    const activity = (await getListingActivityByListing(["l1"])).get("l1");
+    expect(activity).toEqual({
+      lastActivityAt: new Date("2026-06-20T00:00:00Z"),
+      happyPatrons: 0,
+    });
+
+    const meta = deriveListingActivityMeta(activity, new Date("2026-06-23T00:00:00Z"));
+    expect(meta.hasActivity).toBe(true);
+    expect(meta.updatedLabel).toBe("Updated 3 days ago");
+    expect(meta.happyPatronsLabel).toBeNull();
   });
 });
 
@@ -175,10 +204,17 @@ describe("the rendered SQL means what the copy says", () => {
     expect(sql).toContain('"incidents"."moderation_status" = \'visible\'');
   });
 
-  it("bounds the whole query to VISIBLE claims, like its sibling aggregates", () => {
+  it("bounds the query to VISIBLE claims AND a VISIBLE parent listing", () => {
     const sql = render(state.where);
-    expect(sql).toContain("moderation_status");
-    expect(dialect.sqlToQuery(state.where as SQL).params).toContain("visible");
+    // Both bounds, named separately: the claim bound alone would still hand a
+    // hidden/removed listing's activity to anyone holding its id, because
+    // moderation does not propagate from a listing onto its claims.
+    expect(sql).toContain('"claims"."moderation_status"');
+    expect(sql).toContain('"listings"."moderation_status"');
+    // Two bound params, not one — a single "visible" would mean a half-applied
+    // pair silently passing this assertion.
+    const params = dialect.sqlToQuery(state.where as SQL).params;
+    expect(params.filter((param) => param === "visible")).toHaveLength(2);
   });
 
   it("scopes to the requested listing ids (the batching key)", () => {

@@ -64,8 +64,14 @@ const h = vi.hoisted(() => {
   //   select(proj).from().innerJoin().where().groupBy()
   const activityGroupByMock = vi.fn(() => Promise.resolve(state.activityRows));
   const activityWhereMock = vi.fn(() => ({ groupBy: activityGroupByMock }));
-  const activityInnerJoinMock = vi.fn(() => ({ where: activityWhereMock }));
-  const activityFromMock = vi.fn(() => ({ innerJoin: activityInnerJoinMock }));
+  // Two chained inner joins (attestations, then the parent listing).
+  const activityChain: { innerJoin: unknown; where: unknown } = {
+    innerJoin: null,
+    where: activityWhereMock,
+  };
+  const activityInnerJoinMock = vi.fn(() => activityChain);
+  activityChain.innerJoin = activityInnerJoinMock;
+  const activityFromMock = vi.fn(() => activityChain);
 
   // Route each query to the right chain by its select() projection:
   //  - has `occurredOn`           → incidents

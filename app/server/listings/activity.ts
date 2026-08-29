@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "~/db/client";
-import { attestations, claims, incidents } from "~/db/schema";
+import { attestations, claims, incidents, listings } from "~/db/schema";
 import type { ListingActivity } from "~/trust/summary";
 
 /**
@@ -38,7 +38,10 @@ import type { ListingActivity } from "~/trust/summary";
  *        )                                                as happy_patrons
  * from claims c
  * join attestations a on a.claim_id = c.id
- * where c.listing_id in (…) and c.moderation_status = 'visible'
+ * join listings   l on l.id = c.listing_id
+ * where c.listing_id in (…)
+ *   and c.moderation_status = 'visible'
+ *   and l.moderation_status = 'visible'
  * group by c.listing_id
  * ```
  *
@@ -60,8 +63,18 @@ import type { ListingActivity } from "~/trust/summary";
  * so a listing with zero activity is simply absent from the map and the caller
  * renders the honest empty state.
  *
- * Claim visibility is bounded exactly like the neighbouring browse aggregates —
- * a hidden or removed claim contributes neither recency nor patrons.
+ * Visibility is bounded on BOTH levels, exactly like `getListingClaimAggregates`:
+ *
+ * - **Claim** — a hidden or removed claim contributes neither recency nor
+ *   patrons, matching the neighbouring browse aggregates.
+ * - **Parent listing** — `moderationStatus` has no parent-to-child
+ *   propagation, so a moderator hiding a listing leaves its claims `visible`.
+ *   The inner join on `listings` is what stops this loader leaking a
+ *   moderated-away listing's activity: it is wired into the public, anonymous
+ *   `getListingClaims` server fn, which takes a client-supplied listing id, so
+ *   without the bound anyone holding a removed listing's id could still read
+ *   its real recency and patron count. The listing then falls out of the map
+ *   and the caller renders the honest empty state.
  */
 export async function getListingActivityByListing(
   listingIds: string[]
@@ -91,7 +104,17 @@ export async function getListingActivityByListing(
     })
     .from(claims)
     .innerJoin(attestations, eq(attestations.claimId, claims.id))
-    .where(and(inArray(claims.listingId, listingIds), eq(claims.moderationStatus, "visible")))
+    // Parent visibility, mirroring `getListingClaimAggregates` — see the
+    // docstring: this is the only thing keeping a hidden/removed listing's
+    // activity off a public, id-addressable read.
+    .innerJoin(listings, eq(listings.id, claims.listingId))
+    .where(
+      and(
+        inArray(claims.listingId, listingIds),
+        eq(claims.moderationStatus, "visible"),
+        eq(listings.moderationStatus, "visible")
+      )
+    )
     .groupBy(claims.listingId);
 
   const byListing = new Map<string, ListingActivity>();

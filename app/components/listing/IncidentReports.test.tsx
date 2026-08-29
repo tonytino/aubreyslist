@@ -24,6 +24,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { toast } from "sonner";
 
+import { claimsQueryKey } from "./CommunityClaims";
 import { IncidentReports, incidentsQueryKey, todayForDateInput } from "./IncidentReports";
 
 function renderWithQuery(ui: ReactElement): QueryClient {
@@ -130,6 +131,9 @@ describe("IncidentReports", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: incidentsQueryKey("listing-1"),
     });
+    // A new report disqualifies its author from the happy-patron count, which
+    // rides on the claim roll-up — so that query is invalidated too.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: claimsQueryKey("listing-1") });
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith("Incident reported");
     });
@@ -291,6 +295,10 @@ describe("IncidentReports", () => {
       });
       expect(removeIncidentMock).toHaveBeenCalledWith({ data: { id: "own" } });
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: incidentsQueryKey("listing-1") });
+      // The claim roll-up carries the listing's activity strip, and retracting
+      // a report can restore its author to the happy-patron count — so the two
+      // must repaint together, never a step apart.
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: claimsQueryKey("listing-1") });
       await waitFor(() => {
         expect(toast.success).toHaveBeenCalledWith("Report retracted");
       });

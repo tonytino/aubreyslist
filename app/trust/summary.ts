@@ -417,7 +417,19 @@ export const NO_ACTIVITY_LABEL = "No activity yet";
  * it explains, so the card, the mini-card and the hero cannot drift on it.
  */
 export const ACTIVITY_TOOLTIP =
-  "Reflects recent claim activity on this listing, not a safety verification.";
+  "Reflects recent claim activity on this listing, not a safety verification. " +
+  "Happy patrons counts people who confirmed a claim here and reported no incident.";
+
+/**
+ * The short, name-safe form of {@link ACTIVITY_TOOLTIP}, for a surface that
+ * cannot host an interactive trigger.
+ *
+ * The map mini-card is one button end to end, so a tooltip trigger inside it
+ * would be a nested-interactive defect. It appends this to its accessible name
+ * instead, so the clarifier reaches assistive tech in place rather than only on
+ * the detail page. Short on purpose: a carousel announces many cards in a row.
+ */
+export const ACTIVITY_NAME_CLARIFIER = "claim activity, not a safety verification";
 
 /**
  * Derive the listing-activity strip: the "Updated …" line and the happy-patron

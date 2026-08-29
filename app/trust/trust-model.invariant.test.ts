@@ -3,6 +3,7 @@ import type { ClaimAggregate } from "~/server/attestations";
 import { deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident, isRecentIncident } from "~/trust/incident-recency";
 import {
+  ACTIVITY_NAME_CLARIFIER,
   ACTIVITY_TOOLTIP,
   type ClaimTrustSummary,
   DEFAULT_STALENESS_MONTHS,
@@ -41,13 +42,14 @@ import {
  *
  * Scope of that suppression, exactly:
  *   - SUPPRESSED wherever the headline verdict is glanced — the safety badge,
- *     the confirmation-derived freshness cue and the evidence meta ("N
- *     confirmations · M neighbors") of `deriveListingTrustGlance`, on the
- *     browse card, the map mini-card and the detail hero alike. Each is
- *     withheld together with the badge, because any one surviving would leak
- *     the verdict the badge withholds and would distinguish a contested
- *     listing from a never-reviewed one. The gate is what keeps the "Recently
- *     verified" quick filter from returning badge-less cards.
+ *     the confirmation-derived freshness cue and the evidence meta (the
+ *     celiac claim's confirmations and distinct contributors) of
+ *     `deriveListingTrustGlance`, on the browse card, the map mini-card and
+ *     the detail hero alike. Each is withheld together with the badge, because
+ *     any one surviving would leak the verdict the badge withholds and would
+ *     distinguish a contested listing from a never-reviewed one. The gate is
+ *     what keeps the "Recently verified" quick filter from returning
+ *     badge-less cards.
  *   - KEPT — the confirm/dispute counts on the detail-page claim row
  *     (`summarizeClaim`), and every incident signal. The claim row is where a
  *     contest is legible; recent harm outranks the whole rule.
@@ -58,16 +60,17 @@ import {
  * ---------------------------------------------------------------------------
  * Owner decision, 2026-08-25 (refinement) — the meta row reads ACTIVITY.
  *
- * The recency line the card and the hero render is no longer the celiac-gated
- * "Verified …" cue. It is `deriveListingActivityMeta`: "Updated 3 days ago"
- * over the most recent attestation on ANY visible claim of the listing,
- * confirms and disputes alike, beside a "happy patrons" count. Activity is not
- * safety, so it is deliberately OUTSIDE the suppression above and shows for a
- * contested listing exactly as it does for an affirmed one — which is only
- * honest because every surface pairs the line with a mandatory clarifying
- * tooltip ("Reflects recent claim activity on this listing, not a safety
- * verification."). Invariant 6c pins both halves: the derivation ignores the
- * contest, and the tooltip copy makes no safety claim.
+ * The recency line the card, the mini-card and the hero render is
+ * `deriveListingActivityMeta`: "Updated 3 days ago" over the most recent
+ * attestation on ANY visible claim of the listing, confirms and disputes
+ * alike, beside a "happy patrons" count. Activity is not safety, so it sits
+ * deliberately OUTSIDE the suppression above and shows for a contested listing
+ * exactly as it does for an affirmed one — which is only honest because the
+ * clarifier is mandatory and always travels with the line ("Reflects recent
+ * claim activity on this listing, not a safety verification.", as a tooltip
+ * wherever a trigger can live, and in the accessible name on the mini-card).
+ * Invariant 6c pins both halves: the derivation ignores the contest, and the
+ * clarifier copy makes no safety claim.
  * ---------------------------------------------------------------------------
  *
  * The DB-enforced half of "one attestation per user per claim" (the UNIQUE
@@ -676,15 +679,15 @@ describe("INVARIANT 6 — a tie or dispute-majority NEVER yields a safety badge"
 
 // ───────────────────────────────────────────────────────────────────────────
 // Invariant 6c — the meta row reads ACTIVITY, not safety (owner decision,
-// 2026-08-25). The card/hero recency line was a celiac-gated "Verified …" cue
-// and is now `deriveListingActivityMeta`: the most recent attestation on any
-// visible claim, confirms and disputes alike. It is deliberately exempt from
-// invariant 6's suppression — a contested listing's activity is real and
-// showing it hides nothing — and that exemption is only safe because the line
-// makes no safety claim and always carries the clarifying tooltip. This
-// invariant pins BOTH halves. Widening it back into a verdict (gating it on
-// consensus, or phrasing it as "Verified"/"Safe") re-opens the leak invariant
-// 6 closes; dropping the tooltip leaves an activity date reading as one.
+// 2026-08-25). The card/hero recency line is `deriveListingActivityMeta`: the
+// most recent attestation on any visible claim, confirms and disputes alike.
+// It is deliberately exempt from invariant 6's suppression — a contested
+// listing's activity is real and showing it hides nothing — and that exemption
+// is only safe because the line makes no safety claim and always carries its
+// clarifier. This invariant pins BOTH halves. Widening the line into a verdict
+// (gating it on consensus, or phrasing it as "Verified"/"Safe") re-opens the
+// leak invariant 6 closes; dropping the clarifier leaves an activity date
+// reading as one.
 // ───────────────────────────────────────────────────────────────────────────
 
 describe("INVARIANT 6c — the activity line reports activity, never a verdict", () => {
@@ -739,13 +742,17 @@ describe("INVARIANT 6c — the activity line reports activity, never a verdict",
     expect(deriveListingActivityMeta(null, NOW).updatedLabel).not.toMatch(safetyWords);
   });
 
-  it("ships the clarifying tooltip that makes the exemption honest", () => {
+  it("ships the clarifier that makes the exemption honest, in both forms", () => {
     // The copy is mandatory, not decorative: without it "Updated 3 days ago"
-    // sitting where a verdict used to be reads as a verification. Pinned as
-    // content (it must disclaim safety), not as an exact string, so wording can
-    // be improved without weakening the guarantee.
+    // sitting where a verdict would be reads as a verification. Pinned as
+    // content (it must disclaim safety, and define the count it sits beside),
+    // not as an exact string, so wording can be improved without weakening the
+    // guarantee.
     expect(ACTIVITY_TOOLTIP).toMatch(/activity/i);
     expect(ACTIVITY_TOOLTIP).toMatch(/not a safety verification/i);
+    expect(ACTIVITY_TOOLTIP).toMatch(/confirmed a claim here and reported no incident/i);
+    // The mini-card cannot host a trigger, so its short form must disclaim too.
+    expect(ACTIVITY_NAME_CLARIFIER).toMatch(/not a safety verification/i);
   });
 
   it("stays honest at the edges: no fabricated date, no '0 happy patrons'", () => {

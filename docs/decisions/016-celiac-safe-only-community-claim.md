@@ -45,21 +45,29 @@ still governs the transparent-roll-up model this reading derives from.
 ## Update (2026-08-25)
 
 The glance suppression scopes to the **badge and the confirmation-derived
-evidence counts**. The recency line beside them is no longer part of it.
+evidence counts**. The recency line beside them sits outside it.
 
-That line now reports listing **activity**: "Updated 3 days ago", derived from
+That line reports listing **activity**: "Updated 3 days ago", derived from
 the most recent attestation across all visible claims of the listing, on any
 attribute, counting confirms and disputes alike. Incidents never bump it — they
 keep their own, louder signal. Beside it sits "N happy patrons": the distinct
 people who confirmed at least one visible claim on the listing and have never
-reported an incident on it, hidden at zero. It replaces the celiac-scoped
-confirmation count, and the separate contributor count is gone with it.
+reported an incident on it, hidden at zero. It takes the place of the
+celiac-scoped confirmation count, and the separate contributor count is
+dropped.
+
+Both values stay derivable from evidence a visitor can also see, and neither is
+per-user reconstructible: attestations surface as anonymous counts, so "12
+happy patrons" reveals no more about who voted than the save-count pill does
+about who saved.
 
 Activity shows for a contested listing exactly as it does for an affirmed one.
-That is honest only because the line makes no safety assertion and every
-surface pairs it with a tap-reachable clarifier: "Reflects recent claim
-activity on this listing, not a safety verification." The tooltip is part of
-the rule, not decoration.
+That is honest only because the line makes no safety assertion and the
+clarifier always travels with it: "Reflects recent claim activity on this
+listing, not a safety verification." Every surface that can host an interactive
+trigger carries it as a tap-reachable tooltip; the map mini-card, a single
+button end to end, carries a short form in its accessible name. The clarifier
+is part of the rule, not decoration.
 
 ### Consequences
 

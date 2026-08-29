@@ -6,8 +6,10 @@ import { ACTIVITY_TOOLTIP, type ListingActivityMeta } from "~/trust/summary";
 
 /**
  * The listing-activity meta strip — the "Updated 3 days ago" line and the
- * "12 happy patrons" count — shared by the browse card, the map mini-card and
- * the listing-detail hero, so the three surfaces cannot drift on wording.
+ * "12 happy patrons" count — shared by the browse card and the listing-detail
+ * hero, so neither surface can drift on wording. The map mini-card is one
+ * button end to end, so it mirrors the line as plain text and carries
+ * `ACTIVITY_NAME_CLARIFIER` in its accessible name instead of a trigger.
  *
  * **Activity, not safety** (owner decision 2026-08-25). The line reports that
  * people have been voting on this listing's claims lately; it is not a
@@ -56,10 +58,17 @@ export function ActivityLine({
             setOpen((previous) => !previous);
           }}
           className={cn(
-            "inline-flex min-w-0 items-center gap-1.5 rounded-chip text-left outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
-            // Muted either way: activity must never read as loudly as a safety
-            // badge. The empty state is the same line, one shade quieter.
-            meta.hasActivity ? "font-medium text-muted-foreground" : "text-muted-foreground/80",
+            // `-my-1.5 py-1.5` grows the pointer target to ~28px tall without
+            // moving the row: the caption line alone leaves a target under the
+            // 24px minimum, and this clarifier is the one thing keeping the line
+            // from reading as a verdict, so it has to be easy to hit on a phone.
+            "-my-1.5 inline-flex min-w-0 items-center gap-1.5 rounded-chip py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
+            // Both states use the full-strength muted token (6.7:1 on the card
+            // in light, 7.0:1 in dark). The empty state differs by weight, never
+            // by an opacity modifier: `text-muted-foreground/80` computes 4.1:1
+            // on the light card, under the 4.5:1 AA floor (styling.md).
+            "text-muted-foreground",
+            meta.hasActivity ? "font-medium" : "font-normal",
             className
           )}
         >

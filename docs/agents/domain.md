@@ -94,9 +94,12 @@ Rules every trust-related feature must honor:
   patrons" counts the distinct people who confirmed a claim here and never
   reported an incident, hidden at zero. This line is deliberately outside the
   suppression above and shows for a contested listing too, which is only honest
-  because every surface pairs it with a tap-reachable clarifier: "Reflects
-  recent claim activity on this listing, not a safety verification." Never
-  phrase it as a verification, and never drop the tooltip.
+  because the clarifier always travels with it: "Reflects recent claim activity
+  on this listing, not a safety verification." Every surface that can host an
+  interactive trigger carries it as a tap-reachable tooltip. The map mini-card
+  is a single button, so it mirrors the line as plain text and carries a short
+  clarifier in its accessible name instead. Never phrase the line as a
+  verification, and never ship it without its clarifier.
 - **One vote per user per claim.** No ballot-stuffing. A user may change or
   retract their own attestation.
 - **The summary must remain explainable.** Anything shown in the roll-up must be

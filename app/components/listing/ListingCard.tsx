@@ -405,8 +405,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             when a neighbour wraps taller.
 
             The right slot falls back to the bot-provenance label when there are no
-            happy patrons to report — evidence over provenance, the same precedence the
-            freshness slot used to apply.
+            happy patrons to report — evidence over provenance.
 
             `relative z-10`: the activity line is a real tooltip <button>, so the row
             must sit above the stretched-link overlay or the overlay swallows the tap. */}
