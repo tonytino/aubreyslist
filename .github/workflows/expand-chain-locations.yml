@@ -120,8 +120,10 @@ jobs:
           Skipped via `skip-review` — automated, data-only fan-out with no code to review (see docs/agents/orchestration.md).
           EOF
           # Surface truncated brands, brand-identity rejections, and skips so
-          # the reviewer sees them in the PR, not just the run log.
-          if grep -E 'FULL-PAGE|NAME-MISMATCH|Skipped:' "$RUNNER_TEMP/expand.log" > "$RUNNER_TEMP/notes.txt"; then
+          # the reviewer sees them in the PR, not just the run log. Strip
+          # backticks: these lines carry Places-returned business names, and a
+          # backtick could break out of the fenced block below.
+          if grep -E 'FULL-PAGE|NAME-MISMATCH|Skipped:' "$RUNNER_TEMP/expand.log" | tr -d '`' > "$RUNNER_TEMP/notes.txt" && [ -s "$RUNNER_TEMP/notes.txt" ]; then
             {
               printf '\n## Run notes\n\n```\n'
               cat "$RUNNER_TEMP/notes.txt"
