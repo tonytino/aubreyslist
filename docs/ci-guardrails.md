@@ -46,7 +46,7 @@ The guardrails are layered — each layer backstops the one before it:
 | Local, pre-commit | git hooks (lint staged files, lint commit message) | fast feedback before anything is pushed |
 | Local, pre-handoff | one command running lint + typecheck + tests (`pnpm preflight` here) | "done" declared without validation |
 | CI, per-PR | the required checks in §3–§4 | everything else, mechanically |
-| Repo settings | branch protection / rulesets + CODEOWNERS | merges that bypass CI or owner review |
+| Repo settings | branch ruleset + CODEOWNERS | merges that bypass CI or owner review |
 | Process-in-CI | label, PR-body, and review-record gates | workflow steps (review, changelog, classification) skipped |
 
 ---
@@ -58,7 +58,15 @@ things to port — they are stack-agnostic.
 
 **All checks are required, and required checks must always report.**
 Every job below is intended to be a required status check on the default
-branch. Corollary: a required check must produce a result on *every* PR.
+branch. On GitHub, this repo enforces required checks via a **branch
+ruleset** (the newer mechanism), not classic branch-protection rules — the
+two differ in bypass-list, actor-exemption, and check-evaluation semantics,
+so replicate the ruleset form. (The guardrail *architecture* here is
+platform-agnostic, but the concrete mechanisms — required status checks,
+CODEOWNERS, `::error::` annotations, Dependabot — are GitHub's; on GitLab
+the equivalents are merge checks, approval rules, and code-quality reports.)
+
+Corollary: a required check must produce a result on *every* PR.
 Path-filtered triggers (`on.pull_request.paths:`) break this — a PR outside
 the paths never reports, the required check sits at "Expected" forever, and
 the merge is blocked. So expensive conditional gates (mutation testing,
@@ -143,8 +151,10 @@ one workflow (`ci.yml`) on every PR and every push to `main`.
 ### 3.2 Type check
 
 - **Enforces:** the strictest practical compiler settings, no suppressed
-  errors. `tsc --noEmit` with `strict: true`; the repo also bans `any` and
-  unexplained `@ts-ignore`/`@ts-expect-error` (enforced separately — §4.1).
+  errors. `tsc --noEmit` with `strict: true`. The `any` ban is enforced by
+  the linter (Biome's `noExplicitAny` at error level, part of §3.1); bare
+  `@ts-ignore`/`@ts-expect-error` suppressions are caught by the hard-rules
+  scan (§4.1).
 
 ### 3.3 Dead code — fail the PR on unused anything
 
@@ -357,7 +367,7 @@ re-evaluate. Trigger list:
 Two complementary checks:
 
 - **Fragment present** (`ci.yml`): the PR must add a file under
-  `changelog.d/` (diffed against the merge base), unless it's from a
+  `changelog.d/` (two-dot diff against the PR base SHA), unless it's from a
   `release/*` branch or carries the `skip-changelog` label. Per-PR fragment
   files (`<slug>.<category>.md`, Keep-a-Changelog categories) mean PRs never
   conflict on a shared CHANGELOG.
@@ -422,7 +432,7 @@ Standard CodeQL analysis (javascript-typescript) on PR, push, and a weekly
 schedule, isolated in its own workflow so only it holds
 `security-events: write`. **Gotcha documented in the workflow itself:** the
 analyze step uploads alerts but exits 0 — CodeQL only blocks merges once the
-code-scanning check is marked *required* in branch protection. Until an admin
+code-scanning check is marked *required* in the branch ruleset. Until an admin
 does that, it's advisory. Say this out loud in your setup docs or you'll
 believe you have a gate you don't.
 
@@ -454,13 +464,18 @@ Seven owner-gated categories here: cost (billed APIs/infra), legal, security
 irreversible data migrations, data-collection/privacy posture, and
 safety-disclaimer copy. Your categories will differ; the architecture won't:
 
-- **Layer 1 — the teeth: CODEOWNERS + branch protection.** A CODEOWNERS file
-  maps exactly the gated paths to the owner; branch protection enables
-  "Require review from Code Owners" + "Dismiss stale approvals on new
-  commits" + "Do not allow bypassing". An owned-path PR *cannot merge* until
+- **Layer 1 — the teeth: CODEOWNERS + the branch ruleset.** A CODEOWNERS
+  file maps exactly the gated paths to the owner; the default-branch ruleset
+  enables "Require review from Code Owners" + "Dismiss stale approvals on
+  new commits" + no bypass actors. An owned-path PR *cannot merge* until
   the owner approves — no collaborator, bot, admin, or agent can satisfy it.
   Everything not listed is deliberately unowned, so the majority of PRs need
-  zero owner review and ship on green.
+  zero owner review and ship on green. Concretely, on GitHub: Settings →
+  Rules → Rulesets → new branch ruleset targeting the default branch, with
+  "Require a pull request before merging" (+ the code-owner and
+  stale-dismissal options above), "Require status checks to pass" listing
+  the job names from §9, and an empty bypass list — scriptable via
+  `gh api repos/OWNER/REPO/rulesets`.
 - **Layer 2 — the tripwire: a CI job.** A script re-derives the gated surface
   (from a shared module — see drift note below) over the PR's diff and
   **fails the PR if it touches a gated surface without the `safe:human`
@@ -478,12 +493,14 @@ safety-disclaimer copy. Your categories will differ; the architecture won't:
   script, and a unit test asserts it and CODEOWNERS never diverge —
   bidirectionally.
 - **Self-protection:** the `.github/` directory (CODEOWNERS, every workflow,
-  every guard script), the agent-instructions file, ADRs, and every
-  tool config that holds a threshold (lint config, tsconfig, coverage/vitest
-  config, knip/jscpd/stryker configs, commitlint) are themselves owned paths.
+  every guard script), the agent-instructions file, ADRs, and the tool
+  configs that hold thresholds (lint config, tsconfig, coverage/vitest
+  config, knip/stryker configs, commitlint) are themselves owned paths.
   Loosening a gate — or "fixing" a red build by editing the test config —
   requires the owner's review. Close the "loosen the tests instead of the
-  guard" hole explicitly.
+  guard" hole explicitly. (Known gap in this repo at time of writing: the
+  jscpd duplication config, `.jscpd.json`, is *not* in the owned set — when
+  you replicate, include every threshold-bearing config.)
 
 ### 5.7 Merge-autonomy labels (`safe:*`)
 
@@ -491,10 +508,12 @@ Every PR is classified by its author: `safe:agent` (an agent may self-merge
 once CI is fully green, resolving conflicts and babysitting checks itself) or
 `safe:human` (agents drive CI green, then stop; a human always clicks merge).
 The label-trio gate (§4.2) forces the classification to exist; the
-owner-review gate (§5.6) forces it to be honest on gated surfaces; branch
-protection forces it to be honest even when CI is fooled. Agents are
+owner-review gate (§5.6) forces it to be honest on gated surfaces; the
+branch ruleset forces it to be honest even when CI is fooled. Agents are
 additionally instructed to never merge — or enable auto-merge on — a
-`safe:human` PR.
+`safe:human` PR. Enable agent self-merge only after both layers of §5.6
+(CODEOWNERS + ruleset, and the tripwire job) are live — this section is
+safe *because* that one is.
 
 ---
 
@@ -521,7 +540,7 @@ The repo requires multi-lens adversarial review of agent-written changes
   people quietly route around.
 - **Honest limitation, stated in the repo's own docs:** a body can be
   fabricated. The gate is a forcing function and an audit record, not proof.
-  The unfoolable layers remain CODEOWNERS + branch protection.
+  The unfoolable layers remain CODEOWNERS + the branch ruleset.
 
 The PR template mirrors every gate (TL;DR section, changelog checklist,
 owner-sign-off checklist mapping the gated categories, adversarial-review
@@ -560,7 +579,7 @@ are prerequisites for none of the later ones except as noted:
 lint+format check, typecheck, unit tests (with `.only` failing), and the
 setup conventions from §2 (least privilege, SHA pinning, concurrency,
 frozen lockfile, toolchain pinned from files). Add the pre-commit hook and a
-single `preflight` command. Make the checks required in branch protection.
+single `preflight` command. Make the checks required in a branch ruleset (§2).
 
 **Tier 2 — quality ratchets (first week):**
 diff coverage on changed lines (safe on legacy code by construction — §3.6),
@@ -575,7 +594,7 @@ label set and TL;DR gate if you want them, wire the merge-to-Slack feed.
 **Tier 4 — the autonomy boundary (before agents self-merge anything):**
 decide your owner-gated categories, write CODEOWNERS + the tripwire script +
 the drift test (§5.6), define `safe:agent`/`safe:human`, turn on the branch
-protection that gives Layer 1 teeth. If agents review agents, add the
+ruleset settings that give Layer 1 teeth. If agents review agents, add the
 review-record gate (§6).
 
 **Tier 5 — depth:**
@@ -613,7 +632,7 @@ config**, and **every gate's own config is part of the protected surface.**
 | Secret scan | gitleaks | any leaked secret in history | none |
 | Dependency vulns | osv-scanner + cooldown wrapper | installable-fix finding, no-fix finding, or any Critical | reviewed waiver in scanner config |
 | License allowlist | custom script over pnpm licenses | non-permissive/unknown license | package-scoped reviewed exception |
-| CodeQL | github/codeql-action | only if marked required in branch protection | admin setting |
+| CodeQL | github/codeql-action | only if marked required in the branch ruleset | admin setting |
 | Accessibility | Playwright + axe-core | any violation on audited pages | none |
 | Integration & E2E | Vitest + Playwright | failures (when DB secret present) | secret absence ⇒ skip |
 | Release check | version diff + greps | version bump without CHANGELOG section + migration guide | don't bump |
