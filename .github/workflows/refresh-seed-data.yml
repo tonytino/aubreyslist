@@ -5,11 +5,12 @@ name: Refresh seed data
 # opening a PR with the regenerated `scripts/seed-listings.generated.json`
 # against the branch this workflow is run from.
 #
-# This is the ONE step that spends Places API calls (~one per curated source). Run
-# it from the Actions tab ("Run workflow") whenever you curate the source list or
-# add a newly-captured field — NOT on every seed. The committed JSON is what the
+# This step spends Places API calls (~one per curated source). Run it from the
+# Actions tab ("Run workflow") whenever you curate the source list or add a
+# newly-captured field — NOT on every seed. The committed JSON is what the
 # API-free `pnpm db:seed` (local, preview, prod) inserts, so seeding itself never
-# touches Places.
+# touches Places. After a refresh lands, re-dispatch "Expand chain locations" —
+# the chain bake derives from this one and goes stale without it.
 #
 # Skips gracefully (a warning, not a failure) if GOOGLE_PLACES_API_KEY is unset.
 #

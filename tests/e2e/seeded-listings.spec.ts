@@ -64,7 +64,7 @@ test.describe("seeded listings — badge + detail page (AUB-196)", () => {
   test.beforeAll(async () => {
     // Generous headroom for the round trips above — well past the default 30s
     // test timeout this hook would otherwise share.
-    test.setTimeout(480_000);
+    test.setTimeout(540_000);
     const seeder = new Seeder();
     await seedListings(SEED_LISTINGS, { db: seeder.db });
   });

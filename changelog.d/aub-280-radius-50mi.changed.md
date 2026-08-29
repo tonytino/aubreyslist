@@ -1,0 +1,1 @@
+- `[manual]` Widened the seed capture radius from 25 to 50 miles around Union Station and added a 50-mile option to the directory's distance filter, bringing the outer metro ring (Boulder, Longmont, Castle Rock) into reach. The default view stays at 25 miles.

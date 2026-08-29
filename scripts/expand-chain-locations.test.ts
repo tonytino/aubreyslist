@@ -82,10 +82,28 @@ describe("expandChainLocations", () => {
         lat: 39.68,
         lng: -104.94,
         suggestedAttributes: ["dedicated_fryer"],
-        menuUrl: "https://www.fiveguys.com/",
+        // Never the flagship's menuUrl — it is often a location-specific page.
+        menuUrl: null,
         googleMapsUri: "https://maps.google.com/?cid=12345",
       },
     ]);
+  });
+
+  it("drops results whose name does not match the brand, and logs the mismatch", async () => {
+    const log = vi.fn();
+    const lookalike = place({ placeId: "impostor", name: "Five Gals Burger Bar" });
+    const branded = place({ placeId: "real", name: "Five Guys Burgers and Fries" });
+    const resolveLocations = vi.fn(async () => [lookalike, branded]);
+
+    const result = await expandChainLocations({
+      sources: [chainSource()],
+      curatedListings: [],
+      resolveLocations,
+      log,
+    });
+
+    expect(result.listings.map((entry) => entry.placeId)).toEqual(["real"]);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("NAME-MISMATCH"));
   });
 
   it("ignores sources without chainWideAttributes — they do not fan out", async () => {
@@ -208,6 +226,24 @@ describe("runCli", () => {
 
     expect(code).toBe(1);
     expect(error).toHaveBeenCalledWith(expect.stringContaining("refusing to overwrite"));
+  });
+
+  it("surfaces a resolver failure as exit 1 (no write) instead of an empty brand", async () => {
+    const error = vi.fn();
+
+    const code = await runCli(
+      {
+        sources: [chainSource()],
+        curatedListings: [],
+        resolveLocations: vi.fn(async () => {
+          throw new Error('Places searchText 429 for "Five Guys"');
+        }),
+      },
+      { log: vi.fn(), error }
+    );
+
+    expect(code).toBe(1);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("429"));
   });
 
   it("surfaces a miscurated source as exit 1", async () => {

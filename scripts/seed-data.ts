@@ -69,9 +69,9 @@ export const CURATED_SEED_LISTINGS: SeededListing[] = JSON.parse(
 );
 
 /** The fan-out bake: chain locations with corporate-policy attributes only. */
-const chainListings: SeededListing[] = JSON.parse(
+export const CHAIN_SEED_LISTINGS: SeededListing[] = JSON.parse(
   readFileSync(join(scriptsDir, "seed-chain-locations.generated.json"), "utf8")
 );
 
 /** Everything `pnpm db:seed` inserts: curated bake + chain fan-out bake. */
-export const SEED_LISTINGS: SeededListing[] = [...CURATED_SEED_LISTINGS, ...chainListings];
+export const SEED_LISTINGS: SeededListing[] = [...CURATED_SEED_LISTINGS, ...CHAIN_SEED_LISTINGS];

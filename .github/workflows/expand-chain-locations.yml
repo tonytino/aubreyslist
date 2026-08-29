@@ -63,7 +63,9 @@ jobs:
 
       - name: Fan chains out via Google Places
         if: steps.cfg.outputs.enabled == 'true'
-        run: pnpm db:seed:expand-chains
+        # Tee the log so the PR step can surface truncation (FULL-PAGE),
+        # brand-identity rejections (NAME-MISMATCH), and skips to the reviewer.
+        run: pnpm db:seed:expand-chains 2>&1 | tee "$RUNNER_TEMP/expand.log"
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
 
@@ -94,16 +96,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr create \
-            --base "${{ github.ref_name }}" \
-            --head "${{ steps.commit.outputs.branch }}" \
-            --title "chore: expand curated chains to their in-radius locations" \
-            --label "type:chore" \
-            --label "size:s" \
-            --label "safe:human" \
-            --label "skip-review" \
-            --label "skip-changelog" \
-            --body "$(cat <<'EOF'
+          cat > "$RUNNER_TEMP/pr-body.md" <<'EOF'
           ## TL;DR
 
           Added the other nearby locations of chain restaurants we already list, each carrying only the gluten-free options the brand offers everywhere.
@@ -126,4 +119,22 @@ jobs:
 
           Skipped via `skip-review` — automated, data-only fan-out with no code to review (see docs/agents/orchestration.md).
           EOF
-          )"
+          # Surface truncated brands, brand-identity rejections, and skips so
+          # the reviewer sees them in the PR, not just the run log.
+          if grep -E 'FULL-PAGE|NAME-MISMATCH|Skipped:' "$RUNNER_TEMP/expand.log" > "$RUNNER_TEMP/notes.txt"; then
+            {
+              printf '\n## Run notes\n\n```\n'
+              cat "$RUNNER_TEMP/notes.txt"
+              printf '```\n'
+            } >> "$RUNNER_TEMP/pr-body.md"
+          fi
+          gh pr create \
+            --base "${{ github.ref_name }}" \
+            --head "${{ steps.commit.outputs.branch }}" \
+            --title "chore: expand curated chains to their in-radius locations" \
+            --label "type:chore" \
+            --label "size:s" \
+            --label "safe:human" \
+            --label "skip-review" \
+            --label "skip-changelog" \
+            --body-file "$RUNNER_TEMP/pr-body.md"

@@ -64,6 +64,20 @@ export function brandOf(source: SeedSource): string {
   return (brand ?? source.query).trim();
 }
 
+/** Lowercased alphanumerics only, so "P.F. Chang's" and "PF Changs" compare equal. */
+const normalizeName = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Does a resolved place's display name belong to the brand? Text Search is
+ * relevance-ranked, not brand-scoped — it pads short result sets with
+ * similar-named businesses, and stamping those with the brand's attributes
+ * would fabricate claims on an unrelated real business. Normalized
+ * containment ("Five Guys" ⊂ "Five Guys Burgers and Fries") is the guard.
+ */
+export function matchesBrand(brand: string, placeName: string): boolean {
+  return normalizeName(placeName).includes(normalizeName(brand));
+}
+
 /**
  * Fan every eligible chain out to its other in-radius locations. Pure
  * orchestration over the injected resolver. Throws on a miscurated source
@@ -106,6 +120,10 @@ export async function expandChainLocations(
       if (knownPlaceIds.has(place.placeId)) {
         continue; // The flagship's own curated entry, or already emitted.
       }
+      if (!matchesBrand(brand, place.name)) {
+        log(`NAME-MISMATCH ${brand}: "${place.name}" @ ${place.address}`);
+        continue;
+      }
       const coords: Coords = { lat: place.lat, lng: place.lng };
       if (haversineKm(UNION_STATION, coords) > milesToKm(MAX_RADIUS_MILES)) {
         log(`OUT-OF-RANGE ${brand}: ${place.address}`);
@@ -119,7 +137,10 @@ export async function expandChainLocations(
         lat: place.lat,
         lng: place.lng,
         suggestedAttributes: [...chainWide],
-        menuUrl: source.menuUrl ?? null,
+        // Deliberately no menu link: flagship menuUrls are often
+        // location-specific pages, and linking another location's menu would
+        // be wrong. Per-location links arrive via curation or the community.
+        menuUrl: null,
         googleMapsUri: place.googleMapsUri ?? null,
       });
       added += 1;
@@ -148,54 +169,53 @@ export function makeChainLocationsResolver(
   apiKey: string,
   log: (message: string) => void = () => {}
 ): ChainLocationsResolver {
+  // Unlike the refresh's one-query-one-place resolver (where a miss is a
+  // logged skip), a failure here must THROW: each run rewrites the whole
+  // chain bake, so a brand whose API call errored would otherwise look like
+  // "no locations" and silently erase its previously baked rows.
   return async (brand) => {
-    let raw: unknown;
-    try {
-      const res = await fetch(PLACES_SEARCH_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": SEARCH_FIELD_MASK,
-        },
-        body: JSON.stringify({
-          textQuery: `${brand}, Colorado`,
-          regionCode: "US",
-          maxResultCount: MAX_LOCATIONS_PER_BRAND,
-          locationBias: {
-            circle: {
-              center: { latitude: UNION_STATION.lat, longitude: UNION_STATION.lng },
-              radius: 50000, // Places' max bias circle; the 50-mi cap is enforced by the caller
-            },
+    const res = await fetch(PLACES_SEARCH_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": SEARCH_FIELD_MASK,
+      },
+      body: JSON.stringify({
+        textQuery: `${brand}, Colorado`,
+        regionCode: "US",
+        maxResultCount: MAX_LOCATIONS_PER_BRAND,
+        locationBias: {
+          circle: {
+            center: { latitude: UNION_STATION.lat, longitude: UNION_STATION.lng },
+            radius: 50000, // Places' max bias circle; the 50-mi cap is enforced by the caller
           },
-        }),
-      });
-      if (!res.ok) {
-        log(`Places searchText ${res.status} for "${brand}"`);
-        return [];
-      }
-      raw = await res.json();
-    } catch (err) {
-      log(
-        `Places network error for "${brand}": ${err instanceof Error ? err.message : String(err)}`
-      );
-      return [];
+        },
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Places searchText ${res.status} for "${brand}"`);
     }
 
-    const parsed = searchTextResponseSchema.safeParse(raw);
-    const places = parsed.success ? (parsed.data.places ?? []) : [];
+    const parsed = searchTextResponseSchema.safeParse(await res.json());
+    if (!parsed.success) {
+      throw new Error(`Places searchText response for "${brand}" failed validation`);
+    }
+    const places = parsed.data.places ?? [];
     if (places.length === MAX_LOCATIONS_PER_BRAND) {
       log(`FULL-PAGE ${brand} — ${MAX_LOCATIONS_PER_BRAND} results; some locations may be missed`);
     }
 
     const resolved: ResolvedPlace[] = [];
     for (const place of places) {
-      if (!place.location || place.formattedAddress === undefined) {
+      // A result missing its name can't pass the brand-identity check and
+      // must never be relabeled as the brand — drop it with the incompletes.
+      if (!place.location || place.formattedAddress === undefined || !place.displayName?.text) {
         continue;
       }
       resolved.push({
         placeId: place.id,
-        name: place.displayName?.text ?? brand,
+        name: place.displayName.text,
         address: place.formattedAddress,
         lat: place.location.latitude,
         lng: place.location.longitude,
@@ -240,8 +260,9 @@ export async function runCli(
       log: deps?.log ?? ((m) => log.log(m)),
     });
 
-    // Eligible chains but zero locations across ALL of them means the API is
-    // down or the key is bad — never overwrite the committed file with `[]`.
+    // Resolver failures throw above, so zero locations across ALL eligible
+    // chains means every result was filtered (dedup/name/range) — implausible
+    // for a fresh run; never overwrite the committed file with `[]` on it.
     if (eligible > 0 && result.listings.length === 0) {
       throw new Error(
         `Fan-out resolved 0 locations across ${eligible} chain(s) — refusing to overwrite the baked chain data with an empty set. Check GOOGLE_PLACES_API_KEY (auth/quota) and re-run.`

@@ -45,7 +45,7 @@ sections are listed for orientation.
 | --------------------------- | ------------------------ | ---------- | ----------------------------------- |
 | **Google Cloud**            | `GOOGLE_CLIENT_SECRET`   | yes        | Google OAuth client secret (ADR-006). |
 | (project "My First Project")| `GOOGLE_CLIENT_ID`       | no         | Google OAuth client ID (public by nature). |
-|                             | `GOOGLE_PLACES_API_KEY`  | yes        | Server-side Places key (ADR-008). Used by `pnpm db:seed:refresh` to bake the Denver seed data. |
+|                             | `GOOGLE_PLACES_API_KEY`  | yes        | Server-side Places key (ADR-008). Used by `pnpm db:seed:refresh` and `pnpm db:seed:expand-chains` to bake the Denver seed data. |
 | **Neon**                    | `NEON_PROJECT_ID`        | no         | Neon project identifier (a slug, not a credential). In GitHub it lives as a repo **Variable**. |
 |                             | `NEON_API_KEY`           | yes        | Neon API key — resolves preview branch DB URLs. In GitHub, a repo **Secret**. |
 |                             | `DATABASE_URL`           | yes        | Dev/local Neon connection string. |

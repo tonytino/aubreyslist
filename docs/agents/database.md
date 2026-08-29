@@ -236,6 +236,10 @@ the Places API call away from the seed so `pnpm db:seed` is **API-free**:
    ONLY that corporate-policy attribute subset — never the flagship's full
    set. Runs locally or via the **"Expand chain locations"** Action
    (`.github/workflows/expand-chain-locations.yml`, `workflow_dispatch`).
+   Re-dispatch it after ANY curated refresh or chain-curation change — the
+   chain bake derives from both and goes stale otherwise (an invariant test
+   fails preflight on a stale bake). Seeding is insert-only: regenerating a
+   bake heals the files, never rows already seeded into a database.
 4. **Baked data (committed, generated):** `scripts/seed-listings.generated.json`
    and `scripts/seed-chain-locations.generated.json` are the captured outputs —
    **do not hand-edit them**. `scripts/seed-data.ts` parses and concatenates

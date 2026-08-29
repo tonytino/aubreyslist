@@ -344,7 +344,6 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
     menuUrl: "https://smashburger.com/",
     chain: true,
-    chainWideAttributes: ["dedicated_fryer"],
   },
   {
     query: "Five Guys, Denver, CO",
