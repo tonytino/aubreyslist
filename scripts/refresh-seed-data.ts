@@ -5,7 +5,7 @@
  * human-curated `SEED_SOURCES` (`scripts/seed-sources.ts`), resolves each
  * `query` to a real Google Place ID, coordinates, and `googleMapsUri` share
  * link via Places Text Search (biased to Union Station, hard-capped at a
- * 25-mile radius), and bakes the resolved entries to
+ * 50-mile radius), and bakes the resolved entries to
  * `scripts/seed-listings.generated.json`. That committed file is what the
  * API-free `pnpm db:seed` inserts — seeding never calls Places.
  *
@@ -60,8 +60,8 @@ export interface RefreshSeedDataResult {
   skipped: Array<{ query: string; reason: string }>;
 }
 
-/** The 25-mile fan-out radius from Union Station. */
-const MAX_RADIUS_MILES = 25;
+/** The 50-mile fan-out radius from Union Station. */
+const MAX_RADIUS_MILES = 50;
 
 /**
  * Resolve every curated source to a baked {@link SeededListing}. Pure orchestration
@@ -100,8 +100,8 @@ export async function refreshSeedData(deps: RefreshSeedDataDeps): Promise<Refres
 // Places API (New) Text Search — one call resolves a query to id + name + address
 // + coordinates + Google's own share link (no separate details call). We
 // validate only what we bake.
-const PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
-const SEARCH_FIELD_MASK =
+export const PLACES_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText";
+export const SEARCH_FIELD_MASK =
   "places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri";
 
 /* jscpd:ignore-start -- Accepted clone of `detailsResponseSchema` in
@@ -112,7 +112,8 @@ const SEARCH_FIELD_MASK =
    A shared "common subset" schema would couple them, so neither could change
    without dragging the other. This build-time script also must not import
    the runtime server module. */
-const searchTextResponseSchema = z.object({
+// Exported for `expand-chain-locations.ts`, which hits the same endpoint.
+export const searchTextResponseSchema = z.object({
   places: z
     .array(
       z.object({
@@ -130,7 +131,7 @@ const searchTextResponseSchema = z.object({
 /**
  * Build the real Places Text Search resolver. Biases results toward Union Station
  * (so "Marco's" resolves to the Denver one) and rejects anything beyond the
- * 25-mile fan-out radius, returning `null` (skip + log) for any miss rather than
+ * 50-mile fan-out radius, returning `null` (skip + log) for any miss rather than
  * guessing. Deliberately un-gated by intake mode — this is an admin batch, not the
  * user intake flow, so it must not be blocked by an admin `manual` toggle.
  */
@@ -155,7 +156,7 @@ export function makePlacesResolver(
           locationBias: {
             circle: {
               center: { latitude: UNION_STATION.lat, longitude: UNION_STATION.lng },
-              radius: 40000, // ~25 mi, in metres — a bias, enforced hard below
+              radius: 50000, // Places' max bias circle (~31 mi); the 50-mi cap below is the real guard
             },
           },
         }),

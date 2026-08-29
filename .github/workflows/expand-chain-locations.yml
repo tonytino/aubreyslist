@@ -1,0 +1,129 @@
+name: Expand chain locations
+
+# Fans curated chains (those with `chainWideAttributes` in
+# `scripts/seed-sources.ts`) out to their other in-radius locations via one
+# Places Text Search per brand, and opens a PR with the regenerated
+# `scripts/seed-chain-locations.generated.json` against the branch this
+# workflow is run from. Expanded locations carry only the brand's
+# corporate-policy attributes — never the flagship's full set.
+#
+# Spends ~one billed Places call per eligible chain. Run it from the Actions
+# tab whenever chain curation changes. The committed JSON is concatenated with
+# the curated bake by `scripts/seed-data.ts`, so seeding itself never touches
+# Places.
+#
+# Skips gracefully (a warning, not a failure) if GOOGLE_PLACES_API_KEY is
+# unset. The PR is pre-labeled like the seed-refresh PR — `safe:human` because
+# the data was bought with billed Places calls and names real businesses, so a
+# human glances at it and merges.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: expand-chain-locations-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  expand:
+    name: Fan chains out to their locations
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref_name }}
+
+      # pnpm version comes from `packageManager` in package.json
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The `secrets` context isn't allowed in step-level `if`, so detect the key
+      # here and gate the fan-out on this output.
+      - name: Check for Places API key
+        id: cfg
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+        run: |
+          if [ -z "$GOOGLE_PLACES_API_KEY" ]; then
+            echo "::warning::GOOGLE_PLACES_API_KEY is not set — skipping the chain fan-out."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fan chains out via Google Places
+        if: steps.cfg.outputs.enabled == 'true'
+        run: pnpm db:seed:expand-chains
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+
+      - name: Commit the regenerated chain bake to a working branch
+        id: commit
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          if git diff --quiet -- scripts/seed-chain-locations.generated.json; then
+            echo "No change to scripts/seed-chain-locations.generated.json — nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="chain-expand/${{ github.run_id }}"
+          git checkout -b "$branch"
+          git add scripts/seed-chain-locations.generated.json
+          git commit -m "chore: expand curated chains to their in-radius locations"
+          git push origin "HEAD:$branch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      # Branch protection blocks a direct push to main, so hand the data off as
+      # a PR pre-labeled to clear every pr-conventions gate on its own, exactly
+      # like the seed-refresh workflow.
+      - name: Open a PR with the expanded chain locations
+        if: steps.cfg.outputs.enabled == 'true' && steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base "${{ github.ref_name }}" \
+            --head "${{ steps.commit.outputs.branch }}" \
+            --title "chore: expand curated chains to their in-radius locations" \
+            --label "type:chore" \
+            --label "size:s" \
+            --label "safe:human" \
+            --label "skip-review" \
+            --label "skip-changelog" \
+            --body "$(cat <<'EOF'
+          ## TL;DR
+
+          Added the other nearby locations of chain restaurants we already list, each carrying only the gluten-free options the brand offers everywhere.
+
+          ## Summary
+
+          - Automated fan-out: regenerated `scripts/seed-chain-locations.generated.json` from the curated chains' `chainWideAttributes` via `pnpm db:seed:expand-chains`, run by the "Expand chain locations" workflow (`.github/workflows/expand-chain-locations.yml`).
+          - No code changed — data only; `scripts/seed-data.ts` concatenates this file with the curated bake at seed time.
+
+          ## Test plan
+
+          - [x] CI runs on this PR like any other.
+
+          ## Owner sign-off (cost / legal / security / safety)
+
+          - [x] This PR touches an owner-gated surface → `safe:human`:
+            - [x] **Cost** — the data was captured with billed Google Places API calls.
+
+          ## Adversarial review
+
+          Skipped via `skip-review` — automated, data-only fan-out with no code to review (see docs/agents/orchestration.md).
+          EOF
+          )"

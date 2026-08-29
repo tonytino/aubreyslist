@@ -6,16 +6,19 @@ import type { ClaimAttribute } from "~/db/schema";
 /**
  * Baked Denver seed data accessor.
  *
- * {@link SEED_LISTINGS} is generated, not hand-written: `pnpm db:seed:refresh`
- * resolves the human-curated `SEED_SOURCES` against the Google Places API and
- * writes the resolved entries to the committed
- * `scripts/seed-listings.generated.json`. This module parses that JSON so the
- * API-free `pnpm db:seed` can insert it directly — no Places call at seed
- * time.
+ * {@link SEED_LISTINGS} is generated, not hand-written, from two committed
+ * bakes this module concatenates:
+ * - `seed-listings.generated.json` — `pnpm db:seed:refresh` resolves the
+ *   human-curated `SEED_SOURCES` against the Google Places API; and
+ * - `seed-chain-locations.generated.json` — `pnpm db:seed:expand-chains` fans
+ *   curated chains out to their other in-radius locations (corporate-policy
+ *   attributes only; `expand-chain-locations.ts`).
+ * The API-free `pnpm db:seed` inserts the concatenation directly — no Places
+ * call at seed time.
  *
- * Never hand-edit `seed-listings.generated.json`. To change the seed set,
- * edit `seed-sources.ts` (and, for a new captured field,
- * `refresh-seed-data.ts`), then re-run `pnpm db:seed:refresh` to re-bake.
+ * Never hand-edit either generated file. To change the seed set, edit
+ * `seed-sources.ts` (and, for a new captured field, `refresh-seed-data.ts`),
+ * then re-run the matching bake command.
  */
 
 // The curator-bot identity lives with the human-curated sources; re-exported
@@ -54,5 +57,21 @@ export interface SeededListing {
  * statically rewrites the latter into an asset-server URL, which breaks the read
  * under vitest. The path form works identically under plain Node and Vitest.
  */
-const bakedPath = join(dirname(fileURLToPath(import.meta.url)), "seed-listings.generated.json");
-export const SEED_LISTINGS: SeededListing[] = JSON.parse(readFileSync(bakedPath, "utf8"));
+const scriptsDir = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * The curated bake alone — what `expand-chain-locations.ts` dedups against,
+ * so a re-run of the fan-out never treats its own previous output as
+ * already-known (which would silently drop every location from the new bake).
+ */
+export const CURATED_SEED_LISTINGS: SeededListing[] = JSON.parse(
+  readFileSync(join(scriptsDir, "seed-listings.generated.json"), "utf8")
+);
+
+/** The fan-out bake: chain locations with corporate-policy attributes only. */
+const chainListings: SeededListing[] = JSON.parse(
+  readFileSync(join(scriptsDir, "seed-chain-locations.generated.json"), "utf8")
+);
+
+/** Everything `pnpm db:seed` inserts: curated bake + chain fan-out bake. */
+export const SEED_LISTINGS: SeededListing[] = [...CURATED_SEED_LISTINGS, ...chainListings];

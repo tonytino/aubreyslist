@@ -51,9 +51,10 @@ test.describe("seeded listings — badge + detail page (AUB-196)", () => {
   test.skip(!E2E_DB_READY, "needs CI E2E DATABASE_URL + SESSION_SECRET");
   test.skip(SEED_LISTINGS.length === 0, "no baked seed data — run pnpm db:seed:refresh");
 
-  // Hoisted to beforeAll (not beforeEach): seedListings does up to ~140
-  // sequential listing inserts + ~250 claim inserts, each an HTTP round trip to
-  // Neon, so running it once per worker — rather than once per test — is both
+  // Hoisted to beforeAll (not beforeEach): seedListings does up to ~260
+  // sequential listing inserts (curated + chain bakes) + ~380 claim inserts,
+  // each an HTTP round trip to Neon, so running it once per worker — rather
+  // than once per test — is both
   // cheaper and keeps individual tests within the default test timeout. This is safe
   // because the seed is idempotent (Place-ID dedup + claims
   // onConflictDoNothing) and beforeAll doesn't need the `page` fixture, so
@@ -63,7 +64,7 @@ test.describe("seeded listings — badge + detail page (AUB-196)", () => {
   test.beforeAll(async () => {
     // Generous headroom for the round trips above — well past the default 30s
     // test timeout this hook would otherwise share.
-    test.setTimeout(300_000);
+    test.setTimeout(480_000);
     const seeder = new Seeder();
     await seedListings(SEED_LISTINGS, { db: seeder.db });
   });
