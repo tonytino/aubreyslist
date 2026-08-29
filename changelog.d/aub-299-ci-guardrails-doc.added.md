@@ -1,0 +1,1 @@
+- `[manual]` Added `docs/ci-guardrails.md`, a self-contained reference to every PR-gating CI check and guardrail pattern, written so an agent in another repo can replicate them.
