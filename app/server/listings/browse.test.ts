@@ -55,6 +55,10 @@ const h = vi.hoisted(() => {
     confirmedRows: [] as Array<Record<string, unknown>>,
     /** The WHERE predicate handed to the confirmed-attribute query. */
     confirmedWhere: undefined as unknown,
+    /** Rows returned by the listing-activity query. */
+    activityRows: [] as Array<Record<string, unknown>>,
+    /** The WHERE predicate handed to the listing-activity query (visibility). */
+    activityWhere: undefined as unknown,
     /** Public per-listing save counts returned by the (mocked) favorites layer. */
     favoriteCounts: new Map<string, number>(),
     /** The listing ids passed to `getFavoriteCounts` (asserted batched, not N+1). */
@@ -155,6 +159,18 @@ const h = vi.hoisted(() => {
   const confirmedLeftJoinMock = vi.fn(() => ({ where: confirmedWhereMock }));
   const confirmedFromMock = vi.fn(() => ({ leftJoin: confirmedLeftJoinMock }));
 
+  // The listing-activity chain:
+  //   select(proj).from().innerJoin().where().groupBy()  (awaited)
+  // Routed by its own `lastActivityAt` projection key; the WHERE is captured so
+  // the visibility bound can be asserted structurally.
+  const activityGroupByMock = vi.fn(() => Promise.resolve(state.activityRows));
+  const activityWhereMock = vi.fn((predicate?: unknown) => {
+    state.activityWhere = predicate;
+    return { groupBy: activityGroupByMock };
+  });
+  const activityInnerJoinMock = vi.fn(() => ({ where: activityWhereMock }));
+  const activityFromMock = vi.fn(() => ({ innerJoin: activityInnerJoinMock }));
+
   // The count chain: select({ total }).from().where()  (awaited)
   const countWhereMock = vi.fn((predicate?: unknown) => {
     state.countWhere = predicate;
@@ -168,6 +184,7 @@ const h = vi.hoisted(() => {
   //  - has `occurredOn`          → incidents
   //  - has `suggestedListingId`  → bot-suggestion existence
   //  - has `confirmedListingId`  → confirmed non-headline consensus
+  //  - has `lastActivityAt`      → listing activity
   //  - otherwise (claim cols)    → celiac aggregate / trust subquery
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
     if (projection && "listing" in projection) return { from: pageFromMock };
@@ -175,6 +192,7 @@ const h = vi.hoisted(() => {
     if (projection && "occurredOn" in projection) return { from: incidentFromMock };
     if (projection && "suggestedListingId" in projection) return { from: suggestionFromMock };
     if (projection && "confirmedListingId" in projection) return { from: confirmedFromMock };
+    if (projection && "lastActivityAt" in projection) return { from: activityFromMock };
     return { from: celiacFromMock };
   });
 
@@ -240,6 +258,8 @@ beforeEach(() => {
   state.suggestionWhere = undefined;
   state.confirmedRows = [];
   state.confirmedWhere = undefined;
+  state.activityRows = [];
+  state.activityWhere = undefined;
   state.favoriteCounts = new Map();
   state.favoriteCountIds = undefined;
   state.viewerFavoriteIds = [];

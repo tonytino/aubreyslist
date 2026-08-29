@@ -13,9 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * mocking `~/db/client` the same way `browse.test.ts` does — a `getDb()`
  * whose `select()` chains resolve to fixture rows — so the assembled cards
  * are asserted without a live database (docs/agents/testing.md).
- * `buildBrowseCards` issues exactly four batched queries (celiac aggregate,
+ * `buildBrowseCards` issues exactly five batched queries (celiac aggregate,
  * incidents, the bot-suggested-attribute set, the confirmed non-headline
- * attribute set); the mock routes each by its `select()` projection and
+ * attribute set, listing activity); the mock routes each by its `select()`
+ * projection and
  * returns the fixtures verbatim, so the IN(...) filter is irrelevant to what
  * a row maps to (the row's own `listingId` keys it).
  *
@@ -30,6 +31,7 @@ const h = vi.hoisted(() => {
     incidentRows: [] as Array<Record<string, unknown>>,
     suggestionRows: [] as Array<Record<string, unknown>>,
     confirmedRows: [] as Array<Record<string, unknown>>,
+    activityRows: [] as Array<Record<string, unknown>>,
   };
 
   // The celiac-aggregate chain: select(proj).from().leftJoin().where().groupBy()
@@ -58,15 +60,24 @@ const h = vi.hoisted(() => {
   const confirmedLeftJoinMock = vi.fn(() => ({ where: confirmedWhereMock }));
   const confirmedFromMock = vi.fn(() => ({ leftJoin: confirmedLeftJoinMock }));
 
+  // The listing-activity chain:
+  //   select(proj).from().innerJoin().where().groupBy()
+  const activityGroupByMock = vi.fn(() => Promise.resolve(state.activityRows));
+  const activityWhereMock = vi.fn(() => ({ groupBy: activityGroupByMock }));
+  const activityInnerJoinMock = vi.fn(() => ({ where: activityWhereMock }));
+  const activityFromMock = vi.fn(() => ({ innerJoin: activityInnerJoinMock }));
+
   // Route each query to the right chain by its select() projection:
   //  - has `occurredOn`           → incidents
   //  - has `suggestedListingId`   → bot-suggestion existence
   //  - has `confirmedListingId`   → confirmed-attribute consensus
+  //  - has `lastActivityAt`       → listing activity
   //  - otherwise (claim cols)     → celiac aggregate
   const selectMock = vi.fn((projection?: Record<string, unknown>) => {
     if (projection && "occurredOn" in projection) return { from: incidentFromMock };
     if (projection && "suggestedListingId" in projection) return { from: suggestionFromMock };
     if (projection && "confirmedListingId" in projection) return { from: confirmedFromMock };
+    if (projection && "lastActivityAt" in projection) return { from: activityFromMock };
     return { from: aggFromMock };
   });
 
@@ -85,6 +96,14 @@ import { buildBrowseCards } from "./browse";
 
 const { state } = h;
 const NOW = new Date("2026-06-28T00:00:00Z");
+
+/** The honest empty activity strip — a listing with no attestations at all. */
+const NO_ACTIVITY = {
+  hasActivity: false,
+  updatedLabel: "No activity yet",
+  happyPatrons: 0,
+  happyPatronsLabel: null,
+} as const;
 
 /**
  * A full, valid `Listing` fixture. Every field is set (and asserted to pass
@@ -112,6 +131,7 @@ beforeEach(() => {
   state.incidentRows = [];
   state.suggestionRows = [];
   state.confirmedRows = [];
+  state.activityRows = [];
 });
 
 afterEach(() => {
@@ -181,6 +201,17 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
     ];
     // A recent (10d ago, inside the 90d window) incident on the incident listing.
     state.incidentRows = [{ listingId: "l-incident", occurredOn: "2026-06-18" }];
+    // Listing activity — deliberately present on the CONTESTED listing too:
+    // activity is not a safety cue, so it is exempt from the suppression the
+    // badge/evidence/freshness fields below still apply (owner, 2026-08-25).
+    state.activityRows = [
+      { listingId: "l-fresh", lastActivityAt: new Date("2026-06-25T00:00:00Z"), happyPatrons: "6" },
+      {
+        listingId: "l-contested",
+        lastActivityAt: new Date("2026-06-27T00:00:00Z"),
+        happyPatrons: "2",
+      },
+    ];
 
     const cards = await buildBrowseCards(listings, NOW, 6);
 
@@ -209,6 +240,12 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: false,
         evidence: { confirmations: 8, contributors: 6 },
         freshness: { kind: "fresh", label: "Verified 27d ago" },
+        activity: {
+          hasActivity: true,
+          updatedLabel: "Updated 3 days ago",
+          happyPatrons: 6,
+          happyPatronsLabel: "6 happy patrons",
+        },
         suggestedByBot: false,
         suggestedAttributes: [],
         confirmedAttributes: [],
@@ -219,6 +256,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: false,
         evidence: { confirmations: 30, contributors: 12 },
         freshness: { kind: "stale", label: "Updated 6mo ago" },
+        activity: NO_ACTIVITY,
         suggestedByBot: false,
         suggestedAttributes: [],
         confirmedAttributes: [],
@@ -233,6 +271,16 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: false,
         evidence: null,
         freshness: null,
+        // …but the ACTIVITY strip survives, byte-different from the unattested
+        // card below. That is the deliberate scope change (owner, 2026-08-25):
+        // activity makes no safety assertion, and every surface pairs it with
+        // the "not a safety verification" tooltip.
+        activity: {
+          hasActivity: true,
+          updatedLabel: "Updated yesterday",
+          happyPatrons: 2,
+          happyPatronsLabel: "2 happy patrons",
+        },
         suggestedByBot: false,
         suggestedAttributes: [],
         confirmedAttributes: [],
@@ -244,6 +292,9 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: true,
         evidence: { confirmations: 8, contributors: 5 },
         freshness: { kind: "incident", label: "Reported 10d ago" },
+        // No attestation rows for this listing, so no activity — an incident is
+        // deliberately NOT activity (it keeps its own, louder signal).
+        activity: NO_ACTIVITY,
         suggestedByBot: false,
         suggestedAttributes: [],
         confirmedAttributes: [],
@@ -254,6 +305,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
         hasRecentIncident: false,
         evidence: null,
         freshness: null,
+        activity: NO_ACTIVITY,
         suggestedByBot: false,
         suggestedAttributes: [],
         confirmedAttributes: [],
@@ -286,6 +338,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
       hasRecentIncident: false,
       evidence: null,
       freshness: null,
+      activity: NO_ACTIVITY,
       suggestedByBot: false,
       suggestedAttributes: [],
       confirmedAttributes: [],
@@ -311,6 +364,7 @@ describe("buildBrowseCards (golden trust-glance derivation, ADR-007)", () => {
       hasRecentIncident: false,
       evidence: null,
       freshness: null,
+      activity: NO_ACTIVITY,
       suggestedByBot: true,
       suggestedAttributes: ["dedicated_fryer"],
       confirmedAttributes: [],

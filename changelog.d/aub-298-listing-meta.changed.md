@@ -1,0 +1,1 @@
+- `[manual]` Browse cards now share one uniform layout, the recency line reads "Updated" and reflects any claim activity (tap it for details), and "happy patrons" counts visitors who confirmed a claim and reported no incident.

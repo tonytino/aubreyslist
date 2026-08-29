@@ -15,6 +15,7 @@ import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { viewerFavoritesQuery } from "~/favorites/viewer-favorites-query";
 import type { BrowseListingCard } from "~/server/listings/browse";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
+import { deriveListingActivityMeta } from "~/trust/summary";
 import { FavoritesPage, Route } from "./favorites";
 
 /**
@@ -61,6 +62,7 @@ function makeCard(id: string, name: string): BrowseListingCard {
     confirmedAttributes: [],
     evidence: null,
     freshness: null,
+    activity: deriveListingActivityMeta(null),
   };
   return { listing, glance, favoriteCount: 3 };
 }

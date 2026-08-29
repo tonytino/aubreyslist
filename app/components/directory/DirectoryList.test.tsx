@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
+import { deriveListingActivityMeta } from "~/trust/summary";
 import { DirectoryList } from "./DirectoryList";
 
 // Each card embeds the FavoriteButton island, which imports the db-touching
@@ -38,6 +39,7 @@ const vms: RestaurantCardVM[] = [
     suggestedAttributes: [],
     confirmedAttributes: [],
     hasRecentIncident: false,
+    activity: deriveListingActivityMeta(null),
     accent: "lavender",
   },
   {
@@ -49,6 +51,7 @@ const vms: RestaurantCardVM[] = [
     suggestedAttributes: [],
     confirmedAttributes: [],
     hasRecentIncident: false,
+    activity: deriveListingActivityMeta(null),
     accent: "mint",
   },
 ];

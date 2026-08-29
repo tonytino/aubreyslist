@@ -371,40 +371,89 @@ export function deriveHeadlineSafetyState(
   return "celiac-safe";
 }
 
+// ---------------------------------------------------------------------------
+// Listing activity — "Updated …" plus the happy-patron count
+// ---------------------------------------------------------------------------
+
 /**
- * The confirmation-derived cues the listing-detail hero shows beside the
- * headline badge: the "Verified …" recency phrase and the confirmation count.
+ * The two server-batched activity signals for a listing, as raw values.
  *
- * Gated on {@link hasPositiveConsensus} — the same rule
- * `deriveListingTrustGlance` applies to the browse card's freshness cue and
- * evidence meta, so the two surfaces suppress in lockstep. A contested claim
- * yields `{ verifiedRelative: null, confirmations: 0 }`: byte-identical to an
- * unattested listing, which is what makes the hero honest. Suppressing only
- * the badge would leak the withheld verdict straight back through this strip
- * — "Verified 3 days ago · 3 confirmations" sitting where a badge is missing
- * reads as reassurance the community never gave.
+ * - `lastActivityAt` — the most recent attestation instant across ALL visible
+ *   claims of the listing, any attribute, confirm and dispute alike. Incidents
+ *   never bump it: harm keeps its own, louder signal.
+ * - `happyPatrons` — how many distinct people confirmed at least one visible
+ *   claim on the listing and have never reported an incident on it.
  *
- * Scope: these hero cues only. The detail page's per-claim rows keep the full
- * confirm/dispute distribution (`summarizeClaim`) — that is where a contest is
- * meant to be legible — and incident signals are untouched.
- *
- * `null`/`undefined` (a listing with no celiac claim) yields the same empty
- * pair, so the caller never branches on the claim's existence.
+ * Both are plain counts/timestamps over rows the user can also see, so the
+ * derived line stays explainable (ADR-007).
  */
-export function deriveHeadlineMeta(
-  aggregate:
-    | Pick<ClaimAggregate, "confirmCount" | "disputeCount" | "lastConfirmedAt">
-    | null
-    | undefined,
+export interface ListingActivity {
+  lastActivityAt: Date | null;
+  happyPatrons: number;
+}
+
+/** The render-ready activity strip shared by the browse card and the hero. */
+export interface ListingActivityMeta {
+  /** True once any visible claim on the listing carries an attestation. */
+  hasActivity: boolean;
+  /** "Updated 3 days ago", or the honest empty state when nothing has happened. */
+  updatedLabel: string;
+  /** Distinct happy patrons; `0` hides the count entirely. */
+  happyPatrons: number;
+  /** "12 happy patrons" / "1 happy patron", or `null` at zero. */
+  happyPatronsLabel: string | null;
+}
+
+/** The honest empty state for a listing nobody has attested yet. */
+export const NO_ACTIVITY_LABEL = "No activity yet";
+
+/**
+ * The clarifier every surface pairs with the activity line.
+ *
+ * Mandatory, not decoration. The line is exempt from the contested-suppression
+ * rule (owner decision 2026-08-25) precisely because it asserts nothing about
+ * safety, and this copy is what keeps "Updated 3 days ago" — sitting where a
+ * verdict would be — from being read as one. Lives here, beside the derivation
+ * it explains, so the card, the mini-card and the hero cannot drift on it.
+ */
+export const ACTIVITY_TOOLTIP =
+  "Reflects recent claim activity on this listing, not a safety verification.";
+
+/**
+ * Derive the listing-activity strip: the "Updated …" line and the happy-patron
+ * count the browse card, the map mini-card and the detail hero all render.
+ *
+ * **Activity, not safety** (owner decision 2026-08-25). This deliberately does
+ * NOT gate on {@link hasPositiveConsensus}: it reports that people have been
+ * voting on this listing lately, which is true of a contested listing too, and
+ * the surfaces that render it carry a tooltip saying exactly that. The
+ * suppression rule stays where a verdict is actually implied — the headline
+ * badge ({@link deriveHeadlineSafetyState}) and the browse glance's
+ * evidence/freshness cues — so a contested listing still earns no badge and no
+ * confirmation-derived reassurance.
+ *
+ * Both halves are honest at zero: a listing with no attestations reads
+ * {@link NO_ACTIVITY_LABEL} rather than a fabricated date, and a listing with
+ * no happy patrons yields `null` rather than "0 happy patrons".
+ *
+ * `null`/`undefined` (a caller with no batched activity) yields the same empty
+ * strip, so no surface has to branch on whether the data was loaded.
+ */
+export function deriveListingActivityMeta(
+  activity: ListingActivity | null | undefined,
   now: Date = new Date()
-): { verifiedRelative: string | null; confirmations: number } {
-  const affirmed = aggregate !== null && aggregate !== undefined && hasPositiveConsensus(aggregate);
-  if (!affirmed) {
-    return { verifiedRelative: null, confirmations: 0 };
-  }
+): ListingActivityMeta {
+  const relative = formatRelativeTime(activity?.lastActivityAt ?? null, now);
+  // Defensive floor: a driver-shaped count string or a negative can never
+  // render as "-3 happy patrons".
+  const rawPatrons = Number(activity?.happyPatrons ?? 0);
+  const happyPatrons = Number.isFinite(rawPatrons) ? Math.max(0, Math.trunc(rawPatrons)) : 0;
   return {
-    verifiedRelative: formatRelativeTime(aggregate.lastConfirmedAt, now),
-    confirmations: aggregate.confirmCount,
+    hasActivity: relative !== null,
+    updatedLabel: relative === null ? NO_ACTIVITY_LABEL : `Updated ${relative}`,
+    happyPatrons,
+    happyPatronsLabel:
+      happyPatrons === 0 ? null : `${happyPatrons} happy patron${happyPatrons === 1 ? "" : "s"}`,
   };
 }
 

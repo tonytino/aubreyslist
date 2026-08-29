@@ -3,10 +3,11 @@ import type { ClaimAggregate } from "~/server/attestations";
 import { deriveListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident, isRecentIncident } from "~/trust/incident-recency";
 import {
+  ACTIVITY_TOOLTIP,
   type ClaimTrustSummary,
   DEFAULT_STALENESS_MONTHS,
-  deriveHeadlineMeta,
   deriveHeadlineSafetyState,
+  deriveListingActivityMeta,
   hasPositiveConsensus,
   isStale,
   safetyTierRank,
@@ -39,14 +40,14 @@ import {
  * badge it can stand behind, or it shows none.
  *
  * Scope of that suppression, exactly:
- *   - SUPPRESSED wherever the headline verdict is glanced — on the browse card
- *     and map mini-card, the safety badge, the freshness cue and the evidence
- *     meta ("N confirmations · M neighbors") (`deriveListingTrustGlance`); in
- *     the detail hero, the badge plus the "Verified … ago" phrase and the
- *     confirmation count (`deriveHeadlineMeta`). Each set is withheld
- *     together, because any one cue surviving would leak the verdict the badge
- *     withholds and would distinguish a contested listing from a never-
- *     reviewed one.
+ *   - SUPPRESSED wherever the headline verdict is glanced — the safety badge,
+ *     the confirmation-derived freshness cue and the evidence meta ("N
+ *     confirmations · M neighbors") of `deriveListingTrustGlance`, on the
+ *     browse card, the map mini-card and the detail hero alike. Each is
+ *     withheld together with the badge, because any one surviving would leak
+ *     the verdict the badge withholds and would distinguish a contested
+ *     listing from a never-reviewed one. The gate is what keeps the "Recently
+ *     verified" quick filter from returning badge-less cards.
  *   - KEPT — the confirm/dispute counts on the detail-page claim row
  *     (`summarizeClaim`), and every incident signal. The claim row is where a
  *     contest is legible; recent harm outranks the whole rule.
@@ -54,6 +55,19 @@ import {
  * Invariants 6 and 7 below pin that decision; the safety half of it (a contest
  * can only ever REMOVE a signal, never add or soften one) is what must not
  * regress.
+ * ---------------------------------------------------------------------------
+ * Owner decision, 2026-08-25 (refinement) — the meta row reads ACTIVITY.
+ *
+ * The recency line the card and the hero render is no longer the celiac-gated
+ * "Verified …" cue. It is `deriveListingActivityMeta`: "Updated 3 days ago"
+ * over the most recent attestation on ANY visible claim of the listing,
+ * confirms and disputes alike, beside a "happy patrons" count. Activity is not
+ * safety, so it is deliberately OUTSIDE the suppression above and shows for a
+ * contested listing exactly as it does for an affirmed one — which is only
+ * honest because every surface pairs the line with a mandatory clarifying
+ * tooltip ("Reflects recent claim activity on this listing, not a safety
+ * verification."). Invariant 6c pins both halves: the derivation ignores the
+ * contest, and the tooltip copy makes no safety claim.
  * ---------------------------------------------------------------------------
  *
  * The DB-enforced half of "one attestation per user per claim" (the UNIQUE
@@ -574,33 +588,35 @@ describe("INVARIANT 6 — a tie or dispute-majority NEVER yields a safety badge"
     }
   });
 
-  it("suppresses the DETAIL HERO's cues too, not just the browse card's", () => {
+  it("suppresses the DETAIL HERO's badge-derived cues too, not just the browse card's", () => {
     // The hero is a second glance at the same verdict, so it needs the same
     // gate: a contested listing that showed "Verified 3 days ago · 3
     // confirmations" beside a missing badge would leak the withheld verdict
-    // through a different surface, and would read as reassurance the community
-    // never gave. Pinned as an equality against the unattested hero.
-    const unattestedMeta = deriveHeadlineMeta(aggregate(0, 0, null), NOW);
-    expect(unattestedMeta).toEqual({ verifiedRelative: null, confirmations: 0 });
+    // through a different surface. Both surfaces now read the SAME
+    // `deriveListingTrustGlance` seam, so the equality is pinned there once and
+    // covers the hero by construction.
+    const unattestedGlance = deriveListingTrustGlance(aggregate(0, 0, null), 0, null, NOW);
 
     for (const confirmCount of COUNT_GRID) {
       for (const disputeCount of COUNT_GRID.filter((d) => d >= confirmCount && d > 0)) {
         for (const ageMs of [...AGE_GRID_MS, null]) {
           const lastConfirmedAt = ageMs === null ? null : new Date(NOW.getTime() - ageMs);
           const agg = aggregate(confirmCount, disputeCount, lastConfirmedAt);
+          const glance = deriveListingTrustGlance(agg, confirmCount + disputeCount, null, NOW);
           const where = `${confirmCount}c/${disputeCount}d @ ${String(ageMs)}`;
 
           expect(deriveHeadlineSafetyState(agg, NOW), where).toBeNull();
-          expect(deriveHeadlineMeta(agg, NOW), where).toEqual(unattestedMeta);
+          expect(glance.evidence, where).toBe(unattestedGlance.evidence);
+          expect(glance.freshness, where).toBe(unattestedGlance.freshness);
         }
       }
     }
   });
 
-  it("keeps the DETAIL HERO's cues wherever a badge IS shown (suppression is not a blanket)", () => {
+  it("keeps the badge-derived cues wherever a badge IS shown (suppression is not a blanket)", () => {
     // The converse, so the gate cannot be over-tightened into hiding real
     // evidence: whenever the headline earns a badge — celiac-safe or stale —
-    // the hero still reports its confirmation count.
+    // the glance still reports its confirmation count.
     for (const confirmCount of COUNT_GRID) {
       for (const disputeCount of COUNT_GRID) {
         for (const ageMs of [...AGE_GRID_MS, null]) {
@@ -610,7 +626,9 @@ describe("INVARIANT 6 — a tie or dispute-majority NEVER yields a safety badge"
             continue;
           }
           const where = `${confirmCount}c/${disputeCount}d @ ${String(ageMs)}`;
-          expect(deriveHeadlineMeta(agg, NOW).confirmations, where).toBe(confirmCount);
+          expect(deriveListingTrustGlance(agg, 1, null, NOW).evidence?.confirmations, where).toBe(
+            confirmCount
+          );
         }
       }
     }
@@ -653,6 +671,88 @@ describe("INVARIANT 6 — a tie or dispute-majority NEVER yields a safety badge"
         expect(glance.freshness?.kind).toBe("incident");
       }
     }
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// Invariant 6c — the meta row reads ACTIVITY, not safety (owner decision,
+// 2026-08-25). The card/hero recency line was a celiac-gated "Verified …" cue
+// and is now `deriveListingActivityMeta`: the most recent attestation on any
+// visible claim, confirms and disputes alike. It is deliberately exempt from
+// invariant 6's suppression — a contested listing's activity is real and
+// showing it hides nothing — and that exemption is only safe because the line
+// makes no safety claim and always carries the clarifying tooltip. This
+// invariant pins BOTH halves. Widening it back into a verdict (gating it on
+// consensus, or phrasing it as "Verified"/"Safe") re-opens the leak invariant
+// 6 closes; dropping the tooltip leaves an activity date reading as one.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe("INVARIANT 6c — the activity line reports activity, never a verdict", () => {
+  it("is INDEPENDENT of the contest: identical activity reads identically at every count", () => {
+    // Property-style: the same activity pair under every (confirm, dispute)
+    // combination, contested and affirmed alike, must derive the same strip.
+    // A gate slipped back in here would make a contested listing's meta row
+    // differ from an affirmed one's — the exact side channel invariant 6 shut.
+    const activity = { lastActivityAt: new Date(NOW.getTime() - 3 * DAY_MS), happyPatrons: 4 };
+    const baseline = deriveListingActivityMeta(activity, NOW);
+    expect(baseline.updatedLabel).toBe("Updated 3 days ago");
+
+    for (const confirmCount of COUNT_GRID) {
+      for (const disputeCount of COUNT_GRID) {
+        for (const ageMs of [...AGE_GRID_MS, null]) {
+          const lastConfirmedAt = ageMs === null ? null : new Date(NOW.getTime() - ageMs);
+          const agg = aggregate(confirmCount, disputeCount, lastConfirmedAt);
+          const glance = deriveListingTrustGlance(
+            agg,
+            confirmCount + disputeCount,
+            null,
+            NOW,
+            undefined,
+            [],
+            [],
+            activity
+          );
+          const where = `${confirmCount}c/${disputeCount}d @ ${String(ageMs)}`;
+          expect(glance.activity, where).toEqual(baseline);
+        }
+      }
+    }
+  });
+
+  it("never borrows safety vocabulary for the line or the count", () => {
+    // The wording is the whole reason the exemption is safe. "Verified",
+    // "safe", "celiac" and "trusted" belong to the badge; this line says only
+    // that something happened, and when.
+    const safetyWords = /verif|safe|celiac|trust|gluten/i;
+    for (const happyPatrons of [0, 1, 4, 128]) {
+      for (const ageMs of [0, DAY_MS, 30 * DAY_MS, 12 * MONTH_MS]) {
+        const meta = deriveListingActivityMeta(
+          { lastActivityAt: new Date(NOW.getTime() - ageMs), happyPatrons },
+          NOW
+        );
+        expect(meta.updatedLabel).not.toMatch(safetyWords);
+        expect(meta.happyPatronsLabel ?? "").not.toMatch(safetyWords);
+      }
+    }
+    // The empty state too — an unattested listing must not read as cleared.
+    expect(deriveListingActivityMeta(null, NOW).updatedLabel).toBe("No activity yet");
+    expect(deriveListingActivityMeta(null, NOW).updatedLabel).not.toMatch(safetyWords);
+  });
+
+  it("ships the clarifying tooltip that makes the exemption honest", () => {
+    // The copy is mandatory, not decorative: without it "Updated 3 days ago"
+    // sitting where a verdict used to be reads as a verification. Pinned as
+    // content (it must disclaim safety), not as an exact string, so wording can
+    // be improved without weakening the guarantee.
+    expect(ACTIVITY_TOOLTIP).toMatch(/activity/i);
+    expect(ACTIVITY_TOOLTIP).toMatch(/not a safety verification/i);
+  });
+
+  it("stays honest at the edges: no fabricated date, no '0 happy patrons'", () => {
+    const empty = deriveListingActivityMeta({ lastActivityAt: null, happyPatrons: 0 }, NOW);
+    expect(empty.hasActivity).toBe(false);
+    expect(empty.updatedLabel).toBe("No activity yet");
+    expect(empty.happyPatronsLabel).toBeNull();
   });
 });
 

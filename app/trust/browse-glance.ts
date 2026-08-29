@@ -5,7 +5,10 @@ import { type Freshness, formatFreshness } from "~/trust/browse-card-format";
 import {
   DEFAULT_STALENESS_MONTHS,
   deriveHeadlineSafetyState,
+  deriveListingActivityMeta,
   hasPositiveConsensus,
+  type ListingActivity,
+  type ListingActivityMeta,
 } from "~/trust/summary";
 
 /**
@@ -28,14 +31,11 @@ import {
  *   contributors, a plain count of the visible attestation rows.
  * - **Freshness cue** — a compact `{ kind, label }` recency descriptor from
  *   `formatFreshness` (incident → fresh → stale precedence).
+ * - **Activity meta** — the "Updated …" line and the happy-patron count the
+ *   card's meta row renders. Activity, not safety: it is deliberately outside
+ *   the suppression rule below, and the surfaces that render it say so in a
+ *   tooltip (owner decision 2026-08-25).
  *
- * Contested claims are suppressed to the unattested glance. When disputes tie
- * or outnumber confirms, the badge, the freshness cue AND the evidence counts
- * are all withheld, so a contested card is byte-identical to a never-reviewed
- * one: the app declines to adjudicate rather than hinting at a verdict through
- * a side channel. The contest stays legible where it belongs, on the
- * detail-page claim row (`summarizeClaim`, untouched by this rule). Incident
- * signals are exempt — recent harm always surfaces.
  * - **Bot-suggestion provenance** — which attributes carry a live curator-bot
  *   suggestion. Provenance, never evidence (ADR-007): it never influences the
  *   safety verdict or the evidence counts.
@@ -43,11 +43,29 @@ import {
  *   community consensus, deduped against the suggested set so an attribute is
  *   never both confirmed and suggested.
  *
+ * Contested claims are suppressed to the unattested glance. When disputes tie
+ * or outnumber confirms, the badge, the freshness cue AND the evidence counts
+ * are all withheld: the app declines to adjudicate rather than hinting at a
+ * verdict through a side channel. The contest stays legible where it belongs,
+ * on the detail-page claim row (`summarizeClaim`, untouched by this rule).
+ * Two things are exempt — incident signals, because recent harm always
+ * surfaces, and the activity meta, because it asserts nothing about safety and
+ * always ships its clarifying tooltip (owner decision 2026-08-25).
+ *
  * A roll-up of visible evidence, never a secret score — the same reading any
  * user gets from the listing-detail page.
  */
 
-/** Community evidence counts a browse card surfaces beside the safety verdict. */
+/**
+ * The celiac-scoped evidence roll-up, gated on positive consensus.
+ *
+ * No longer rendered directly: the card's meta row reads listing activity
+ * ({@link ListingTrustGlance.activity}) instead, so these are the derived
+ * numbers rather than a displayed string. They stay because they are the
+ * subject of the glance-suppression contract the trust-model invariants pin —
+ * any future surface reading them inherits the "contested reads as unattested"
+ * gate for free.
+ */
 export interface ListingEvidence {
   /** Confirmations on the celiac claim (its `confirmCount`). */
   confirmations: number;
@@ -69,6 +87,12 @@ export interface ListingTrustGlance {
    * Community evidence counts (celiac-claim confirmations + distinct
    * contributors), or `null` when the listing has no celiac claim, no
    * evidence, or a contested one (which reads as unattested).
+   *
+   * The card's meta row now reads listing ACTIVITY ({@link activity}) instead,
+   * so this is the celiac-scoped evidence roll-up rather than a rendered
+   * string. It stays the subject of the glance-suppression contract the
+   * trust-model invariants pin: whatever a future surface renders from it must
+   * inherit the same "contested reads as unattested" gate for free.
    */
   evidence: ListingEvidence | null;
   /**
@@ -76,8 +100,23 @@ export interface ListingTrustGlance {
    * nothing honest to show (no incident and no usable confirmation timestamp).
    * A contested claim's confirmation recency is withheld the same way its badge
    * is; an incident cue still comes through.
+   *
+   * This is the definition of the `recent` ("Recently verified") quick filter —
+   * `freshness.kind === "fresh"` — which the server mirrors in SQL
+   * (`buildQuickFilterPredicate`). Keeping it gated is what stops that filter
+   * from returning badge-less cards.
    */
   freshness: Freshness | null;
+  /**
+   * The listing's activity strip: "Updated 3 days ago" (or the honest empty
+   * state) plus the happy-patron count. Rendered in the card's meta row.
+   *
+   * Deliberately OUTSIDE the contested-suppression rule (owner decision
+   * 2026-08-25): activity is not a safety cue, and every surface that renders
+   * it carries a tooltip saying so. Always present — a listing with no
+   * attestations gets the empty strip, never a missing row.
+   */
+  activity: ListingActivityMeta;
   /**
    * True when this listing carries at least one live (unvoted) curator-bot
    * suggestion on any visible claim — i.e. whenever
@@ -153,6 +192,13 @@ function normalizeAttributes(attributes: readonly ClaimAttribute[]): ClaimAttrib
  * deduped against the suggested set (mutually exclusive by construction:
  * consensus needs a confirm, a live suggestion needs zero votes) so the card
  * never double-renders one attribute as both evidence and provenance.
+ *
+ * `activity` is the batched listing-wide activity pair (last attestation
+ * instant + happy patrons), rolled up by `deriveListingActivityMeta`. It is
+ * the one part of the glance the suppression rule does not touch: it makes no
+ * safety assertion, and the card, the mini-card and the hero all say so in the
+ * line's tooltip. A caller with nothing batched passes nothing and gets the
+ * honest empty strip.
  */
 export function deriveListingTrustGlance(
   celiacAggregate:
@@ -165,7 +211,8 @@ export function deriveListingTrustGlance(
   now: Date = new Date(),
   stalenessMonths: number = DEFAULT_STALENESS_MONTHS,
   suggestedAttributes: readonly ClaimAttribute[] = [],
-  confirmedAttributes: readonly ClaimAttribute[] = []
+  confirmedAttributes: readonly ClaimAttribute[] = [],
+  activity: ListingActivity | null = null
 ): ListingTrustGlance {
   const hasEvidence =
     celiacAggregate !== null &&
@@ -225,5 +272,9 @@ export function deriveListingTrustGlance(
     // Confirmed non-headline claim badges — real community evidence, rendered
     // as the affirmed (non-suggested) ClaimBadge. Detail-page parity.
     confirmedAttributes: confirmed,
+    // Listing activity — ungated on purpose (owner decision 2026-08-25). It
+    // answers "has anyone weighed in lately", which is a fair question about a
+    // contested listing too, so it never routes through `affirmed`.
+    activity: deriveListingActivityMeta(activity, now),
   };
 }
