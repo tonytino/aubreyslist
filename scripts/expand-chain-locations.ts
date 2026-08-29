@@ -64,8 +64,15 @@ export function brandOf(source: SeedSource): string {
   return (brand ?? source.query).trim();
 }
 
-/** Lowercased alphanumerics only, so "P.F. Chang's" and "PF Changs" compare equal. */
-const normalizeName = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+/**
+ * Lowercased alphanumerics with "&" spelled out, so "P.F. Chang's" / "PF
+ * Changs" and "Restaurant and Bar" / "Restaurant & Bar" compare equal.
+ */
+const normalizeName = (name: string): string =>
+  name
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]/g, "");
 
 /**
  * Does a resolved place's display name belong to the brand? Text Search is

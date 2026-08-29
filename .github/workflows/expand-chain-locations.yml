@@ -65,6 +65,8 @@ jobs:
         if: steps.cfg.outputs.enabled == 'true'
         # Tee the log so the PR step can surface truncation (FULL-PAGE),
         # brand-identity rejections (NAME-MISMATCH), and skips to the reviewer.
+        # Explicit bash => pipefail, so tee can't mask a failed fan-out.
+        shell: bash
         run: pnpm db:seed:expand-chains 2>&1 | tee "$RUNNER_TEMP/expand.log"
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}

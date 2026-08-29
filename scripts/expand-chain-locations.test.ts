@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { brandOf, expandChainLocations, runCli } from "./expand-chain-locations";
+import { brandOf, expandChainLocations, matchesBrand, runCli } from "./expand-chain-locations";
 import type { ResolvedPlace } from "./refresh-seed-data";
 import type { SeededListing } from "./seed-data";
 import { SEED_SOURCES, type SeedSource } from "./seed-sources";
@@ -56,6 +56,14 @@ describe("brandOf", () => {
     expect(brandOf(chainSource({ query: "P.F. Chang's, Cherry Creek, Denver, CO" }))).toBe(
       "P.F. Chang's"
     );
+  });
+});
+
+describe("matchesBrand", () => {
+  it("matches across punctuation and the ampersand/and spelling split", () => {
+    expect(matchesBrand("P.F. Chang's", "PF Changs China Bistro")).toBe(true);
+    expect(matchesBrand("Lazy Dog Restaurant and Bar", "Lazy Dog Restaurant & Bar")).toBe(true);
+    expect(matchesBrand("Five Guys", "Five Gals Burger Bar")).toBe(false);
   });
 });
 
