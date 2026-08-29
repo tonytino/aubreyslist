@@ -113,9 +113,11 @@ export interface ListingTrustGlance {
    * state) plus the happy-patron count. Rendered in the card's meta row.
    *
    * Deliberately OUTSIDE the contested-suppression rule (owner decision
-   * 2026-08-25): activity is not a safety cue, and every surface that renders
-   * it carries a tooltip saying so. Always present — a listing with no
-   * attestations gets the empty strip, never a missing row.
+   * 2026-08-25): activity is not a safety cue, and every surface that can host
+   * an interactive trigger says so in the line's tooltip (the map mini-card
+   * mirrors it as plain text with the clarifier in its accessible name).
+   * Always present — a listing with no attestations gets the empty strip,
+   * never a missing row.
    */
   activity: ListingActivityMeta;
   /**

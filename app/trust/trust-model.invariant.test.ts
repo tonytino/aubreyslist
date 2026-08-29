@@ -595,7 +595,7 @@ describe("INVARIANT 6 — a tie or dispute-majority NEVER yields a safety badge"
     // The hero is a second glance at the same verdict, so it needs the same
     // gate: a contested listing that showed "Verified 3 days ago · 3
     // confirmations" beside a missing badge would leak the withheld verdict
-    // through a different surface. Both surfaces now read the SAME
+    // through a different surface. Both surfaces read the same
     // `deriveListingTrustGlance` seam, so the equality is pinned there once and
     // covers the hero by construction.
     const unattestedGlance = deriveListingTrustGlance(aggregate(0, 0, null), 0, null, NOW);

@@ -76,7 +76,7 @@ export function ActivityLine({
           <span className="truncate">{meta.updatedLabel}</span>
         </button>
       </TooltipTrigger>
-      <TooltipContent>{ACTIVITY_TOOLTIP}</TooltipContent>
+      <TooltipContent className="max-w-[280px]">{ACTIVITY_TOOLTIP}</TooltipContent>
     </Tooltip>
   );
 }
