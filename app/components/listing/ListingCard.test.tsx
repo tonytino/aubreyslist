@@ -779,7 +779,7 @@ describe("RestaurantCard", () => {
 });
 
 /**
- * The AUB-300 uniform-anatomy contract: six slots, same order, always rendered
+ * The uniform-anatomy contract: six slots, same order, always rendered
  * — media, name, location, signals row, divider, meta row. Only what sits
  * INSIDE a slot varies.
  *
