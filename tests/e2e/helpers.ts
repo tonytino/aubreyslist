@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page } from "@playwright/test";
 
 /**
@@ -83,4 +84,26 @@ export async function waitForBrowseSearchApplied(page: Page, query: string): Pro
   await waitForHydration(page);
   await waitForBrowseHydration(page);
   await expect(page.getByRole("button", { name: `Search: ${query}` })).toBeVisible();
+}
+
+/**
+ * The axe-core rule-tag set every accessibility scan in this repo runs
+ * against: `wcag2a` + `wcag2aa` only, deliberately not the WCAG 2.1 tags
+ * (`wcag21a`/`wcag21aa`) — a stable, deterministic gate across axe releases.
+ * The 2.1 gap is a known, tracked choice; do not widen this set in an
+ * unrelated change — it would change what the always-on a11y lane gates on
+ * every PR.
+ */
+export const WCAG_TAGS = ["wcag2a", "wcag2aa"] as const;
+
+/** Run axe on the current page and return a readable summary of any violations. */
+export async function runAxeScan(page: Page) {
+  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  const summary = results.violations.map((v) => ({
+    id: v.id,
+    impact: v.impact,
+    help: v.help,
+    nodes: v.nodes.map((n) => n.target.join(" ")),
+  }));
+  return { violations: results.violations, summary };
 }

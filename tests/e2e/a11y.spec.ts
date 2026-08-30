@@ -1,7 +1,6 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { waitForHydration } from "./helpers";
+import { runAxeScan, waitForHydration } from "./helpers";
 
 /**
  * Accessibility gate.
@@ -38,29 +37,14 @@ import { waitForHydration } from "./helpers";
  * not this always-on DB-free one. Authenticated/DB-seeded flows (admin,
  * attest, report-incident, listing-detail) are excluded for the same reason.
  *
- * Rule set: `wcag2a` + `wcag2aa` — a deterministic, standards-based tag set so
- * the gate is stable across axe releases (no "best-practice"/experimental
- * rules that can flip on a version bump). On failure we print each violation's
- * id and the node targets so the report is actionable, then assert zero
- * violations. Never disable rules or weaken the assertion to go green — a real
- * violation is a real a11y bug to fix.
+ * Rule set: `WCAG_TAGS` from `./helpers` (see its doc for why not the 2.1
+ * tags). On failure we print each violation's id and the node targets so the
+ * report is actionable, then assert zero violations. Never disable rules or
+ * weaken the assertion to go green — a real violation is a real a11y bug to
+ * fix.
  */
 
 const PUBLIC_DB_FREE_PAGES = ["/about", "/style-guide"] as const;
-
-const WCAG_TAGS = ["wcag2a", "wcag2aa"] as const;
-
-/** Run axe on the current page and return a readable summary of any violations. */
-async function analyze(page: Page) {
-  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
-  const summary = results.violations.map((v) => ({
-    id: v.id,
-    impact: v.impact,
-    help: v.help,
-    nodes: v.nodes.map((n) => n.target.join(" ")),
-  }));
-  return { violations: results.violations, summary };
-}
 
 for (const path of PUBLIC_DB_FREE_PAGES) {
   test(`a11y: ${path} has no WCAG 2 A/AA violations`, async ({ page }) => {
@@ -68,7 +52,7 @@ for (const path of PUBLIC_DB_FREE_PAGES) {
     // Let the route's loader/suspense settle so axe sees the hydrated DOM.
     await page.waitForLoadState("networkidle");
 
-    const { violations, summary } = await analyze(page);
+    const { violations, summary } = await runAxeScan(page);
 
     if (violations.length > 0) {
       // Surface actionable detail (rule id + offending element targets) in the
@@ -104,7 +88,7 @@ test.describe("mobile header (375px)", () => {
 
     // (a) Closed mobile header chrome.
     {
-      const { violations, summary } = await analyze(page);
+      const { violations, summary } = await runAxeScan(page);
       if (violations.length > 0) {
         console.error(
           `axe violations on /about (375px, menu closed):\n${JSON.stringify(summary, null, 2)}`
@@ -125,7 +109,7 @@ test.describe("mobile header (375px)", () => {
     await expect(page.getByRole("menuitem", { name: "Browse" })).toBeVisible();
 
     {
-      const { violations, summary } = await analyze(page);
+      const { violations, summary } = await runAxeScan(page);
       if (violations.length > 0) {
         console.error(
           `axe violations on /about (375px, menu open):\n${JSON.stringify(summary, null, 2)}`

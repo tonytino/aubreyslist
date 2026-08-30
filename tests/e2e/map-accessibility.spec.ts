@@ -1,106 +1,65 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { E2E_DB_READY, Seeder, uniqueToken } from "./fixtures";
-import { waitForBrowseReady } from "./helpers";
+import { runAxeScan, waitForBrowseReady } from "./helpers";
 
 /**
- * Directory Map view (`?view=map`) — DB-gated accessibility + keyboard pass
- * (AUB-278).
+ * Directory map view (`?view=map`) accessibility + keyboard pass.
  *
- * Lives in its own file, deliberately NOT `a11y.spec.ts`, for two reasons:
+ * Separate file, not a11y.spec.ts, for two reasons.
  *
- * 1. **It needs a real database.** `/` (the directory) needs a live
- *    `DATABASE_URL` to render its real content at all — DB-free it hits the
- *    router's default error component instead (see `a11y.spec.ts`'s
- *    "Deliberately excluded" note) — and even with a DB the map's content
- *    area only mounts once `vms.length > 0` (`app/routes/index.tsx`). So this
- *    file seeds its own listing and self-skips without the CI E2E
- *    database/session secret, exactly like every other DB-touching spec
- *    (`tests/e2e/fixtures.ts` → `E2E_DB_READY`; mirrors
- *    `browse-filter-results.spec.ts`).
- * 2. **Filename routing.** `playwright.config.ts` runs `a11y.spec.ts` ONLY
- *    under the dedicated `a11y` Playwright project, and that project is
- *    exactly what the always-on, DB-free `.github/workflows/a11y.yml` lane
- *    invokes (`--project=a11y`, deliberately setting no `DATABASE_URL`) — the
- *    `chromium` project's `testIgnore: /a11y\.spec\.ts/` excludes it from the
- *    DB-backed `integration-e2e` lane (`ci.yml`, `pnpm test:e2e
- *    --project=chromium`) entirely. Both of those config regexes match on
- *    unanchored substring, so ANY filename ending in literal "a11y.spec.ts" —
- *    including an at-first-glance-reasonable `map-a11y.spec.ts` — collides
- *    with them too and would be silently DB-free-only forever, the same dead
- *    end this file exists to avoid (verified with
- *    `node -e "/a11y\.spec\.ts/.test('tests/e2e/map-a11y.spec.ts')"` → `true`,
- *    vs. `map-accessibility.spec.ts` → `false`). Hence the deliberately
- *    non-colliding name here. This file therefore runs under
- *    `--project=chromium` (the DB-backed lane, where `E2E_DB_READY` can
- *    actually be true) and is correctly absent from `--project=a11y`.
- *    Nothing in `.github/` or `playwright.config.ts` needed to change.
+ * 1. The map needs a real database: `/` errors without `DATABASE_URL` (see
+ *    a11y.spec.ts's exclusion note), and the map content area only mounts
+ *    once `vms.length > 0` (app/routes/index.tsx). This file seeds its own
+ *    listing and self-skips without the CI E2E database/session secret, like
+ *    every DB-touching spec (fixtures.ts's `E2E_DB_READY`).
+ * 2. `playwright.config.ts` runs `a11y.spec.ts` only under the `a11y`
+ *    project, which `.github/workflows/a11y.yml` invokes DB-free; the
+ *    `chromium` project's `testIgnore` excludes it from the DB-backed
+ *    `integration-e2e` lane entirely. Both regexes match on substring, so any
+ *    filename ending in "a11y.spec.ts" hits the same DB-free-only dead end —
+ *    hence the name here. This file runs under `--project=chromium`, where
+ *    `E2E_DB_READY` can actually be true.
  *
- * These DB-gated scans complement, not replace, `a11y.spec.ts`'s always-on
- * DB-free lane: that lane gates every PR unconditionally on the public static
- * pages; this file adds real, seeded-data coverage of the one surface that
- * lane structurally cannot reach, but only where the optional CI E2E DB
- * secret is configured.
+ * These scans complement, not replace, `a11y.spec.ts`'s always-on DB-free
+ * lane: that lane gates every PR unconditionally on the public static pages;
+ * this file adds seeded-data coverage of the one surface that lane cannot
+ * reach, gated on the optional CI E2E database secret.
  *
  * Render path: this environment provisions no
- * `VITE_GOOGLE_MAPS_BROWSER_KEY` (local dev / CI / E2E — see the key check in
- * `DirectoryMap.tsx`), so `?view=map` renders the CSS-placeholder fallback
- * (`DirectoryMap.tsx`'s `PlaceholderMap`), not the real Google
- * `<AdvancedMarker>` map (`DirectoryMapLive.tsx`). Both paths render the
- * exact same pin `<button>` and mini-card carousel from the shared
- * `map-ui.tsx` (`MapPinButton`, `MapCarousel`) — only the backdrop (CSS blobs
- * vs. Google tiles) and the pin's positioning mechanism (percent-projected
- * vs. a real marker at true lat/lng) differ — so this spec's coverage (the
- * axe scan and the pin/carousel keyboard flow) exercises that shared,
- * accessible surface unchanged either way. If a future environment
- * provisions the live browser key for E2E, this spec starts exercising the
- * real `<AdvancedMarker>` DOM with no changes needed here.
+ * `VITE_GOOGLE_MAPS_BROWSER_KEY`, so `?view=map` renders the CSS-placeholder
+ * fallback (`DirectoryMap.tsx`'s `PlaceholderMap`), not the live Google
+ * `<AdvancedMarker>` map (`DirectoryMapLive.tsx`). Both paths render the same
+ * pin `<button>` and mini-card carousel from `map-ui.tsx`, so this coverage
+ * applies unchanged either way.
  *
- * A single seeded listing is enough for every test below. Its name gets a
- * leading-digit prefix so it sorts first under the directory's default
- * alphabetical order (mirrors `browse-filter-results.spec.ts`), making it
- * deterministically `entries[0]` — pin/mini-card index 1, and the FIRST pin
- * in tab order — regardless of how much other data the persistent CI Neon
- * branch has accrued. It gets no claims, so it renders the neutral
- * no-verdict pin (`UNATTESTED_PIN` in `map-ui.tsx`) with an accessible name
- * equal to exactly its listing name (no safety label, no incident chip) —
- * which is also what makes it possible to target the pin unambiguously with
- * an exact accessible-name match below.
+ * Sort: the directory's default sort is "distance", which degrades to the
+ * recency fallback with no location signal — headless E2E has neither
+ * geolocation nor a coarse IP anchor. An unconfirmed seeded listing sorts to
+ * the tail there, not the front. Every test below navigates with an explicit
+ * `?sort=alpha` so the seeded listing's leading-digit name (`0000-<token>
+ * …`) genuinely sorts first (`app/server/listings/browse.ts`'s
+ * `buildOrderBy`, alpha case: name ASC). A non-default sort survives
+ * `stripSearchParams`, so the param round-trips.
  *
- * Themes: the app has no theme query param — a visitor's choice lives in
- * `localStorage.theme`, read by the no-FOUC inline script in
- * `app/routes/__root.tsx` before hydration (see `ThemeToggle.tsx`'s
- * `readAppliedTheme`/`toggle`). Setting it via `page.addInitScript` before
- * `goto` reproduces exactly what that script does, so both scans below see
- * the real pre-paint theme rather than racing a post-mount toggle click.
+ * Locators: the pin's accessible name equals the listing name exactly (no
+ * safety label on an unclaimed listing); the mini-card's starts with the
+ * same name; the favourite button's starts with "Save"/"Saved, remove"
+ * instead. `listingLocators` below matches on those names, not DOM position,
+ * so a test can't bind to a different card even if ordering shifts.
  *
- * Rule set: `wcag2a` + `wcag2aa` — the same deterministic tag set
- * `a11y.spec.ts` uses, for the same reason (stable across axe releases).
+ * Theme: a visitor's choice lives in `localStorage.theme`, read by the
+ * no-FOUC inline script in `app/routes/__root.tsx` before hydration. Setting
+ * it via `page.addInitScript` before `goto` reproduces that script, so both
+ * scans below see the real pre-paint theme.
  */
-
-const WCAG_TAGS = ["wcag2a", "wcag2aa"] as const;
-
-/** Run axe on the current page and return a readable summary of any violations. */
-async function analyze(page: Page) {
-  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
-  const summary = results.violations.map((v) => ({
-    id: v.id,
-    impact: v.impact,
-    help: v.help,
-    nodes: v.nodes.map((n) => n.target.join(" ")),
-  }));
-  return { violations: results.violations, summary };
-}
 
 /**
  * Press Tab repeatedly (bounded) until `target` actually receives DOM focus,
- * or throw. This proves an element is reachable via the browser's own
- * sequential keyboard navigation — not merely that `locator.focus()` can
- * force focus onto it programmatically — which is exactly what's under test
- * for the map view's pin/carousel keyboard flow below. Bounded rather than
- * unbounded so a regression that removes the target from the tab order fails
- * fast with a clear error instead of hanging.
+ * or throw. Proves an element is reachable via the browser's own sequential
+ * keyboard navigation, not merely that `locator.focus()` can force focus onto
+ * it. Bounded so a regression that removes the target from the tab order
+ * fails fast instead of hanging.
  */
 async function tabUntilFocused(page: Page, target: Locator, maxPresses: number): Promise<void> {
   for (let i = 0; i < maxPresses; i++) {
@@ -110,6 +69,26 @@ async function tabUntilFocused(page: Page, target: Locator, maxPresses: number):
     }
   }
   throw new Error(`Tab did not reach the target element within ${maxPresses} presses`);
+}
+
+/**
+ * Locators for the seeded listing's pin and its mini-card's three stops,
+ * scoped by accessible name rather than DOM position (see the module doc).
+ * The pin lives outside `map-carousel` (a sibling subtree), so scoping the
+ * card/favourite/chevron lookups to the carousel container is enough to keep
+ * the exact-name pin match from also matching inside it.
+ */
+function listingLocators(page: Page, listingName: string) {
+  const escaped = listingName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const carousel = page.getByTestId("map-carousel");
+  return {
+    pin: page.getByRole("button", { name: listingName, exact: true }),
+    cardButton: carousel.getByRole("button", { name: new RegExp(`^${escaped}`) }),
+    favoriteButton: carousel.getByRole("button", {
+      name: new RegExp(`^Save(d, remove)? ${escaped}$`),
+    }),
+    chevronLink: carousel.getByRole("link", { name: `View ${listingName}`, exact: true }),
+  };
 }
 
 test.describe("directory map view (?view=map, DB-gated)", () => {
@@ -135,14 +114,14 @@ test.describe("directory map view (?view=map, DB-gated)", () => {
       if (theme === "dark") {
         await page.addInitScript(() => localStorage.setItem("theme", "dark"));
       }
-      await page.goto("/?view=map");
+      await page.goto("/?view=map&sort=alpha");
       await waitForBrowseReady(page);
       // The pin/carousel render only once the map content area mounts and the
       // seeded listing lands — wait for the pin so axe scans the real pin +
       // carousel DOM, not a still-loading content area.
-      await expect(page.getByRole("button", { name: listingName, exact: true })).toBeVisible();
+      await expect(listingLocators(page, listingName).pin).toBeVisible();
 
-      const { violations, summary } = await analyze(page);
+      const { violations, summary } = await runAxeScan(page);
       if (violations.length > 0) {
         console.error(
           `axe violations on /?view=map (${theme} theme):\n${JSON.stringify(summary, null, 2)}`
@@ -156,39 +135,28 @@ test.describe("directory map view (?view=map, DB-gated)", () => {
   }
 
   /**
-   * Live-path keyboard operability: a pin must be reachable by Tab (not just
-   * clickable), Enter must select it (`aria-pressed`, never colour alone),
-   * that selection must sync to the matching mini-card in the carousel, and
-   * Tab order must then proceed through the selected mini-card's three
+   * Live-path keyboard operability: a pin must be reachable by Tab, not just
+   * clickable; Enter must select it (`aria-pressed`, never colour alone);
+   * that selection must sync to the matching mini-card in the carousel; and
+   * tab order must then proceed through the selected mini-card's three
    * stops in order — the card button, the favourite button, then the
    * chevron link — never nested (`MapCarousel`'s doc in `map-ui.tsx`).
    */
   test("keyboard: Tab reaches a pin button, Enter selects it, and the carousel stays in sync", async ({
     page,
   }) => {
-    await page.goto("/?view=map");
+    await page.goto("/?view=map&sort=alpha");
     await waitForBrowseReady(page);
 
-    const pin = page.getByRole("button", { name: listingName, exact: true });
+    const { pin, cardButton, favoriteButton, chevronLink } = listingLocators(page, listingName);
     await expect(pin).toBeVisible();
 
-    // The carousel scopes the mini-card locators below to its own subtree.
-    // The seeded listing sorts first (see the describe doc), so its
-    // mini-card is the carousel's first entry wrapper — each entry wrapper
-    // renders, in DOM order, the card button, the favourite button, then the
-    // chevron link (map-ui.tsx's `MapCarousel`).
-    const carousel = page.getByTestId("map-carousel");
-    const firstCard = carousel.locator("> div").first();
-    const cardButton = firstCard.getByRole("button").first();
-    const favoriteButton = firstCard.getByRole("button").nth(1);
-    const chevronLink = firstCard.getByRole("link");
-
     // Tab from a blank focus (nothing is focused on a fresh load) until the
-    // seeded pin — the first pin in DOM order — actually receives focus.
-    // Bounded generously: the directory's header + filter chrome (search,
-    // quick/taxonomy chips, sort, distance, ViewToggle, …) all precede the
-    // map content area, but our pin is entries[0] so no other pin can be
-    // ahead of it.
+    // seeded pin actually receives focus. Bounded generously: the
+    // directory's header + filter chrome (search, quick/taxonomy chips,
+    // sort, distance, ViewToggle, …) all precede the map content area, and
+    // `?sort=alpha` puts the seeded listing at entries[0] — the first pin in
+    // DOM order — ahead of any other pin.
     await tabUntilFocused(page, pin, 80);
     await expect(pin).toBeFocused();
 
@@ -200,7 +168,7 @@ test.describe("directory map view (?view=map, DB-gated)", () => {
     // (the shared `useUserSelectionChange` discriminator in `map-ui.tsx`).
     await expect(cardButton).toHaveAttribute("aria-pressed", "true");
 
-    // Continue the SAME tab sequence (focus is still on the pin — a keypress
+    // Continue the same tab sequence (focus is still on the pin — a keypress
     // doesn't move it) through to the mini-card's three stops, confirming
     // both the order and that each is individually reachable.
     await tabUntilFocused(page, cardButton, 60);
@@ -213,15 +181,15 @@ test.describe("directory map view (?view=map, DB-gated)", () => {
 
   /**
    * The pin is a real <button>, so Space must activate it exactly like Enter
-   * does above. Scoped narrowly (a direct `.focus()`, not a re-walk of the
-   * full tab order already proven above) since the only thing left to prove
-   * here is that the OTHER native activation key fires the same handler.
+   * does above. Scoped narrowly — a direct `.focus()`, not a re-walk of the
+   * full tab order already proven above — since the only thing left to
+   * prove is that the other native activation key fires the same handler.
    */
   test("keyboard: Space also activates the pin button", async ({ page }) => {
-    await page.goto("/?view=map");
+    await page.goto("/?view=map&sort=alpha");
     await waitForBrowseReady(page);
 
-    const pin = page.getByRole("button", { name: listingName, exact: true });
+    const { pin } = listingLocators(page, listingName);
     await expect(pin).toBeVisible();
     await pin.focus();
     await page.keyboard.press("Space");
