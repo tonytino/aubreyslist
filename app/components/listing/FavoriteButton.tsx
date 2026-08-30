@@ -17,6 +17,69 @@ import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { cn } from "~/lib/utils";
 import { favoriteListing, unfavoriteListing } from "~/server/favorites/favorites.fn";
 
+/**
+ * Which surface the control is drawn on. Each entry owns a box, a fill, and a
+ * saved-heart ink tuned to that surface's backdrop, so the count can be painted
+ * legibly wherever the control appears.
+ *
+ * A named surface is the ONLY way to get a counted control. Free-form
+ * `className` stays an appearance escape hatch with no count: an arbitrary box
+ * cannot promise room for a number or contrast for its ink, and a count
+ * announced with nothing on screen is its own defect. A new counted surface
+ * earns an entry here, with its ratios checked.
+ */
+export type FavoriteSurface = "card" | "hero";
+
+interface FavoriteSurfaceStyle {
+  /** Box, fill, and focus ring. */
+  chrome: string;
+  /** Extra inline padding once a count widens the box into a pill. */
+  counted: string;
+  /** The saved heart's fill colour against this surface's backdrop. */
+  savedInk: string;
+}
+
+/**
+ * Chrome for a heart floating on a media tile — the browse card and the map
+ * mini-card both draw it. `h-9` + `min-w-9` is the shared box: an uncounted
+ * heart is a 36px circle and a counted one grows sideways into a pill of the
+ * same height, so the tile's right rail holds still. Compose with `cn` to shift
+ * it (`cn(FAVORITE_OVERLAY_CHROME, "top-2")`) — but note that passing it as
+ * `className` suppresses the count, so a card lets the default surface apply.
+ */
+export const FAVORITE_OVERLAY_CHROME =
+  "absolute right-3 top-3 z-10 inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
+
+/**
+ * Chrome for the listing hero's icon rail — a translucent dark chip with a light
+ * border, over an arbitrary photo. Exported because the sibling flag control
+ * shares the rail: one appearance, so the two chips cannot drift apart.
+ *
+ * The fill is `black/65`, not lighter: the counted pill paints white TEXT here,
+ * and over a pure-white photo a lighter chip drops that text under the 4.5:1 AA
+ * floor. `h-10` + `min-w-10` keeps a lone glyph a 40px circle while letting the
+ * counted heart grow sideways, so both chips stay the same height.
+ */
+export const FAVORITE_HERO_CHROME =
+  "inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-full border border-white/40 bg-black/65 text-white backdrop-blur transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-0 motion-reduce:transition-none [&_svg]:size-5";
+
+const FAVORITE_SURFACES: Record<FavoriteSurface, FavoriteSurfaceStyle> = {
+  card: {
+    chrome: FAVORITE_OVERLAY_CHROME,
+    counted: "px-2.5",
+    // Brand purple on the translucent neutral pill: >= 3.6:1 in both themes.
+    savedInk: "text-brand-strong",
+  },
+  hero: {
+    chrome: FAVORITE_HERO_CHROME,
+    counted: "px-3",
+    // The rail is pinned dark in both themes, so the saved ink is pinned light:
+    // the pastel end of the same brand hue reads >= 5.4:1 on `black/65` over any
+    // photo, where either `brand` token would fall far under the 3:1 floor.
+    savedInk: "text-accent-lavender",
+  },
+};
+
 interface FavoriteButtonProps {
   listingId: string;
   /** The listing's name, woven into the accessible label ("Save Blue Sparrow"). */
@@ -27,35 +90,22 @@ interface FavoriteButtonProps {
    * widens the same control into a pill carrying "heart + 24", so one control
    * states both the diner's save action and the community's count.
    *
-   * Honoured only on the default chrome. A caller supplying its own `className`
-   * sizes the box for a bare glyph, so the count is dropped from the render AND
-   * from the accessible name together — an announced count with nothing on
-   * screen is its own defect.
+   * Honoured on a named {@link FavoriteSurface} only — see {@link FavoriteSurface}
+   * for why free-form `className` never counts.
    *
    * ADR-007: a community signal, never a safety verdict — hence the plain
-   * neutral overlay chrome (no safety colour) and the "not a safety score"
-   * tooltip below.
+   * neutral chrome (no safety colour) and the "not a safety score" tooltip.
    */
   saveCount?: number | undefined;
+  /** Which surface's chrome to draw. Defaults to the card overlay. */
+  surface?: FavoriteSurface;
   /**
-   * Optional positioning/appearance override. When provided, it replaces
-   * {@link FAVORITE_OVERLAY_CHROME} so another surface (e.g. the listing hero)
-   * can restyle the button; the disabled-state utilities are always kept.
+   * Free-form appearance override. Replaces the surface chrome entirely and
+   * suppresses the count; the disabled-state utilities are always kept. Reach
+   * for a {@link FavoriteSurface} first.
    */
   className?: string;
 }
-
-/**
- * The overlay chrome for a heart floating on a media tile — the browse card and
- * the map mini-card both draw it, so both import it rather than restating it.
- * `h-9` + `min-w-9` is the shared box: an uncounted heart is a 36px circle and a
- * counted one grows sideways into a pill of the same height, so the tile's right
- * rail holds still. Compose with `cn` to shift it (`cn(FAVORITE_OVERLAY_CHROME,
- * "top-2")`); passing it as `className` suppresses the count, so the browse card
- * lets the default apply instead.
- */
-export const FAVORITE_OVERLAY_CHROME =
-  "absolute right-3 top-3 z-10 inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
 
 /**
  * The one wording for the merged control's accessible name. The count is part
@@ -97,7 +147,7 @@ function buildReturnTo(listingId: string): string {
 
 /**
  * The favorite (bookmark) affordance for a listing — a self-contained client island
- * in the browse card's top-right corner.
+ * drawn on the browse card, the map mini-card, and the listing hero's icon rail.
  *
  * Reads the prefetched `favoriteIdsQuery` + `currentUserQuery` via `useSuspenseQuery`
  * (both hydrated by the root loader), so the filled/empty state renders correctly on
@@ -118,9 +168,10 @@ function buildReturnTo(listingId: string): string {
  *
  * Save count: a positive {@link FavoriteButtonProps.saveCount} widens this same
  * control into a pill — heart + number, with no visible "saves" word — and folds
- * the count into the accessible name. The count is a community signal, not a
- * safety score, so the pill keeps the neutral overlay chrome (never a safety
- * colour) and carries the ADR-007 tooltip saying exactly that.
+ * the count into the accessible name, identically on every named
+ * {@link FavoriteSurface}. The count is a community signal, not a safety score,
+ * so the pill borrows no safety colour and carries the ADR-007 tooltip saying
+ * exactly that.
  *
  * Client-safe: imports only the `favorites.fn` seam, query modules, dialog, and
  * icons — never `~/server/favorites/index` or `db`.
@@ -129,6 +180,7 @@ export function FavoriteButton({
   listingId,
   listingName,
   saveCount,
+  surface = "card",
   className,
 }: FavoriteButtonProps) {
   const queryClient = useQueryClient();
@@ -188,11 +240,11 @@ export function FavoriteButton({
     toggleFavorite.mutate(!isFavorited);
   };
 
-  // The count belongs to the default chrome's box. A caller's own chrome sizes
-  // for a bare glyph, so the count leaves the render and the accessible name in
-  // one step and the two can never disagree.
-  const defaultChrome = className === undefined;
-  const showCount = defaultChrome && saveCount !== undefined && saveCount > 0;
+  // The count belongs to a surface that reserved room and ink for it. Free-form
+  // chrome sizes for a bare glyph, so the count leaves the render and the
+  // accessible name in one step and the two can never disagree.
+  const style = className === undefined ? FAVORITE_SURFACES[surface] : null;
+  const showCount = style !== null && saveCount !== undefined && saveCount > 0;
   const accessibleLabel = favoriteAccessibleName(
     name,
     isFavorited,
@@ -208,24 +260,23 @@ export function FavoriteButton({
       disabled={toggleFavorite.isPending}
       onClick={handleClick}
       className={cn(
-        className ?? FAVORITE_OVERLAY_CHROME,
+        className ?? style?.chrome,
         // The count's own breathing room, only when there is a count.
-        showCount ? "px-2.5" : "",
+        showCount ? style?.counted : "",
         // Disabled-while-pending treatment is kept regardless of the override.
         "disabled:pointer-events-none disabled:opacity-60"
       )}
     >
-      {/* The saved fill takes the brand purple on the overlay chrome, where the
-          translucent neutral pill can carry it (>= 3.6:1 in both themes, WCAG
-          1.4.11). The colour sits on the glyph, not the button, so a hover does
-          not repaint a saved heart. A caller's own chrome owns its palette (the
-          hero's white-on-black rail), so there the fill inherits. Redundant
-          either way: `aria-pressed` and the accessible name carry the state. */}
+      {/* The saved fill takes the surface's own brand ink, which sits on the
+          glyph rather than the button so a hover cannot repaint a saved heart.
+          Free-form chrome owns its palette, so there the fill inherits.
+          Redundant either way: `aria-pressed` and the accessible name carry the
+          state without colour. */}
       <Heart
         className={cn(
           "h-4 w-4 shrink-0",
           isFavorited && "fill-current",
-          isFavorited && defaultChrome && "text-brand-strong"
+          isFavorited && style?.savedInk
         )}
         aria-hidden="true"
       />

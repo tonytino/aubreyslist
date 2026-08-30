@@ -6,7 +6,7 @@ import { z } from "zod";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { ClaimDeckSection } from "~/components/listing/ClaimDeckSection";
 import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityClaims";
-import { FavoriteButton } from "~/components/listing/FavoriteButton";
+import { FAVORITE_HERO_CHROME, FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { HeroPhoto } from "~/components/listing/HeroPhoto";
 import { HeroTrustBar } from "~/components/listing/HeroTrustBar";
@@ -25,6 +25,7 @@ import {
 import { useListingPreview } from "~/listings/photo-preview-state";
 import { getListingClaimAggregates } from "~/server/attestations/listing-summary";
 import { getCurrentUser } from "~/server/auth/current-user";
+import { getFavoriteCounts } from "~/server/favorites";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
 import { fetchListingLinks } from "~/server/listing-links/links.fn";
 import { getListingActivity } from "~/server/listings/activity";
@@ -67,6 +68,17 @@ const getListingClaims = createServerFn({ method: "GET" })
 const getStalenessMonths = createServerFn({ method: "GET" }).handler(() =>
   getSetting("staleness_months")
 );
+
+/**
+ * The listing's PUBLIC save count — how many people have saved it, not the
+ * viewer's own state. Reuses the same set-based aggregate the browse and
+ * favorites card builders read, with a single id, so no two surfaces can count
+ * a listing differently. The helper degrades to an empty map on a favorites
+ * read failure, so a missing count renders as 0 rather than failing the page.
+ */
+const getListingSaveCount = createServerFn({ method: "GET" })
+  .validator(z.object({ id: z.string().min(1) }))
+  .handler(async ({ data: { id } }) => (await getFavoriteCounts([id])).get(id) ?? 0);
 
 /**
  * The current viewer's user id, or `null` when anonymous. Drives the incident
@@ -135,14 +147,15 @@ export const Route = createFileRoute("/listings/$id")({
     // Only fetch the trust roll-up once the listing is known to exist.
     // Prefetch the claims query so the roll-up renders on first paint and is
     // refetchable client-side after the viewer changes/retracts a vote.
-    const [, stalenessMonths] = await Promise.all([
+    const [, stalenessMonths, saveCount] = await Promise.all([
       context.queryClient.ensureQueryData(claimsQueryOptions(id)),
       getStalenessMonths(),
+      getListingSaveCount({ data: { id } }),
     ]);
     // Resolve "now" once on the server and pass it down as epoch ms, so the
     // recency window + relative phrasing use the same instant on SSR and
     // after hydration — no banner flicker or off-by-one at window edges.
-    return { listing, viewerId, stalenessMonths, nowMs: Date.now() };
+    return { listing, viewerId, stalenessMonths, saveCount, nowMs: Date.now() };
   },
   // Per-listing SEO + social unfurl — the high-value share case. Guarded: on
   // a 404 the loader throws `notFound()` and never returns, so `loaderData`
@@ -191,17 +204,8 @@ export const Route = createFileRoute("/listings/$id")({
   notFoundComponent: ListingNotFound,
 });
 
-/**
- * Circular icon-button chrome for the hero media overlay (favorite + flag). A
- * translucent dark chip with a light border so white glyphs stay AA-legible over
- * the brand gradient + scrim. Motion is limited to a colour transition, disabled
- * under prefers-reduced-motion.
- */
-const HERO_ICON_BUTTON =
-  "inline-flex size-10 items-center justify-center rounded-full border border-white/40 bg-black/50 text-white backdrop-blur transition-colors hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-0 motion-reduce:transition-none [&_svg]:size-5";
-
 function ListingDetail() {
-  const { listing, viewerId, stalenessMonths, nowMs } = Route.useLoaderData();
+  const { listing, viewerId, stalenessMonths, saveCount, nowMs } = Route.useLoaderData();
   const { tab } = Route.useSearch();
   const navigate = Route.useNavigate();
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
@@ -303,14 +307,16 @@ function ListingDetail() {
           {/* Top-right circular icon actions: favorite (wired) + flag. */}
           <div className="absolute right-3 top-3 z-30 flex gap-2">
             {/* Save/favorite affordance. Reads `["favorites"]` +
-                `currentUserQuery` itself (both prefetched at the root), so it
-                needs no loader wiring and handles its own anon (dialog) vs
-                signed-in (optimistic toggle) behaviour. Styled with the hero
-                overlay chrome to match the sibling flag icon button. */}
+                `currentUserQuery` itself (both prefetched at the root), so the
+                viewer's own saved state needs no loader wiring; only the public
+                count comes from the loader. The `hero` surface is what lets it
+                carry that count — free-form chrome never does — and it draws the
+                same chip as the sibling flag control. */}
             <FavoriteButton
               listingId={listing.id}
               listingName={listing.name}
-              className={HERO_ICON_BUTTON}
+              saveCount={saveCount}
+              surface="hero"
             />
             {/* Flag this listing as an icon + tooltip. FlagControl keeps its
                 login gate (renders nothing when anonymous) and the server
@@ -322,7 +328,7 @@ function ListingDetail() {
               isSignedIn={isSignedIn}
               label="Flag listing"
               variant="icon"
-              triggerClassName={HERO_ICON_BUTTON}
+              triggerClassName={FAVORITE_HERO_CHROME}
             />
           </div>
 

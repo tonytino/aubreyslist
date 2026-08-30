@@ -22,8 +22,12 @@ import { toast } from "sonner";
 
 import { currentUserQuery } from "~/auth/current-user-query";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
+import { cn } from "~/lib/utils";
 import type { SessionUser } from "~/server/auth/current-user.fn";
-import { FavoriteButton } from "./FavoriteButton";
+import { FAVORITE_HERO_CHROME, FavoriteButton } from "./FavoriteButton";
+
+/** The disabled-while-pending utilities the component always keeps. */
+const DISABLED_UTILS = "disabled:pointer-events-none disabled:opacity-60";
 
 const SIGNED_IN_USER: SessionUser = {
   id: "user-1",
@@ -268,8 +272,8 @@ describe("FavoriteButton — merged save count", () => {
   });
 
   it("leaves the saved heart's colour to a caller that owns the chrome", () => {
-    // The listing hero draws a white-on-black rail; a brand purple glyph there
-    // would be the one element fighting its palette.
+    // Free-form chrome brings its own palette, so the fill inherits rather than
+    // dropping a surface ink onto a backdrop nobody checked.
     renderButton({
       signedIn: true,
       favoriteIds: ["listing-1"],
@@ -284,6 +288,7 @@ describe("FavoriteButton — merged save count", () => {
     const heart = screen.getByRole("button", { name: /^Saved, remove/ }).querySelector("svg");
     expect(heart?.getAttribute("class")).toContain("fill-current");
     expect(heart?.getAttribute("class")).not.toContain("text-brand-strong");
+    expect(heart?.getAttribute("class")).not.toContain("text-accent-lavender");
   });
 
   it("folds the count into the accessible name, both directions", () => {
@@ -343,9 +348,9 @@ describe("FavoriteButton — merged save count", () => {
   });
 
   it("drops the count from BOTH the render and the name on caller-owned chrome", () => {
-    // The hero's icon-button chrome is a fixed square that cannot hold a number.
+    // A free-form box cannot promise room for a number or contrast for its ink.
     // An announced count with nothing on screen is its own defect, so the two
-    // are suppressed together.
+    // are suppressed together. A surface that wants a count earns a named entry.
     renderButton({
       signedIn: true,
       favoriteIds: [],
@@ -361,5 +366,83 @@ describe("FavoriteButton — merged save count", () => {
     expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Blue Sparrow" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /24 saves/ })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The listing hero's icon rail. Same counted-pill treatment as the cards, on a
+ * chip pinned dark in both themes — so the box, the ink, and the count's own
+ * contrast are the surface's, not the card's.
+ */
+describe("FavoriteButton — hero surface", () => {
+  const hero = (props: { saveCount?: number } = {}) => (
+    <FavoriteButton
+      listingId="listing-1"
+      listingName="Blue Sparrow"
+      surface="hero"
+      {...(props.saveCount !== undefined ? { saveCount: props.saveCount } : {})}
+    />
+  );
+
+  it("draws the shared rail chip, so the heart and the flag control match", () => {
+    renderButton({ signedIn: true, favoriteIds: [], ui: hero() });
+    const btn = screen.getByRole("button", { name: "Save Blue Sparrow" });
+    expect(btn.className).toBe(cn(FAVORITE_HERO_CHROME, DISABLED_UTILS));
+    // Not the card overlay: the rail is not absolutely positioned on a tile.
+    expect(btn.className).not.toContain("absolute");
+  });
+
+  it("counts on the hero, with the count in the accessible name both directions", () => {
+    renderButton({ signedIn: true, favoriteIds: [], ui: hero({ saveCount: 24 }) });
+    const btn = screen.getByRole("button", { name: "Save Blue Sparrow. 24 saves" });
+    expect(within(btn).getByTestId("save-count")).toHaveTextContent("24");
+    // The chip grows sideways from the same 40px height the flag control keeps.
+    expect(btn).toHaveClass("h-10", "min-w-10", "px-3");
+
+    cleanup();
+
+    renderButton({ signedIn: true, favoriteIds: ["listing-1"], ui: hero({ saveCount: 24 }) });
+    expect(
+      screen.getByRole("button", { name: "Saved, remove Blue Sparrow. 24 saves" })
+    ).toBeInTheDocument();
+  });
+
+  it("stays a bare circle at zero and when no count is supplied", () => {
+    for (const saveCount of [undefined, 0]) {
+      renderButton({
+        signedIn: true,
+        favoriteIds: [],
+        ui: hero({ ...(saveCount !== undefined ? { saveCount } : {}) }),
+      });
+      expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
+      const btn = screen.getByRole("button", { name: "Save Blue Sparrow" });
+      expect(btn.className).not.toContain("px-3");
+      cleanup();
+    }
+  });
+
+  it("tints the saved heart with the rail's own light brand ink", async () => {
+    // The rail is pinned dark in both themes, so its saved ink is pinned light:
+    // `brand-strong` would fall under 2.4:1 on this chip.
+    renderButton({ signedIn: true, favoriteIds: ["listing-1"], ui: hero({ saveCount: 24 }) });
+    const btn = screen.getByRole("button", { name: /^Saved, remove/ });
+    const heart = btn.querySelector("svg") as SVGElement;
+    expect(heart.getAttribute("class")).toContain("text-accent-lavender");
+    expect(heart.getAttribute("class")).not.toContain("text-brand-strong");
+    expect(btn).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("carries the same ADR-007 tooltip as the cards", async () => {
+    renderButton({ signedIn: true, favoriteIds: [], ui: hero({ saveCount: 24 }) });
+    fireEvent.focus(screen.getByRole("button", { name: /^Save Blue Sparrow/ }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Community saves, not a safety score."
+    );
+  });
+
+  it("adds no tooltip to an uncounted hero heart", () => {
+    renderButton({ signedIn: true, favoriteIds: [], ui: hero() });
+    fireEvent.focus(screen.getByRole("button", { name: "Save Blue Sparrow" }));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 });
