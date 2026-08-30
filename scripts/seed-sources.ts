@@ -24,7 +24,7 @@ import type { ClaimAttribute } from "~/db/schema";
  * ever fabricated on a real business.
  *
  * The `query` is biased to Denver Union Station; anything unresolved (or
- * outside a 25-mile radius) is skipped and logged rather than guessed. The
+ * outside a 50-mile radius) is skipped and logged rather than guessed. The
  * seed is idempotent: dedup on Place ID, and a claim a real user has engaged
  * with is never re-suggested.
  */
@@ -58,11 +58,21 @@ export interface SeedSource {
   menuUrl?: string;
   /**
    * The brand operates 2+ locations; this entry is its single flagship. Not
-   * consumed by the seed pipeline — it marks brands whose other locations
-   * could be enumerated, where attributes need per-location re-verification
-   * rather than inheritance.
+   * consumed by the base seed pipeline — it marks brands whose other locations
+   * `pnpm db:seed:expand-chains` can enumerate.
    */
   chain?: true;
+  /**
+   * The subset of `suggestedAttributes` that is corporate policy or structural
+   * brand design (a chain-wide printed GF menu, a fries-only fryer) rather
+   * than one location's equipment or practice. `pnpm db:seed:expand-chains`
+   * fans a `chain` brand out to its other in-radius locations with ONLY these
+   * attributes; a chain without this field does not fan out — its other
+   * locations wait for per-location verification. Must be a non-empty subset
+   * of `suggestedAttributes` on a `chain: true` entry (the script enforces
+   * both).
+   */
+  chainWideAttributes?: ClaimAttribute[];
 }
 
 export const SEED_SOURCES: SeedSource[] = [
@@ -196,11 +206,13 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["celiac_safe", "dedicated_fryer", "dedicated_gf_menu"],
     menuUrl: "https://bamboosushi.com/location/lohi/menu",
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu"],
   },
   {
     query: "Urban Egg, Cherry Creek North, Denver, CO",
     suggestedAttributes: ["celiac_safe", "dedicated_gf_menu", "gf_substitutes"],
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu", "gf_substitutes"],
   },
   {
     query: "HashTAG Restaurant, Aurora, CO",
@@ -270,6 +282,7 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
     menuUrl: "https://illegalpetes.com/",
     chain: true,
+    chainWideAttributes: ["gf_substitutes"],
   },
   {
     query: "Adelitas Cocina y Cantina, South Broadway, Denver, CO",
@@ -290,6 +303,7 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
     menuUrl: "https://www.hopdoddy.com/gluten-free-menu",
     chain: true,
+    chainWideAttributes: ["gf_substitutes"],
   },
   {
     query: "CD's Wings, Aurora, CO",
@@ -336,12 +350,14 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["dedicated_fryer"],
     menuUrl: "https://www.fiveguys.com/",
     chain: true,
+    chainWideAttributes: ["dedicated_fryer"],
   },
   {
     query: "In-N-Out Burger, Aurora, CO",
     suggestedAttributes: ["dedicated_fryer"],
     menuUrl: "https://www.in-n-out.com/",
     chain: true,
+    chainWideAttributes: ["dedicated_fryer"],
   },
   {
     query: "North Side Tavern, Broomfield, CO",
@@ -360,6 +376,7 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["dedicated_fryer", "dedicated_gf_menu"],
     menuUrl: "https://www.pfchangs.com/gluten-free.html",
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu"],
   },
   // --- Gluten-friendly pizza & Italian (GF crusts/pastas, labeled menus)
   {
@@ -378,18 +395,21 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.miciitalian.com/",
     chain: true,
+    chainWideAttributes: ["gf_substitutes"],
   },
   {
     query: "North Italia, Cherry Creek, Denver, CO",
     suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.northitalia.com/",
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu", "gf_substitutes"],
   },
   {
     query: "Beau Jo's Pizza, Olde Town Arvada, CO",
     suggestedAttributes: ["dedicated_gf_menu"],
     menuUrl: "https://www.beaujos.com/menu/",
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu"],
   },
   {
     query: "Phatt Matt's, Denver, CO",
@@ -515,12 +535,14 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["dedicated_gf_menu", "off_menu_gf_on_request"],
     menuUrl: "https://littleindiaofdenver.com/best-gluten-free-restaurant-in-denver/",
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu"],
   },
   {
     query: "Spice Room, Highland, Denver, CO",
     suggestedAttributes: ["dedicated_gf_menu"],
     menuUrl: "https://denverspiceroom.com/gluten-free-indian-food-denver/",
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu"],
   },
   {
     query: "Nozomi Sushi and Temaki Bar, Sunnyside, Denver, CO",
@@ -584,6 +606,7 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["off_menu_gf_on_request", "gf_substitutes"],
     menuUrl: "https://eatgarbanzo.com/",
     chain: true,
+    chainWideAttributes: ["gf_substitutes"],
   },
   {
     query: "Ash'Kara, LoHi, Denver, CO",
@@ -618,6 +641,7 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["gf_substitutes"],
     menuUrl: "https://www.snoozeeatery.com/",
     chain: true,
+    chainWideAttributes: ["gf_substitutes"],
   },
   {
     query: "Gold Mine Cupcakes, Golden, CO",
@@ -647,6 +671,7 @@ export const SEED_SOURCES: SeedSource[] = [
     query: "Parlor Doughnuts, Downtown Denver, CO",
     suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
     chain: true,
+    chainWideAttributes: ["gf_substitutes"],
   },
   {
     query: "Legacy Pie Co, Tennyson Street, Denver, CO",
@@ -701,6 +726,7 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.truefoodkitchen.com/locations/denver/",
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu", "gf_substitutes"],
   },
   {
     query: "Steuben's, Uptown, Denver, CO",
@@ -725,12 +751,14 @@ export const SEED_SOURCES: SeedSource[] = [
     suggestedAttributes: ["dedicated_gf_menu", "gf_substitutes"],
     menuUrl: "https://www.modernmarket.com/",
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu", "gf_substitutes"],
   },
   {
     query: "Lazy Dog Restaurant and Bar, Aurora, CO",
     suggestedAttributes: ["dedicated_gf_menu"],
     menuUrl: "https://www.lazydogrestaurants.com/menus/gluten-sensitive",
     chain: true,
+    chainWideAttributes: ["dedicated_gf_menu"],
   },
   {
     query: "A5 Steakhouse, Downtown Denver, CO",

@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { SEED_LISTINGS, type SeededListing } from "./seed-data";
+import { brandOf, matchesBrand } from "./expand-chain-locations";
+import {
+  CHAIN_SEED_LISTINGS,
+  CURATED_SEED_LISTINGS,
+  SEED_LISTINGS,
+  type SeededListing,
+} from "./seed-data";
+import { SEED_SOURCES } from "./seed-sources";
 
 /**
- * ADR-014 artifact invariant: the committed seed bake must never carry a
+ * ADR-014 artifact invariant: the committed seed bakes must never carry a
  * captured Google rating.
  *
- * This guards the artifact ADR-014 actually names — `SEED_LISTINGS`, parsed
+ * This guards the artifacts ADR-014 actually names — `SEED_LISTINGS`, parsed
  * unchecked (`JSON.parse(...) as SeededListing[]`) from the committed
- * `seed-listings.generated.json` — not just the emitter.
+ * `seed-listings.generated.json` + `seed-chain-locations.generated.json` —
+ * not just the emitters.
  * `refresh-seed-data.test.ts` pins that a fresh refresh never bakes rating
  * fields; it says nothing about the file already sitting in the repo, so a
  * bad merge, a revert, or a hand-edit that reinstates `googleRating` /
@@ -50,5 +58,32 @@ describe("SEED_LISTINGS (ADR-014 artifact invariant)", () => {
     }
 
     expect([...strayKeys].sort()).toEqual([]);
+  });
+});
+
+/**
+ * The chain bake is DERIVED — regenerated whole by `pnpm db:seed:expand-chains`
+ * from the current sources + curated bake. These invariants make a stale bake
+ * (a withdrawn chain, a re-resolved flagship, a fabricated-brand entry) fail
+ * preflight instead of silently seeding.
+ */
+describe("CHAIN_SEED_LISTINGS (derived-bake invariants)", () => {
+  it("never overlaps the curated bake and holds no duplicate Place IDs", () => {
+    const curatedIds = new Set(CURATED_SEED_LISTINGS.map((listing) => listing.placeId));
+    const seen = new Set<string>();
+    for (const listing of CHAIN_SEED_LISTINGS) {
+      expect(curatedIds.has(listing.placeId)).toBe(false);
+      expect(seen.has(listing.placeId)).toBe(false);
+      seen.add(listing.placeId);
+    }
+  });
+
+  it("every entry traces to a source that still fans out, with only its chain-wide attributes", () => {
+    const eligible = SEED_SOURCES.filter((source) => source.chainWideAttributes !== undefined);
+    for (const listing of CHAIN_SEED_LISTINGS) {
+      const source = eligible.find((candidate) => matchesBrand(brandOf(candidate), listing.name));
+      expect(source, `"${listing.name}" matches no fan-out-eligible source`).toBeDefined();
+      expect(listing.suggestedAttributes).toEqual(source?.chainWideAttributes);
+    }
   });
 });

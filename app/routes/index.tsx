@@ -557,7 +557,7 @@ function BrowseListings() {
    * labels all read from it (browse-query.ts) — at page 1, so the pins,
    * numbering, and map accumulation all reset (the query key changes).
    * Rounded before it enters the URL (`coarsenCoords`): the origin of a
-   * 5-25 mi radius needs no more precision, and a shared link never carries a
+   * 5-50 mi radius needs no more precision, and a shared link never carries a
    * street-level point. Returns the navigation promise so the map's pill can
    * show its searching state until the new page is in — a rejection re-throws
    * after recording the failed status, and the pill keeps itself mounted for

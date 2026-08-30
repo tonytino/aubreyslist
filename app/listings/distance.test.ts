@@ -102,7 +102,7 @@ describe("parseRadiusMiles", () => {
     expect(parseRadiusMiles(1000)).toBe(DEFAULT_RADIUS_MILES);
   });
 
-  it("uses the widest option (25 mi) as the default", () => {
+  it("defaults to 25 mi — a valid option, deliberately not the widest", () => {
     expect(DEFAULT_RADIUS_MILES).toBe(25);
     expect(DISTANCE_RADIUS_OPTIONS).toContain(DEFAULT_RADIUS_MILES);
   });

@@ -218,20 +218,33 @@ the Places API call away from the seed so `pnpm db:seed` is **API-free**:
    (`scripts/refresh-seed-data.ts`) resolves each `query` to a real Google
    Place ID + coordinates (+ Google's `googleMapsUri` share link, preferred as
    the seeded `mapsUrl`) via Places Text Search (biased to Union Station,
-   hard-capped at a 25-mile radius) and **bakes** the resolved entries
+   hard-capped at a 50-mile radius) and **bakes** the resolved entries
    into `scripts/seed-listings.generated.json`. Needs **only**
    `GOOGLE_PLACES_API_KEY` (via `getPlacesApiKey()`; no DB connection, so no
-   `DATABASE_URL`). Anything unresolvable or outside 25 miles is skipped and
+   `DATABASE_URL`). Anything unresolvable or outside 50 miles is skipped and
    logged, never guessed. Run it (and commit the regenerated JSON) whenever you
    curate the sources — locally, or with the **"Refresh seed data"** GitHub
    Action (`.github/workflows/refresh-seed-data.yml`, `workflow_dispatch`),
    which uses the `GOOGLE_PLACES_API_KEY` secret and commits the JSON back to
    the branch. This is the **only** step that spends Places API calls — never
    `pnpm db:seed`.
-3. **Baked data (committed, generated):** `scripts/seed-listings.generated.json`
-   is the captured output — **do not hand-edit it**. `scripts/seed-data.ts`
-   parses it into `SEED_LISTINGS`.
-4. **Seed (API-free):** `pnpm db:seed` inserts the baked `SEED_LISTINGS`
+3. **Chain fan-out (Places, optional):** `pnpm db:seed:expand-chains`
+   (`scripts/expand-chain-locations.ts`) enumerates the other in-radius
+   locations of every curated chain carrying `chainWideAttributes` (one Text
+   Search per brand) and bakes them into
+   `scripts/seed-chain-locations.generated.json`. Expanded locations inherit
+   ONLY that corporate-policy attribute subset — never the flagship's full
+   set. Runs locally or via the **"Expand chain locations"** Action
+   (`.github/workflows/expand-chain-locations.yml`, `workflow_dispatch`).
+   Re-dispatch it after ANY curated refresh or chain-curation change — the
+   chain bake derives from both and goes stale otherwise (an invariant test
+   fails preflight on a stale bake). Seeding is insert-only: regenerating a
+   bake heals the files, never rows already seeded into a database.
+4. **Baked data (committed, generated):** `scripts/seed-listings.generated.json`
+   and `scripts/seed-chain-locations.generated.json` are the captured outputs —
+   **do not hand-edit them**. `scripts/seed-data.ts` parses and concatenates
+   them into `SEED_LISTINGS`.
+5. **Seed (API-free):** `pnpm db:seed` inserts the baked `SEED_LISTINGS`
    directly — it never calls Places. If the baked file is empty it prints a
    hint to run the refresh first and exits 0.
 

@@ -45,12 +45,16 @@ export const UNION_STATION: Coords = { lat: 39.7539, lng: -104.9999 };
  * {@link DistanceSelector} and validated on the `?radius=` URL param; any
  * value outside this set degrades to {@link DEFAULT_RADIUS_MILES}.
  */
-export const DISTANCE_RADIUS_OPTIONS = [5, 10, 15, 20, 25] as const;
+export const DISTANCE_RADIUS_OPTIONS = [5, 10, 15, 20, 25, 50] as const;
 
 /** A selectable radius (one of {@link DISTANCE_RADIUS_OPTIONS}), in miles. */
 export type RadiusMiles = (typeof DISTANCE_RADIUS_OPTIONS)[number];
 
-/** The default search radius (miles) when none is chosen — the widest option. */
+/**
+ * The default search radius (miles) when none is chosen. Deliberately NOT the
+ * widest option: the un-located default view keeps the dense metro core; the
+ * 50-mile ring (Boulder, Longmont, Castle Rock) is opt-in via the selector.
+ */
 export const DEFAULT_RADIUS_MILES: RadiusMiles = 25;
 
 /**
