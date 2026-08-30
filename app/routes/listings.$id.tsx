@@ -32,13 +32,9 @@ import { getListingActivity } from "~/server/listings/activity";
 import { fetchListing } from "~/server/listings/get-listing.fn";
 import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
+import { deriveHeroClaimChips } from "~/trust/hero-chips";
 import { findRecentIncident } from "~/trust/incident-recency";
-import {
-  deriveHeadlineSafetyState,
-  deriveListingActivityMeta,
-  hasEvidence,
-  hasPositiveConsensus,
-} from "~/trust/summary";
+import { deriveHeadlineSafetyState, deriveListingActivityMeta } from "~/trust/summary";
 
 /**
  * Server-only loader for a listing's claims with their aggregates (confirm/
@@ -236,21 +232,13 @@ function ListingDetail() {
   // no badge and no confirmation-derived reassurance.
   const activityMeta = deriveListingActivityMeta(activity, now);
 
-  // The non-headline claim badges relevant to this listing (e.g. "Off-menu GF
-  // on request"): every attribute besides the headline that either has real
-  // positive community consensus, or — while there's no evidence yet — is a
-  // live curator-bot suggestion (ADR-007: a suggestion never coexists with
-  // real evidence for the same attribute, guarded here the same way
-  // `summarizeClaim` does). Rendered via the shared `ClaimBadge` so this row
-  // and the browse cards' suggested badges stay visually consistent.
-  const nonHeadlineClaimBadges = claims
-    .filter((claim) => claim.attribute !== "celiac_safe")
-    .map((claim) => ({
-      attribute: claim.attribute,
-      confirmed: hasPositiveConsensus(claim),
-      suggested: claim.suggested && !hasEvidence(claim),
-    }))
-    .filter((claim) => claim.confirmed || claim.suggested);
+  // The hero's claim chips — confirmed non-headline attributes, then live bot
+  // suggestions (the headline included, which is the one state where it earns
+  // a chip: the hero renders nothing for a suggestion). Evidence before
+  // provenance, the browse card's order, through the same shared `ClaimBadge`,
+  // so the two surfaces read identically for the same listing. The rule itself
+  // lives in the pure `deriveHeroClaimChips`, pinned against the card's glance.
+  const heroClaimBadges = deriveHeroClaimChips(claims);
 
   const claimsCount = claims.length;
   const incidentsCount = incidents.length;
@@ -373,12 +361,12 @@ function ListingDetail() {
           </div>
         </div>
 
-        {/* Non-headline claim badges: a second row, so every confirmed or
-            bot-suggested attribute — not just the headline state — is visible
-            at a glance instead of buried in the Claims tab below. */}
-        {nonHeadlineClaimBadges.length > 0 ? (
+        {/* Claim chips: a second row, so every confirmed attribute and every
+            live bot suggestion is visible at a glance instead of buried in the
+            Claims tab below. */}
+        {heroClaimBadges.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-card pb-card pt-3">
-            {nonHeadlineClaimBadges.map((claim) => (
+            {heroClaimBadges.map((claim) => (
               <ClaimBadge
                 key={claim.attribute}
                 attribute={claim.attribute}
