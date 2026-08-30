@@ -21,7 +21,9 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: /a11y\.spec\.ts/,
+      // Anchored so only the exact file matches — a substring match would
+      // silently reroute any `*-a11y.spec.ts` into the wrong lane.
+      testIgnore: /(^|\/)a11y\.spec\.ts$/,
     },
     // Accessibility-only project. The a11y CI lane targets it with
     // `--project=a11y`, so it runs ONLY a11y.spec.ts and never re-runs the rest
@@ -29,7 +31,9 @@ export default defineConfig({
     {
       name: "a11y",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: /a11y\.spec\.ts/,
+      // Anchored so only the exact file matches — a substring match would
+      // silently reroute any `*-a11y.spec.ts` into the wrong lane.
+      testMatch: /(^|\/)a11y\.spec\.ts$/,
     },
   ],
   webServer: {
