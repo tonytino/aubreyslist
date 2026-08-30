@@ -9,12 +9,11 @@ import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityC
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { HeroPhoto } from "~/components/listing/HeroPhoto";
+import { HeroTrustBar } from "~/components/listing/HeroTrustBar";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
-import { ActivityLine, HappyPatrons } from "~/components/listing/ListingActivity";
 import { ListingLinks, listingLinksQueryKey } from "~/components/listing/ListingLinks";
 import { ListingMap } from "~/components/listing/ListingMap";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
-import { SafetySummary } from "~/components/listing/SafetySummary";
 import { Card, CardContent } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { absoluteUrl, breadcrumbJsonLd, canonicalLink, jsonLdScript, pageSeoMeta } from "~/lib/seo";
@@ -339,27 +338,15 @@ function ListingDetail() {
           </div>
         </div>
 
-        {/* Solid bar below the media: the one safety-badge row for this
-            listing plus the at-a-glance metadata strip mirrored from the
-            browse card. `SafetySummary`'s hero variant owns the whole row:
-            the headline celiac-safe/stale badge (or, with no verdict, honest
-            guidance and no badge at all) plus the recent-incident badge,
-            scrolling horizontally on overflow rather than wrapping. */}
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-card">
-          <SafetySummary
-            state={safetyState}
-            variant="hero"
-            hasRecentIncident={recentIncident !== null}
-          />
-          {/* Activity strip — always present, mirroring the browse card's meta
-              row: the "Updated …" line (or the honest "No activity yet") plus the
-              happy-patron count when there is one. Not a safety cue, which is why
-              the line carries its clarifying tooltip. */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-muted-foreground">
-            <ActivityLine meta={activityMeta} />
-            <HappyPatrons meta={activityMeta} />
-          </div>
-        </div>
+        {/* Solid bar below the media: the safety verdict, then the activity
+            strip in its own fixed slot. `HeroTrustBar` owns that stacking, so
+            the strip reads as the same row in the same place whichever badge,
+            prose, or combination the verdict renders. */}
+        <HeroTrustBar
+          safetyState={safetyState}
+          hasRecentIncident={recentIncident !== null}
+          activity={activityMeta}
+        />
 
         {/* Claim chips: a second row, so every confirmed attribute and every
             live bot suggestion is visible at a glance instead of buried in the
