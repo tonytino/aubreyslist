@@ -1,1 +1,976 @@
-[]
+[
+  {
+    "placeId": "ChIJWZS-8Bp5bIcRJNbldWJ_4S4",
+    "name": "Urban Egg",
+    "address": "1550 Wewatta St, Denver, CO 80202",
+    "lat": 39.752575,
+    "lng": -105.0024784,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=3378121256366102052&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJIw_PDeOGbIcRRTLisCKgbPk",
+    "name": "Urban Egg",
+    "address": "6991 E Belleview Ave, Denver, CO 80237",
+    "lat": 39.6243597,
+    "lng": -104.90573400000001,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=17972916283785753157&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ17UNDROtbocRDMhlnyy5rzc",
+    "name": "Urban Egg",
+    "address": "4861 Thompson Pkwy, Johnstown, CO 80534",
+    "lat": 40.405746,
+    "lng": -104.9856818,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=4012629394314348556&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJRVa3iMR4bIcRX3bBRvtZUIA",
+    "name": "Illegal Pete's Lodo",
+    "address": "1610 16th St Mall, Denver, CO 80202",
+    "lat": 39.751258,
+    "lng": -105.0003656,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=9245988970750375519&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJtcM6vMp-bIcRVjaCLz8jD1Q",
+    "name": "Illegal Pete's - Colfax",
+    "address": "2001 E Colfax Ave, Denver, CO 80206",
+    "lat": 39.7402467,
+    "lng": -104.96326669999999,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=6057098778123581014&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJJQ9utIx4bIcReuMN1qQoRg0",
+    "name": "Illegal Pete's Northside",
+    "address": "1851 W 38th Ave, Denver, CO 80211",
+    "lat": 39.769550300000006,
+    "lng": -105.00924479999999,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=956496659293791098&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJv1lBdQmHa4cRvZ7kXJ5ckjU",
+    "name": "Illegal Pete's Gold's",
+    "address": "10009 W 26th Ave, Wheat Ridge, CO 80215",
+    "lat": 39.7550293,
+    "lng": -105.1103619,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=3860249665843011261&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJbUBTPT9-bIcRNow9PHVhgqM",
+    "name": "Illegal Pete's DU",
+    "address": "1744 E Evans Ave, Denver, CO 80210",
+    "lat": 39.6782672,
+    "lng": -104.9666989,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=11782086731304373302&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJsW8EyBR7bIcR0Vn3HdoTleY",
+    "name": "Illegal Pete's - Park Hill",
+    "address": "2230 Oneida St, Denver, CO 80207",
+    "lat": 39.7503312,
+    "lng": -104.90767059999999,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=16615208227779860945&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJnX95M1iGbIcR1hpaVWhFHeE",
+    "name": "Illegal Pete's - DTC",
+    "address": "5312 DTC Blvd #400, Greenwood Village, CO 80111",
+    "lat": 39.6192083,
+    "lng": -104.8893841,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=16221197747269278422&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJsdY7WDnta4cR45M69vHj0Es",
+    "name": "Illegal Pete's - Table Mesa",
+    "address": "657 S Broadway, Boulder, CO 80305",
+    "lat": 39.9833692,
+    "lng": -105.24966210000001,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=5463116976358069219&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJlUPMxDDsa4cRTZs5r8z0Cno",
+    "name": "Illegal Pete's on The Hill",
+    "address": "1124 13th St, Boulder, CO 80302",
+    "lat": 40.007824299999996,
+    "lng": -105.27595950000001,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=8794110382344608589&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJczhs9Cjsa4cReFGG-01sySw",
+    "name": "Illegal Pete's - Pearl St.",
+    "address": "1447 Pearl St, Boulder, CO 80302",
+    "lat": 40.0188174,
+    "lng": -105.2763118,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=3227229690175836536&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJZbQAMXZ_bIcRATHTk1Fvg9M",
+    "name": "Hopdoddy Burger Bar",
+    "address": "4024 E 8th Pl, Denver, CO 80220",
+    "lat": 39.729905599999995,
+    "lng": -104.9401771,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=15241147960115015937&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJvQ_xfql7bIcRhheDDjA5O_M",
+    "name": "Five Guys",
+    "address": "8201 E Northfield Blvd, Denver, CO 80238",
+    "lat": 39.7859816,
+    "lng": -104.892935,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=17526665253407102854&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJg9cgv6aHa4cRT0TdPXE7Uuc",
+    "name": "Five Guys",
+    "address": "3727 Wadsworth Blvd Ste 126, Wheat Ridge, CO 80033",
+    "lat": 39.7685691,
+    "lng": -105.0818656,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=16668450528406881359&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJf_dzrHqBa4cRBgVwUsuMbwo",
+    "name": "Five Guys",
+    "address": "98 Wadsworth Blvd, Lakewood, CO 80226",
+    "lat": 39.716000699999995,
+    "lng": -105.08063,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=751974467683484934&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJGS8fs2eEa4cR9k2ljUUTuic",
+    "name": "Five Guys",
+    "address": "14630 W Colfax Ave, Lakewood, CO 80401",
+    "lat": 39.732093899999995,
+    "lng": -105.1638079,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=2862621702597463542&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJw12Pxh-Ga4cRm70gs1jD9vc",
+    "name": "Five Guys",
+    "address": "9585 Ralston Rd, Arvada, CO 80002",
+    "lat": 39.802221599999996,
+    "lng": -105.104303,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=17867683357368827291&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJF3aacmB9bIcRVzAjnbbC0J0",
+    "name": "Five Guys",
+    "address": "2300 S Parker Rd, Denver, CO 80231",
+    "lat": 39.674356599999996,
+    "lng": -104.86931910000001,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=11371803148686667863&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJAZzYm1eAbIcRrRM2d7WkvF8",
+    "name": "Five Guys",
+    "address": "4989 S Broadway Unit A, Englewood, CO 80113",
+    "lat": 39.6254894,
+    "lng": -104.9888039,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=6898569828520825773&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJQUKveHKKa4cR_u_IWOvmvuU",
+    "name": "Five Guys",
+    "address": "4480 W 121st Ave, Broomfield, CO 80020",
+    "lat": 39.914925000000004,
+    "lng": -105.04400199999999,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=16554923178741788670&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJQzkwhQRjbIcRFsFfyJcAUM8",
+    "name": "Five Guys",
+    "address": "14535 E Alameda Ave Unit A, Aurora, CO 80012",
+    "lat": 39.711464,
+    "lng": -104.8184759,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=14938440615889715478&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJNcsib4GDbIcRY3Xkx9_8PR4",
+    "name": "Five Guys",
+    "address": "9352 S Colorado Blvd, Highlands Ranch, CO 80126",
+    "lat": 39.5452906,
+    "lng": -104.9436154,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=2179175832778732899&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJj-7RqZeJbIcRthOq3_yjNYU",
+    "name": "Five Guys",
+    "address": "3751 Tower Rd, Aurora, CO 80011",
+    "lat": 39.7686639,
+    "lng": -104.7729444,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=9598758487289631670&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJtc9m6i6PbIcR7FKoQ5mjiUE",
+    "name": "Five Guys",
+    "address": "6710 S Cornerstar Way C, Aurora, CO 80016",
+    "lat": 39.5944165,
+    "lng": -104.8063767,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=4722485562935104236&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJR3QC6X2GbIcRkMDG_OZmvck",
+    "name": "Five Guys",
+    "address": "8547 E Arapahoe Rd, Greenwood Village, CO 80112",
+    "lat": 39.596258,
+    "lng": -104.8917139,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=14536888314491224208&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJtZ7xA4cPbIcRPh5P8BKJ8xM",
+    "name": "Five Guys",
+    "address": "6160 Silverstone Drive A, Longmont, CO 80504",
+    "lat": 40.0891139,
+    "lng": -104.9431082,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=1437643420495453758&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJTWdP7OF0bIcRxGN3Z2NUj8Y",
+    "name": "Five Guys",
+    "address": "14326 Lincoln St, Thornton, CO 80023",
+    "lat": 39.955492,
+    "lng": -104.984501,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=14307747327093728196&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ43s5IhqFbIcRzLh0pq28Yv8",
+    "name": "Five Guys",
+    "address": "9992 Commons St #130, Lone Tree, CO 80124",
+    "lat": 39.5355876,
+    "lng": -104.88073340000001,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=18402478481397299404&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJo133qGOMbIcRZaKsdSCYQ2g",
+    "name": "Five Guys",
+    "address": "23963 E Prospect Ave, Aurora, CO 80016",
+    "lat": 39.6001353,
+    "lng": -104.7089424,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=7513015868564742757&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJifYoXQn1a4cRTSyK2zO2F2o",
+    "name": "Five Guys",
+    "address": "2934 Arapahoe Rd Ste 100, Lafayette, CO 80026",
+    "lat": 40.014477199999995,
+    "lng": -105.1023542,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=7644779226327559245&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ4VRwNNfta4cR0zxU50hZ96o",
+    "name": "Five Guys",
+    "address": "1855 29th St, Boulder, CO 80301",
+    "lat": 40.0190707,
+    "lng": -105.25650379999999,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=12319413475348856019&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJfZ6dx66Ba4cRbN7p6cyIlI4",
+    "name": "In-N-Out Burger",
+    "address": "150 S Wadsworth Blvd, Lakewood, CO 80226",
+    "lat": 39.7129598,
+    "lng": -105.0810585,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=10273987063618068076&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJnRZOZACHa4cRJjLtbUEeBbs",
+    "name": "In-N-Out Burger",
+    "address": "7494 W 52nd Ave, Arvada, CO 80002",
+    "lat": 39.7905672,
+    "lng": -105.0807956,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=13476210726342046246&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJH4Z4rnp7bIcRyHKYba-Aoac",
+    "name": "In-N-Out Burger",
+    "address": "4597 Central Park Blvd, Denver, CO 80238",
+    "lat": 39.7798462,
+    "lng": -104.8836501,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=12079077166530720456&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJE02a9EZ1bIcRfx2WL3-fazs",
+    "name": "In-N-Out Burger",
+    "address": "111 E 136th Ave, Thornton, CO 80023",
+    "lat": 39.943432099999995,
+    "lng": -104.9841979,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=4281691239353818495&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJJ8MZ4ZOFbIcRXigesw7R-mI",
+    "name": "In-N-Out Burger",
+    "address": "9171 Westview Rd, Lone Tree, CO 80124",
+    "lat": 39.5653457,
+    "lng": -104.881958,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=7132242820959447134&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJA9Ein92PbIcR1J7kGwMC8xc",
+    "name": "In-N-Out Burger",
+    "address": "9558 N Pine Ln St, Parker, CO 80134",
+    "lat": 39.5436087,
+    "lng": -104.7722264,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=1725725294589157076&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJW5yJEoJtbIcRmdVUdDiJAGQ",
+    "name": "In-N-Out Burger",
+    "address": "3860 Eagle Boulevard, Brighton, CO 80601",
+    "lat": 39.956713199999996,
+    "lng": -104.773534,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=7205910279355684249&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ6e4UTSGtbocRIzpSOZE7Ojo",
+    "name": "In-N-Out Burger",
+    "address": "1450 Fall River Dr, Loveland, CO 80538",
+    "lat": 40.407889399999995,
+    "lng": -105.0080302,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=4195731497767025187&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJuZMJE3aZbIcRJOyXyBWRbwQ",
+    "name": "In-N-Out Burger",
+    "address": "5470 Factory Shops Blvd, Castle Rock, CO 80108",
+    "lat": 39.4158346,
+    "lng": -104.8764515,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=319633621312334884&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJc110P2r5a4cRq7Xxf7-AUbQ",
+    "name": "In-N-Out Burger",
+    "address": "735 Harvest Moon Dr, Longmont, CO 80501",
+    "lat": 40.151942299999995,
+    "lng": -105.08553339999999,
+    "suggestedAttributes": [
+      "dedicated_fryer"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=12993307959914247595&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJk9vBC4V7bIcRmt7vZuPV1QQ",
+    "name": "P.F. Chang's",
+    "address": "8260 E Northfield Blvd Ste 1360, Denver, CO 80238",
+    "lat": 39.782658,
+    "lng": -104.89244049999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=348419718852370074&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJj514rSCBa4cRn1UBXj-8nqU",
+    "name": "P.F. Chang's",
+    "address": "7210 W Alameda Ave, Lakewood, CO 80226",
+    "lat": 39.7106656,
+    "lng": -105.0772521,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=11934183042924500383&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJszeoGgB1bIcRQT6c7oWtEzE",
+    "name": "P.F. Chang's",
+    "address": "14416 Delaware St, Westminster, CO 80023",
+    "lat": 39.9581459,
+    "lng": -104.99134339999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=3536360923161443905&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJfdbHKp2Ma4cRJPRSZBHEM24",
+    "name": "P.F. Chang's",
+    "address": "1 W Flatiron Crossing Dr Unit 500, Bldg. 5, Broomfield, CO 80021",
+    "lat": 39.930223,
+    "lng": -105.13445449999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=7940906146960962596&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJUTbN57uFbIcRvVZLRT_-k-g",
+    "name": "P.F. Chang's",
+    "address": "8315 Park Meadows Center Dr, Lone Tree, CO 80124",
+    "lat": 39.565371299999995,
+    "lng": -104.8759523,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=16759018186074707645&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJr67idWOMbIcRAs6lCofmslo",
+    "name": "P.F. Chang's",
+    "address": "23902 E Prospect Ave, Aurora, CO 80016",
+    "lat": 39.6001261,
+    "lng": -104.71032819999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=6535539476941622786&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJcctAwP6sbocRsw7upUpxvz4",
+    "name": "P.F. Chang's",
+    "address": "5915 Sky Pond Dr, Loveland, CO 80538",
+    "lat": 40.4118521,
+    "lng": -104.9905993,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=4521457116328627891&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJs0rOMpuFbIcR4_JEjGwjYKM",
+    "name": "Beau Jo's Pizza Lone Tree",
+    "address": "9234 Park Meadows Dr #300, Lone Tree, CO 80124",
+    "lat": 39.554542399999995,
+    "lng": -104.882617,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=11772448375063245539&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJu3oa49h-bIcRjwG-VOPSFcc",
+    "name": "Little India Restaurant & Bar 6th Avenue",
+    "address": "330 E 6th Ave, Denver, CO 80203",
+    "lat": 39.72542,
+    "lng": -104.982885,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=14345604061879730575&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ7TqZFoV7bIcRXqmQCVfPh_o",
+    "name": "Little India Restaurant & Bar Central Park",
+    "address": "7352 E 29th Ave, Denver, CO 80238",
+    "lat": 39.757875000000006,
+    "lng": -104.90191800000001,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=18052625604067502430&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ5yOMEjp-bIcR_-nJuH59n5Q",
+    "name": "Little India Restaurant & Bar Wash Park/DU",
+    "address": "2390 S Downing St B, Denver, CO 80210",
+    "lat": 39.6732954,
+    "lng": -104.97321009999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=10709416422129920511&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJibg4NPt_bIcRvCuJ0bl1UsM",
+    "name": "SPICE ROOM",
+    "address": "3100 E Colfax Ave, Denver, CO 80206",
+    "lat": 39.7399487,
+    "lng": -104.9502613,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=14074441226431048636&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ76sG-huHa4cR8E9lfgYNG2o",
+    "name": "SPICE ROOM",
+    "address": "7355 Ralston Rd Unit H, Arvada, CO 80002",
+    "lat": 39.802729299999996,
+    "lng": -105.07711680000001,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=7645719113933082608&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJZfie-N54bIcRdEaRsACylm8",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "2262 Larimer St, Denver, CO 80205",
+    "lat": 39.7554751,
+    "lng": -104.98886820000001,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=8040809900748654196&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJl7Qc66B-bIcRptPJ675Zxng",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "700 Colorado Blvd Ste A, Denver, CO 80206",
+    "lat": 39.727590299999996,
+    "lng": -104.9403779,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=8702742006474593190&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJFaarTDJ_bIcRrzBZbwJWBFA",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "101 N Broadway #1, Denver, CO 80203",
+    "lat": 39.7185389,
+    "lng": -104.98776230000001,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=5765827991399116975&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJTdnWz4-Ha4cREmzkMaIxd9k",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "7240 W 56th Ave Ste 100, Arvada, CO 80002",
+    "lat": 39.7983007,
+    "lng": -105.0772877,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=15670048001150446610&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJq6pmT_yGbIcRAM3DyB5gV6I",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "5073 S Syracuse St, Denver, CO 80237",
+    "lat": 39.6253759,
+    "lng": -104.8999542,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=11697924242451713280&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJtRFG_4eJa4cRJWm2uaqpiks",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "6315 W 104th Ave #100, Westminster, CO 80020",
+    "lat": 39.8885685,
+    "lng": -105.0676955,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=5443349650355939621&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJn2wVc0KBbIcRyyK1He4oU68",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "6781 S York St Ste 515, Centennial, CO 80122",
+    "lat": 39.5931574,
+    "lng": -104.96177399999999,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=12633486382870110923&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJp-EvIhqFbIcR_cunSVfDBMk",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "10002 Commons St E1, Lone Tree, CO 80124",
+    "lat": 39.5353089,
+    "lng": -104.8791274,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=14484917081195662333&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJUaSQIp91bIcR0A-H7c4qEoE",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "14345 Orchard Pkwy #200, Westminster, CO 80023",
+    "lat": 39.9567986,
+    "lng": -104.99425649999999,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=9300543248710176720&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJY6w2pinsa4cRSuCvJ8Poce0",
+    "name": "Snooze, an A.M. Eatery",
+    "address": "1617 Pearl St, Boulder, CO 80302",
+    "lat": 40.019330599999996,
+    "lng": -105.27424680000001,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=17109712384239329354&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJLwA1Q_KJbIcRKiL8bdVGiy0",
+    "name": "Parlor Doughnuts",
+    "address": "5001 S Parker Rd, Aurora, CO 80015",
+    "lat": 39.6252004,
+    "lng": -104.82279869999999,
+    "suggestedAttributes": [
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=3281794635956757034&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJe37szoJ5bIcRJKR4GVxNeyk",
+    "name": "Modern Market Eatery Corporate Offices",
+    "address": "1600 Champa St #340, Denver, CO 80202",
+    "lat": 39.7465568,
+    "lng": -104.9933923,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=2989067835650122788&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJrxHf-GaEa4cR5bagzY6OpTY",
+    "name": "Modern Market Eatery - Denver West",
+    "address": "14630 W Colfax Ave Unit 130, Lakewood, CO 80401",
+    "lat": 39.7319916,
+    "lng": -105.1640752,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=3937710193191728869&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJbfJO5hJ9bIcRZNrctOSwPAo",
+    "name": "Modern Market Eatery - Fitzsimons",
+    "address": "12230 E Colfax Ave Ste 130, Aurora, CO 80011",
+    "lat": 39.7398452,
+    "lng": -104.84502409999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=737658935315323492&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ24ZOUqKAbIcRxWweSgMaWZ4",
+    "name": "Modern Market Eatery - Cherry Hills",
+    "address": "3475 S University Blvd Ste A, Englewood, CO 80113",
+    "lat": 39.6545578,
+    "lng": -104.9607554,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=11410179732350594245&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJS2iJcWyKa4cRUnrXF1No9qA",
+    "name": "Modern Market Eatery - Broomfield",
+    "address": "4800 W 121st Ave Unit C, Broomfield, CO 80020",
+    "lat": 39.914602699999996,
+    "lng": -105.0492117,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=11598572596430862930&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJV9lrw32GbIcR1JRnymIYJ98",
+    "name": "Modern Market Eatery - Greenwood Village",
+    "address": "8575 E Arapahoe Rd F, Greenwood Village, CO 80112",
+    "lat": 39.5962288,
+    "lng": -104.88968539999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=16079847807131292884&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJC_mTHRp_a4cRO7Na5Jps6Ug",
+    "name": "Modern Market Eatery - Littleton",
+    "address": "8501 W Bowles Ave #2030, Littleton, CO 80123",
+    "lat": 39.6113737,
+    "lng": -105.09636409999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=5253849852816307003&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJ-eMaL0-CbIcR9asRWncaggw",
+    "name": "Modern Market Eatery - Highlands Ranch",
+    "address": "537 W Highlands Ranch Pkwy, Highlands Ranch, CO 80129",
+    "lat": 39.5498599,
+    "lng": -104.99487909999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=901311975342058485&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJfdT2aixnbIcRYmNyCAu7Hdk",
+    "name": "Modern market Eatery C",
+    "address": "8500 Peña Blvd, Denver, CO 80249",
+    "lat": 39.862994799999996,
+    "lng": -104.6767969,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=15644866336615719778&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJc_1wlJf5a4cR-M9HIGqsV9w",
+    "name": "Modern Market Eatery - Longmont",
+    "address": "700 Ken Pratt Blvd Ste 100, Longmont, CO 80501",
+    "lat": 40.15324880000001,
+    "lng": -105.1054648,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=15877348583126061048&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJl3m5U9Dta4cRNn52l-DDMBI",
+    "name": "Modern Market Eatery - Boulder",
+    "address": "1600 28th St #1212, Boulder, CO 80301",
+    "lat": 40.0157609,
+    "lng": -105.2579069,
+    "suggestedAttributes": [
+      "dedicated_gf_menu",
+      "gf_substitutes"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=1310762860946030134&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJizhcHSJ1bIcRiXxeFcKPeiQ",
+    "name": "Lazy Dog Restaurant & Bar",
+    "address": "14618 Delaware St, Westminster, CO 80023",
+    "lat": 39.961335299999995,
+    "lng": -104.98915319999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=2628571396269046921&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  },
+  {
+    "placeId": "ChIJgYGui6eDbIcRhWcm3ZfvLSE",
+    "name": "Lazy Dog Restaurant & Bar",
+    "address": "43 Centennial Blvd, Highlands Ranch, CO 80129",
+    "lat": 39.5626642,
+    "lng": -104.98846599999999,
+    "suggestedAttributes": [
+      "dedicated_gf_menu"
+    ],
+    "menuUrl": null,
+    "googleMapsUri": "https://maps.google.com/?cid=2390830412732983173&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+  }
+]

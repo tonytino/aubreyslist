@@ -323,6 +323,79 @@ describe("DirectoryMap — pins", () => {
     expect(onSelect).toHaveBeenNthCalledWith(1, "b");
     expect(onSelect).toHaveBeenNthCalledWith(2, "b");
   });
+
+  it("fills the unattested dot from its own token, never the global muted-foreground", async () => {
+    await renderMap();
+    const dot = pinOf("New Spot").querySelector("span") as HTMLElement;
+    // The scoped pin-unattested pair (app/styles/app.css) darkens only the
+    // dot in dark mode: dark muted-foreground merges with the white halo
+    // (~2.5:1), and body text everywhere depends on that global token.
+    expect(dot.className).toContain("bg-pin-unattested");
+    expect(dot.className).not.toContain("bg-muted-foreground");
+  });
+});
+
+describe("DirectoryMap — pin incident decoration (AUB-278)", () => {
+  it("adds the incident badge to the dot when a recent incident rides a non-incident headline", async () => {
+    await renderMap();
+    // The dot keeps its headline fill (decorate, never override) and gains the
+    // incident-token badge — the pin-scale mirror of the card's headline chip
+    // + incident add-on chip.
+    const pin = pinOf("Harvest Table, Celiac-safe, Recent incident");
+    const badge = within(pin).getByTestId("pin-incident-dot");
+    expect(badge.className).toContain("bg-incident");
+    // A white ring at the dot's own halo weight (border-2): the incident red
+    // is near-isoluminant with the celiac-safe fill, so under greyscale/CVD
+    // the ring, not the hue, separates the badge.
+    expect(badge.className).toContain("border-2");
+    expect(badge.className).toContain("border-white");
+    const dot = pin.querySelector("span") as HTMLElement;
+    expect(dot.className).toContain("bg-celiac-safe");
+    // The badge rides inside the dot, so it can never float over a different
+    // card (the module's safety-correctness invariant).
+    expect(dot).toContainElement(badge);
+  });
+
+  it("stays visual-only: aria-hidden, no text, and the accessible name unchanged", async () => {
+    await renderMap();
+    const pin = pinOf("Harvest Table, Celiac-safe, Recent incident");
+    // Sighted and AT users already get equivalent incident info — the name
+    // folds it in (pinAccessibleName), so the badge adds nothing spoken.
+    expect(within(pin).getByTestId("pin-incident-dot")).toHaveAttribute("aria-hidden", "true");
+    expect(pin.textContent).toBe("4");
+    expect(pin).toHaveAccessibleName("Harvest Table, Celiac-safe, Recent incident");
+  });
+
+  it("never decorates the incident-headline pin — its fill already is the signal", async () => {
+    await renderMap();
+    expect(
+      within(pinOf("Lucia Trattoria, Recent incident")).queryByTestId("pin-incident-dot")
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders no badge without a recent incident, whatever the headline", async () => {
+    await renderMap();
+    expect(
+      within(pinOf("Root & Rye, Celiac-safe")).queryByTestId("pin-incident-dot")
+    ).not.toBeInTheDocument();
+    expect(within(pinOf("New Spot")).queryByTestId("pin-incident-dot")).not.toBeInTheDocument();
+  });
+
+  it("decorates an unattested pin with a recent incident (null headline is not 'incident')", async () => {
+    const { rerenderWith } = await renderMap(null);
+    rerenderWith(null, [
+      {
+        vm: vm({ id: "u", name: "Quiet Corner", safetyState: null, hasRecentIncident: true }),
+        lat: 39.73,
+        lng: -104.97,
+      },
+    ]);
+    // The neutral grey dot stays (no fake verdict) but the recent harm still
+    // shows — matching the accessible name, which appends the incident.
+    const pin = pinOf("Quiet Corner, Recent incident");
+    expect(within(pin).getByTestId("pin-incident-dot")).toBeInTheDocument();
+    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-pin-unattested");
+  });
 });
 
 describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview variant)", () => {
@@ -367,7 +440,7 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
     const pin = pinOf("New Spot");
     expect(pin.textContent).toBe("3");
     // Still the neutral unattested pairing, never a safety-state fill.
-    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-muted-foreground");
+    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-pin-unattested");
   });
 
   it("keeps the number out of every accessible name — a visual correlation aid only", async () => {
@@ -419,8 +492,13 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
     const carousel = screen.getByTestId("map-carousel");
     // The opaque background band + raised stacking are what stop a low pin from
     // visually floating over a different card (a mis-associated safety signal).
-    expect(carousel.className).toContain("z-10");
+    // The z-10 raise rides the band's positioning shell, which also hosts the
+    // edge-fade overlay.
+    expect((carousel.parentElement as HTMLElement).className).toContain("z-10");
     expect(carousel.className).toContain("bg-background");
+    // The band itself stays fully opaque: the right-edge scroll cue is an
+    // overlay, never a mask-image that would let pins bleed through the band.
+    expect(carousel.className).not.toContain("mask-image");
   });
 
   it("keeps a mini-card's safety chip inside that same card (no cross-card bleed in the DOM)", async () => {
@@ -430,6 +508,58 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
     const rootCard = cardOf("Root & Rye, Celiac-safe");
     expect(within(rootCard).getByText("Celiac-safe")).toBeInTheDocument();
     expect(within(rootCard).queryByText("Recent incident")).not.toBeInTheDocument();
+  });
+});
+
+describe("DirectoryMap — band right-edge fade (AUB-278)", () => {
+  it("overlays a decorative right-edge fade so a clipped card reads as scrollable", async () => {
+    await renderMap();
+    const fade = screen.getByTestId("carousel-edge-fade");
+    // Decorative and click-through: never announced, never eats a tap or
+    // wheel aimed at the strip beneath it.
+    expect(fade).toHaveAttribute("aria-hidden", "true");
+    expect(fade.className).toContain("pointer-events-none");
+    // Pinned to the band's right edge, fading to the band's own background.
+    expect(fade.className).toContain("right-0");
+    expect(fade.className).toContain("from-background");
+    // Focus-driven minimal scrolls must clear the fade: scroll-padding-right
+    // at the fade's width keeps a tabbed-to heart/chevron ring unwashed.
+    expect(screen.getByTestId("map-carousel").className).toContain("scroll-pr-10");
+  });
+
+  it("keeps the fade a sibling overlay of the scroller, never band content", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    const fade = screen.getByTestId("carousel-edge-fade");
+    // Inside the scroller it would ride the scrolled content instead of
+    // pinning to the visual edge — and the end spacer must stay the band's
+    // last child (FAB clearance).
+    expect(carousel).not.toContainElement(fade);
+    expect(fade.parentElement).toBe(carousel.parentElement);
+  });
+
+  it("keeps the mini-card inside the scroller at its full 224px, under the fade", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    const fade = screen.getByTestId("carousel-edge-fade");
+    const entry = cardOf("New Spot").parentElement as HTMLElement;
+    // The full-anatomy card is band CONTENT: it scrolls beneath the fade
+    // rather than sitting beside it, so the fade keeps pinning to the band's
+    // visual edge whatever the card measures.
+    expect(entry.className).toContain("w-[224px]");
+    expect(carousel).toContainElement(entry);
+    expect(entry).not.toContainElement(fade);
+    // scroll-padding is card-width independent, so the fade clearance needs no
+    // retune when the mini-card resizes.
+    expect(carousel.className).toContain("scroll-pr-10");
+  });
+
+  it("mirrors nothing on the left edge, where selection parks cards flush-left", async () => {
+    await renderMap();
+    const shell = screen.getByTestId("map-carousel").parentElement as HTMLElement;
+    // One fade only: a left-edge twin would sit over the selected card's
+    // leading edge after every flush-left scroll.
+    expect(shell.querySelectorAll('[data-testid="carousel-edge-fade"]')).toHaveLength(1);
   });
 });
 
@@ -777,6 +907,123 @@ describe("DirectoryMap — carousel scrolls the selected card flush-left", () =>
     rerenderWith("b");
     expect(scrollTo).toHaveBeenCalledTimes(1);
     expect(scrollTo).toHaveBeenCalledWith({ left: 0, behavior: "auto" });
+  });
+});
+
+describe("DirectoryMap — wheel-to-horizontal-scroll (AUB-301)", () => {
+  // jsdom always reports scrollWidth/clientWidth as 0, so the overflow check
+  // (and every other branch keyed on the band's size) needs both stubbed per
+  // test; scrollLeft itself is a plain settable property jsdom already
+  // supports, no stub needed.
+  function stubBandWidth(carousel: HTMLElement, { scrollWidth = 2000, clientWidth = 500 } = {}) {
+    Object.defineProperty(carousel, "scrollWidth", { value: scrollWidth, configurable: true });
+    Object.defineProperty(carousel, "clientWidth", { value: clientWidth, configurable: true });
+  }
+
+  it("scrolls a deltaY-dominant wheel into scrollLeft and cancels the event", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, cancelable: true, bubbles: true })
+    );
+    // dispatchEvent returns false iff preventDefault() was called.
+    expect(notCanceled).toBe(false);
+    expect(carousel.scrollLeft).toBe(100);
+  });
+
+  it("scrolls back on negative deltaY", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 50;
+    carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -30, cancelable: true, bubbles: true })
+    );
+    expect(carousel.scrollLeft).toBe(20);
+  });
+
+  it("leaves shift+wheel untouched — the browser's native shift-remap already scrolls it", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, shiftKey: true, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+
+  it("leaves a deltaX-dominant wheel untouched — a trackpad's horizontal pan already works natively", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaX: 100, deltaY: 5, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+
+  it("leaves the band untouched when it does not overflow (nothing to scroll)", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel, { scrollWidth: 500, clientWidth: 500 });
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+
+  it("normalizes DOM_DELTA_LINE (deltaMode 1) to 40px per line", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 2, deltaMode: 1, cancelable: true, bubbles: true })
+    );
+    expect(carousel.scrollLeft).toBe(80);
+  });
+
+  it("normalizes DOM_DELTA_PAGE (deltaMode 2) to deltaY × the band's clientWidth", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel, { scrollWidth: 2000, clientWidth: 500 });
+    carousel.scrollLeft = 0;
+    carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 1, deltaMode: 2, cancelable: true, bubbles: true })
+    );
+    expect(carousel.scrollLeft).toBe(500);
+  });
+
+  it("leaves ctrl+wheel untouched — a page/pinch-zoom gesture, never carousel input", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, ctrlKey: true, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+
+  it("leaves meta+wheel untouched — Firefox/macOS cmd+scroll zoom", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, metaKey: true, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
   });
 });
 

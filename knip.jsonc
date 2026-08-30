@@ -31,7 +31,10 @@
     "scripts/alias-resolve-hook.mjs", // loaded dynamically by register-aliases.mjs via node --import register("./alias-resolve-hook.mjs", ...) — the string specifier is untraceable, so it must be an explicit entry
     "app/components/ui/**" // shadcn/ui is copy-in vendored source (ADR-011): its component API surface deliberately mirrors upstream, so unused sub-exports (DialogPortal, DropdownMenuSub, SheetFooter, …) are kept on purpose, not dead code
   ],
-  "project": ["app/**/*.{ts,tsx}", "db/**/*.ts", "scripts/*.mjs"],
+  // tests/** is in project so dependencies imported only by shared test
+  // helpers (e.g. @axe-core/playwright via tests/e2e/helpers.ts) are traced —
+  // the playwright plugin only adds the spec files themselves as entries.
+  "project": ["app/**/*.{ts,tsx}", "db/**/*.ts", "scripts/*.mjs", "tests/**/*.ts"],
 
   // Don't flag an export merely because its ONLY consumer is its own file
   // (e.g. db/schema pgEnums referenced by columns in schema.ts, or the trust

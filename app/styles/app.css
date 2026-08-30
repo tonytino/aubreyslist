@@ -66,6 +66,13 @@
      utility, so this token must exist for that class to render. KEEP. */
   --color-muted-foreground: oklch(0.476 0.02 295);
 
+  /* Map "no verdict" pin fill (map-ui.tsx UNATTESTED_PIN) — scoped so the pin
+     dot can darken in dark mode without re-pointing muted-foreground, which
+     body text everywhere depends on. Light value = muted-foreground's light
+     value, so the two match wherever only light mode renders. Contrast
+     rationale lives with the pin. */
+  --color-pin-unattested: oklch(0.476 0.02 295);
+
   /* ----------------------------------------------------------------------- */
   /* Safety states — the headline domain signal (see docs/agents/domain.md). */
   /* Each state has: a strong colour (text/icon/border, AA on white + on soft) */
@@ -253,6 +260,10 @@
   --color-surface: oklch(0.22 0.018 295);
   --color-border: oklch(0.32 0.02 295);
   --color-muted-foreground: oklch(0.72 0.02 295); /* ~5.6:1 on background */
+  /* Kept darker than dark muted-foreground (L0.72 merges with the pin's white
+     halo at ~2.5:1): L0.62 gives ~3.6:1 halo-vs-fill (≥3:1 non-text) with the
+     near-black index number at ~5.2:1 on the fill (AA). */
+  --color-pin-unattested: oklch(0.62 0.02 295);
 
   /* shadcn semantic layer.
      --color-primary is overridden INDEPENDENTLY of --color-brand: solid

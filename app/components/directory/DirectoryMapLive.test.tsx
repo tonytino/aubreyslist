@@ -191,9 +191,12 @@ describe("DirectoryMapLive — markers", () => {
     );
     // aria-label overrides button content, so the incident must live in the
     // name itself — AT hears the same safety picture sighted users see.
-    expect(
-      screen.getByRole("button", { name: "Harvest Table, Celiac-safe, Recent incident" })
-    ).toBeInTheDocument();
+    const pin = screen.getByRole("button", { name: "Harvest Table, Celiac-safe, Recent incident" });
+    expect(pin).toBeInTheDocument();
+    // The shared MapPinButton also decorates the live pin's dot with the
+    // incident badge over the kept headline fill — no per-path wiring.
+    expect(within(pin).getByTestId("pin-incident-dot")).toHaveAttribute("aria-hidden", "true");
+    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-celiac-safe");
   });
 
   it("numbers each pin by its 1-based entries order, keeping the number out of the accessible name (AUB-275)", () => {
