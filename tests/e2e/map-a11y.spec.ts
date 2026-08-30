@@ -6,20 +6,14 @@ import { runAxeScan, waitForBrowseReady } from "./helpers";
 /**
  * Directory map view (`?view=map`) accessibility + keyboard pass.
  *
- * Separate file, not a11y.spec.ts, for two reasons.
+ * This spec lives in the DB-backed chromium lane, not the DB-free a11y lane,
+ * because its scans need seeded data.
  *
- * 1. The map needs a real database: `/` errors without `DATABASE_URL` (see
- *    a11y.spec.ts's exclusion note), and the map content area only mounts
- *    once `vms.length > 0` (app/routes/index.tsx). This file seeds its own
- *    listing and self-skips without the CI E2E database/session secret, like
- *    every DB-touching spec (fixtures.ts's `E2E_DB_READY`).
- * 2. `playwright.config.ts` runs `a11y.spec.ts` only under the `a11y`
- *    project, which `.github/workflows/a11y.yml` invokes DB-free; the
- *    `chromium` project's `testIgnore` excludes it from the DB-backed
- *    `integration-e2e` lane entirely. Both regexes match on substring, so any
- *    filename ending in "a11y.spec.ts" hits the same DB-free-only dead end —
- *    hence the name here. This file runs under `--project=chromium`, where
- *    `E2E_DB_READY` can actually be true.
+ * The map needs a real database: `/` errors without `DATABASE_URL` (see
+ * a11y.spec.ts's exclusion note), and the map content area only mounts once
+ * `vms.length > 0` (app/routes/index.tsx). This file seeds its own listing
+ * and self-skips without the CI E2E database/session secret, like every
+ * DB-touching spec (fixtures.ts's `E2E_DB_READY`).
  *
  * These scans complement, not replace, `a11y.spec.ts`'s always-on DB-free
  * lane: that lane gates every PR unconditionally on the public static pages;
