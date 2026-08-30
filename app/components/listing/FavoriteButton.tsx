@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import { cn } from "~/lib/utils";
 import { favoriteListing, unfavoriteListing } from "~/server/favorites/favorites.fn";
@@ -21,11 +22,44 @@ interface FavoriteButtonProps {
   /** The listing's name, woven into the accessible label ("Save Blue Sparrow"). */
   listingName?: string;
   /**
+   * The listing's PUBLIC save count — how many people have saved it, not this
+   * diner's own state. Absent (or 0) keeps the circular heart; a positive count
+   * widens the same control into a pill that carries "heart + 24".
+   *
+   * One control, one concept (AUB-300): the heart and the old separate
+   * save-count pill were the same idea drawn twice, and the second one is what
+   * made the card's title row structurally variable. Merged here, the title row
+   * holds nothing but the name.
+   *
+   * ADR-007: a community signal, never a safety verdict — hence the plain
+   * neutral overlay chrome (no safety colour) and the "not a safety score"
+   * tooltip below.
+   */
+  saveCount?: number | undefined;
+  /**
    * Optional positioning/appearance override. When provided, it replaces the default
    * browse-card overlay chrome so another surface (e.g. the listing hero) can restyle
    * the button; the disabled-state utilities are always kept.
    */
   className?: string;
+}
+
+/**
+ * The one wording for the merged control's accessible name. The count is part
+ * of the name, never tooltip- or sight-only (styling.md): "Save Blue Sparrow.
+ * 24 saves" / "Saved, remove Blue Sparrow. 24 saves". A sentence break, not a
+ * comma, so the personal action and the community count stay two separate
+ * statements when read aloud, and the action stays FIRST — it is what the
+ * control does. Singular at one ("1 save"), never a machine-shaped "1 saves".
+ */
+function favoriteAccessibleName(
+  name: string,
+  isFavorited: boolean,
+  saveCount?: number | undefined
+): string {
+  const action = isFavorited ? `Saved, remove ${name}` : `Save ${name}`;
+  if (saveCount === undefined || saveCount <= 0) return action;
+  return `${action}. ${saveCount} save${saveCount === 1 ? "" : "s"}`;
 }
 
 /**
@@ -69,10 +103,21 @@ function buildReturnTo(listingId: string): string {
  * and the accessible label flips ("Save …" ↔ "Saved, remove …"); the filled heart is
  * a redundant cue, never the sole signal.
  *
+ * Save count (AUB-300): a positive {@link FavoriteButtonProps.saveCount} widens
+ * this same control into a pill — heart + number, with no visible "saves" word —
+ * and folds the count into the accessible name. The count is a community signal,
+ * not a safety score, so the pill keeps the neutral overlay chrome (never a
+ * safety colour) and carries the ADR-007 tooltip saying exactly that.
+ *
  * Client-safe: imports only the `favorites.fn` seam, query modules, dialog, and
  * icons — never `~/server/favorites/index` or `db`.
  */
-export function FavoriteButton({ listingId, listingName, className }: FavoriteButtonProps) {
+export function FavoriteButton({
+  listingId,
+  listingName,
+  saveCount,
+  className,
+}: FavoriteButtonProps) {
   const queryClient = useQueryClient();
   const { data: favoriteIds } = useSuspenseQuery(favoriteIdsQuery);
   const { data: currentUser } = useSuspenseQuery(currentUserQuery);
@@ -130,28 +175,62 @@ export function FavoriteButton({ listingId, listingName, className }: FavoriteBu
     toggleFavorite.mutate(!isFavorited);
   };
 
-  const accessibleLabel = isFavorited ? `Saved, remove ${name}` : `Save ${name}`;
+  const showCount = saveCount !== undefined && saveCount > 0;
+  const accessibleLabel = favoriteAccessibleName(name, isFavorited, saveCount);
   const signInHref = `/api/auth/google?returnTo=${encodeURIComponent(buildReturnTo(listingId))}`;
+
+  const control = (
+    <button
+      type="button"
+      aria-label={accessibleLabel}
+      aria-pressed={isFavorited}
+      disabled={toggleFavorite.isPending}
+      onClick={handleClick}
+      className={cn(
+        // Default browse-card overlay chrome — replaced wholesale when the caller
+        // passes its own `className`. `h-9` + `min-w-9` is the shared box: a
+        // countless heart stays a 36px circle, a counted one grows sideways into
+        // a pill of the same height, so the media tile's right rail never shifts.
+        className ??
+          "absolute right-3 top-3 z-10 inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand",
+        // The count's own breathing room, only when there is a count.
+        className === undefined && showCount ? "px-2.5" : "",
+        // Disabled-while-pending treatment is kept regardless of the override.
+        "disabled:pointer-events-none disabled:opacity-60"
+      )}
+    >
+      <Heart
+        className={`h-4 w-4 shrink-0 ${isFavorited ? "fill-current" : ""}`}
+        aria-hidden="true"
+      />
+      {showCount ? (
+        // Number only — no visible "saves" word (owner, PR #274). The meaning
+        // rides on the glyph + count + the accessible name above, and
+        // `aria-hidden` keeps AT from hearing the bare digits twice.
+        <span
+          data-testid="save-count"
+          aria-hidden="true"
+          className="text-caption font-semibold tabular-nums"
+        >
+          {saveCount}
+        </span>
+      ) : null}
+    </button>
+  );
 
   return (
     <>
-      <button
-        type="button"
-        aria-label={accessibleLabel}
-        aria-pressed={isFavorited}
-        disabled={toggleFavorite.isPending}
-        onClick={handleClick}
-        className={cn(
-          // Default browse-card overlay chrome — replaced wholesale when the caller
-          // passes its own `className`.
-          className ??
-            "absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand",
-          // Disabled-while-pending treatment is kept regardless of the override.
-          "disabled:pointer-events-none disabled:opacity-60"
-        )}
-      >
-        <Heart className={`h-4 w-4 ${isFavorited ? "fill-current" : ""}`} aria-hidden="true" />
-      </button>
+      {showCount ? (
+        // ADR-007: the count is community activity, not a safety score. The
+        // clarifier is supplementary — the visible glyph + number and the
+        // accessible name already carry the whole meaning.
+        <Tooltip>
+          <TooltipTrigger asChild>{control}</TooltipTrigger>
+          <TooltipContent>Community saves, not a safety score.</TooltipContent>
+        </Tooltip>
+      ) : (
+        control
+      )}
 
       <Dialog open={signInOpen} onOpenChange={setSignInOpen}>
         <DialogContent>

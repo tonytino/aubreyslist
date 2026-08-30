@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -209,5 +209,115 @@ describe("FavoriteButton", () => {
     expect(btn).not.toHaveClass("absolute", "right-3", "top-3", "bg-background/80");
     // The disabled-while-pending utilities survive the override.
     expect(btn).toHaveClass("disabled:pointer-events-none", "disabled:opacity-60");
+  });
+});
+
+/**
+ * AUB-300: the heart and the browse card's separate save-count pill were one
+ * concept drawn twice. They are one control now — a circle with no count, the
+ * same-height pill with one.
+ */
+describe("FavoriteButton — merged save count", () => {
+  it("stays a plain circle with no count, and with a zero count", () => {
+    for (const saveCount of [undefined, 0]) {
+      renderButton({
+        signedIn: true,
+        favoriteIds: [],
+        ui: (
+          <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" saveCount={saveCount} />
+        ),
+      });
+      // No fabricated "0 saves", nothing added to the name.
+      expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save Blue Sparrow" })).toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it("widens into a pill carrying heart + number, with no visible 'saves' word", () => {
+    renderButton({
+      signedIn: true,
+      favoriteIds: [],
+      ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" saveCount={24} />,
+    });
+    const btn = screen.getByRole("button", { name: /^Save Blue Sparrow/ });
+    expect(within(btn).getByTestId("save-count")).toHaveTextContent("24");
+    expect(btn).not.toHaveTextContent("saves");
+    // Same 36px height as the circle, grown sideways — the media tile's right
+    // rail must not shift between a counted and an uncounted card.
+    expect(btn).toHaveClass("h-9", "min-w-9", "px-2.5");
+  });
+
+  it("folds the count into the accessible name, both directions", () => {
+    renderButton({
+      signedIn: true,
+      favoriteIds: [],
+      ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" saveCount={24} />,
+    });
+    // Personal action first, community count second — two statements.
+    expect(screen.getByRole("button", { name: "Save Blue Sparrow. 24 saves" })).toBeInTheDocument();
+
+    cleanup();
+
+    renderButton({
+      signedIn: true,
+      favoriteIds: ["listing-1"],
+      ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" saveCount={24} />,
+    });
+    expect(
+      screen.getByRole("button", { name: "Saved, remove Blue Sparrow. 24 saves" })
+    ).toBeInTheDocument();
+  });
+
+  it("says '1 save', not '1 saves'", () => {
+    renderButton({
+      signedIn: true,
+      favoriteIds: [],
+      ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" saveCount={1} />,
+    });
+    expect(screen.getByRole("button", { name: "Save Blue Sparrow. 1 save" })).toBeInTheDocument();
+  });
+
+  it("carries the ADR-007 'not a safety score' tooltip only when counted", async () => {
+    renderButton({
+      signedIn: true,
+      favoriteIds: [],
+      ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" saveCount={24} />,
+    });
+    fireEvent.focus(screen.getByRole("button", { name: /^Save Blue Sparrow/ }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Community saves, not a safety score."
+    );
+  });
+
+  it("still toggles the save when the count is showing", async () => {
+    const queryClient = renderButton({
+      signedIn: true,
+      favoriteIds: [],
+      ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" saveCount={24} />,
+    });
+    // The tooltip wrapper must not swallow the click that is the button's whole job.
+    fireEvent.click(screen.getByRole("button", { name: /^Save Blue Sparrow/ }));
+    await waitFor(() =>
+      expect(queryClient.getQueryData(favoriteIdsQuery.queryKey)).toEqual(["listing-1"])
+    );
+    expect(favoriteListingMock).toHaveBeenCalledWith({ data: { listingId: "listing-1" } });
+  });
+
+  it("does NOT count on a surface that passes its own chrome (the listing hero)", () => {
+    // The hero's icon-button chrome is a fixed square; a count would break it,
+    // and the hero already states the count elsewhere if it ever needs to.
+    renderButton({
+      signedIn: true,
+      favoriteIds: [],
+      ui: (
+        <FavoriteButton
+          listingId="listing-1"
+          listingName="Blue Sparrow"
+          className="size-10 rounded-full"
+        />
+      ),
+    });
+    expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
   });
 });

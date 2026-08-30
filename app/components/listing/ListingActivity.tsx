@@ -73,7 +73,16 @@ export function ActivityLine({
           )}
         >
           <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="truncate">{meta.updatedLabel}</span>
+          {/* The dotted underline is the affordance: it is the one visual cue
+              that this line has an explanation behind it, matching the "AI"
+              marker's treatment on a suggested ClaimBadge. It is never the
+              MEANING — the visible words carry that — only the invitation to
+              tap. Surfaces that cannot host a trigger (the map mini-card) do
+              not draw it, so a dotted line always means "there is something
+              here to open". */}
+          <span className="truncate underline decoration-dotted underline-offset-2">
+            {meta.updatedLabel}
+          </span>
         </button>
       </TooltipTrigger>
       <TooltipContent className="max-w-[280px]">{ACTIVITY_TOOLTIP}</TooltipContent>
@@ -86,27 +95,48 @@ export function ActivityLine({
  * an incident. Renders nothing at zero — an honest absence, never "0 happy
  * patrons". A community count, not a safety verdict (ADR-007), so it stays
  * muted and out of the safety-signal row.
+ *
+ * Two sizes, one component, so the browse card and the map mini-card cannot
+ * drift on what the count means or how it is spelled:
+ *
+ * - `full` (browse card, detail hero) — glyph + the whole "12 happy patrons"
+ *   phrase. The noun is visible, because there is room for it.
+ * - `compact` (map mini-card, 224px) — glyph + the bare number, with the noun
+ *   moved into `aria-label`. Never a naked digit to AT: without the noun "12"
+ *   announced beside a safety label is exactly the ambiguity ADR-007 forbids.
+ *   The mini-card is itself one `<button aria-label>`, which hides this
+ *   element's own name, so `cardAccessibleName` folds the same phrase in — this
+ *   label is what keeps the component honest anywhere else it is reused.
  */
 export function HappyPatrons({
   meta,
+  size = "full",
   className,
 }: {
   meta: ListingActivityMeta;
+  size?: "full" | "compact";
   className?: string;
 }) {
   if (meta.happyPatronsLabel === null) {
     return null;
   }
+  const compact = size === "compact";
   return (
     <span
       data-testid="happy-patrons"
+      {...(compact ? { "aria-label": meta.happyPatronsLabel } : {})}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 font-medium text-muted-foreground",
+        "inline-flex shrink-0 items-center font-medium text-muted-foreground",
+        compact ? "gap-1 tabular-nums" : "gap-1.5",
         className
       )}
     >
-      <Users className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span>{meta.happyPatronsLabel}</span>
+      <Users className={compact ? "size-3.5 shrink-0" : "h-4 w-4 shrink-0"} aria-hidden="true" />
+      {compact ? (
+        <span aria-hidden="true">{meta.happyPatrons}</span>
+      ) : (
+        <span>{meta.happyPatronsLabel}</span>
+      )}
     </span>
   );
 }

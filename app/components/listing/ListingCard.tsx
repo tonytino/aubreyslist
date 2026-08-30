@@ -1,12 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { Heart } from "lucide-react";
-import { type ComponentProps, useState } from "react";
+import { useState } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { ActivityLine, HappyPatrons } from "~/components/listing/ListingActivity";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
 import { cn } from "~/lib/utils";
 import { cityFromAddress } from "~/listings/address";
@@ -87,10 +85,11 @@ export interface RestaurantCardVM {
   /** Decorative photo-placeholder gradient (never a safety signal). */
   accent: RestaurantCardAccent;
   /**
-   * Public count of people who have saved this listing; the pill hides at 0. Meaning is
-   * carried by the heart glyph + count + `aria-label` + tooltip, with no visible "saves"
-   * word. ADR-007: a community signal, never a safety verdict, so it stays out of the
-   * safety-signal row.
+   * Public count of people who have saved this listing; the count hides at 0. It is
+   * carried by the {@link FavoriteButton} itself — one control, one concept
+   * (AUB-300) — which widens from a heart circle to a heart + number pill and folds
+   * the count into its accessible name. ADR-007: a community signal, never a safety
+   * verdict, so it stays out of the safety-signal row.
    */
   saveCount?: number;
   /** A real food photo when available; otherwise the placeholder tile is shown. */
@@ -131,7 +130,7 @@ export function cardLocationParts(vm: RestaurantCardVM): string[] {
  *
  * Overflow rule: the CITY truncates and the distance never does. The segments
  * are separate flex items (`min-w-0 truncate` / `shrink-0`) because a single
- * joined string clips from the right — on the 200px mini-card that drops the
+ * joined string clips from the right — on the narrow map mini-card that drops the
  * distance entirely. "Greenwood Village · 12.4 mi" degrades to
  * "Greenwood Vill… · 12.4 mi".
  *
@@ -177,26 +176,6 @@ export function CardLocationLine({
 }
 
 /**
- * Attributed community pill — the shell for the save-count pill. A real,
- * non-submitting `<button type="button">` so the tooltip trigger is focusable with
- * proper semantics; Tailwind preflight strips native button chrome.
- * ADR-007: a non-safety signal — meaning lives in the visible content and accessible
- * name, never in the tooltip alone.
- */
-function AttributedPill({ className, type = "button", ...props }: ComponentProps<"button">) {
-  return (
-    <button
-      type={type}
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-chip px-2 py-1 text-caption font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand-ring",
-        className
-      )}
-      {...props}
-    />
-  );
-}
-
-/**
  * One scannable browse-list card, bound to a {@link RestaurantCardVM}. The whole card is
  * a single {@link Link} to `/listings/$id` — one large, mobile-friendly tap target.
  *
@@ -205,22 +184,27 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  * disputed — shows no safety badge, never a fabricated verdict. A recent incident adds
  * the `incident` signal.
  *
- * ADR-007: the save-count pill is an attributed community signal, not a safety score;
- * all safety meaning stays in {@link SafetySignal}. Bot suggestions are provenance,
- * never evidence: a listing with live suggestions shows the "Suggested by Aubrey's Bot"
- * label in the meta row's right slot (a happy-patron count wins the slot) plus one
- * suggested-variant {@link ClaimBadge} per attribute.
+ * ADR-007: the save count rides on the heart ({@link FavoriteButton}) as an attributed
+ * community signal, not a safety score; all safety meaning stays in
+ * {@link SafetySignal}. Bot suggestions are provenance, never evidence: a listing with
+ * live suggestions shows the "Suggested by Aubrey's Bot" label in the meta row's right
+ * slot (a happy-patron count wins the slot) plus one suggested-variant
+ * {@link ClaimBadge} per attribute.
  *
- * Uniform anatomy: every card renders the same five parts — media, title row, chips row,
- * divider, meta row — whatever the listing knows. The meta row is never a reserved blank:
- * a listing with no attestations reads "No activity yet". Activity is not safety, so the
- * line carries a tooltip saying so ({@link ActivityLine}).
+ * Uniform anatomy (AUB-300): every card renders the same SIX slots in the same order —
+ * media, name, location, signals row, divider, meta row — whatever the listing knows.
+ * Nothing is conditionally added to or removed from the stack; only what sits INSIDE a
+ * slot varies. The signals row keeps its band even with no chips to show, the divider is
+ * always opaque structure, and the meta row is never a reserved blank: a listing with no
+ * attestations reads "No activity yet". Activity is not safety, so the line carries a
+ * tooltip saying so ({@link ActivityLine}).
  *
  * Consistent height: every card in a grid row renders at the same height. The shell is
- * `h-full flex flex-col` with a `flex-1` body, and the location line always reserves its
- * space — an `invisible` placeholder of the same composition when a VM has no location.
- * Reserved space, never a fixed total height, so wrapped text is never clipped.
- * The claim row holds to that too: it is a single never-wrapping line that scrolls
+ * `h-full flex flex-col` with a `flex-1` body; the name is clamped to two lines, the
+ * location line always reserves its space (an `invisible` placeholder of the same
+ * composition when a VM has no location), and the signals row has a fixed minimum
+ * height. Reserved space, never a fixed total height, so wrapped text is never clipped.
+ * The signals row holds to that too: it is a single never-wrapping line that scrolls
  * horizontally, so a listing's badge count changes what you scroll to, not the card's
  * height.
  *
@@ -298,10 +282,22 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
               ) : null}
             </>
           ) : (
+            // `bg-white` is the gradient's opaque base, not a theme colour: the
+            // ramp's `/40` end stop composites over whatever sits behind it, so
+            // without a fixed base it dissolved into the near-black `bg-card` in
+            // dark mode. The accent pastels are deliberately NOT re-pointed for
+            // dark mode, so pinning the base keeps the tile the same light
+            // surface in both themes — light mode renders byte-identically (the
+            // card was already white) and dark mode stops eating the caption.
             <div
-              className={`flex h-full w-full items-center justify-center ${ACCENT_GRADIENTS[vm.accent]}`}
+              data-testid="photo-placeholder"
+              className={`flex h-full w-full items-center justify-center bg-white ${ACCENT_GRADIENTS[vm.accent]}`}
             >
-              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground/50">
+              {/* Fixed ink, never a theme-following one: the tile it sits on does
+                  not follow the theme either. `text-foreground/50` inverted to
+                  near-white here in dark mode (~1.3:1); `text-accent-ink` is
+                  >= 9.2:1 on every accent, in both themes. */}
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent-ink">
                 Food photo
               </span>
             </div>
@@ -311,47 +307,27 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
 
       {/* Body — a sibling of the Link, not nested in the anchor; `flex-1` so the card
           fills its grid cell and the meta row can pin to the bottom via `mt-auto`. */}
-      <div className="flex flex-1 flex-col gap-1 px-4 pb-4 pt-3">
-        {/* Title row: name (left) + the attributed pill (right) in one flex row, so a
-            long name can never slide under it. */}
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="min-w-0 break-words font-display text-card-title font-bold text-foreground">
-            {vm.name}
-          </h3>
-
-          {/* Public save-count — heart glyph + number, hidden at 0, no visible "saves"
-              word. Meaning is carried by the glyph + count + aria-label + tooltip, never
-              colour alone (styling.md). Lavender is distinct from every safety-state
-              colour (ADR-007): an attributed community signal, never a safety verdict —
-              all safety meaning stays in SafetySignal below. The wrapper raises it above
-              the stretched-link overlay with `relative z-10` so hover/focus reaches it;
-              it can be a real tooltip trigger only because it is not a descendant of
-              the <a>. */}
-          {vm.saveCount !== undefined && vm.saveCount > 0 ? (
-            <div className="relative z-10 flex shrink-0 items-center gap-1.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <AttributedPill
-                    data-testid="save-count"
-                    className="bg-accent-lavender/50"
-                    aria-label={`${vm.saveCount} saves`}
-                  >
-                    <Heart className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                    <span aria-hidden="true">{vm.saveCount}</span>
-                  </AttributedPill>
-                </TooltipTrigger>
-                <TooltipContent>Community saves, not a safety score.</TooltipContent>
-              </Tooltip>
-            </div>
-          ) : null}
-        </div>
+      {/* No `gap-*`: each slot owns its own top margin, so the vertical rhythm is
+          stated per gap (media→name 12 via `pt-3`, name→location 2, location→signals
+          10, signals→divider 12, divider→meta 12, meta→edge 12 via `pb-3`) rather
+          than being a shared gap plus a pile of corrections. */}
+      <div className="flex flex-1 flex-col px-4 pb-3 pt-3">
+        {/* Name — the whole title slot. Nothing shares this row (AUB-300): the save
+            count moved onto the heart, so a long name can no longer reflow anything.
+            `line-clamp-2` caps it at two lines so a 60-character name cannot make one
+            card taller than its neighbours; the FULL name stays in the media link's
+            `aria-label` above, so nothing is lost to AT or to search. `break-words`
+            keeps an unbroken long token inside the card instead of widening it. */}
+        <h3 className="line-clamp-2 break-words font-display text-card-title font-bold text-foreground">
+          {vm.name}
+        </h3>
 
         {/* Location line — the shared component, so this card and the map mini-card
             cannot drift. An unparseable address yields no city, and the full street
             address stays on the detail page. */}
-        <CardLocationLine vm={vm} className="text-body-sm text-muted-foreground" />
+        <CardLocationLine vm={vm} className="mt-0.5 text-body-sm text-muted-foreground" />
 
-        {/* Claim row — one line that scrolls horizontally on overflow instead of
+        {/* Signals row — one line that scrolls horizontally on overflow instead of
             wrapping (the `SafetySummary` hero / `FilterChips` pattern), so badge
             count changes what you scroll to, never how tall the card is: a
             one-badge and a five-badge card are the same height. Every chip in
@@ -360,9 +336,24 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             engines — a painted one would put the height back on the badge count.
             `min-w-0` lets the row shrink inside the flex-column body and hand its
             overflow to the scroller instead of widening the card at 375px, and
-            `-mx-1 px-1 py-1` (net `mt-1 + py-1` = the old `mt-2` rhythm) keeps the
-            suggested ring's gradient edge and the "AI" trigger's focus-visible ring
-            inside the scroll box instead of clipped by it.
+            `-mx-1 px-1 py-1` keeps the suggested ring's gradient edge and the "AI"
+            trigger's focus-visible ring inside the scroll box instead of clipped
+            by it.
+
+            `min-h-[38px]` is the slot, not the content: 30px (the badge family's
+            rendered height — `py-1` + a `text-body-sm` line + the chip border) plus
+            this row's own 4px focus-ring bleed top and bottom. A card with NO chips
+            keeps the identical band, so an unattested card and a five-chip card are
+            the same object at the same height (owner-approved empty band, AUB-300).
+
+            The right-edge fade tells the truth about overflow: the same 16px mask
+            the map mini-card already carries, so a clipped label reads as
+            scrollable rather than truncated — and the two surfaces cannot drift.
+
+            Fixed chip order, left to right: the headline verdict, then the incident
+            add-on, then confirmed claims (evidence), then bot suggestions
+            (provenance). The "Suggested by Aubrey's Bot" label is NOT part of this
+            row — it stays in the meta row's right slot (owner decision, AUB-300).
 
             `relative z-10`: the suggested ClaimBadge's "AI" tooltip trigger is a real
             <button>, so this row must be raised above the stretched-link overlay or
@@ -371,7 +362,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             lets a touch drag scroll the row rather than hitting the card link. */}
         <div
           data-testid="card-claim-row"
-          className="relative z-10 -mx-1 mt-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="relative z-10 -mx-1 mt-1.5 flex min-h-[38px] min-w-0 items-center gap-2 overflow-x-auto px-1 py-1 [mask-image:linear-gradient(to_right,black_calc(100%_-_16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {/* No verdict (unattested or disputed) renders nothing here: the two are
               indistinguishable by design. A bot-suggested listing still shows its
@@ -398,11 +389,11 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
 
         {/* Meta row — the activity line (left) + the happy-patron count (right).
             ALWAYS rendered, with a real divider and real content: every card has the
-            same anatomy (media, title row, chips row, divider, meta row) whatever it
-            knows, so a suggestion-only card and a heavily-attested one read as the
-            same object. A listing nobody has attested says "No activity yet" rather
-            than reserving an invisible line. `mt-auto` pins the row to the card bottom
-            when a neighbour wraps taller.
+            same six-slot anatomy (media, name, location, signals row, divider, meta
+            row) whatever it knows, so a suggestion-only card and a heavily-attested
+            one read as the same object. A listing nobody has attested says "No
+            activity yet" rather than reserving an invisible line. `mt-auto` pins the
+            row to the card bottom when a neighbour wraps taller.
 
             The right slot falls back to the bot-provenance label when there are no
             happy patrons to report — evidence over provenance.
@@ -412,7 +403,9 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
         <div className="mt-auto">
           <div
             data-testid="card-meta-row"
-            className="relative z-10 mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-caption"
+            // `mt-2` + the signals row's own 4px focus-ring bleed = the spec's 12px
+            // gap to the divider; `pt-3` is the spec's 12px from divider to meta.
+            className="relative z-10 mt-2 flex items-center justify-between gap-2 border-t border-border pt-3 text-caption"
           >
             <ActivityLine meta={vm.activity} />
 
@@ -427,10 +420,12 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
         </div>
       </div>
 
-      {/* Save/heart affordance. A sibling of the Link (a <button> inside an <a> is
-          invalid HTML), raised above the stretched-link overlay with `absolute … z-10`.
+      {/* Save/heart affordance, carrying the public save count (AUB-300: one control,
+          one concept — the separate lavender count pill is gone and the title row is
+          name-only). A sibling of the Link (a <button> inside an <a> is invalid HTML),
+          raised above the stretched-link overlay with `absolute … z-10`.
           FavoriteButton reads `["favorites"]` itself, so the VM stays per-user-free. */}
-      <FavoriteButton listingId={vm.id} listingName={vm.name} />
+      <FavoriteButton listingId={vm.id} listingName={vm.name} saveCount={vm.saveCount} />
     </div>
   );
 }

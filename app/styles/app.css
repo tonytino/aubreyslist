@@ -42,6 +42,18 @@
   --color-accent-peach: oklch(0.93 0.05 55);
   --color-accent-sky: oklch(0.93 0.05 235);
 
+  /* Fixed ink for text drawn ON a pastel accent tile (the browse card's
+     photo placeholder). Deliberately has NO `.dark` override — and that is the
+     whole point: the `--color-accent-*` pastels above are not re-pointed for
+     dark mode either, so a tile stays light in BOTH themes. A theme-following
+     caption (`text-foreground/50`) therefore inverted to near-white on a light
+     tile in dark mode, ~1.3:1. This ink is pinned to the tile it sits on, not
+     to the theme: >= 9.2:1 on every accent, everywhere along the tile's
+     gradient (the tile pairs it with an opaque `bg-white` base so the ramp
+     cannot composite the dark card through). Decorative surface only — never
+     a safety colour. */
+  --color-accent-ink: oklch(0.34 0.03 295);
+
   /* ----------------------------------------------------------------------- */
   /* Neutrals / surfaces                                                     */
   /* ----------------------------------------------------------------------- */
