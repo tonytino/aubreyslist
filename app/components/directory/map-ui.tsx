@@ -158,15 +158,16 @@ const PIN_FILLS: Record<SafetyState, string> = {
  * keeps the icon legible on the fill in BOTH themes: near-white on the mid-grey
  * light fill, near-black on the dark fill.
  *
- * The dark fill is scoped here instead of re-pointing the global
- * `muted-foreground` token, which body text everywhere depends on. Dark
+ * `pin-unattested` is a dedicated token pair (app/styles/app.css), not the
+ * global `muted-foreground` that body text everywhere depends on. Dark
  * `muted-foreground` (L0.72) sits ~2.5:1 against the pin's white halo, merging
- * dot and halo over dark tiles; the same neutral hue at L0.62 gives ~3.6:1
- * halo-vs-fill (≥3:1 non-text) while the near-black index number keeps ~5.2:1
- * on the fill (AA).
+ * dot and halo over dark tiles; the token's dark value keeps the same neutral
+ * hue at L0.62 — ~3.6:1 halo-vs-fill (≥3:1 non-text) while the near-black
+ * index number keeps ~5.2:1 on the fill (AA). Its light value matches light
+ * `muted-foreground`, so light mode is unchanged.
  */
 const UNATTESTED_PIN = {
-  fill: "bg-muted-foreground text-background dark:bg-[oklch(0.62_0.02_295)]",
+  fill: "bg-pin-unattested text-background",
   Icon: CircleDashed,
   /** No safety wording at all — there is no verdict to announce. */
   label: null,
@@ -191,18 +192,29 @@ function indexNumberClass(index: number): string {
 }
 
 /**
+ * The ONE incident add-on gate: a recent incident riding any non-incident
+ * headline (a `null` headline included) both decorates the pin dot and is
+ * appended to the accessible name. `pinAccessibleName` and the badge render
+ * in `MapPinButton` must share this predicate, so the spoken and the visible
+ * incident signal can never disagree.
+ */
+function showsIncidentAddOn(vm: RestaurantCardVM): boolean {
+  return vm.hasRecentIncident && vm.safetyState !== "incident";
+}
+
+/**
  * The ONE accessible-name construction for both the pin and the mini-card
  * (`aria-label` overrides button content, so anything visual-only inside —
  * like the incident add-on chip — is invisible to AT unless folded in here).
- * A recent incident is appended whenever the headline state isn't already
- * "incident": what sighted users see (headline chip + red incident chip) is
- * exactly what screen readers hear. A `null` state contributes no safety
- * wording — sighted users see no badge either.
+ * A recent incident is appended per {@link showsIncidentAddOn}: what sighted
+ * users see (headline chip + red incident chip) is exactly what screen
+ * readers hear. A `null` state contributes no safety wording — sighted users
+ * see no badge either.
  */
 function pinAccessibleName(vm: RestaurantCardVM): string {
   const label = pinStyleFor(vm.safetyState).label;
   const parts = [vm.name, ...(label === null ? [] : [label])];
-  if (vm.hasRecentIncident && vm.safetyState !== "incident") {
+  if (showsIncidentAddOn(vm)) {
     parts.push(safetyLabel("incident"));
   }
   return parts.join(", ");
@@ -301,24 +313,25 @@ export function MapPinButton({
         <span aria-hidden="true" className={indexNumberClass(index)}>
           {index}
         </span>
-        {/* Recent-incident add-on riding a non-incident headline (a `null`
-            headline included): the dot KEEPS its headline fill and gains this
-            `incident`-token badge — the pin-scale mirror of the card's
-            headline chip + incident add-on chip, so recent harm never reads
-            clean on the map. A corner badge dot, not a second ring: the
-            selected state already owns the ring treatment (`ring-4
-            ring-brand/50`), which a full incident-red ring would collide
-            with. Its white border separates the badge from the fill and from
-            map tiles, the dot's own halo idiom. Visual-only and aria-hidden:
+        {/* Recent-incident add-on (the shared `showsIncidentAddOn` gate): the
+            dot keeps its headline fill and gains this `incident`-token badge
+            — the pin-scale mirror of the card's headline chip + incident
+            add-on chip, so recent harm never reads clean on the map. A corner
+            badge dot, not a second ring: the selected state already owns the
+            ring treatment (`ring-4 ring-brand/50`), which a full incident-red
+            ring would collide with. Its `border-2` white ring matches the
+            dot's own halo weight, so the badge still separates from the fill
+            under greyscale/CVD — the incident red is near-isoluminant with
+            the celiac-safe fill. Visual-only and aria-hidden:
             `pinAccessibleName` already folds the incident into the button's
             name, so AT hears exactly what this shows. It renders inside the
             pin button, so the carousel-above-pins safety invariant is
             untouched. */}
-        {vm.hasRecentIncident && vm.safetyState !== "incident" ? (
+        {showsIncidentAddOn(vm) ? (
           <span
             aria-hidden="true"
             data-testid="pin-incident-dot"
-            className="absolute -right-1 -top-1 size-2.5 rounded-full border border-white bg-incident"
+            className="absolute -right-1 -top-1 size-3 rounded-full border-2 border-white bg-incident"
           />
         ) : null}
       </span>
@@ -430,7 +443,8 @@ function normalizedWheelDelta(event: WheelEvent, clientWidth: number): number {
  * only a listener attached with `{ passive: false }` can actually cancel the
  * event. Hence a plain `useEffect` + `addEventListener` here instead of a
  * second prop. Assumes the container renders unconditionally once mounted
- * (`MapCarousel`'s root div never toggles away): the effect attaches once
+ * (the scroller inside `MapCarousel`'s shell never toggles away): the effect
+ * attaches once
  * against `containerEl.current` and never re-runs to chase a later-arriving
  * ref, since `containerEl` itself is a stable ref object.
  *
@@ -678,7 +692,7 @@ export function MapCarousel({
   return (
     // The band's positioning shell: it carries the `z-10` raise for the
     // carousel-above-pins safety invariant and hosts the edge-fade overlay,
-    // which must be a SIBLING of the scroller — an absolutely positioned
+    // which must be a sibling of the scroller — an absolutely positioned
     // child of a scroll container rides the scrolled content instead of
     // pinning to the band's visual edge.
     <div className="absolute inset-x-0 bottom-0 z-10">
@@ -690,7 +704,10 @@ export function MapCarousel({
         tabIndex={-1}
         onPointerDown={onUserBandInput}
         onWheel={onUserBandInput}
-        className="flex gap-3 overflow-x-auto bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        // scroll-pr-10 = the fade's width: focus-driven minimal scrolls (a
+        // tabbed-to heart/chevron) park the card clear of the fade instead of
+        // flush under its most opaque zone, so focus rings stay unwashed.
+        className="flex gap-3 overflow-x-auto scroll-pr-10 bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {entries.map(({ vm }, entryIndex) => {
           const selected = vm.id === selectedId;
@@ -892,14 +909,16 @@ export function MapCarousel({
       {/* Right-edge fade: the scrollbar is hidden, so a clipped card is the
           band's only scroll cue — this fade makes the clip read as scrollable
           (the trust row's right-edge mask idiom, at band scale). An overlay
-          ABOVE the band, deliberately NOT a mask-image on the band itself: a
+          above the band, deliberately not a mask-image on the band itself: a
           mask would make the opaque `bg-background` translucent at the edge
           and let a low pin bleed through (the safety invariant above). z-10
-          keeps it over the cards' own raised overlays (heart/chevron);
-          pointer-events-none keeps the strip fully interactive beneath it.
-          The viewport-fixed Add-listing FAB sits above at z-30, unfaded. No
-          left-edge mirror: selection and restore park the chosen card
-          flush-left, so a fade there would sit over its leading edge. */}
+          keeps it over the cards' own raised overlays (heart/chevron), and
+          the scroller's scroll-pr-10 keeps a focus-driven scroll from parking
+          those under it; pointer-events-none keeps the strip fully
+          interactive beneath it. The viewport-fixed Add-listing FAB sits
+          above at z-30, unfaded. No left-edge mirror: selection and restore
+          park the chosen card flush-left, so a fade there would sit over its
+          leading edge. */}
       <div
         aria-hidden="true"
         data-testid="carousel-edge-fade"

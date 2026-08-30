@@ -322,15 +322,14 @@ describe("DirectoryMap — pins", () => {
     expect(onSelect).toHaveBeenNthCalledWith(2, "b");
   });
 
-  it("darkens the unattested dot's dark-mode fill so it separates from the white halo", async () => {
+  it("fills the unattested dot from its own token, never the global muted-foreground", async () => {
     await renderMap();
     const dot = pinOf("New Spot").querySelector("span") as HTMLElement;
-    // Scoped to the pin, never a re-point of the global muted-foreground token:
-    // the lightened dark muted-foreground merges with the white halo (~2.5:1),
-    // so the dot carries its own darker dark-mode fill (≥3:1 vs the halo, with
-    // the near-black index number still AA on it).
-    expect(dot.className).toContain("bg-muted-foreground");
-    expect(dot.className).toContain("dark:bg-[oklch(0.62_0.02_295)]");
+    // The scoped pin-unattested pair (app/styles/app.css) darkens only the
+    // dot in dark mode: dark muted-foreground merges with the white halo
+    // (~2.5:1), and body text everywhere depends on that global token.
+    expect(dot.className).toContain("bg-pin-unattested");
+    expect(dot.className).not.toContain("bg-muted-foreground");
   });
 });
 
@@ -343,11 +342,14 @@ describe("DirectoryMap — pin incident decoration (AUB-278)", () => {
     const pin = pinOf("Harvest Table, Celiac-safe, Recent incident");
     const badge = within(pin).getByTestId("pin-incident-dot");
     expect(badge.className).toContain("bg-incident");
-    // A light border for tile separation, like the dot's own halo.
+    // A white ring at the dot's own halo weight (border-2): the incident red
+    // is near-isoluminant with the celiac-safe fill, so under greyscale/CVD
+    // the ring, not the hue, separates the badge.
+    expect(badge.className).toContain("border-2");
     expect(badge.className).toContain("border-white");
     const dot = pin.querySelector("span") as HTMLElement;
     expect(dot.className).toContain("bg-celiac-safe");
-    // The badge rides INSIDE the dot, so it can never float over a different
+    // The badge rides inside the dot, so it can never float over a different
     // card (the module's safety-correctness invariant).
     expect(dot).toContainElement(badge);
   });
@@ -390,7 +392,7 @@ describe("DirectoryMap — pin incident decoration (AUB-278)", () => {
     // shows — matching the accessible name, which appends the incident.
     const pin = pinOf("Quiet Corner, Recent incident");
     expect(within(pin).getByTestId("pin-incident-dot")).toBeInTheDocument();
-    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-muted-foreground");
+    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-pin-unattested");
   });
 });
 
@@ -436,7 +438,7 @@ describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview var
     const pin = pinOf("New Spot");
     expect(pin.textContent).toBe("3");
     // Still the neutral unattested pairing, never a safety-state fill.
-    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-muted-foreground");
+    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-pin-unattested");
   });
 
   it("keeps the number out of every accessible name — a visual correlation aid only", async () => {
@@ -518,6 +520,9 @@ describe("DirectoryMap — band right-edge fade (AUB-278)", () => {
     // Pinned to the band's right edge, fading to the band's own background.
     expect(fade.className).toContain("right-0");
     expect(fade.className).toContain("from-background");
+    // Focus-driven minimal scrolls must clear the fade: scroll-padding-right
+    // at the fade's width keeps a tabbed-to heart/chevron ring unwashed.
+    expect(screen.getByTestId("map-carousel").className).toContain("scroll-pr-10");
   });
 
   it("keeps the fade a sibling overlay of the scroller, never band content", async () => {
