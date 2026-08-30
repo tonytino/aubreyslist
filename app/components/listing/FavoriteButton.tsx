@@ -23,13 +23,14 @@ interface FavoriteButtonProps {
   listingName?: string;
   /**
    * The listing's PUBLIC save count — how many people have saved it, not this
-   * diner's own state. Absent (or 0) keeps the circular heart; a positive count
-   * widens the same control into a pill that carries "heart + 24".
+   * diner's own state. Absent or 0 keeps the circular heart; a positive count
+   * widens the same control into a pill carrying "heart + 24", so one control
+   * states both the diner's save action and the community's count.
    *
-   * One control, one concept (AUB-300): the heart and the old separate
-   * save-count pill were the same idea drawn twice, and the second one is what
-   * made the card's title row structurally variable. Merged here, the title row
-   * holds nothing but the name.
+   * Honoured only on the default chrome. A caller supplying its own `className`
+   * sizes the box for a bare glyph, so the count is dropped from the render AND
+   * from the accessible name together — an announced count with nothing on
+   * screen is its own defect.
    *
    * ADR-007: a community signal, never a safety verdict — hence the plain
    * neutral overlay chrome (no safety colour) and the "not a safety score"
@@ -37,12 +38,24 @@ interface FavoriteButtonProps {
    */
   saveCount?: number | undefined;
   /**
-   * Optional positioning/appearance override. When provided, it replaces the default
-   * browse-card overlay chrome so another surface (e.g. the listing hero) can restyle
-   * the button; the disabled-state utilities are always kept.
+   * Optional positioning/appearance override. When provided, it replaces
+   * {@link FAVORITE_OVERLAY_CHROME} so another surface (e.g. the listing hero)
+   * can restyle the button; the disabled-state utilities are always kept.
    */
   className?: string;
 }
+
+/**
+ * The overlay chrome for a heart floating on a media tile — the browse card and
+ * the map mini-card both draw it, so both import it rather than restating it.
+ * `h-9` + `min-w-9` is the shared box: an uncounted heart is a 36px circle and a
+ * counted one grows sideways into a pill of the same height, so the tile's right
+ * rail holds still. Compose with `cn` to shift it (`cn(FAVORITE_OVERLAY_CHROME,
+ * "top-2")`); passing it as `className` suppresses the count, so the browse card
+ * lets the default apply instead.
+ */
+export const FAVORITE_OVERLAY_CHROME =
+  "absolute right-3 top-3 z-10 inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
 
 /**
  * The one wording for the merged control's accessible name. The count is part
@@ -103,11 +116,11 @@ function buildReturnTo(listingId: string): string {
  * and the accessible label flips ("Save …" ↔ "Saved, remove …"); the filled heart is
  * a redundant cue, never the sole signal.
  *
- * Save count (AUB-300): a positive {@link FavoriteButtonProps.saveCount} widens
- * this same control into a pill — heart + number, with no visible "saves" word —
- * and folds the count into the accessible name. The count is a community signal,
- * not a safety score, so the pill keeps the neutral overlay chrome (never a
- * safety colour) and carries the ADR-007 tooltip saying exactly that.
+ * Save count: a positive {@link FavoriteButtonProps.saveCount} widens this same
+ * control into a pill — heart + number, with no visible "saves" word — and folds
+ * the count into the accessible name. The count is a community signal, not a
+ * safety score, so the pill keeps the neutral overlay chrome (never a safety
+ * colour) and carries the ADR-007 tooltip saying exactly that.
  *
  * Client-safe: imports only the `favorites.fn` seam, query modules, dialog, and
  * icons — never `~/server/favorites/index` or `db`.
@@ -175,8 +188,16 @@ export function FavoriteButton({
     toggleFavorite.mutate(!isFavorited);
   };
 
-  const showCount = saveCount !== undefined && saveCount > 0;
-  const accessibleLabel = favoriteAccessibleName(name, isFavorited, saveCount);
+  // The count belongs to the default chrome's box. A caller's own chrome sizes
+  // for a bare glyph, so the count leaves the render and the accessible name in
+  // one step and the two can never disagree.
+  const defaultChrome = className === undefined;
+  const showCount = defaultChrome && saveCount !== undefined && saveCount > 0;
+  const accessibleLabel = favoriteAccessibleName(
+    name,
+    isFavorited,
+    showCount ? saveCount : undefined
+  );
   const signInHref = `/api/auth/google?returnTo=${encodeURIComponent(buildReturnTo(listingId))}`;
 
   const control = (
@@ -187,24 +208,29 @@ export function FavoriteButton({
       disabled={toggleFavorite.isPending}
       onClick={handleClick}
       className={cn(
-        // Default browse-card overlay chrome — replaced wholesale when the caller
-        // passes its own `className`. `h-9` + `min-w-9` is the shared box: a
-        // countless heart stays a 36px circle, a counted one grows sideways into
-        // a pill of the same height, so the media tile's right rail never shifts.
-        className ??
-          "absolute right-3 top-3 z-10 inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand",
+        className ?? FAVORITE_OVERLAY_CHROME,
         // The count's own breathing room, only when there is a count.
-        className === undefined && showCount ? "px-2.5" : "",
+        showCount ? "px-2.5" : "",
         // Disabled-while-pending treatment is kept regardless of the override.
         "disabled:pointer-events-none disabled:opacity-60"
       )}
     >
+      {/* The saved fill takes the brand purple on the overlay chrome, where the
+          translucent neutral pill can carry it (>= 3.6:1 in both themes, WCAG
+          1.4.11). The colour sits on the glyph, not the button, so a hover does
+          not repaint a saved heart. A caller's own chrome owns its palette (the
+          hero's white-on-black rail), so there the fill inherits. Redundant
+          either way: `aria-pressed` and the accessible name carry the state. */}
       <Heart
-        className={`h-4 w-4 shrink-0 ${isFavorited ? "fill-current" : ""}`}
+        className={cn(
+          "h-4 w-4 shrink-0",
+          isFavorited && "fill-current",
+          isFavorited && defaultChrome && "text-brand-strong"
+        )}
         aria-hidden="true"
       />
       {showCount ? (
-        // Number only — no visible "saves" word (owner, PR #274). The meaning
+        // Number only — no visible "saves" word (owner decision). The meaning
         // rides on the glyph + count + the accessible name above, and
         // `aria-hidden` keeps AT from hearing the bare digits twice.
         <span

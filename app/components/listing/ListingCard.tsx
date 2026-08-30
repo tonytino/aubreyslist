@@ -5,6 +5,7 @@ import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { ActivityLine, HappyPatrons } from "~/components/listing/ListingActivity";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
+import { SCROLL_FADE_RIGHT } from "~/components/scroll-fade";
 import type { Listing } from "~/db/schema";
 import { cn } from "~/lib/utils";
 import { cityFromAddress } from "~/listings/address";
@@ -86,9 +87,9 @@ export interface RestaurantCardVM {
   accent: RestaurantCardAccent;
   /**
    * Public count of people who have saved this listing; the count hides at 0. It is
-   * carried by the {@link FavoriteButton} itself — one control, one concept
-   * (AUB-300) — which widens from a heart circle to a heart + number pill and folds
-   * the count into its accessible name. ADR-007: a community signal, never a safety
+   * carried by the {@link FavoriteButton} itself — one control for both the save
+   * action and the count — which widens from a heart circle to a heart + number
+   * pill and folds the count into its accessible name. ADR-007: a community signal, never a safety
    * verdict, so it stays out of the safety-signal row.
    */
   saveCount?: number;
@@ -191,7 +192,7 @@ export function CardLocationLine({
  * slot (a happy-patron count wins the slot) plus one suggested-variant
  * {@link ClaimBadge} per attribute.
  *
- * Uniform anatomy (AUB-300): every card renders the same SIX slots in the same order —
+ * Uniform anatomy: every card renders the same six slots in the same order —
  * media, name, location, signals row, divider, meta row — whatever the listing knows.
  * Nothing is conditionally added to or removed from the stack; only what sits INSIDE a
  * slot varies. The signals row keeps its band even with no chips to show, the divider is
@@ -283,19 +284,17 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             </>
           ) : (
             // `bg-white` is the gradient's opaque base, not a theme colour: the
-            // ramp's `/40` end stop composites over whatever sits behind it, so
-            // without a fixed base it dissolved into the near-black `bg-card` in
-            // dark mode. The accent pastels are deliberately NOT re-pointed for
-            // dark mode, so pinning the base keeps the tile the same light
-            // surface in both themes — light mode renders byte-identically (the
-            // card was already white) and dark mode stops eating the caption.
+            // ramp's `/40` end stop composites whatever is behind it through, so
+            // an opaque base is what keeps the tile light in both themes. The
+            // accent pastels are not re-pointed for dark mode either, so light
+            // mode is unaffected and dark mode gets the same light surface.
             <div
               data-testid="photo-placeholder"
               className={`flex h-full w-full items-center justify-center bg-white ${ACCENT_GRADIENTS[vm.accent]}`}
             >
-              {/* Fixed ink, never a theme-following one: the tile it sits on does
-                  not follow the theme either. `text-foreground/50` inverted to
-                  near-white here in dark mode (~1.3:1); `text-accent-ink` is
+              {/* The ink is pinned to the tile, not to the theme, because the tile
+                  is light in both. A theme-following ink inverts to near-white on
+                  this light tile in dark mode (~1.3:1); `text-accent-ink` holds
                   >= 9.2:1 on every accent, in both themes. */}
               <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent-ink">
                 Food photo
@@ -312,12 +311,13 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           10, signals→divider 12, divider→meta 12, meta→edge 12 via `pb-3`) rather
           than being a shared gap plus a pile of corrections. */}
       <div className="flex flex-1 flex-col px-4 pb-3 pt-3">
-        {/* Name — the whole title slot. Nothing shares this row (AUB-300): the save
-            count moved onto the heart, so a long name can no longer reflow anything.
-            `line-clamp-2` caps it at two lines so a 60-character name cannot make one
-            card taller than its neighbours; the FULL name stays in the media link's
-            `aria-label` above, so nothing is lost to AT or to search. `break-words`
-            keeps an unbroken long token inside the card instead of widening it. */}
+        {/* Name — the whole title slot. Nothing shares this row: the heart carries
+            the save count, so the name owns the slot and cannot reflow around a
+            sibling. `line-clamp-2` caps it at two lines so a 60-character name
+            cannot make one card taller than its neighbours; the full name stays in
+            the media link's `aria-label` above, so nothing is lost to AT or to
+            search. `break-words` keeps an unbroken long token inside the card
+            instead of widening it. */}
         <h3 className="line-clamp-2 break-words font-display text-card-title font-bold text-foreground">
           {vm.name}
         </h3>
@@ -344,7 +344,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             rendered height — `py-1` + a `text-body-sm` line + the chip border) plus
             this row's own 4px focus-ring bleed top and bottom. A card with NO chips
             keeps the identical band, so an unattested card and a five-chip card are
-            the same object at the same height (owner-approved empty band, AUB-300).
+            the same object at the same height (the empty band is an owner decision).
 
             The right-edge fade tells the truth about overflow: the same 16px mask
             the map mini-card already carries, so a clipped label reads as
@@ -353,7 +353,7 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             Fixed chip order, left to right: the headline verdict, then the incident
             add-on, then confirmed claims (evidence), then bot suggestions
             (provenance). The "Suggested by Aubrey's Bot" label is NOT part of this
-            row — it stays in the meta row's right slot (owner decision, AUB-300).
+            row — it stays in the meta row's right slot (owner decision).
 
             `relative z-10`: the suggested ClaimBadge's "AI" tooltip trigger is a real
             <button>, so this row must be raised above the stretched-link overlay or
@@ -362,7 +362,10 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
             lets a touch drag scroll the row rather than hitting the card link. */}
         <div
           data-testid="card-claim-row"
-          className="relative z-10 -mx-1 mt-1.5 flex min-h-[38px] min-w-0 items-center gap-2 overflow-x-auto px-1 py-1 [mask-image:linear-gradient(to_right,black_calc(100%_-_16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className={cn(
+            "relative z-10 -mx-1 mt-1.5 flex min-h-[38px] min-w-0 items-center gap-2 overflow-x-auto px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            SCROLL_FADE_RIGHT
+          )}
         >
           {/* No verdict (unattested or disputed) renders nothing here: the two are
               indistinguishable by design. A bot-suggested listing still shows its
@@ -420,10 +423,10 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
         </div>
       </div>
 
-      {/* Save/heart affordance, carrying the public save count (AUB-300: one control,
-          one concept — the separate lavender count pill is gone and the title row is
-          name-only). A sibling of the Link (a <button> inside an <a> is invalid HTML),
-          raised above the stretched-link overlay with `absolute … z-10`.
+      {/* Save/heart affordance, carrying the public save count: one control states
+          both the diner's save and the community's count, which is what leaves the
+          title row to the name. A sibling of the Link (a <button> inside an <a> is
+          invalid HTML), raised above the stretched-link overlay with `absolute … z-10`.
           FavoriteButton reads `["favorites"]` itself, so the VM stays per-user-free. */}
       <FavoriteButton listingId={vm.id} listingName={vm.name} saveCount={vm.saveCount} />
     </div>

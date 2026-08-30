@@ -11,6 +11,7 @@ import { useEffect, useReducer } from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
+import { SCROLL_FADE_RIGHT } from "~/components/scroll-fade";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import type { MapLoadMore } from "~/listings/use-map-pages";
 import { deriveListingActivityMeta } from "~/trust/summary";
@@ -476,12 +477,13 @@ describe("DirectoryMap — mini-card meta row mirrors ListingCard (AUB-298)", ()
     ]);
     const meta = within(cardOf("Loved Spot, Celiac-safe")).getByTestId("carousel-activity");
     const patrons = within(meta).getByTestId("happy-patrons");
-    // The bare number is all that fits at this width...
-    expect(patrons).toHaveTextContent("12");
-    expect(patrons).not.toHaveTextContent("happy");
-    // ...so the noun rides in the component's own label AND — because
-    // `aria-label` on the card hides its content — in the card's name.
-    expect(patrons).toHaveAttribute("aria-label", "12 happy patrons");
+    // The painted number is a bare digit — all that fits at this width — and it
+    // is hidden from AT so the digit is never announced alone.
+    const painted = within(patrons).getByText("12");
+    expect(painted).toHaveAttribute("aria-hidden", "true");
+    // The noun rides in real, visually-hidden text beside it...
+    expect(within(patrons).getByText("12 happy patrons")).toHaveClass("sr-only");
+    // ...and again in the card's own name, since `aria-label` hides card content.
     expect(cardOf("Loved Spot, Celiac-safe")).toHaveAccessibleName(/12 happy patrons$/);
   });
 
@@ -492,6 +494,23 @@ describe("DirectoryMap — mini-card meta row mirrors ListingCard (AUB-298)", ()
     // The divider and the activity line still render — the slot is reserved by
     // the row, not by its right-hand content.
     expect(meta.className).toContain("border-t");
+  });
+
+  it("fades the signals row from the SAME shared constant as the browse card", async () => {
+    await renderMap();
+    const row =
+      cardOf("Root & Rye, Celiac-safe").querySelector("[data-safety-state]")?.parentElement;
+    expect(row?.className).toContain(SCROLL_FADE_RIGHT);
+  });
+
+  it("composes the shared heart chrome rather than restating it", async () => {
+    await renderMap();
+    const heart = screen.getByRole("button", { name: "Save New Spot" });
+    // One overlay chrome for both card surfaces, shifted to `top-2` here so the
+    // heart and the chevron below it do not touch on this short card.
+    expect(heart.className).toContain("top-2");
+    expect(heart.className).not.toContain("top-3");
+    expect(heart).toHaveClass("bg-background/80", "min-w-9", "focus-visible:ring-brand-ring");
   });
 
   it("puts the chevron at the meta row's right end, clear of the row's content", async () => {

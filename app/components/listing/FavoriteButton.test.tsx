@@ -213,9 +213,10 @@ describe("FavoriteButton", () => {
 });
 
 /**
- * AUB-300: the heart and the browse card's separate save-count pill were one
- * concept drawn twice. They are one control now — a circle with no count, the
- * same-height pill with one.
+ * One control carries both the diner's save action and the public save count: a
+ * circle with no count, a same-height pill with one. The count is honoured only
+ * on the default chrome — a caller's own chrome sizes for a bare glyph, so the
+ * count leaves the render and the accessible name together.
  */
 describe("FavoriteButton — merged save count", () => {
   it("stays a plain circle with no count, and with a zero count", () => {
@@ -244,8 +245,45 @@ describe("FavoriteButton — merged save count", () => {
     expect(within(btn).getByTestId("save-count")).toHaveTextContent("24");
     expect(btn).not.toHaveTextContent("saves");
     // Same 36px height as the circle, grown sideways — the media tile's right
-    // rail must not shift between a counted and an uncounted card.
+    // rail must hold still whether or not a card is counted.
     expect(btn).toHaveClass("h-9", "min-w-9", "px-2.5");
+    // The house focus ring, like every neighbouring control.
+    expect(btn).toHaveClass("focus-visible:ring-2", "focus-visible:ring-brand-ring");
+  });
+
+  it("tints the SAVED heart brand on the overlay chrome, on the glyph not the button", () => {
+    renderButton({
+      signedIn: true,
+      favoriteIds: ["listing-1"],
+      ui: <FavoriteButton listingId="listing-1" listingName="Blue Sparrow" saveCount={24} />,
+    });
+    const btn = screen.getByRole("button", { name: /^Saved, remove Blue Sparrow/ });
+    const heart = btn.querySelector("svg") as SVGElement;
+    // The colour rides on the glyph, so the button's `hover:text-brand` cannot
+    // repaint a saved heart mid-hover.
+    expect(heart.getAttribute("class")).toContain("text-brand-strong");
+    expect(heart.getAttribute("class")).toContain("fill-current");
+    // Redundant with the state carriers that do not depend on sight.
+    expect(btn).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("leaves the saved heart's colour to a caller that owns the chrome", () => {
+    // The listing hero draws a white-on-black rail; a brand purple glyph there
+    // would be the one element fighting its palette.
+    renderButton({
+      signedIn: true,
+      favoriteIds: ["listing-1"],
+      ui: (
+        <FavoriteButton
+          listingId="listing-1"
+          listingName="Blue Sparrow"
+          className="size-10 rounded-full bg-black/50 text-white"
+        />
+      ),
+    });
+    const heart = screen.getByRole("button", { name: /^Saved, remove/ }).querySelector("svg");
+    expect(heart?.getAttribute("class")).toContain("fill-current");
+    expect(heart?.getAttribute("class")).not.toContain("text-brand-strong");
   });
 
   it("folds the count into the accessible name, both directions", () => {
@@ -304,9 +342,10 @@ describe("FavoriteButton — merged save count", () => {
     expect(favoriteListingMock).toHaveBeenCalledWith({ data: { listingId: "listing-1" } });
   });
 
-  it("does NOT count on a surface that passes its own chrome (the listing hero)", () => {
-    // The hero's icon-button chrome is a fixed square; a count would break it,
-    // and the hero already states the count elsewhere if it ever needs to.
+  it("drops the count from BOTH the render and the name on caller-owned chrome", () => {
+    // The hero's icon-button chrome is a fixed square that cannot hold a number.
+    // An announced count with nothing on screen is its own defect, so the two
+    // are suppressed together.
     renderButton({
       signedIn: true,
       favoriteIds: [],
@@ -314,10 +353,13 @@ describe("FavoriteButton — merged save count", () => {
         <FavoriteButton
           listingId="listing-1"
           listingName="Blue Sparrow"
+          saveCount={24}
           className="size-10 rounded-full"
         />
       ),
     });
     expect(screen.queryByTestId("save-count")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Blue Sparrow" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /24 saves/ })).not.toBeInTheDocument();
   });
 });

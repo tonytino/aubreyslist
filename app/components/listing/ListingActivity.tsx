@@ -101,12 +101,13 @@ export function ActivityLine({
  *
  * - `full` (browse card, detail hero) — glyph + the whole "12 happy patrons"
  *   phrase. The noun is visible, because there is room for it.
- * - `compact` (map mini-card, 224px) — glyph + the bare number, with the noun
- *   moved into `aria-label`. Never a naked digit to AT: without the noun "12"
- *   announced beside a safety label is exactly the ambiguity ADR-007 forbids.
- *   The mini-card is itself one `<button aria-label>`, which hides this
- *   element's own name, so `cardAccessibleName` folds the same phrase in — this
- *   label is what keeps the component honest anywhere else it is reused.
+ * - `compact` (map mini-card, 224px) — a painted bare number beside a
+ *   visually-hidden "12 happy patrons". Never a naked digit in the accessibility
+ *   tree: "12" read out beside a safety label is exactly the ambiguity ADR-007
+ *   forbids. Real text rather than `aria-label`, because a generic `<span>` has
+ *   no role to hang a name on. A surface that overrides the whole subtree's name
+ *   (the mini-card is one `<button aria-label>`) must still fold the phrase into
+ *   that name itself.
  */
 export function HappyPatrons({
   meta,
@@ -124,7 +125,6 @@ export function HappyPatrons({
   return (
     <span
       data-testid="happy-patrons"
-      {...(compact ? { "aria-label": meta.happyPatronsLabel } : {})}
       className={cn(
         "inline-flex shrink-0 items-center font-medium text-muted-foreground",
         compact ? "gap-1 tabular-nums" : "gap-1.5",
@@ -133,7 +133,10 @@ export function HappyPatrons({
     >
       <Users className={compact ? "size-3.5 shrink-0" : "h-4 w-4 shrink-0"} aria-hidden="true" />
       {compact ? (
-        <span aria-hidden="true">{meta.happyPatrons}</span>
+        <>
+          <span aria-hidden="true">{meta.happyPatrons}</span>
+          <span className="sr-only">{meta.happyPatronsLabel}</span>
+        </>
       ) : (
         <span>{meta.happyPatronsLabel}</span>
       )}

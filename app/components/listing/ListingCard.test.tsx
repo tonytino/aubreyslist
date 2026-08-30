@@ -10,6 +10,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
+import { SCROLL_FADE_RIGHT } from "~/components/scroll-fade";
 import type { Listing } from "~/db/schema";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import type { PlacePhoto } from "~/server/places-photos";
@@ -422,8 +423,8 @@ describe("RestaurantCard", () => {
 
   it("merges the save count INTO the heart — one control, one concept (AUB-300)", async () => {
     renderCard({ saveCount: 12 });
-    // There is exactly ONE save affordance on the card, and it carries the count:
-    // no separate lavender pill in the title row.
+    // One save affordance on the card, carrying the count: the title row holds
+    // nothing but the name.
     const heart = await screen.findByRole("button", { name: /^Save Acme Gluten-Free/ });
     const count = screen.getByTestId("save-count");
     expect(heart).toContainElement(count);
@@ -474,10 +475,9 @@ describe("RestaurantCard", () => {
   });
 
   it("leaves the title row to the NAME ALONE, clamped to two lines (AUB-300)", async () => {
-    // The old in-flow save pill is what made this row structurally variable.
-    // With it gone the name owns the slot, and `line-clamp-2` keeps a very long
-    // name from making one card taller than its neighbours — the full name
-    // still reaches AT and search through the media link's accessible name.
+    // The name owns the slot, so nothing can reflow it, and `line-clamp-2` keeps
+    // a very long name from making one card taller than its neighbours — the
+    // full name reaches AT and search through the media link's accessible name.
     const name = "The Extraordinarily Long Gluten-Free Bakery And Coffee House Name";
     renderCard({ name, saveCount: 8 });
     const heading = await screen.findByRole("heading");
@@ -883,14 +883,12 @@ describe("RestaurantCard — uniform six-slot anatomy (AUB-300)", () => {
     expect(full.className).toBe(bareClass);
   });
 
-  it("fades the signals row's right edge, on the same 16px mask the mini-card uses", async () => {
-    // Clipped content must read as scrollable, not truncated — and the two
-    // surfaces must not drift on how that reads.
+  it("fades the signals row's right edge from the shared row-fade constant", async () => {
+    // Clipped content must read as scrollable, not truncated. The map mini-card
+    // composes the same constant, so the two surfaces cannot drift.
     renderInRouter(<RestaurantCard vm={referenceVms.populated as RestaurantCardVM} />);
     const signals = await screen.findByTestId("card-claim-row");
-    expect(signals.className).toContain(
-      "[mask-image:linear-gradient(to_right,black_calc(100%_-_16px),transparent)]"
-    );
+    expect(signals.className).toContain(SCROLL_FADE_RIGHT);
   });
 
   it("keeps the fixed chip order: verdict, incident, confirmed, suggested", async () => {
@@ -922,11 +920,11 @@ describe("RestaurantCard — uniform six-slot anatomy (AUB-300)", () => {
   });
 
   it("draws the photo-placeholder caption in a FIXED ink on a FIXED light tile (dark-mode contrast)", async () => {
-    // `text-foreground/50` inverted to near-white in dark mode (~1.3:1) because
-    // the accent pastels are deliberately not re-pointed for dark. The caption
-    // is pinned to the tile it sits on instead (>= 9.2:1 on every accent), and
-    // the tile gets an opaque base so its `/40` gradient end cannot dissolve
-    // into the near-black card.
+    // The accent pastels are not re-pointed for dark mode, so the tile is light
+    // in both themes and a theme-following ink inverts to near-white on it
+    // (~1.3:1). The caption is pinned to the tile instead (>= 9.2:1 on every
+    // accent), and the tile carries an opaque base so its `/40` gradient end
+    // cannot composite the near-black card through.
     renderInRouter(<RestaurantCard vm={{ ...baseVm, photoUrl: null }} />);
     const tile = await screen.findByTestId("photo-placeholder");
     expect(tile.className).toContain("bg-white");
