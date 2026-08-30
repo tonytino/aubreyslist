@@ -8,7 +8,7 @@ import {
   RotateCw,
   Search,
 } from "lucide-react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, RefObject } from "react";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
@@ -370,6 +370,67 @@ function scrollCardFlushLeft(
 }
 
 /**
+ * Convert a dominant-vertical wheel step into the band's `scrollLeft` delta,
+ * normalizing `deltaMode` so a step feels the same regardless of the input
+ * device's units: `DOM_DELTA_LINE` (mouse-wheel "lines") scales by a nominal
+ * 16px line height, `DOM_DELTA_PAGE` scales by the band's own width (a "page"
+ * of horizontal scroll), and pixel deltas (`DOM_DELTA_PIXEL`, trackpads) pass
+ * through unchanged.
+ */
+function normalizedWheelDelta(event: WheelEvent, clientWidth: number): number {
+  if (event.deltaMode === 1) return event.deltaY * 16;
+  if (event.deltaMode === 2) return event.deltaY * clientWidth;
+  return event.deltaY;
+}
+
+/**
+ * Attaches the NATIVE wheel listener that lets a plain vertical mouse wheel
+ * drive the band, which the React `onWheel` prop below cannot do: React 17+
+ * delegates its synthetic `wheel` listener from the root as a PASSIVE
+ * listener (to keep the page scroll-perf path unblocked by default), so
+ * `preventDefault()` inside a React `onWheel` handler is silently ignored —
+ * only a listener attached with `{ passive: false }` can actually cancel the
+ * event. Hence a plain `useEffect` + `addEventListener` here instead of a
+ * second prop.
+ *
+ * Pass-throughs (each returns without touching the event, letting the
+ * browser's default handling run):
+ * - the band doesn't overflow — nothing to scroll, and cancelling would only
+ *   eat the page's own scroll for no reason;
+ * - `shiftKey` — the browser already remaps vertical wheel to horizontal
+ *   scroll on shift (Chrome via `deltaX`, Firefox natively); converting again
+ *   on top of that would double the distance;
+ * - `deltaX` already dominant — a trackpad's horizontal pan already drives
+ *   the band natively, so this is a vertical-only assist, not a general
+ *   wheel-to-scroll remap.
+ *
+ * Otherwise the step is converted and ALWAYS `preventDefault()`s, even right
+ * at `scrollLeft`'s min/max edge: the band floats over the map canvas
+ * (`z-10`), so a step this handler chose not to consume would otherwise fall
+ * through to the map's own wheel zoom or bubble into page scroll — an
+ * unrelated surface reacting to a gesture the visitor aimed at the carousel.
+ * Direct `scrollLeft` assignment, never `scrollTo({ behavior: "smooth" })`:
+ * wheel steps arrive as a rapid-fire sequence and need to feel 1:1 with the
+ * gesture, which also makes this inherently safe under reduced motion — an
+ * instant per-step move is state catching up to input, not an animation.
+ */
+function useWheelHorizontalScroll(containerEl: RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const container = containerEl.current;
+    if (!container) return;
+    const onWheel = (event: WheelEvent) => {
+      if (container.scrollWidth <= container.clientWidth) return;
+      if (event.shiftKey) return;
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      event.preventDefault();
+      container.scrollLeft += normalizedWheelDelta(event, container.clientWidth);
+    };
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => container.removeEventListener("wheel", onWheel);
+  }, [containerEl]);
+}
+
+/**
  * Bottom mini-card carousel, kept in sync with pin selection — identical in
  * both map paths. Each card leads its name row with the entry's index chip —
  * the same 1-based number as its pin, on the neutral `secondary` fill so the
@@ -433,6 +494,7 @@ export function MapCarousel({
   const navigate = useNavigate();
   const containerEl = useRef<HTMLDivElement | null>(null);
   const cardEls = useRef(new Map<string, HTMLDivElement>());
+  useWheelHorizontalScroll(containerEl);
   useUserSelectionChange(true, entries, selectedId, (id) => {
     const container = containerEl.current;
     const card = cardEls.current.get(id);
