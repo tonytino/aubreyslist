@@ -41,7 +41,15 @@ export function BotProvenanceLabel({
   return (
     <span
       {...props}
-      className={cn("inline-flex items-center font-semibold text-brand", sizes.root, className)}
+      // `dark:text-brand-strong`: dark-mode `brand` (lightened for dark
+      // surfaces) lands at 4.41:1 on the card's `surface` — just under the
+      // 4.5:1 AA bar at this size. `brand-strong` is the house tone for
+      // readable brand text on dark (chevrons, "Load more").
+      className={cn(
+        "inline-flex items-center font-semibold text-brand dark:text-brand-strong",
+        sizes.root,
+        className
+      )}
     >
       <Sparkles className={sizes.icon} aria-hidden="true" />
       <span>{sizes.label}</span>
