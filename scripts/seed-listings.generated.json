@@ -232,8 +232,8 @@
     "placeId": "ChIJ1TjixqWaa4cRxgvnONu4xq0",
     "name": "Holidaily Brewing Company",
     "address": "801 Brickyard Cir, Golden, CO 80403",
-    "lat": 39.7803676,
-    "lng": -105.2328209,
+    "lat": 39.7800559,
+    "lng": -105.2331397,
     "suggestedAttributes": [
       "celiac_safe"
     ],
@@ -1084,7 +1084,7 @@
   },
   {
     "placeId": "ChIJo5Y42a6La4cRPRWuWxLuR0c",
-    "name": "Infinitus Pie Broomfield",
+    "name": "Infinitus Pie Pizza Broomfield",
     "address": "145 Nickel St, Broomfield, CO 80020",
     "lat": 39.9195567,
     "lng": -105.08885079999999,
@@ -1311,17 +1311,17 @@
     "googleMapsUri": "https://maps.google.com/?cid=17115906342131248393&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
-    "placeId": "ChIJE1o0GYB-bIcR4QdDgw7MYiA",
-    "name": "Garbanzo",
-    "address": "630 S Colorado Blvd, Glendale, CO 80246",
-    "lat": 39.7053782,
-    "lng": -104.94021099999999,
+    "placeId": "ChIJ0S3mhuZnbIcRWncQeZ-URis",
+    "name": "Garbanzo Mediterranean Fresh",
+    "address": "8500 Peña Blvd Room 4766, Denver, CO 80249",
+    "lat": 39.8588781,
+    "lng": -104.673312,
     "suggestedAttributes": [
       "off_menu_gf_on_request",
       "gf_substitutes"
     ],
     "menuUrl": "https://eatgarbanzo.com/",
-    "googleMapsUri": "https://maps.google.com/?cid=2333651919635154913&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+    "googleMapsUri": "https://maps.google.com/?cid=3118343204652480346&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
     "placeId": "ChIJw9FqUex4bIcRpV-3fHDv2TQ",
@@ -1682,17 +1682,17 @@
     "googleMapsUri": "https://maps.google.com/?cid=14588461797921754321&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
-    "placeId": "ChIJXzv-5Sh_bIcRiXHv9VJ2ZMA",
-    "name": "Town Pump Provisions - Bodega",
-    "address": "2810 E 3rd Ave, Denver, CO 80206",
-    "lat": 39.7208471,
-    "lng": -104.9542807,
+    "placeId": "ChIJ7Q1jYtB4bIcRStZdE6TujAA",
+    "name": "Modern Market Eatery - Champa",
+    "address": "900 16th St Mall, Denver, CO 80202",
+    "lat": 39.746598999999996,
+    "lng": -104.9942896,
     "suggestedAttributes": [
       "dedicated_gf_menu",
       "gf_substitutes"
     ],
     "menuUrl": "https://www.modernmarket.com/",
-    "googleMapsUri": "https://maps.google.com/?cid=13863335651638735241&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
+    "googleMapsUri": "https://maps.google.com/?cid=39668885206455882&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA"
   },
   {
     "placeId": "ChIJiQPbK2OMbIcREENDDqSw1VA",
