@@ -685,6 +685,123 @@ describe("DirectoryMap — carousel scrolls the selected card flush-left", () =>
   });
 });
 
+describe("DirectoryMap — wheel-to-horizontal-scroll (AUB-301)", () => {
+  // jsdom always reports scrollWidth/clientWidth as 0, so the overflow check
+  // (and every other branch keyed on the band's size) needs both stubbed per
+  // test; scrollLeft itself is a plain settable property jsdom already
+  // supports, no stub needed.
+  function stubBandWidth(carousel: HTMLElement, { scrollWidth = 2000, clientWidth = 500 } = {}) {
+    Object.defineProperty(carousel, "scrollWidth", { value: scrollWidth, configurable: true });
+    Object.defineProperty(carousel, "clientWidth", { value: clientWidth, configurable: true });
+  }
+
+  it("scrolls a deltaY-dominant wheel into scrollLeft and cancels the event", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, cancelable: true, bubbles: true })
+    );
+    // dispatchEvent returns false iff preventDefault() was called.
+    expect(notCanceled).toBe(false);
+    expect(carousel.scrollLeft).toBe(100);
+  });
+
+  it("scrolls back on negative deltaY", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 50;
+    carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -30, cancelable: true, bubbles: true })
+    );
+    expect(carousel.scrollLeft).toBe(20);
+  });
+
+  it("leaves shift+wheel untouched — the browser's native shift-remap already scrolls it", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, shiftKey: true, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+
+  it("leaves a deltaX-dominant wheel untouched — a trackpad's horizontal pan already works natively", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaX: 100, deltaY: 5, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+
+  it("leaves the band untouched when it does not overflow (nothing to scroll)", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel, { scrollWidth: 500, clientWidth: 500 });
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+
+  it("normalizes DOM_DELTA_LINE (deltaMode 1) to 40px per line", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 2, deltaMode: 1, cancelable: true, bubbles: true })
+    );
+    expect(carousel.scrollLeft).toBe(80);
+  });
+
+  it("normalizes DOM_DELTA_PAGE (deltaMode 2) to deltaY × the band's clientWidth", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel, { scrollWidth: 2000, clientWidth: 500 });
+    carousel.scrollLeft = 0;
+    carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 1, deltaMode: 2, cancelable: true, bubbles: true })
+    );
+    expect(carousel.scrollLeft).toBe(500);
+  });
+
+  it("leaves ctrl+wheel untouched — a page/pinch-zoom gesture, never carousel input", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, ctrlKey: true, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+
+  it("leaves meta+wheel untouched — Firefox/macOS cmd+scroll zoom", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, metaKey: true, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+});
+
 describe("DirectoryMap — mini-card navigation (AUB-283)", () => {
   it("navigates to the listing when the already-selected card is tapped (no re-select)", async () => {
     const { onSelect, router } = await renderMap("a");
