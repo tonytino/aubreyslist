@@ -80,13 +80,26 @@ Rules every trust-related feature must honor:
   ago") **regardless of** how many older confirmations exist. Never let old
   confirmations bury fresh harm.
 - **A disputed headline claim shows nothing** (ADR-016). When disputes tie or
-  outnumber confirms on the celiac claim, the listing renders no badge, no
-  freshness cue, and no evidence counts at glance level (cards, map pins,
+  outnumber confirms on the celiac claim, the listing renders no badge and no
+  confirmation-derived evidence counts at glance level (cards, map pins,
   detail hero, filters) — indistinguishable from an unattested listing. The
   confirm/dispute counts stay visible on the claim row, and incident signals
   are exempt. Copy shared by the two cases must state only what is true of
   both ("not confirmed celiac-safe"); "Not yet attested" is false on a
   contested claim and must never stand in for the no-verdict glance.
+- **The meta row reads activity, not safety.** Every card, map mini-card and
+  detail hero carries the same line: "Updated 3 days ago", from the most recent
+  attestation on any visible claim of the listing, confirms and disputes alike
+  (incidents keep their own signal and never bump it). Beside it, "N happy
+  patrons" counts the distinct people who confirmed a claim here and never
+  reported an incident, hidden at zero. This line is deliberately outside the
+  suppression above and shows for a contested listing too, which is only honest
+  because the clarifier always travels with it: "Reflects recent claim activity
+  on this listing, not a safety verification." Every surface that can host an
+  interactive trigger carries it as a tap-reachable tooltip. The map mini-card
+  is a single button, so it mirrors the line as plain text and carries a short
+  clarifier in its accessible name instead. Never phrase the line as a
+  verification, and never ship it without its clarifier.
 - **One vote per user per claim.** No ballot-stuffing. A user may change or
   retract their own attestation.
 - **The summary must remain explainable.** Anything shown in the roll-up must be

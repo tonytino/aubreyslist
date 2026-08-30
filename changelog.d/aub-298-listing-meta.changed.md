@@ -1,0 +1,2 @@
+- `[manual]` Browse cards now share one uniform layout, the recency line reads "Updated" and reflects any claim activity (tap it for details), and "happy patrons" counts visitors who confirmed a claim and reported no incident.
+- `[manual]` A listing detail page now shows the bot-suggested celiac-safe chip its browse card shows, so the two read the same.

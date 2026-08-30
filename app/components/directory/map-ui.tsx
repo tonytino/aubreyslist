@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ChevronRight,
   CircleDashed,
+  Clock,
   LoaderCircle,
   LocateFixed,
   Plus,
@@ -20,6 +21,7 @@ import {
 import { SafetySignal, type SafetyState, safetyIcon, safetyLabel } from "~/components/SafetySignal";
 import { prefersReducedMotion } from "~/lib/motion";
 import type { MapLoadMore } from "~/listings/use-map-pages";
+import { ACTIVITY_NAME_CLARIFIER } from "~/trust/summary";
 
 /**
  * Shared presentational pieces of the directory Map view: the safety-pin
@@ -74,14 +76,15 @@ const MAP_CONTROL_SURFACE =
 
 /**
  * Approximate rendered height of the opaque carousel band in px — the ONE
- * retune point when the mini-cards change size: `pt-3` (12) + card (~92: `py-2`
- * + name + location line + 30px chip row + border) + `pb-3` (12). Derived from
- * it: the live map's `FIT_PADDING.bottom` and selection-pan offset
- * (`DirectoryMapLive.tsx`) and the recenter FAB's `bottom-[128px]` (band + a
+ * retune point when the mini-cards change size: `pt-3` (12) + card (~121:
+ * `py-2` + name + location line + 30px chip row + the meta row's divider +
+ * `mt-1.5`/`pt-1.5` + caption line + border) + `pb-3` (12). Derived from it:
+ * the live map's `FIT_PADDING.bottom` and selection-pan offset
+ * (`DirectoryMapLive.tsx`) and the recenter FAB's `bottom-[157px]` (band + a
  * 12px gap — Tailwind can't interpolate a JS constant into a class, so that
  * one is restated below).
  */
-export const CAROUSEL_BAND_PX = 116;
+export const CAROUSEL_BAND_PX = 145;
 
 /**
  * Invoke `onUserSelect` exactly when a selection change was caused by a user
@@ -212,6 +215,13 @@ function pinAccessibleName(vm: RestaurantCardVM): string {
 function cardAccessibleName(vm: RestaurantCardVM): string {
   const parts = [pinAccessibleName(vm), ...cardLocationParts(vm)];
   if (!vm.safetyState && vm.suggestedByBot) parts.push("suggested by Aubrey's Bot");
+  // The meta row's activity line, which `aria-label` would otherwise hide.
+  // A dated line gets the short clarifier appended, because "Updated 3 days
+  // ago" announced right after a safety label is the one phrasing that could
+  // be heard as a verification. The empty state asserts nothing, so it stays
+  // bare rather than adding a sentence to every unattested card in the band.
+  parts.push(vm.activity.updatedLabel);
+  if (vm.activity.hasActivity) parts.push(ACTIVITY_NAME_CLARIFIER);
   return parts.join(", ");
 }
 
@@ -293,7 +303,7 @@ export function MapPinButton({
 /**
  * Recenter FAB. In the live map path `onClick` re-fits the camera to the
  * current pins; in the CSS-placeholder fallback it is passed no handler and
- * stays an unwired affordance. `bottom-[128px]` = {@link CAROUSEL_BAND_PX} +
+ * stays an unwired affordance. `bottom-[157px]` = {@link CAROUSEL_BAND_PX} +
  * a 12px gap, restated as a literal because Tailwind arbitrary values can't
  * interpolate a JS constant.
  */
@@ -303,7 +313,7 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
       type="button"
       aria-label="Recenter map"
       {...(onClick ? { onClick } : {})}
-      className={`absolute bottom-[128px] right-4 z-[11] inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}
+      className={`absolute bottom-[157px] right-4 z-[11] inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}
     >
       <LocateFixed className="size-5" strokeWidth={2.25} aria-hidden="true" />
     </button>
@@ -668,14 +678,32 @@ export function MapCarousel({
                     clean on the map. */}
                 {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
               </span>
+              {/* Meta row — the browse card's anatomy (divider + activity line),
+                  mirrored as closely as a 200px card allows: the activity line
+                  only, since the happy-patron count cannot share this width with
+                  it. Plain text, not the tooltip trigger the browse card and the
+                  detail hero use: a <button> inside this card's own <button>
+                  would be invalid HTML and a nested-interactive a11y defect. The
+                  clarifier reaches AT through `cardAccessibleName` instead,
+                  which also folds in the line itself (`aria-label` hides button
+                  content). `mr-12` clears the chevron overlay (`right-3` +
+                  `size-9` = 48px), which sits at this row's height. */}
+              <span
+                data-testid="carousel-activity"
+                className="mr-12 mt-1.5 flex items-center gap-1.5 border-t border-border pt-1.5 text-caption text-muted-foreground"
+              >
+                <Clock className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{vm.activity.updatedLabel}</span>
+              </span>
             </button>
 
             <FavoriteButton
               listingId={vm.id}
               listingName={vm.name}
-              // The default overlay chrome with `top-2` instead of `top-3`:
-              // on the ~92px mini-card the heart and the chevron below it
-              // would otherwise touch, so the heart gives the pair its gap.
+              // The default overlay chrome with `top-2` instead of `top-3`: the
+              // heart and the chevron below it would otherwise touch on a card
+              // this short (see {@link CAROUSEL_BAND_PX} for the card's height
+              // breakdown), so the heart gives the pair its gap.
               className="absolute right-3 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand"
             />
 

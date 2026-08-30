@@ -25,6 +25,7 @@ import { formatDistanceLabel } from "~/trust/browse-card-format";
 import { deriveListingTrustGlance, type ListingTrustGlance } from "~/trust/browse-glance";
 import { findRecentIncident, toCalendarDayString } from "~/trust/incident-recency";
 import { DEFAULT_STALENESS_MONTHS, stalenessCutoff } from "~/trust/summary";
+import { getListingActivityByListing } from "./activity";
 import { buildBrowseWhere } from "./filter";
 import { buildQuickFilterPredicate } from "./quick-filter";
 import { buildSearchPredicate } from "./search";
@@ -44,7 +45,9 @@ import { buildSearchPredicate } from "./search";
  *   3. each page-listing's incidents, one `IN (…)` query reduced to a
  *      recent-incident boolean per listing via `findRecentIncident`, and
  *   4. which claim attributes still carry a live curator-bot suggestion, one
- *      `IN (…)` query.
+ *      `IN (…)` query, and
+ *   5. the listing-activity pair behind the meta row (last attestation instant
+ *      + happy patrons), one grouped `IN (…)` query.
  * The trust glance is then derived purely (`deriveListingTrustGlance`) from
  * those visible aggregates — a roll-up of visible evidence, never a score.
  *
@@ -446,10 +449,11 @@ export async function getBrowseListings(
 
 /**
  * Build browse cards — each listing paired with its at-a-glance trust. Owns
- * only the trust-glance derivation (ADR-007): it batches the four visible
+ * only the trust-glance derivation (ADR-007): it batches the five visible
  * signals (the headline celiac aggregate, the recent-incident dates, the live
- * bot-suggested attribute set, and the confirmed non-headline attribute set)
- * and reduces each listing to a pure {@link ListingTrustGlance} via
+ * bot-suggested attribute set, the confirmed non-headline attribute set, and
+ * the listing-activity pair behind the card's meta row) and reduces each
+ * listing to a pure {@link ListingTrustGlance} via
  * {@link deriveListingTrustGlance}.
  *
  * Distance-agnostic by design: the "0.4 mi" `distanceLabel` is a browse-only
@@ -457,7 +461,7 @@ export async function getBrowseListings(
  * can reuse this helper without change. Cards come back in the same order as
  * `listings`.
  *
- * No N+1: the four signal queries batch across all `listings` at once.
+ * No N+1: the five signal queries batch across all `listings` at once.
  *
  * Server-only: drives the db-backed aggregate helpers below, so it must never
  * be imported into client code (same rule as the rest of this module).
@@ -479,13 +483,19 @@ export async function buildBrowseCards(
 
   const listingIds = listings.map((listing) => listing.id);
 
-  const [celiacAggregates, recentIncidentDates, botSuggestedAttributes, confirmedAttributes] =
-    await Promise.all([
-      getCeliacAggregatesByListing(listingIds),
-      getRecentIncidentDatesByListing(listingIds, now),
-      getBotSuggestedAttributesByListing(listingIds),
-      getConfirmedAttributesByListing(listingIds),
-    ]);
+  const [
+    celiacAggregates,
+    recentIncidentDates,
+    botSuggestedAttributes,
+    confirmedAttributes,
+    activityByListing,
+  ] = await Promise.all([
+    getCeliacAggregatesByListing(listingIds),
+    getRecentIncidentDatesByListing(listingIds, now),
+    getBotSuggestedAttributesByListing(listingIds),
+    getConfirmedAttributesByListing(listingIds),
+    getListingActivityByListing(listingIds),
+  ]);
 
   return listings.map((listing) => {
     const celiac = celiacAggregates.get(listing.id) ?? null;
@@ -496,7 +506,8 @@ export async function buildBrowseCards(
       now,
       stalenessMonths,
       botSuggestedAttributes.get(listing.id) ?? [],
-      confirmedAttributes.get(listing.id) ?? []
+      confirmedAttributes.get(listing.id) ?? [],
+      activityByListing.get(listing.id) ?? null
     );
     return { listing, glance };
   });

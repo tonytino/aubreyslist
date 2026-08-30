@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { forwardRef, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
+import { deriveListingActivityMeta } from "~/trust/summary";
 import { DirectoryMapLive } from "./DirectoryMapLive";
 import { CAROUSEL_BAND_PX, type DirectoryMapEntry } from "./map-ui";
 
@@ -112,6 +113,7 @@ function vm(overrides: Partial<RestaurantCardVM>): RestaurantCardVM {
     suggestedAttributes: [],
     confirmedAttributes: [],
     hasRecentIncident: false,
+    activity: deriveListingActivityMeta(null),
     accent: "lavender",
     ...overrides,
   };

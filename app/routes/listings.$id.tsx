@@ -1,7 +1,7 @@
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, notFound, stripSearchParams } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { CircleCheck, MapPin, Users } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { z } from "zod";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { ClaimDeckSection } from "~/components/listing/ClaimDeckSection";
@@ -9,11 +9,11 @@ import { CommunityClaims, claimsQueryKey } from "~/components/listing/CommunityC
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
 import { FlagControl } from "~/components/listing/FlagControl";
 import { HeroPhoto } from "~/components/listing/HeroPhoto";
+import { HeroTrustBar } from "~/components/listing/HeroTrustBar";
 import { IncidentReports, incidentsQueryKey } from "~/components/listing/IncidentReports";
 import { ListingLinks, listingLinksQueryKey } from "~/components/listing/ListingLinks";
 import { ListingMap } from "~/components/listing/ListingMap";
 import { RecentIncidentBanner } from "~/components/listing/RecentIncidentBanner";
-import { SafetySummary } from "~/components/listing/SafetySummary";
 import { Card, CardContent } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { absoluteUrl, breadcrumbJsonLd, canonicalLink, jsonLdScript, pageSeoMeta } from "~/lib/seo";
@@ -27,25 +27,35 @@ import { getListingClaimAggregates } from "~/server/attestations/listing-summary
 import { getCurrentUser } from "~/server/auth/current-user";
 import { fetchIncidents } from "~/server/incidents/incidents.fn";
 import { fetchListingLinks } from "~/server/listing-links/links.fn";
+import { getListingActivity } from "~/server/listings/activity";
 import { fetchListing } from "~/server/listings/get-listing.fn";
 import { isHttpUrl } from "~/server/listings/url";
 import { getSetting } from "~/server/settings";
+import { deriveHeroClaimChips } from "~/trust/hero-chips";
 import { findRecentIncident } from "~/trust/incident-recency";
-import {
-  deriveHeadlineMeta,
-  deriveHeadlineSafetyState,
-  hasEvidence,
-  hasPositiveConsensus,
-} from "~/trust/summary";
+import { deriveHeadlineSafetyState, deriveListingActivityMeta } from "~/trust/summary";
 
 /**
  * Server-only loader for a listing's claims with their aggregates (confirm/
  * dispute counts + recency) in one batched query — the transparent trust
- * roll-up the detail page renders (ADR-007). Reads are open/anonymous.
+ * roll-up the detail page renders (ADR-007) — plus the listing's activity pair
+ * (last attestation instant + happy patrons) behind the hero's meta strip.
+ * Reads are open/anonymous.
+ *
+ * The two travel together so one invalidation after a vote refreshes both: a
+ * viewer who just confirmed a claim sees the counts AND the "Updated just now"
+ * line move in the same paint, instead of an activity line stuck at its
+ * page-load value.
  */
 const getListingClaims = createServerFn({ method: "GET" })
   .validator(z.object({ id: z.string().min(1) }))
-  .handler(({ data: { id } }) => getListingClaimAggregates({ listingId: id }));
+  .handler(async ({ data: { id } }) => {
+    const [claims, activity] = await Promise.all([
+      getListingClaimAggregates({ listingId: id }),
+      getListingActivity(id),
+    ]);
+    return { claims, activity };
+  });
 
 /**
  * Server-only read of the admin-tunable staleness window (ADR-007), so the
@@ -195,7 +205,8 @@ function ListingDetail() {
   const { tab } = Route.useSearch();
   const navigate = Route.useNavigate();
   const { data: incidents } = useSuspenseQuery(incidentsQueryOptions(listing.id));
-  const { data: claims } = useSuspenseQuery(claimsQueryOptions(listing.id));
+  const { data: claimsData } = useSuspenseQuery(claimsQueryOptions(listing.id));
+  const { claims, activity } = claimsData;
   const { data: linksData } = useSuspenseQuery(listingLinksQueryOptions(listing.id));
   const preview = useListingPreview();
   const now = new Date(nowMs);
@@ -212,30 +223,21 @@ function ListingDetail() {
     ? deriveHeadlineSafetyState(headlineClaim, now, stalenessMonths)
     : null;
 
-  // At-a-glance metadata mirrored from the browse card, through the shared
-  // trust seam so the two surfaces suppress in lockstep: a contested headline
-  // claim yields neither cue, exactly as `deriveListingTrustGlance` withholds
-  // the card's freshness cue and evidence meta. Honest either way — an item is
-  // omitted rather than fabricated when its value isn't available. A
-  // distinct-contributor count is not loaded on this route, so it is omitted
-  // rather than invented.
-  const { verifiedRelative, confirmations } = deriveHeadlineMeta(headlineClaim, now);
+  // The hero's meta strip, mirrored from the browse card through the shared
+  // pure seam so the two surfaces phrase activity identically. Deliberately
+  // NOT gated on the headline verdict (owner decision 2026-08-25): it reports
+  // claim activity, not a verification, and the line says so in its tooltip.
+  // The badge suppression above is untouched — a contested listing still earns
+  // no badge and no confirmation-derived reassurance.
+  const activityMeta = deriveListingActivityMeta(activity, now);
 
-  // The non-headline claim badges relevant to this listing (e.g. "Off-menu GF
-  // on request"): every attribute besides the headline that either has real
-  // positive community consensus, or — while there's no evidence yet — is a
-  // live curator-bot suggestion (ADR-007: a suggestion never coexists with
-  // real evidence for the same attribute, guarded here the same way
-  // `summarizeClaim` does). Rendered via the shared `ClaimBadge` so this row
-  // and the browse cards' suggested badges stay visually consistent.
-  const nonHeadlineClaimBadges = claims
-    .filter((claim) => claim.attribute !== "celiac_safe")
-    .map((claim) => ({
-      attribute: claim.attribute,
-      confirmed: hasPositiveConsensus(claim),
-      suggested: claim.suggested && !hasEvidence(claim),
-    }))
-    .filter((claim) => claim.confirmed || claim.suggested);
+  // The hero's claim chips — confirmed non-headline attributes, then live bot
+  // suggestions (the headline included, which is the one state where it earns
+  // a chip: the hero renders nothing for a suggestion). Evidence before
+  // provenance, the browse card's order, through the same shared `ClaimBadge`,
+  // so the two surfaces read identically for the same listing. The rule itself
+  // lives in the pure `deriveHeroClaimChips`, pinned against the card's glance.
+  const heroClaimBadges = deriveHeroClaimChips(claims);
 
   const claimsCount = claims.length;
   const incidentsCount = incidents.length;
@@ -336,42 +338,22 @@ function ListingDetail() {
           </div>
         </div>
 
-        {/* Solid bar below the media: the one safety-badge row for this
-            listing plus the at-a-glance metadata strip mirrored from the
-            browse card. `SafetySummary`'s hero variant owns the whole row:
-            the headline celiac-safe/stale badge (or, with no verdict, honest
-            guidance and no badge at all) plus the recent-incident badge,
-            scrolling horizontally on overflow rather than wrapping. */}
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-card">
-          <SafetySummary
-            state={safetyState}
-            variant="hero"
-            hasRecentIncident={recentIncident !== null}
-          />
-          {verifiedRelative || confirmations > 0 ? (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-muted-foreground">
-              {verifiedRelative ? (
-                <span className="inline-flex items-center gap-1.5 font-medium">
-                  <CircleCheck aria-hidden="true" className="size-4 text-celiac-safe" />
-                  Verified {verifiedRelative}
-                </span>
-              ) : null}
-              {confirmations > 0 ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <Users aria-hidden="true" className="size-4" />
-                  {confirmations} confirmation{confirmations === 1 ? "" : "s"}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+        {/* Solid bar below the media: the safety verdict, then the activity
+            strip in its own fixed slot. `HeroTrustBar` owns that stacking, so
+            the strip reads as the same row in the same place whichever badge,
+            prose, or combination the verdict renders. */}
+        <HeroTrustBar
+          safetyState={safetyState}
+          hasRecentIncident={recentIncident !== null}
+          activity={activityMeta}
+        />
 
-        {/* Non-headline claim badges: a second row, so every confirmed or
-            bot-suggested attribute — not just the headline state — is visible
-            at a glance instead of buried in the Claims tab below. */}
-        {nonHeadlineClaimBadges.length > 0 ? (
+        {/* Claim chips: a second row, so every confirmed attribute and every
+            live bot suggestion is visible at a glance instead of buried in the
+            Claims tab below. */}
+        {heroClaimBadges.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-border px-card pb-card pt-3">
-            {nonHeadlineClaimBadges.map((claim) => (
+            {heroClaimBadges.map((claim) => (
               <ClaimBadge
                 key={claim.attribute}
                 attribute={claim.attribute}

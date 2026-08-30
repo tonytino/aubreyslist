@@ -14,6 +14,7 @@ import type { Listing } from "~/db/schema";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import type { PlacePhoto } from "~/server/places-photos";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
+import { deriveListingActivityMeta } from "~/trust/summary";
 import {
   CARD_PHOTO_MAX_WIDTH_PX,
   ListingCard,
@@ -44,6 +45,17 @@ vi.mock("~/server/favorites/favorites.fn", () => ({
  * resolve its href without the full app route tree.
  */
 
+/** An empty activity strip — the honest "nobody has attested this" reading. */
+const noActivity = deriveListingActivityMeta(null);
+
+/** An activity strip N days old with `happyPatrons` happy patrons. */
+function activity(daysAgo: number, happyPatrons: number) {
+  return deriveListingActivityMeta({
+    lastActivityAt: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
+    happyPatrons,
+  });
+}
+
 const baseVm: RestaurantCardVM = {
   id: "listing-1",
   name: "Acme Gluten-Free",
@@ -53,6 +65,7 @@ const baseVm: RestaurantCardVM = {
   suggestedAttributes: [],
   confirmedAttributes: [],
   hasRecentIncident: false,
+  activity: noActivity,
   accent: "lavender",
 };
 
@@ -121,6 +134,7 @@ const cityLessVm: RestaurantCardVM = {
   suggestedAttributes: [],
   confirmedAttributes: [],
   hasRecentIncident: false,
+  activity: noActivity,
   accent: "mint",
 };
 
@@ -228,7 +242,7 @@ describe("RestaurantCard", () => {
     expect(document.querySelector("[data-safety-state]")).not.toBeInTheDocument();
   });
 
-  it("labels a bot-suggested card 'Suggested by Aubrey's Bot' in the META ROW's freshness slot (owner nits 7+8)", async () => {
+  it("labels a bot-suggested card 'Suggested by Aubrey's Bot' in the META ROW (owner nits 7+8)", async () => {
     renderCard({
       safetyState: null,
       suggestedByBot: true,
@@ -236,7 +250,7 @@ describe("RestaurantCard", () => {
     });
     const label = await screen.findByTestId("bot-provenance");
     expect(label).toHaveTextContent("Suggested by Aubrey's Bot");
-    // The label lives in the meta row (the freshness slot), not the safety row —
+    // The label lives in the meta row, not the safety row —
     // bot-suggested cards read uniformly with verified ones.
     expect(screen.getByTestId("card-meta-row")).toContainElement(label);
     // The suggestion replaces the (absent) safety badge — never a fabricated verdict.
@@ -257,16 +271,16 @@ describe("RestaurantCard", () => {
     expect(screen.getByTestId("bot-provenance")).toHaveTextContent("Suggested by Aubrey's Bot");
   });
 
-  it("gives a REAL freshness cue the meta-row slot over the bot label (evidence over provenance)", async () => {
+  it("gives the happy-patron count the meta-row slot over the bot label (evidence over provenance)", async () => {
     renderCard({
       safetyState: "celiac-safe",
       suggestedByBot: true,
       suggestedAttributes: ["dedicated_fryer"],
-      freshness: { kind: "fresh", label: "Verified 4d ago" },
+      activity: activity(4, 3),
     });
-    expect(await screen.findByText("Verified 4d ago")).toBeInTheDocument();
-    // The freshness cue wins the slot; the per-claim suggested badge still
-    // carries the provenance.
+    expect(await screen.findByText("3 happy patrons")).toBeInTheDocument();
+    // The count wins the slot; the per-claim suggested badge still carries the
+    // provenance.
     expect(screen.queryByTestId("bot-provenance")).not.toBeInTheDocument();
     expect(screen.getByTestId("suggested-attribute")).toBeInTheDocument();
   });
@@ -486,67 +500,105 @@ describe("RestaurantCard", () => {
     expect(link).toHaveAccessibleName("Acme Gluten-Free, Denver");
   });
 
-  it("renders evidence counts when present", async () => {
-    renderCard({ evidence: { confirmations: 128, contributors: 41 } });
-    expect(await screen.findByText("128 confirmations · 41 neighbors")).toBeInTheDocument();
+  it("renders the activity line and the happy-patron count in the meta row", async () => {
+    renderCard({ activity: activity(3, 128) });
+    expect(await screen.findByText("Updated 3 days ago")).toBeInTheDocument();
+    expect(screen.getByText("128 happy patrons")).toBeInTheDocument();
   });
 
-  it("renders a freshness cue with its label when present", async () => {
-    renderCard({ freshness: { kind: "fresh", label: "Verified 3d ago" } });
-    expect(await screen.findByText("Verified 3d ago")).toBeInTheDocument();
+  it("renders the count in the singular at one happy patron", async () => {
+    renderCard({ activity: activity(3, 1) });
+    expect(await screen.findByText("1 happy patron")).toBeInTheDocument();
   });
 
-  it("reserves the meta-row space with an invisible placeholder when freshness, evidence AND bot label are all absent (AUB-194)", async () => {
-    // A bare unattested VM has no freshness cue, no evidence counts, and no bot
-    // provenance, but its card must keep the same body height as a fully-
-    // attested card — the meta row always renders, swapping in an invisible
-    // height-reserving line.
+  it("hides the happy-patron count at zero rather than showing '0 happy patrons'", async () => {
+    renderCard({ activity: activity(3, 0) });
+    await screen.findByText("Updated 3 days ago");
+    expect(screen.queryByTestId("happy-patrons")).not.toBeInTheDocument();
+    expect(screen.queryByText(/happy patron/)).not.toBeInTheDocument();
+  });
+
+  it("gives EVERY card the same anatomy: a real divider + a real meta row (AUB-298)", async () => {
+    // The uniform-anatomy rule: a card with nothing to report must not vary
+    // structurally from a fully-attested one. It says "No activity yet" rather
+    // than reserving an invisible line behind a transparent divider.
     renderCard({ safetyState: null, suggestedByBot: false });
     await screen.findByTestId("card-claim-row");
 
     const metaRow = screen.getByTestId("card-meta-row");
-    expect(metaRow).toBeInTheDocument();
-    const placeholder = screen.getByTestId("card-meta-placeholder");
-    expect(metaRow).toContainElement(placeholder);
-    // Hidden from paint and the accessibility tree, but still occupying layout —
-    // `invisible` (visibility: hidden) keeps the box, unlike `hidden`.
-    expect(placeholder).toHaveClass("invisible");
-    expect(placeholder).toHaveAttribute("aria-hidden", "true");
-    // The reserved row keeps the same vertical rhythm as the real one (top
-    // margin + padding), with a transparent border so no stray divider shows.
-    expect(metaRow).toHaveClass("mt-3", "pt-3", "border-t", "border-transparent");
+    expect(metaRow).toHaveClass("mt-3", "pt-3", "border-t", "border-border");
+    expect(metaRow.className).not.toContain("border-transparent");
+    expect(screen.queryByTestId("card-meta-placeholder")).not.toBeInTheDocument();
+    // The honest empty state, visible (not `invisible`) and readable by AT.
+    const line = screen.getByTestId("activity-line");
+    expect(metaRow).toContainElement(line);
+    expect(line).toHaveTextContent("No activity yet");
+    expect(line.className).not.toContain("invisible");
+    expect(line).not.toHaveAttribute("aria-hidden");
   });
 
-  it("renders the REAL meta row (no placeholder, same rhythm) for a bot-suggested card (AUB-194)", async () => {
-    // A bot-suggested card fills the reserved slot with the provenance label —
-    // same row composition and vertical rhythm, so heights stay equalized.
+  it("keeps that same anatomy for a bot-suggested card and an attested one", async () => {
+    // Same row composition and vertical rhythm across the three cases the owner
+    // screenshotted as structurally different.
     renderCard({
       safetyState: null,
       suggestedByBot: true,
       suggestedAttributes: ["gf_substitutes"],
     });
     await screen.findByTestId("bot-provenance");
-
-    const metaRow = screen.getByTestId("card-meta-row");
-    expect(metaRow).toHaveClass("mt-3", "pt-3", "border-t", "border-border");
-    expect(screen.queryByTestId("card-meta-placeholder")).not.toBeInTheDocument();
+    expect(screen.getByTestId("card-meta-row")).toHaveClass(
+      "mt-3",
+      "pt-3",
+      "border-t",
+      "border-border"
+    );
+    expect(screen.getByTestId("activity-line")).toHaveTextContent("No activity yet");
   });
 
-  it("renders the REAL meta row (no placeholder) when freshness or evidence is present", async () => {
-    renderCard({
-      freshness: { kind: "fresh", label: "Verified 3d ago" },
-      evidence: { confirmations: 2, contributors: 3 },
-    });
-    expect(await screen.findByText("Verified 3d ago")).toBeInTheDocument();
-    expect(screen.getByText("2 confirmations · 3 neighbors")).toBeInTheDocument();
+  it("opens the activity clarifier on tap, so touch users can reach it", async () => {
+    // A hover-only tooltip is unreachable on a phone, and this clarifier is the
+    // only thing keeping "Updated …" from reading as a safety verification.
+    renderCard({ activity: activity(3, 2) });
+    const line = await screen.findByTestId("activity-line");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
-    const metaRow = screen.getByTestId("card-meta-row");
-    // The real row draws its divider; the invisible placeholder is not rendered.
-    expect(metaRow).toHaveClass("border-border");
-    expect(screen.queryByTestId("card-meta-placeholder")).not.toBeInTheDocument();
-    // Same vertical-rhythm classes as the reserved variant, so both render the
-    // same row height in a grid.
-    expect(metaRow).toHaveClass("mt-3", "pt-3", "border-t");
+    fireEvent.pointerDown(line);
+
+    const tip = await screen.findByRole("tooltip");
+    // Pinned verbatim, both sentences: the clarifier disclaims safety AND
+    // defines the count sitting next to it.
+    expect(tip).toHaveTextContent(
+      "Reflects recent claim activity on this listing, not a safety verification. " +
+        "Happy patrons counts people who confirmed a claim here and reported no incident."
+    );
+
+    // A second tap closes it: Radix's own pointer-down close is suppressed
+    // (preventDefault) so the two handlers cannot fight and leave it stuck open.
+    fireEvent.pointerDown(line);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+  });
+
+  it("exposes the activity clarifier on keyboard focus too", async () => {
+    renderCard({ activity: activity(3, 2) });
+    const line = await screen.findByTestId("activity-line");
+    fireEvent.focus(line);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/not a safety verification/);
+  });
+
+  it("never phrases the activity line as a verification", async () => {
+    // Activity is not safety. The word "Verified" belongs to the badge.
+    renderCard({ activity: activity(3, 2) });
+    const line = await screen.findByTestId("activity-line");
+    expect(line.textContent ?? "").not.toMatch(/verif/i);
+  });
+
+  it("shows the activity line for a card with NO safety badge (activity is not a verdict)", async () => {
+    // The deliberate difference from the badge/evidence suppression: a
+    // contested or unattested listing still reports its activity.
+    renderCard({ safetyState: null, activity: activity(2, 5) });
+    expect(await screen.findByText("Updated 2 days ago")).toBeInTheDocument();
+    expect(screen.getByText("5 happy patrons")).toBeInTheDocument();
+    expect(document.querySelector("[data-safety-state]")).not.toBeInTheDocument();
   });
 
   it("scrolls the claim row sideways instead of wrapping, so badge count never changes card height", async () => {
@@ -720,6 +772,7 @@ describe("ListingCard (mapping wrapper)", () => {
     hasRecentIncident: false,
     evidence: null,
     freshness: null,
+    activity: noActivity,
   };
 
   function renderWrapper(glance: Partial<ListingTrustGlance> = {}, distanceLabel?: string) {
@@ -752,14 +805,10 @@ describe("ListingCard (mapping wrapper)", () => {
     expect(await screen.findByText("Recent incident")).toBeInTheDocument();
   });
 
-  it("maps the glance's evidence counts onto the card", async () => {
-    renderWrapper({ evidence: { confirmations: 12, contributors: 5 } });
-    expect(await screen.findByText("12 confirmations · 5 neighbors")).toBeInTheDocument();
-  });
-
-  it("maps the glance's freshness cue onto the card", async () => {
-    renderWrapper({ freshness: { kind: "stale", label: "Updated 8mo ago" } });
-    expect(await screen.findByText("Updated 8mo ago")).toBeInTheDocument();
+  it("maps the glance's activity strip onto the card", async () => {
+    renderWrapper({ activity: activity(5, 5) });
+    expect(await screen.findByText("Updated 5 days ago")).toBeInTheDocument();
+    expect(screen.getByText("5 happy patrons")).toBeInTheDocument();
   });
 
   it("maps the distanceLabel onto the card's location line", async () => {
@@ -767,11 +816,11 @@ describe("ListingCard (mapping wrapper)", () => {
     expect(await screen.findByTestId("card-location")).toHaveTextContent("Denver · 0.4 mi");
   });
 
-  it("omits evidence/freshness when the glance carries none", async () => {
+  it("falls back to the honest empty activity state when the glance has none", async () => {
     renderWrapper();
     await screen.findByText("Celiac-safe");
-    expect(screen.queryByText(/confirmations/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("activity-line")).toHaveTextContent("No activity yet");
+    expect(screen.queryByTestId("happy-patrons")).not.toBeInTheDocument();
   });
 });
 
@@ -781,6 +830,7 @@ describe("listingToCardVM (bot-provenance threading)", () => {
     hasRecentIncident: false,
     evidence: null,
     freshness: null,
+    activity: noActivity,
     suggestedByBot: true,
     suggestedAttributes: ["dedicated_fryer", "gf_substitutes"],
     confirmedAttributes: [],
@@ -832,6 +882,7 @@ describe("listingToCardVM (photo threading, AUB-219)", () => {
     hasRecentIncident: false,
     evidence: null,
     freshness: null,
+    activity: noActivity,
     confirmedAttributes: [],
     suggestedByBot: false,
     suggestedAttributes: [],

@@ -13,6 +13,7 @@ import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import type { MapLoadMore } from "~/listings/use-map-pages";
+import { deriveListingActivityMeta } from "~/trust/summary";
 import {
   type AreaSearchStatus,
   DirectoryMap,
@@ -85,6 +86,7 @@ function vm(overrides: Partial<RestaurantCardVM>): RestaurantCardVM {
     suggestedAttributes: [],
     confirmedAttributes: [],
     hasRecentIncident: false,
+    activity: deriveListingActivityMeta(null),
     accent: "lavender",
     ...overrides,
   };
@@ -279,7 +281,7 @@ describe("DirectoryMap — pins", () => {
   it("omits any safety label for a null safety state (no fake verdict, never 'Not yet attested')", async () => {
     await renderMap();
     expect(pinOf("New Spot")).toHaveAccessibleName("New Spot");
-    expect(cardOf("New Spot")).toHaveAccessibleName("New Spot, Denver");
+    expect(cardOf("New Spot")).toHaveAccessibleName("New Spot, Denver, No activity yet");
   });
 
   it("marks the selected entry via aria-pressed on both its pin and mini-card", async () => {
@@ -324,22 +326,26 @@ describe("DirectoryMap — pins", () => {
 describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview variant)", () => {
   // The five fixture entries' accessible names, in `entries` order — index i
   // must render the visible number i + 1 on both the pin and the card. The pin
-  // stays terse; the CARD name adds the location it shows sighted users, plus
-  // the trust row's provenance for the bot-suggested unattested entry.
+  // stays terse; the CARD name adds the location it shows sighted users, the
+  // trust row's provenance for the bot-suggested unattested entry, and the meta
+  // row's activity line (which `aria-label` would otherwise hide from AT).
   const namePairs = [
-    { pin: "Root & Rye, Celiac-safe", card: "Root & Rye, Celiac-safe, Denver, 0.8 mi" },
+    {
+      pin: "Root & Rye, Celiac-safe",
+      card: "Root & Rye, Celiac-safe, Denver, 0.8 mi, No activity yet",
+    },
     {
       pin: "Lucia Trattoria, Recent incident",
-      card: "Lucia Trattoria, Recent incident, Denver",
+      card: "Lucia Trattoria, Recent incident, Denver, No activity yet",
     },
-    { pin: "New Spot", card: "New Spot, Denver" },
+    { pin: "New Spot", card: "New Spot, Denver, No activity yet" },
     {
       pin: "Harvest Table, Celiac-safe, Recent incident",
-      card: "Harvest Table, Celiac-safe, Recent incident, Denver",
+      card: "Harvest Table, Celiac-safe, Recent incident, Denver, No activity yet",
     },
     {
       pin: "Bot Bistro",
-      card: "Bot Bistro, Denver, suggested by Aubrey's Bot",
+      card: "Bot Bistro, Denver, suggested by Aubrey's Bot, No activity yet",
     },
   ];
 
@@ -425,6 +431,68 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
   });
 });
 
+describe("DirectoryMap — mini-card meta row mirrors ListingCard (AUB-298)", () => {
+  it("gives EVERY mini-card the same divider + activity line", async () => {
+    await renderMap();
+    // Uniform anatomy: the mini-card mirrors the browse card's meta row as
+    // closely as 200px allows — every card, whatever it knows.
+    for (const { card } of [
+      { card: cardOf("Root & Rye, Celiac-safe") },
+      { card: cardOf("New Spot") },
+      { card: cardOf("Bot Bistro") },
+    ]) {
+      const row = within(card).getByTestId("carousel-activity");
+      expect(row).toHaveTextContent("No activity yet");
+      expect(row.className).toContain("border-t");
+    }
+  });
+
+  it("keeps the activity line PLAIN TEXT, never a nested interactive trigger", async () => {
+    await renderMap();
+    // The whole mini-card is a <button>; a tooltip trigger inside it would be
+    // invalid HTML and a nested-interactive a11y defect.
+    const row = within(cardOf("New Spot")).getByTestId("carousel-activity");
+    expect(row.tagName).toBe("SPAN");
+    expect(row.querySelector("button")).toBeNull();
+  });
+
+  it("carries the clarifier in the ACCESSIBLE NAME of a card that has a dated line", async () => {
+    // Without a trigger to host the tooltip, the accessible name is the only
+    // place AT can hear that "Updated 3 days ago" is not a verification — and
+    // it is announced right after a safety label, which is exactly the pairing
+    // that could otherwise be misheard.
+    const { rerenderWith } = await renderMap();
+    rerenderWith(null, [
+      {
+        vm: vm({
+          id: "active",
+          name: "Active Spot",
+          safetyState: "celiac-safe",
+          activity: deriveListingActivityMeta({
+            lastActivityAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+            happyPatrons: 4,
+          }),
+        }),
+        lat: 39.74,
+        lng: -104.99,
+      },
+    ]);
+
+    expect(
+      screen.getByRole("button", {
+        name: "Active Spot, Celiac-safe, Denver, Updated 3 days ago, claim activity, not a safety verification",
+      })
+    ).toBeInTheDocument();
+  });
+
+  it("leaves the honest empty state bare, with no clarifier to append", async () => {
+    // "No activity yet" asserts nothing, so a sentence per unattested card
+    // would be noise in a band that announces many cards in a row.
+    await renderMap();
+    expect(cardOf("New Spot")).toHaveAccessibleName("New Spot, Denver, No activity yet");
+  });
+});
+
 describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", () => {
   it("adds the incident chip alongside the headline verdict when hasRecentIncident", async () => {
     await renderMap();
@@ -444,14 +512,14 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
       "Harvest Table, Celiac-safe, Recent incident"
     );
     expect(cardOf("Harvest Table, Celiac-safe, Recent incident")).toHaveAccessibleName(
-      "Harvest Table, Celiac-safe, Recent incident, Denver"
+      "Harvest Table, Celiac-safe, Recent incident, Denver, No activity yet"
     );
     // Never doubled when the headline already IS the incident state.
     expect(pinOf("Lucia Trattoria, Recent incident")).toHaveAccessibleName(
       "Lucia Trattoria, Recent incident"
     );
     expect(cardOf("Lucia Trattoria, Recent incident")).toHaveAccessibleName(
-      "Lucia Trattoria, Recent incident, Denver"
+      "Lucia Trattoria, Recent incident, Denver, No activity yet"
     );
   });
 
@@ -473,7 +541,9 @@ describe("DirectoryMap — mini-card trust row mirrors ListingCard (AUB-274)", (
     expect((provenance.parentElement as HTMLElement).className).toContain("mask-image");
     // …and the card's accessible name gives AT no safety label (there is none)
     // plus the provenance sighted users see, mirroring the browse list card.
-    expect(botCard).toHaveAccessibleName("Bot Bistro, Denver, suggested by Aubrey's Bot");
+    expect(botCard).toHaveAccessibleName(
+      "Bot Bistro, Denver, suggested by Aubrey's Bot, No activity yet"
+    );
   });
 
   it("keeps the pin announcement terse: provenance joins the card name only", async () => {

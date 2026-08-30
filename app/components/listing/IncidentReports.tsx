@@ -22,6 +22,7 @@ import {
   isRecentIncident,
   toCalendarDayString,
 } from "~/trust/incident-recency";
+import { claimsQueryKey } from "./CommunityClaims";
 import { FlagControl } from "./FlagControl";
 import { formatIncidentDate, formatSeverity } from "./incident-format";
 
@@ -252,6 +253,10 @@ function IncidentOwnerControls({
     mutationFn: () => removeIncident({ data: { id: incident.id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: incidentsQueryKey(listingId) });
+      // Retracting a report can make its author a happy patron again, so the
+      // claim roll-up (which carries the listing's activity strip) repaints
+      // with the incident list rather than a step behind it.
+      queryClient.invalidateQueries({ queryKey: claimsQueryKey(listingId) });
       toast.success("Report retracted");
     },
     onError: () => {
@@ -544,6 +549,10 @@ function IncidentForm({ listingId, onSuccess }: { listingId: string; onSuccess: 
       setSeverity("");
       setNote("");
       queryClient.invalidateQueries({ queryKey: incidentsQueryKey(listingId) });
+      // A new report disqualifies its author from the happy-patron count, so
+      // the claim roll-up (which carries the listing's activity strip)
+      // repaints with the incident list rather than a step behind it.
+      queryClient.invalidateQueries({ queryKey: claimsQueryKey(listingId) });
       toast.success("Incident reported");
       onSuccess();
     },

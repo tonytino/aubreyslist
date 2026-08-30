@@ -5,8 +5,8 @@ import {
   claimAttributeDescription,
   claimAttributeLabel,
   DEFAULT_STALENESS_MONTHS,
-  deriveHeadlineMeta,
   deriveHeadlineSafetyState,
+  deriveListingActivityMeta,
   formatLastConfirmed,
   formatRelativeTime,
   formatVoteCounts,
@@ -449,51 +449,49 @@ describe("hasPositiveConsensus — the taxonomy filter match rule (#35)", () => 
   });
 });
 
-describe("deriveHeadlineMeta (the detail hero's confirmation-derived cues)", () => {
-  const affirmed = { confirmCount: 8, disputeCount: 1, lastConfirmedAt: ago(3 * WEEK) };
+describe("deriveListingActivityMeta (the listing-activity strip)", () => {
+  const active = { lastActivityAt: ago(3 * WEEK), happyPatrons: 8 };
 
-  it("surfaces the recency phrase and the confirmation count for an affirmed claim", () => {
-    expect(deriveHeadlineMeta(affirmed, NOW)).toEqual({
-      verifiedRelative: "3 weeks ago",
-      confirmations: 8,
-    });
+  it("phrases the recency as activity, not verification", () => {
+    const meta = deriveListingActivityMeta(active, NOW);
+    expect(meta.hasActivity).toBe(true);
+    expect(meta.updatedLabel).toBe("Updated 3 weeks ago");
+    // "Verified" is a safety word and this line is not a safety cue.
+    expect(meta.updatedLabel).not.toMatch(/verif/i);
   });
 
-  it("withholds BOTH cues on a contested claim — the hero matches an unattested one", () => {
-    // The suppression the badge already applies has to cover this strip too, or
-    // the withheld verdict leaks straight back: "Verified 3 days ago · 3
-    // confirmations" beside a missing badge reads as reassurance the community
-    // never gave. Same `hasPositiveConsensus` gate the browse glance uses.
-    const empty = { verifiedRelative: null, confirmations: 0 };
+  it("counts happy patrons, singular at one", () => {
+    expect(deriveListingActivityMeta(active, NOW).happyPatronsLabel).toBe("8 happy patrons");
+    expect(deriveListingActivityMeta({ ...active, happyPatrons: 1 }, NOW).happyPatronsLabel).toBe(
+      "1 happy patron"
+    );
+  });
 
-    // Dispute majority, recently confirmed (the raw timestamp still looks fresh).
-    expect(deriveHeadlineMeta({ ...affirmed, disputeCount: 12 }, NOW)).toEqual(empty);
-    // A tie is contested too.
+  it("hides the count at zero rather than showing '0 happy patrons'", () => {
+    const meta = deriveListingActivityMeta({ ...active, happyPatrons: 0 }, NOW);
+    expect(meta.happyPatrons).toBe(0);
+    expect(meta.happyPatronsLabel).toBeNull();
+  });
+
+  it("shows the honest empty state when nothing has been attested", () => {
+    const meta = deriveListingActivityMeta({ lastActivityAt: null, happyPatrons: 0 }, NOW);
+    expect(meta.hasActivity).toBe(false);
+    expect(meta.updatedLabel).toBe("No activity yet");
+    expect(meta.happyPatronsLabel).toBeNull();
+  });
+
+  it("yields the same empty strip for a caller with no activity data at all", () => {
+    const empty = deriveListingActivityMeta({ lastActivityAt: null, happyPatrons: 0 }, NOW);
+    expect(deriveListingActivityMeta(null, NOW)).toEqual(empty);
+    expect(deriveListingActivityMeta(undefined, NOW)).toEqual(empty);
+  });
+
+  it("never renders a negative or fractional patron count", () => {
     expect(
-      deriveHeadlineMeta({ confirmCount: 4, disputeCount: 4, lastConfirmedAt: ago(DAY) }, NOW)
-    ).toEqual(empty);
-    // …and it equals the unattested reading exactly.
+      deriveListingActivityMeta({ lastActivityAt: null, happyPatrons: -3 }, NOW).happyPatrons
+    ).toBe(0);
     expect(
-      deriveHeadlineMeta({ confirmCount: 0, disputeCount: 0, lastConfirmedAt: null }, NOW)
-    ).toEqual(empty);
-  });
-
-  it("yields the empty pair for a listing with no celiac claim at all", () => {
-    expect(deriveHeadlineMeta(null, NOW)).toEqual({ verifiedRelative: null, confirmations: 0 });
-    expect(deriveHeadlineMeta(undefined, NOW)).toEqual({
-      verifiedRelative: null,
-      confirmations: 0,
-    });
-  });
-
-  it("keeps the count for a STALE but uncontested claim (aged, not contested)", () => {
-    // Staleness is flagged by the badge, not by blanking the evidence: an
-    // uncontested consensus still has a real count and a real recency to show.
-    const stale = { confirmCount: 30, disputeCount: 2, lastConfirmedAt: ago(9 * MONTH) };
-    expect(deriveHeadlineSafetyState(stale, NOW)).toBe("stale");
-    expect(deriveHeadlineMeta(stale, NOW)).toEqual({
-      verifiedRelative: "9 months ago",
-      confirmations: 30,
-    });
+      deriveListingActivityMeta({ lastActivityAt: null, happyPatrons: 2.7 }, NOW).happyPatronsLabel
+    ).toBe("2 happy patrons");
   });
 });

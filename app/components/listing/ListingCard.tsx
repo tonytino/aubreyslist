@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { Check, Clock, Heart, TriangleAlert, Users } from "lucide-react";
+import { Heart } from "lucide-react";
 import { type ComponentProps, useState } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
 import { ClaimBadge } from "~/components/listing/ClaimBadge";
 import { FavoriteButton } from "~/components/listing/FavoriteButton";
+import { ActivityLine, HappyPatrons } from "~/components/listing/ListingActivity";
 import { SafetySignal, type SafetyState } from "~/components/SafetySignal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 import type { Listing } from "~/db/schema";
@@ -15,6 +16,7 @@ import type { ClaimAttribute } from "~/listings/taxonomy";
 // Type-only: erased at build time, so `getDb`/the Places key never enter the client bundle.
 import type { PlacePhoto, PlacePhotoAttribution } from "~/server/places-photos";
 import type { ListingTrustGlance } from "~/trust/browse-glance";
+import type { ListingActivityMeta } from "~/trust/summary";
 
 /**
  * Width requested from the `/api/places/photo` proxy for browse cards. The tile is 158px
@@ -71,10 +73,17 @@ export interface RestaurantCardVM {
   confirmedAttributes: ClaimAttribute[];
   /** A recent "got glutened" report flags the card regardless of confirmations. */
   hasRecentIncident: boolean;
-  /** Freshness/recency cue, e.g. `{ kind: "fresh", label: "Verified 3d ago" }`. */
-  freshness?: { kind: "fresh" | "stale" | "incident"; label: string };
-  /** Community evidence counts, rendered as "N confirmations · M neighbors". */
-  evidence?: { confirmations: number; contributors: number };
+  /**
+   * The meta row's content: the "Updated 3 days ago" activity line (or the
+   * honest "No activity yet" empty state) plus the happy-patron count. Always
+   * present, because the meta row always renders — every card has the same
+   * anatomy whatever it knows.
+   *
+   * Activity, never a verdict (ADR-007): the line reports claim activity, shows
+   * for a contested listing too, and says so in its tooltip. The safety reading
+   * stays entirely in {@link safetyState}.
+   */
+  activity: ListingActivityMeta;
   /** Decorative photo-placeholder gradient (never a safety signal). */
   accent: RestaurantCardAccent;
   /**
@@ -104,13 +113,6 @@ const ACCENT_GRADIENTS: Record<RestaurantCardAccent, string> = {
   mint: "bg-gradient-to-br from-accent-mint to-accent-mint/40",
   sky: "bg-gradient-to-br from-accent-sky to-accent-sky/40",
 };
-
-/** Per-kind colour + icon for the freshness cue (colour + icon + label, never colour alone). */
-const FRESHNESS = {
-  fresh: { className: "text-celiac-safe", Icon: Check },
-  stale: { className: "text-stale", Icon: Clock },
-  incident: { className: "text-incident", Icon: TriangleAlert },
-} as const;
 
 /**
  * The location atoms for an accessible name — `["Denver", "0.8 mi"]`, either
@@ -206,13 +208,18 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  * ADR-007: the save-count pill is an attributed community signal, not a safety score;
  * all safety meaning stays in {@link SafetySignal}. Bot suggestions are provenance,
  * never evidence: a listing with live suggestions shows the "Suggested by Aubrey's Bot"
- * label in the meta row's freshness slot (a real freshness cue wins the slot) plus one
+ * label in the meta row's right slot (a happy-patron count wins the slot) plus one
  * suggested-variant {@link ClaimBadge} per attribute.
  *
+ * Uniform anatomy: every card renders the same five parts — media, title row, chips row,
+ * divider, meta row — whatever the listing knows. The meta row is never a reserved blank:
+ * a listing with no attestations reads "No activity yet". Activity is not safety, so the
+ * line carries a tooltip saying so ({@link ActivityLine}).
+ *
  * Consistent height: every card in a grid row renders at the same height. The shell is
- * `h-full flex flex-col` with a `flex-1` body, and the location line and meta row always
- * reserve their space — an `invisible` placeholder of the same composition when a VM has
- * no signal. Reserved space, never a fixed total height, so wrapped text is never clipped.
+ * `h-full flex flex-col` with a `flex-1` body, and the location line always reserves its
+ * space — an `invisible` placeholder of the same composition when a VM has no location.
+ * Reserved space, never a fixed total height, so wrapped text is never clipped.
  * The claim row holds to that too: it is a single never-wrapping line that scrolls
  * horizontally, so a listing's badge count changes what you scroll to, not the card's
  * height.
@@ -220,8 +227,6 @@ function AttributedPill({ className, type = "button", ...props }: ComponentProps
  * Client-safe: imports only pure/client-safe/type-only modules.
  */
 export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
-  const freshness = vm.freshness ? FRESHNESS[vm.freshness.kind] : null;
-
   // A broken image (stale token, proxy 503) falls back to the gradient placeholder.
   // Storing the failed src (not a boolean) scopes the suppression to the exact image
   // that broke, so a VM update with a different `photoUrl` is unaffected.
@@ -391,59 +396,34 @@ export function RestaurantCard({ vm }: { vm: RestaurantCardVM }) {
           ))}
         </div>
 
-        {/* Meta row — freshness cue (left) + evidence counts (right). The left slot
-            doubles as the bot-provenance slot; a real freshness cue wins it (evidence
-            over provenance). Always rendered so every card reserves the same bottom-row
-            height: a VM with no signal gets an `invisible` placeholder of the same
-            composition and a transparent divider. `mt-auto` pins the row to the card
-            bottom when a neighbour wraps taller. */}
-        <div className="mt-auto">
-          {freshness || vm.evidence || vm.suggestedByBot ? (
-            <div
-              data-testid="card-meta-row"
-              className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-caption"
-            >
-              {freshness && vm.freshness ? (
-                <span
-                  className={`inline-flex items-center gap-1.5 font-semibold ${freshness.className}`}
-                >
-                  <freshness.Icon className="h-4 w-4" aria-hidden="true" />
-                  <span>{vm.freshness.label}</span>
-                </span>
-              ) : vm.suggestedByBot ? (
-                // Bot provenance in the freshness slot — the shared inline label
-                // (one wording + treatment across browse card and map mini-card).
-                <BotProvenanceLabel data-testid="bot-provenance" />
-              ) : (
-                <span />
-              )}
+        {/* Meta row — the activity line (left) + the happy-patron count (right).
+            ALWAYS rendered, with a real divider and real content: every card has the
+            same anatomy (media, title row, chips row, divider, meta row) whatever it
+            knows, so a suggestion-only card and a heavily-attested one read as the
+            same object. A listing nobody has attested says "No activity yet" rather
+            than reserving an invisible line. `mt-auto` pins the row to the card bottom
+            when a neighbour wraps taller.
 
-              {vm.evidence ? (
-                <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground">
-                  <Users className="h-4 w-4" aria-hidden="true" />
-                  <span>
-                    {vm.evidence.confirmations} confirmations · {vm.evidence.contributors} neighbors
-                  </span>
-                </span>
-              ) : null}
-            </div>
-          ) : (
-            <div
-              data-testid="card-meta-row"
-              className="mt-3 flex items-center justify-between gap-2 border-t border-transparent pt-3 text-caption"
-            >
-              {/* Invisible height-reserving placeholder: same icon size + text
-                  line as the real row, hidden from paint AND the a11y tree. */}
-              <span
-                data-testid="card-meta-placeholder"
-                aria-hidden="true"
-                className="invisible inline-flex items-center gap-1.5 font-semibold"
-              >
-                <Clock className="h-4 w-4" aria-hidden="true" />
-                <span>Not yet verified</span>
-              </span>
-            </div>
-          )}
+            The right slot falls back to the bot-provenance label when there are no
+            happy patrons to report — evidence over provenance.
+
+            `relative z-10`: the activity line is a real tooltip <button>, so the row
+            must sit above the stretched-link overlay or the overlay swallows the tap. */}
+        <div className="mt-auto">
+          <div
+            data-testid="card-meta-row"
+            className="relative z-10 mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-caption"
+          >
+            <ActivityLine meta={vm.activity} />
+
+            {vm.activity.happyPatronsLabel !== null ? (
+              <HappyPatrons meta={vm.activity} />
+            ) : vm.suggestedByBot ? (
+              // Bot provenance — the shared inline label (one wording + treatment
+              // across browse card and map mini-card).
+              <BotProvenanceLabel data-testid="bot-provenance" />
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -497,7 +477,7 @@ interface ListingCardProps {
  *
  * The single mapping site: every browse surface (list card, map pins, map carousel)
  * derives its VM here, so trust/accent logic is never duplicated. The glance already
- * carries the server-derived evidence, freshness, and suggestion data — this never
+ * carries the server-derived verdict, activity strip, and suggestion data — this never
  * touches `db` or re-derives trust.
  *
  * `photo` is the render-time Google photo when the caller has one; callers without one
@@ -527,12 +507,13 @@ export function listingToCardVM(
     suggestedAttributes: glance.suggestedAttributes,
     confirmedAttributes: glance.confirmedAttributes,
     hasRecentIncident: glance.hasRecentIncident,
+    // Always threaded, never optional: the meta row is part of every card's
+    // anatomy, and the glance always carries an honest (possibly empty) strip.
+    activity: glance.activity,
     accent: accentForId(listing.id),
     // Each optional field is spread in only when present, so the prop stays truly
     // absent (not `undefined`) under `exactOptionalPropertyTypes`.
     ...(city !== null ? { city } : {}),
-    ...(glance.evidence ? { evidence: glance.evidence } : {}),
-    ...(glance.freshness ? { freshness: glance.freshness } : {}),
     ...(distanceLabel !== undefined ? { distanceLabel } : {}),
     ...(saveCount !== undefined ? { saveCount } : {}),
     // A caller with no photo (kill switch off, manual listing, upstream miss, photos
