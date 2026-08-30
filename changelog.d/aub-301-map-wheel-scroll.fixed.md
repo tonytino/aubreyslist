@@ -1,1 +1,1 @@
-- `[manual]` Map view: on desktop the card list under the map now scrolls with a plain mouse wheel — no more shift+scrollwheel trick.
+- `[manual]` Map view: on desktop the card list under the map now scrolls with a plain mouse wheel — no shift key needed.

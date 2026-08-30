@@ -685,7 +685,7 @@ describe("DirectoryMap — wheel-to-horizontal-scroll (AUB-301)", () => {
     expect(carousel.scrollLeft).toBe(0);
   });
 
-  it("normalizes DOM_DELTA_LINE (deltaMode 1) to 16px per line", async () => {
+  it("normalizes DOM_DELTA_LINE (deltaMode 1) to 40px per line", async () => {
     await renderMap();
     const carousel = screen.getByTestId("map-carousel");
     stubBandWidth(carousel);
@@ -693,21 +693,42 @@ describe("DirectoryMap — wheel-to-horizontal-scroll (AUB-301)", () => {
     carousel.dispatchEvent(
       new WheelEvent("wheel", { deltaY: 2, deltaMode: 1, cancelable: true, bubbles: true })
     );
-    expect(carousel.scrollLeft).toBe(32);
+    expect(carousel.scrollLeft).toBe(80);
   });
 
-  it("still retires the deep-link restore on wheel input (both listeners fire on the same event)", async () => {
-    // Guards against the native listener replacing rather than adding to the
-    // existing React onWheel prop's restore-takeover behaviour (see the
-    // dedicated describe block above for the full restore suite).
-    const scrollTo = vi.fn();
-    Element.prototype.scrollTo = scrollTo as unknown as Element["scrollTo"];
-    const { rerenderWith } = await renderMap("b", undefined, "b", true);
-    expect(scrollTo).toHaveBeenCalledTimes(1);
+  it("normalizes DOM_DELTA_PAGE (deltaMode 2) to deltaY × the band's clientWidth", async () => {
+    await renderMap();
     const carousel = screen.getByTestId("map-carousel");
-    fireEvent.wheel(carousel);
-    rerenderWith("b", [...entries].reverse(), undefined, "idle", false);
-    expect(scrollTo).toHaveBeenCalledTimes(1);
+    stubBandWidth(carousel, { scrollWidth: 2000, clientWidth: 500 });
+    carousel.scrollLeft = 0;
+    carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 1, deltaMode: 2, cancelable: true, bubbles: true })
+    );
+    expect(carousel.scrollLeft).toBe(500);
+  });
+
+  it("leaves ctrl+wheel untouched — a page/pinch-zoom gesture, never carousel input", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, ctrlKey: true, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
+  });
+
+  it("leaves meta+wheel untouched — Firefox/macOS cmd+scroll zoom", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    stubBandWidth(carousel);
+    carousel.scrollLeft = 0;
+    const notCanceled = carousel.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 100, metaKey: true, cancelable: true, bubbles: true })
+    );
+    expect(notCanceled).toBe(true);
+    expect(carousel.scrollLeft).toBe(0);
   });
 });
 

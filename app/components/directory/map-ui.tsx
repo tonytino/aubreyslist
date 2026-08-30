@@ -372,31 +372,40 @@ function scrollCardFlushLeft(
 /**
  * Convert a dominant-vertical wheel step into the band's `scrollLeft` delta,
  * normalizing `deltaMode` so a step feels the same regardless of the input
- * device's units: `DOM_DELTA_LINE` (mouse-wheel "lines") scales by a nominal
- * 16px line height, `DOM_DELTA_PAGE` scales by the band's own width (a "page"
- * of horizontal scroll), and pixel deltas (`DOM_DELTA_PIXEL`, trackpads) pass
- * through unchanged.
+ * device's units: `DOM_DELTA_LINE` (mouse-wheel "lines") scales by 40px/line
+ * — Firefox fires ~3 lines/notch, so 3 × 40 = 120px/notch, matching a
+ * Chromium pixel-mode notch (~100-120px) rather than undershooting it at a
+ * literal 16px line-height; `DOM_DELTA_PAGE` scales by the band's own width
+ * (a "page" of horizontal scroll); pixel deltas (`DOM_DELTA_PIXEL`,
+ * trackpads) pass through unchanged.
  */
 function normalizedWheelDelta(event: WheelEvent, clientWidth: number): number {
-  if (event.deltaMode === 1) return event.deltaY * 16;
-  if (event.deltaMode === 2) return event.deltaY * clientWidth;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 40;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * clientWidth;
   return event.deltaY;
 }
 
 /**
- * Attaches the NATIVE wheel listener that lets a plain vertical mouse wheel
+ * Attaches the native wheel listener that lets a plain vertical mouse wheel
  * drive the band, which the React `onWheel` prop below cannot do: React 17+
- * delegates its synthetic `wheel` listener from the root as a PASSIVE
+ * delegates its synthetic `wheel` listener from the root as a `passive`
  * listener (to keep the page scroll-perf path unblocked by default), so
  * `preventDefault()` inside a React `onWheel` handler is silently ignored —
  * only a listener attached with `{ passive: false }` can actually cancel the
  * event. Hence a plain `useEffect` + `addEventListener` here instead of a
- * second prop.
+ * second prop. Assumes the container renders unconditionally once mounted
+ * (`MapCarousel`'s root div never toggles away): the effect attaches once
+ * against `containerEl.current` and never re-runs to chase a later-arriving
+ * ref, since `containerEl` itself is a stable ref object.
  *
  * Pass-throughs (each returns without touching the event, letting the
  * browser's default handling run):
  * - the band doesn't overflow — nothing to scroll, and cancelling would only
  *   eat the page's own scroll for no reason;
+ * - `ctrlKey` or `metaKey` — ctrl+wheel (all platforms) and Firefox/macOS
+ *   cmd+scroll are browser page-zoom gestures (also how trackpad pinch-zoom
+ *   is delivered), never data for this carousel to consume; remapping them
+ *   to horizontal scroll would suppress an accessibility gesture;
  * - `shiftKey` — the browser already remaps vertical wheel to horizontal
  *   scroll on shift (Chrome via `deltaX`, Firefox natively); converting again
  *   on top of that would double the distance;
@@ -404,13 +413,15 @@ function normalizedWheelDelta(event: WheelEvent, clientWidth: number): number {
  *   the band natively, so this is a vertical-only assist, not a general
  *   wheel-to-scroll remap.
  *
- * Otherwise the step is converted and ALWAYS `preventDefault()`s, even right
- * at `scrollLeft`'s min/max edge: the band floats over the map canvas
- * (`z-10`), so a step this handler chose not to consume would otherwise fall
- * through to the map's own wheel zoom or bubble into page scroll — an
- * unrelated surface reacting to a gesture the visitor aimed at the carousel.
- * Direct `scrollLeft` assignment, never `scrollTo({ behavior: "smooth" })`:
- * wheel steps arrive as a rapid-fire sequence and need to feel 1:1 with the
+ * Otherwise the step is converted and always `preventDefault()`s, even right
+ * at `scrollLeft`'s min/max edge: the band is a sibling of the map canvas in
+ * the shell (`DirectoryMap.tsx`), not a descendant, so an unconsumed wheel
+ * here never reaches the map's own zoom handler — the fall-through this
+ * guards against is the default scroll chain (the band bubbling the gesture
+ * to its scroll ancestors, ultimately the page), which would move the wrong
+ * surface for a gesture the visitor aimed at the carousel. Direct
+ * `scrollLeft` assignment, never `scrollTo({ behavior: "smooth" })`: wheel
+ * steps arrive as a rapid-fire sequence and need to feel 1:1 with the
  * gesture, which also makes this inherently safe under reduced motion — an
  * instant per-step move is state catching up to input, not an animation.
  */
@@ -420,6 +431,7 @@ function useWheelHorizontalScroll(containerEl: RefObject<HTMLDivElement | null>)
     if (!container) return;
     const onWheel = (event: WheelEvent) => {
       if (container.scrollWidth <= container.clientWidth) return;
+      if (event.ctrlKey || event.metaKey) return;
       if (event.shiftKey) return;
       if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
       event.preventDefault();
