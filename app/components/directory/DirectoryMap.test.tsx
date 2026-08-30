@@ -321,6 +321,77 @@ describe("DirectoryMap — pins", () => {
     expect(onSelect).toHaveBeenNthCalledWith(1, "b");
     expect(onSelect).toHaveBeenNthCalledWith(2, "b");
   });
+
+  it("darkens the unattested dot's dark-mode fill so it separates from the white halo", async () => {
+    await renderMap();
+    const dot = pinOf("New Spot").querySelector("span") as HTMLElement;
+    // Scoped to the pin, never a re-point of the global muted-foreground token:
+    // the lightened dark muted-foreground merges with the white halo (~2.5:1),
+    // so the dot carries its own darker dark-mode fill (≥3:1 vs the halo, with
+    // the near-black index number still AA on it).
+    expect(dot.className).toContain("bg-muted-foreground");
+    expect(dot.className).toContain("dark:bg-[oklch(0.62_0.02_295)]");
+  });
+});
+
+describe("DirectoryMap — pin incident decoration (AUB-278)", () => {
+  it("adds the incident badge to the dot when a recent incident rides a non-incident headline", async () => {
+    await renderMap();
+    // The dot keeps its headline fill (decorate, never override) and gains the
+    // incident-token badge — the pin-scale mirror of the card's headline chip
+    // + incident add-on chip.
+    const pin = pinOf("Harvest Table, Celiac-safe, Recent incident");
+    const badge = within(pin).getByTestId("pin-incident-dot");
+    expect(badge.className).toContain("bg-incident");
+    // A light border for tile separation, like the dot's own halo.
+    expect(badge.className).toContain("border-white");
+    const dot = pin.querySelector("span") as HTMLElement;
+    expect(dot.className).toContain("bg-celiac-safe");
+    // The badge rides INSIDE the dot, so it can never float over a different
+    // card (the module's safety-correctness invariant).
+    expect(dot).toContainElement(badge);
+  });
+
+  it("stays visual-only: aria-hidden, no text, and the accessible name unchanged", async () => {
+    await renderMap();
+    const pin = pinOf("Harvest Table, Celiac-safe, Recent incident");
+    // Sighted and AT users already get equivalent incident info — the name
+    // folds it in (pinAccessibleName), so the badge adds nothing spoken.
+    expect(within(pin).getByTestId("pin-incident-dot")).toHaveAttribute("aria-hidden", "true");
+    expect(pin.textContent).toBe("4");
+    expect(pin).toHaveAccessibleName("Harvest Table, Celiac-safe, Recent incident");
+  });
+
+  it("never decorates the incident-headline pin — its fill already is the signal", async () => {
+    await renderMap();
+    expect(
+      within(pinOf("Lucia Trattoria, Recent incident")).queryByTestId("pin-incident-dot")
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders no badge without a recent incident, whatever the headline", async () => {
+    await renderMap();
+    expect(
+      within(pinOf("Root & Rye, Celiac-safe")).queryByTestId("pin-incident-dot")
+    ).not.toBeInTheDocument();
+    expect(within(pinOf("New Spot")).queryByTestId("pin-incident-dot")).not.toBeInTheDocument();
+  });
+
+  it("decorates an unattested pin with a recent incident (null headline is not 'incident')", async () => {
+    const { rerenderWith } = await renderMap(null);
+    rerenderWith(null, [
+      {
+        vm: vm({ id: "u", name: "Quiet Corner", safetyState: null, hasRecentIncident: true }),
+        lat: 39.73,
+        lng: -104.97,
+      },
+    ]);
+    // The neutral grey dot stays (no fake verdict) but the recent harm still
+    // shows — matching the accessible name, which appends the incident.
+    const pin = pinOf("Quiet Corner, Recent incident");
+    expect(within(pin).getByTestId("pin-incident-dot")).toBeInTheDocument();
+    expect((pin.querySelector("span") as HTMLElement).className).toContain("bg-muted-foreground");
+  });
 });
 
 describe("DirectoryMap — numbered pins ↔ numbered cards (AUB-275 preview variant)", () => {
@@ -417,8 +488,13 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
     const carousel = screen.getByTestId("map-carousel");
     // The opaque background band + raised stacking are what stop a low pin from
     // visually floating over a different card (a mis-associated safety signal).
-    expect(carousel.className).toContain("z-10");
+    // The z-10 raise rides the band's positioning shell, which also hosts the
+    // edge-fade overlay.
+    expect((carousel.parentElement as HTMLElement).className).toContain("z-10");
     expect(carousel.className).toContain("bg-background");
+    // The band itself stays fully opaque: the right-edge scroll cue is an
+    // overlay, never a mask-image that would let pins bleed through the band.
+    expect(carousel.className).not.toContain("mask-image");
   });
 
   it("keeps a mini-card's safety chip inside that same card (no cross-card bleed in the DOM)", async () => {
@@ -428,6 +504,39 @@ describe("DirectoryMap — carousel-above-pins safety invariant", () => {
     const rootCard = cardOf("Root & Rye, Celiac-safe");
     expect(within(rootCard).getByText("Celiac-safe")).toBeInTheDocument();
     expect(within(rootCard).queryByText("Recent incident")).not.toBeInTheDocument();
+  });
+});
+
+describe("DirectoryMap — band right-edge fade (AUB-278)", () => {
+  it("overlays a decorative right-edge fade so a clipped card reads as scrollable", async () => {
+    await renderMap();
+    const fade = screen.getByTestId("carousel-edge-fade");
+    // Decorative and click-through: never announced, never eats a tap or
+    // wheel aimed at the strip beneath it.
+    expect(fade).toHaveAttribute("aria-hidden", "true");
+    expect(fade.className).toContain("pointer-events-none");
+    // Pinned to the band's right edge, fading to the band's own background.
+    expect(fade.className).toContain("right-0");
+    expect(fade.className).toContain("from-background");
+  });
+
+  it("keeps the fade a sibling overlay of the scroller, never band content", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    const fade = screen.getByTestId("carousel-edge-fade");
+    // Inside the scroller it would ride the scrolled content instead of
+    // pinning to the visual edge — and the end spacer must stay the band's
+    // last child (FAB clearance).
+    expect(carousel).not.toContainElement(fade);
+    expect(fade.parentElement).toBe(carousel.parentElement);
+  });
+
+  it("mirrors nothing on the left edge, where selection parks cards flush-left", async () => {
+    await renderMap();
+    const shell = screen.getByTestId("map-carousel").parentElement as HTMLElement;
+    // One fade only: a left-edge twin would sit over the selected card's
+    // leading edge after every flush-left scroll.
+    expect(shell.querySelectorAll('[data-testid="carousel-edge-fade"]')).toHaveLength(1);
   });
 });
 

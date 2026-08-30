@@ -156,11 +156,17 @@ const PIN_FILLS: Record<SafetyState, string> = {
  * verdict glyph: at dot size a shield outline reads celiac-safe under
  * greyscale/CVD, so this state must not borrow `ShieldCheck`. `text-background`
  * keeps the icon legible on the fill in BOTH themes: near-white on the mid-grey
- * light fill, near-black on the lightened `.dark` `muted-foreground` (where
- * white would drop to ~2.5:1).
+ * light fill, near-black on the dark fill.
+ *
+ * The dark fill is scoped here instead of re-pointing the global
+ * `muted-foreground` token, which body text everywhere depends on. Dark
+ * `muted-foreground` (L0.72) sits ~2.5:1 against the pin's white halo, merging
+ * dot and halo over dark tiles; the same neutral hue at L0.62 gives ~3.6:1
+ * halo-vs-fill (≥3:1 non-text) while the near-black index number keeps ~5.2:1
+ * on the fill (AA).
  */
 const UNATTESTED_PIN = {
-  fill: "bg-muted-foreground text-background",
+  fill: "bg-muted-foreground text-background dark:bg-[oklch(0.62_0.02_295)]",
   Icon: CircleDashed,
   /** No safety wording at all — there is no verdict to announce. */
   label: null,
@@ -286,7 +292,7 @@ export function MapPinButton({
           is unconditional and only the transition is motion-gated, so
           reduced-motion users still see a clearly larger selected dot. */}
       <span
-        className={`flex size-6 items-center justify-center rounded-full border-2 border-white shadow-md motion-safe:transition-transform ${
+        className={`relative flex size-6 items-center justify-center rounded-full border-2 border-white shadow-md motion-safe:transition-transform ${
           pin.fill
         }${selected ? " scale-125 ring-4 ring-brand/50" : ""}`}
       >
@@ -295,6 +301,26 @@ export function MapPinButton({
         <span aria-hidden="true" className={indexNumberClass(index)}>
           {index}
         </span>
+        {/* Recent-incident add-on riding a non-incident headline (a `null`
+            headline included): the dot KEEPS its headline fill and gains this
+            `incident`-token badge — the pin-scale mirror of the card's
+            headline chip + incident add-on chip, so recent harm never reads
+            clean on the map. A corner badge dot, not a second ring: the
+            selected state already owns the ring treatment (`ring-4
+            ring-brand/50`), which a full incident-red ring would collide
+            with. Its white border separates the badge from the fill and from
+            map tiles, the dot's own halo idiom. Visual-only and aria-hidden:
+            `pinAccessibleName` already folds the incident into the button's
+            name, so AT hears exactly what this shows. It renders inside the
+            pin button, so the carousel-above-pins safety invariant is
+            untouched. */}
+        {vm.hasRecentIncident && vm.safetyState !== "incident" ? (
+          <span
+            aria-hidden="true"
+            data-testid="pin-incident-dot"
+            className="absolute -right-1 -top-1 size-2.5 rounded-full border border-white bg-incident"
+          />
+        ) : null}
       </span>
     </button>
   );
@@ -484,7 +510,8 @@ function useWheelHorizontalScroll(containerEl: RefObject<HTMLDivElement | null>)
  *
  * Must sit above the pins with an opaque band so a low pin can never bleed
  * over a mini-card (safety-correctness — see the module comment). The opaque
- * `bg-background` band + top shadow + z-10 enforce it.
+ * `bg-background` band + top shadow, inside the z-10 positioning shell,
+ * enforce it.
  */
 export function MapCarousel({
   entries,
@@ -649,59 +676,65 @@ export function MapCarousel({
   }, [loadMoreVisible]);
 
   return (
-    <div
-      ref={containerEl}
-      data-testid="map-carousel"
-      // tabIndex -1: a programmatic focus target only (the Load more focus
-      // hand-off above) — never a tab stop.
-      tabIndex={-1}
-      onPointerDown={onUserBandInput}
-      onWheel={onUserBandInput}
-      className="absolute inset-x-0 bottom-0 z-10 flex gap-3 overflow-x-auto bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      {entries.map(({ vm }, entryIndex) => {
-        const selected = vm.id === selectedId;
-        const index = entryIndex + 1;
-        return (
-          // Positioned wrapper so the heart is a sibling overlay of the mini-card
-          // action — not nested inside it. Nesting a <button> (FavoriteButton)
-          // inside the mini-card <button> would be invalid HTML + a
-          // nested-interactive a11y defect. The wrapper carries the fixed
-          // carousel-entry width; the mini-card button fills it, and FavoriteButton
-          // is raised over it (`absolute … z-10`). The carousel's own opaque
-          // `bg-background` band + z-10 stacking (documented above) still keep low
-          // pins behind the whole band, so nothing here weakens that invariant.
-          <div
-            key={vm.id}
-            ref={(node) => {
-              if (node) cardEls.current.set(vm.id, node);
-              else cardEls.current.delete(vm.id);
-            }}
-            className="relative w-[200px] shrink-0"
-          >
-            <button
-              type="button"
-              aria-pressed={selected}
-              aria-label={cardAccessibleName(vm)}
-              // First tap selects (pan/highlight); a tap on the already-selected
-              // card opens the listing — a sighted shortcut only. The chevron
-              // link below is the accessible navigation path, so AT never
-              // depends on this press-again behaviour.
-              onClick={() => {
-                if (selected) {
-                  navigate({ to: "/listings/$id", params: { id: vm.id } });
-                } else {
-                  // A tap is a takeover: a restore still waiting on its page
-                  // is obsolete the moment the visitor picks a card.
-                  restoreTarget.current = null;
-                  onSelect(vm.id);
-                }
+    // The band's positioning shell: it carries the `z-10` raise for the
+    // carousel-above-pins safety invariant and hosts the edge-fade overlay,
+    // which must be a SIBLING of the scroller — an absolutely positioned
+    // child of a scroll container rides the scrolled content instead of
+    // pinning to the band's visual edge.
+    <div className="absolute inset-x-0 bottom-0 z-10">
+      <div
+        ref={containerEl}
+        data-testid="map-carousel"
+        // tabIndex -1: a programmatic focus target only (the Load more focus
+        // hand-off above) — never a tab stop.
+        tabIndex={-1}
+        onPointerDown={onUserBandInput}
+        onWheel={onUserBandInput}
+        className="flex gap-3 overflow-x-auto bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {entries.map(({ vm }, entryIndex) => {
+          const selected = vm.id === selectedId;
+          const index = entryIndex + 1;
+          return (
+            // Positioned wrapper so the heart is a sibling overlay of the mini-card
+            // action — not nested inside it. Nesting a <button> (FavoriteButton)
+            // inside the mini-card <button> would be invalid HTML + a
+            // nested-interactive a11y defect. The wrapper carries the fixed
+            // carousel-entry width; the mini-card button fills it, and FavoriteButton
+            // is raised over it (`absolute … z-10`). The carousel's own opaque
+            // `bg-background` band + z-10 stacking (documented above) still keep low
+            // pins behind the whole band, so nothing here weakens that invariant.
+            <div
+              key={vm.id}
+              ref={(node) => {
+                if (node) cardEls.current.set(vm.id, node);
+                else cardEls.current.delete(vm.id);
               }}
-              className={`block w-full rounded-card bg-surface px-3 py-2 text-left shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
-                selected ? "border-2 border-brand" : "border border-border"
-              }`}
+              className="relative w-[200px] shrink-0"
             >
-              {/* pr-14 keeps the two text rows clear of the overlaid heart
+              <button
+                type="button"
+                aria-pressed={selected}
+                aria-label={cardAccessibleName(vm)}
+                // First tap selects (pan/highlight); a tap on the already-selected
+                // card opens the listing — a sighted shortcut only. The chevron
+                // link below is the accessible navigation path, so AT never
+                // depends on this press-again behaviour.
+                onClick={() => {
+                  if (selected) {
+                    navigate({ to: "/listings/$id", params: { id: vm.id } });
+                  } else {
+                    // A tap is a takeover: a restore still waiting on its page
+                    // is obsolete the moment the visitor picks a card.
+                    restoreTarget.current = null;
+                    onSelect(vm.id);
+                  }
+                }}
+                className={`block w-full rounded-card bg-surface px-3 py-2 text-left shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
+                  selected ? "border-2 border-brand" : "border border-border"
+                }`}
+              >
+                {/* pr-14 keeps the two text rows clear of the overlaid heart
                   (right-3 + size-9 = 48px) with breathing room; the chip row
                   sits below the heart, full width. The leading index chip
                   shares the pin's number typography but sits on the neutral
@@ -709,27 +742,27 @@ export function MapCarousel({
                   the solid safety colours stay unique to the pin and the
                   `SafetySignal` row keeps the loudest safety voice on the
                   card. */}
-              <span className="flex items-center gap-1.5 pr-14">
-                <span
-                  aria-hidden="true"
-                  className={`flex size-5 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground ${indexNumberClass(index)}`}
-                >
-                  {index}
+                <span className="flex items-center gap-1.5 pr-14">
+                  <span
+                    aria-hidden="true"
+                    className={`flex size-5 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground ${indexNumberClass(index)}`}
+                  >
+                    {index}
+                  </span>
+                  <span className="truncate font-display text-body-sm font-bold text-foreground">
+                    {vm.name}
+                  </span>
                 </span>
-                <span className="truncate font-display text-body-sm font-bold text-foreground">
-                  {vm.name}
-                </span>
-              </span>
-              {/* The same location line the list card renders, from one shared
+                {/* The same location line the list card renders, from one shared
                   component so the two surfaces cannot disagree. At 200px only the
                   city truncates — the distance always stays whole. `pr-14` keeps
                   it clear of the overlaid heart. */}
-              <CardLocationLine
-                vm={vm}
-                as="span"
-                className="mt-0.5 pr-14 text-caption text-muted-foreground"
-              />
-              {/* Trust row — the same rules as ListingCard's claim row.
+                <CardLocationLine
+                  vm={vm}
+                  as="span"
+                  className="mt-0.5 pr-14 text-caption text-muted-foreground"
+                />
+                {/* Trust row — the same rules as ListingCard's claim row.
                   `min-h-[30px]` reserves the badge family's rendered height
                   (py-1 + text-body-sm line + border) so every card keeps the
                   same height; overflow scrolls sideways like ListingCard's
@@ -737,22 +770,22 @@ export function MapCarousel({
                   so a safety chip can never slide underneath it, and the
                   right-edge mask fades clipped content so an overflowing
                   label reads as scrollable, not truncated. */}
-              <span className="mr-10 mt-1.5 flex min-h-[30px] items-center gap-1.5 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%_-_16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {vm.safetyState ? (
-                  <SafetySignal state={vm.safetyState} />
-                ) : vm.suggestedByBot ? (
-                  // No verdict but a live bot suggestion: the shared provenance
-                  // label, not a blank row. Provenance, never a verdict
-                  // (ADR-007) — the card's accessible name carries the same
-                  // context for AT.
-                  <BotProvenanceLabel size="compact" data-testid="carousel-bot-provenance" />
-                ) : null}
-                {/* Recent harm flags the mini-card regardless of the headline
+                <span className="mr-10 mt-1.5 flex min-h-[30px] items-center gap-1.5 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%_-_16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {vm.safetyState ? (
+                    <SafetySignal state={vm.safetyState} />
+                  ) : vm.suggestedByBot ? (
+                    // No verdict but a live bot suggestion: the shared provenance
+                    // label, not a blank row. Provenance, never a verdict
+                    // (ADR-007) — the card's accessible name carries the same
+                    // context for AT.
+                    <BotProvenanceLabel size="compact" data-testid="carousel-bot-provenance" />
+                  ) : null}
+                  {/* Recent harm flags the mini-card regardless of the headline
                     verdict (mirrors ListingCard) — an incident must never read
                     clean on the map. */}
-                {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
-              </span>
-              {/* Meta row — the browse card's anatomy (divider + activity line),
+                  {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
+                </span>
+                {/* Meta row — the browse card's anatomy (divider + activity line),
                   mirrored as closely as a 200px card allows: the activity line
                   only, since the happy-patron count cannot share this width with
                   it. Plain text, not the tooltip trigger the browse card and the
@@ -762,48 +795,48 @@ export function MapCarousel({
                   which also folds in the line itself (`aria-label` hides button
                   content). `mr-12` clears the chevron overlay (`right-3` +
                   `size-9` = 48px), which sits at this row's height. */}
-              <span
-                data-testid="carousel-activity"
-                className="mr-12 mt-1.5 flex items-center gap-1.5 border-t border-border pt-1.5 text-caption text-muted-foreground"
-              >
-                <Clock className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{vm.activity.updatedLabel}</span>
-              </span>
-            </button>
+                <span
+                  data-testid="carousel-activity"
+                  className="mr-12 mt-1.5 flex items-center gap-1.5 border-t border-border pt-1.5 text-caption text-muted-foreground"
+                >
+                  <Clock className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{vm.activity.updatedLabel}</span>
+                </span>
+              </button>
 
-            <FavoriteButton
-              listingId={vm.id}
-              listingName={vm.name}
-              // The default overlay chrome with `top-2` instead of `top-3`: the
-              // heart and the chevron below it would otherwise touch on a card
-              // this short (see {@link CAROUSEL_BAND_PX} for the card's height
-              // breakdown), so the heart gives the pair its gap.
-              className="absolute right-3 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand"
-            />
+              <FavoriteButton
+                listingId={vm.id}
+                listingName={vm.name}
+                // The default overlay chrome with `top-2` instead of `top-3`: the
+                // heart and the chevron below it would otherwise touch on a card
+                // this short (see {@link CAROUSEL_BAND_PX} for the card's height
+                // breakdown), so the heart gives the pair its gap.
+                className="absolute right-3 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand"
+              />
 
-            {/* Chevron link — the accessible way to open the listing, and a
+              {/* Chevron link — the accessible way to open the listing, and a
                 sibling overlay like the heart (never nested in the card
                 button). Muted while unselected; selected uses the `primary`
                 pair, whose dark-mode value is pinned for AA foreground
                 contrast where the lightened dark `brand` is not (styling.md).
                 Sits under the heart in the card's right rail; the trust row's
                 `mr-10` keeps chips clear of it. */}
-            <Link
-              to="/listings/$id"
-              params={{ id: vm.id }}
-              aria-label={`View ${vm.name}`}
-              className={`absolute bottom-2 right-3 z-10 flex size-9 items-center justify-center rounded-full shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2 ${
-                selected
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-background/80 text-muted-foreground backdrop-blur hover:text-brand"
-              }`}
-            >
-              <ChevronRight className="size-4" strokeWidth={2.4} aria-hidden="true" />
-            </Link>
-          </div>
-        );
-      })}
-      {/* "Load more" — an action card in the band (same height via the flex
+              <Link
+                to="/listings/$id"
+                params={{ id: vm.id }}
+                aria-label={`View ${vm.name}`}
+                className={`absolute bottom-2 right-3 z-10 flex size-9 items-center justify-center rounded-full shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2 ${
+                  selected
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-background/80 text-muted-foreground backdrop-blur hover:text-brand"
+                }`}
+              >
+                <ChevronRight className="size-4" strokeWidth={2.4} aria-hidden="true" />
+              </Link>
+            </div>
+          );
+        })}
+        {/* "Load more" — an action card in the band (same height via the flex
           row's default stretch) that cannot be mistaken for a listing: dashed
           brand-tinted border, centred brand-toned action content. It stays
           while the just-requested final page is in flight (`pending`) and
@@ -813,48 +846,65 @@ export function MapCarousel({
           Busy: `aria-busy` + `aria-disabled` + a click guard, never
           `disabled` — focus must stay on the control — with the spinner and
           label at full opacity. */}
-      {loadMore && (loadMore.hasNext || loadMore.pending || loadMore.failed) ? (
-        <button
-          type="button"
-          data-testid="carousel-load-more"
-          aria-busy={loadMore.pending}
-          aria-disabled={loadMore.pending}
-          onFocus={() => {
-            loadMoreFocused.current = true;
-          }}
-          onBlur={() => {
-            loadMoreFocused.current = false;
-          }}
-          onClick={() => {
-            if (loadMore.pending) return;
-            // Marks the coming append as visitor-requested so the append
-            // scroll above runs for it (and only for it). The click is also
-            // a takeover of the band, so a still-armed provisional restore
-            // must not snap back over the append.
-            appendRequested.current = true;
-            restoreTarget.current = null;
-            loadMore.onLoadMore();
-          }}
-          className={`flex w-32 shrink-0 flex-col items-center justify-center gap-1 rounded-card border border-dashed border-brand/40 bg-surface px-3 py-2 text-body-sm font-semibold text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}
-        >
-          {loadMore.pending ? (
-            <LoaderCircle
-              className="size-5 motion-safe:animate-spin"
-              strokeWidth={2.25}
-              aria-hidden="true"
-            />
-          ) : loadMore.failed ? (
-            <RotateCw className="size-5" strokeWidth={2.25} aria-hidden="true" />
-          ) : (
-            <Plus className="size-5" strokeWidth={2.25} aria-hidden="true" />
-          )}
-          {loadMore.pending ? "Loading…" : loadMore.failed ? "Try again" : "Load more"}
-        </button>
-      ) : null}
-      {/* End spacer sized to the viewport-fixed Add-listing FAB's footprint
+        {loadMore && (loadMore.hasNext || loadMore.pending || loadMore.failed) ? (
+          <button
+            type="button"
+            data-testid="carousel-load-more"
+            aria-busy={loadMore.pending}
+            aria-disabled={loadMore.pending}
+            onFocus={() => {
+              loadMoreFocused.current = true;
+            }}
+            onBlur={() => {
+              loadMoreFocused.current = false;
+            }}
+            onClick={() => {
+              if (loadMore.pending) return;
+              // Marks the coming append as visitor-requested so the append
+              // scroll above runs for it (and only for it). The click is also
+              // a takeover of the band, so a still-armed provisional restore
+              // must not snap back over the append.
+              appendRequested.current = true;
+              restoreTarget.current = null;
+              loadMore.onLoadMore();
+            }}
+            className={`flex w-32 shrink-0 flex-col items-center justify-center gap-1 rounded-card border border-dashed border-brand/40 bg-surface px-3 py-2 text-body-sm font-semibold text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}
+          >
+            {loadMore.pending ? (
+              <LoaderCircle
+                className="size-5 motion-safe:animate-spin"
+                strokeWidth={2.25}
+                aria-hidden="true"
+              />
+            ) : loadMore.failed ? (
+              <RotateCw className="size-5" strokeWidth={2.25} aria-hidden="true" />
+            ) : (
+              <Plus className="size-5" strokeWidth={2.25} aria-hidden="true" />
+            )}
+            {loadMore.pending ? "Loading…" : loadMore.failed ? "Try again" : "Load more"}
+          </button>
+        ) : null}
+        {/* End spacer sized to the viewport-fixed Add-listing FAB's footprint
           (right offset + pill width), so the last card can always scroll fully
           clear of it instead of ending underneath. */}
-      <div aria-hidden="true" data-testid="carousel-end-spacer" className="w-40 shrink-0" />
+        <div aria-hidden="true" data-testid="carousel-end-spacer" className="w-40 shrink-0" />
+      </div>
+      {/* Right-edge fade: the scrollbar is hidden, so a clipped card is the
+          band's only scroll cue — this fade makes the clip read as scrollable
+          (the trust row's right-edge mask idiom, at band scale). An overlay
+          ABOVE the band, deliberately NOT a mask-image on the band itself: a
+          mask would make the opaque `bg-background` translucent at the edge
+          and let a low pin bleed through (the safety invariant above). z-10
+          keeps it over the cards' own raised overlays (heart/chevron);
+          pointer-events-none keeps the strip fully interactive beneath it.
+          The viewport-fixed Add-listing FAB sits above at z-30, unfaded. No
+          left-edge mirror: selection and restore park the chosen card
+          flush-left, so a fade there would sit over its leading edge. */}
+      <div
+        aria-hidden="true"
+        data-testid="carousel-edge-fade"
+        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-background to-transparent"
+      />
     </div>
   );
 }
