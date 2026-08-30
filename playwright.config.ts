@@ -21,7 +21,7 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      // Anchored so only the exact file matches — a substring match would
+      // Anchored so only a file named exactly a11y.spec.ts matches — a substring match would
       // silently reroute any `*-a11y.spec.ts` into the wrong lane.
       testIgnore: /(^|\/)a11y\.spec\.ts$/,
     },
@@ -31,7 +31,7 @@ export default defineConfig({
     {
       name: "a11y",
       use: { ...devices["Desktop Chrome"] },
-      // Anchored so only the exact file matches — a substring match would
+      // Anchored so only a file named exactly a11y.spec.ts matches — a substring match would
       // silently reroute any `*-a11y.spec.ts` into the wrong lane.
       testMatch: /(^|\/)a11y\.spec\.ts$/,
     },
