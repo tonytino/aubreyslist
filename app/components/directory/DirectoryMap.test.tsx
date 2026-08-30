@@ -11,6 +11,7 @@ import { useEffect, useReducer } from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { currentUserQuery } from "~/auth/current-user-query";
 import type { RestaurantCardVM } from "~/components/listing/ListingCard";
+import { SCROLL_FADE_RIGHT } from "~/components/scroll-fade";
 import { favoriteIdsQuery } from "~/favorites/favorites-query";
 import type { MapLoadMore } from "~/listings/use-map-pages";
 import { deriveListingActivityMeta } from "~/trust/summary";
@@ -20,6 +21,7 @@ import {
   type DirectoryMapEntry,
   resetLiveMapFailureLatch,
 } from "./DirectoryMap";
+import { CAROUSEL_BAND_PX, RECENTER_FAB_GAP_PX } from "./map-ui";
 
 // Each carousel entry carries a FavoriteButton island, which imports the
 // `favorites.fn` server seam (transitively db-touching). As in
@@ -536,6 +538,22 @@ describe("DirectoryMap — band right-edge fade (AUB-278)", () => {
     expect(fade.parentElement).toBe(carousel.parentElement);
   });
 
+  it("keeps the mini-card inside the scroller at its full 224px, under the fade", async () => {
+    await renderMap();
+    const carousel = screen.getByTestId("map-carousel");
+    const fade = screen.getByTestId("carousel-edge-fade");
+    const entry = cardOf("New Spot").parentElement as HTMLElement;
+    // The full-anatomy card is band CONTENT: it scrolls beneath the fade
+    // rather than sitting beside it, so the fade keeps pinning to the band's
+    // visual edge whatever the card measures.
+    expect(entry.className).toContain("w-[224px]");
+    expect(carousel).toContainElement(entry);
+    expect(entry).not.toContainElement(fade);
+    // scroll-padding is card-width independent, so the fade clearance needs no
+    // retune when the mini-card resizes.
+    expect(carousel.className).toContain("scroll-pr-10");
+  });
+
   it("mirrors nothing on the left edge, where selection parks cards flush-left", async () => {
     await renderMap();
     const shell = screen.getByTestId("map-carousel").parentElement as HTMLElement;
@@ -548,8 +566,8 @@ describe("DirectoryMap — band right-edge fade (AUB-278)", () => {
 describe("DirectoryMap — mini-card meta row mirrors ListingCard (AUB-298)", () => {
   it("gives EVERY mini-card the same divider + activity line", async () => {
     await renderMap();
-    // Uniform anatomy: the mini-card mirrors the browse card's meta row as
-    // closely as 200px allows — every card, whatever it knows.
+    // Uniform anatomy: the mini-card carries the browse card's meta row —
+    // every card, whatever it knows.
     for (const { card } of [
       { card: cardOf("Root & Rye, Celiac-safe") },
       { card: cardOf("New Spot") },
@@ -568,6 +586,99 @@ describe("DirectoryMap — mini-card meta row mirrors ListingCard (AUB-298)", ()
     const row = within(cardOf("New Spot")).getByTestId("carousel-activity");
     expect(row.tagName).toBe("SPAN");
     expect(row.querySelector("button")).toBeNull();
+    // ...and with no trigger there is nothing to open, so the label draws no
+    // dotted underline either — that cue must keep meaning "tap me".
+    expect(row.innerHTML).not.toContain("decoration-dotted");
+  });
+
+  it("carries the happy-patron count in the meta row, glyph + number (AUB-300)", async () => {
+    const { rerenderWith } = await renderMap();
+    rerenderWith(null, [
+      {
+        vm: vm({
+          id: "loved",
+          name: "Loved Spot",
+          safetyState: "celiac-safe",
+          activity: deriveListingActivityMeta({ lastActivityAt: new Date(), happyPatrons: 12 }),
+        }),
+        lat: 39.74,
+        lng: -104.99,
+      },
+    ]);
+    const meta = within(cardOf("Loved Spot, Celiac-safe")).getByTestId("carousel-activity");
+    const patrons = within(meta).getByTestId("happy-patrons");
+    // The painted number is a bare digit — all that fits at this width — and it
+    // is hidden from AT so the digit is never announced alone.
+    const painted = within(patrons).getByText("12");
+    expect(painted).toHaveAttribute("aria-hidden", "true");
+    // The noun rides in real, visually-hidden text beside it...
+    expect(within(patrons).getByText("12 happy patrons")).toHaveClass("sr-only");
+    // ...and again in the card's own name, since `aria-label` hides card content.
+    expect(cardOf("Loved Spot, Celiac-safe")).toHaveAccessibleName(/12 happy patrons$/);
+  });
+
+  it("omits the patron count at zero rather than showing a bare '0'", async () => {
+    await renderMap();
+    const meta = within(cardOf("New Spot")).getByTestId("carousel-activity");
+    expect(within(meta).queryByTestId("happy-patrons")).not.toBeInTheDocument();
+    // The divider and the activity line still render — the slot is reserved by
+    // the row, not by its right-hand content.
+    expect(meta.className).toContain("border-t");
+  });
+
+  it("fades the signals row from the SAME shared constant as the browse card", async () => {
+    await renderMap();
+    const row =
+      cardOf("Root & Rye, Celiac-safe").querySelector("[data-safety-state]")?.parentElement;
+    expect(row?.className).toContain(SCROLL_FADE_RIGHT);
+  });
+
+  it("composes the shared heart chrome rather than restating it", async () => {
+    await renderMap();
+    const heart = screen.getByRole("button", { name: "Save New Spot" });
+    // One overlay chrome for both card surfaces, shifted to `top-2` here so the
+    // heart and the chevron below it do not touch on this short card.
+    expect(heart.className).toContain("top-2");
+    expect(heart.className).not.toContain("top-3");
+    expect(heart).toHaveClass("bg-background/80", "min-w-9", "focus-visible:ring-brand-ring");
+  });
+
+  it("puts the chevron at the meta row's right end, clear of the row's content", async () => {
+    await renderMap();
+    const chevron = screen.getByRole("link", { name: "View New Spot" });
+    // Anchored bottom-right of the card wrapper — which is where the meta row
+    // sits — and a sibling overlay of the card button, never nested in it.
+    expect(chevron.className).toContain("absolute");
+    expect(chevron.className).toContain("bottom-2");
+    expect(chevron.className).toContain("right-3");
+    expect(cardOf("New Spot")).not.toContainElement(chevron);
+    // The meta row pads (never margins) itself clear, so the divider still
+    // spans the card's full width like the browse card's does.
+    const meta = within(cardOf("New Spot")).getByTestId("carousel-activity");
+    expect(meta.className).toContain("pr-11");
+    expect(meta.className).not.toContain("mr-");
+  });
+
+  it("keeps the mini-card the same height selected or not (band-height stability)", async () => {
+    await renderMap("c");
+    const selected = cardOf("New Spot");
+    const unselected = cardOf("Root & Rye, Celiac-safe");
+    // The selected card's extra border is paid for out of its own padding, so
+    // CAROUSEL_BAND_PX holds whichever card is selected.
+    expect(selected.className).toContain("border-2");
+    expect(selected.className).toContain("px-[11px]");
+    expect(selected.className).toContain("py-[7px]");
+    expect(unselected.className).toContain("px-3");
+    expect(unselected.className).toContain("py-2");
+  });
+
+  it("derives the recenter FAB's offset from CAROUSEL_BAND_PX (+12px gap)", async () => {
+    // Tailwind cannot interpolate a JS constant into a class, so the literal is
+    // restated in map-ui.tsx — this is what keeps the two from drifting when
+    // the mini-card changes size.
+    await renderMap();
+    const fab = screen.getByRole("button", { name: "Recenter map" });
+    expect(fab.className).toContain(`bottom-[${CAROUSEL_BAND_PX + RECENTER_FAB_GAP_PX}px]`);
   });
 
   it("carries the clarifier in the ACCESSIBLE NAME of a card that has a dated line", async () => {
@@ -594,7 +705,7 @@ describe("DirectoryMap — mini-card meta row mirrors ListingCard (AUB-298)", ()
 
     expect(
       screen.getByRole("button", {
-        name: "Active Spot, Celiac-safe, Denver, Updated 3 days ago, claim activity, not a safety verification",
+        name: "Active Spot, Celiac-safe, Denver, Updated 3 days ago, claim activity, not a safety verification, 4 happy patrons",
       })
     ).toBeInTheDocument();
   });
@@ -696,7 +807,7 @@ describe("DirectoryMap — mini-card location line", () => {
     expect(within(card).queryByText(/St,|Ave,/)).not.toBeInTheDocument();
   });
 
-  it("keeps the DISTANCE whole when a long city has to truncate at 200px", async () => {
+  it("keeps the DISTANCE whole when a long city has to truncate at 224px", async () => {
     const { rerenderWith } = await renderMap(null);
     rerenderWith(null, [
       {
@@ -712,7 +823,7 @@ describe("DirectoryMap — mini-card location line", () => {
       },
     ]);
     const line = within(cardOf("Verdant Table, Celiac-safe")).getByTestId("card-location");
-    // The 200px card cannot fit both segments. Only the CITY is allowed to
+    // The narrow card cannot fit both segments. Only the CITY is allowed to
     // clip: the distance is the segment the map exists to convey, so it stays
     // in the DOM and out of the truncating box.
     expect(within(line).getByText("Greenwood Village").className).toContain("truncate");

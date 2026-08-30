@@ -88,6 +88,15 @@ Dark mode is class-based (ADR-011), via three pieces:
 When adding tokens, add the light value under `@theme` **and** a matching
 `.dark` override, and re-check AA contrast for both themes.
 
+The one deliberate exception is a token whose BACKGROUND does not follow the
+theme either. The `--color-accent-*` pastels are not re-pointed in `.dark`, so a
+tile painted with one stays light in both themes — and text on it must stay dark
+in both. `--color-accent-ink` is therefore defined once, with no `.dark`
+override; giving it one would reintroduce the near-white-on-pastel failure it
+exists to fix. Pair such a tile with an opaque light base (the browse card's
+photo placeholder uses `bg-white` under its gradient) so an alpha gradient stop
+cannot composite the dark surface through it.
+
 ## Brand & Design Tokens
 
 Direction: clean / clinical-but-warm, mobile-first, **purple-led** with soft
@@ -100,7 +109,7 @@ they surface as Tailwind v4 utilities — never reach for inline styles or
 | Group | Tokens | Utility examples |
 | --- | --- | --- |
 | Brand | `--color-brand`, `-foreground`, `-strong`, `-soft`, `-ring` | `bg-brand`, `text-brand`, `hover:bg-brand-strong`, `bg-brand-soft` |
-| Pastel accents (decorative only) | `--color-accent-{lavender,mint,peach,sky}` | `bg-accent-mint` |
+| Pastel accents (decorative only) | `--color-accent-{lavender,mint,peach,sky}`, `--color-accent-ink` | `bg-accent-mint`, `text-accent-ink` |
 | Neutrals | `--color-{background,foreground,surface,border}`, `--color-muted-foreground` | `bg-background`, `text-foreground`, `border-border` |
 | Safety states | `--color-{celiac-safe,stale,incident}` + `-foreground` + `-soft` | use the `SafetySignal` component, not raw classes |
 | Type scale | `--text-{caption,body-sm,body,lead,title,headline,display}` | `text-display`, `text-body` |

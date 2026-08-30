@@ -12,14 +12,17 @@ import {
 import type { CSSProperties, RefObject } from "react";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { BotProvenanceLabel } from "~/components/listing/BotProvenanceLabel";
-import { FavoriteButton } from "~/components/listing/FavoriteButton";
+import { FAVORITE_OVERLAY_CHROME, FavoriteButton } from "~/components/listing/FavoriteButton";
+import { HappyPatrons } from "~/components/listing/ListingActivity";
 import {
   CardLocationLine,
   cardLocationParts,
   type RestaurantCardVM,
 } from "~/components/listing/ListingCard";
 import { SafetySignal, type SafetyState, safetyIcon, safetyLabel } from "~/components/SafetySignal";
+import { SCROLL_FADE_RIGHT } from "~/components/scroll-fade";
 import { prefersReducedMotion } from "~/lib/motion";
+import { cn } from "~/lib/utils";
 import type { MapLoadMore } from "~/listings/use-map-pages";
 import { ACTIVITY_NAME_CLARIFIER } from "~/trust/summary";
 
@@ -38,7 +41,9 @@ import { ACTIVITY_NAME_CLARIFIER } from "~/trust/summary";
  * at `z-10` above the pins (`z-1`/`z-6` in the placeholder; the Google map
  * canvas is a `z-0`-clamped sibling in the live path) and draws an opaque
  * background band, so any low pin hides behind the band instead of over a
- * card.
+ * card. The band's right-edge fade is an overlay ON that opaque fill, never a
+ * mask applied to it — a mask would thin the fill and let a low pin bleed
+ * through the very edge the fade decorates.
  *
  * Accessibility: every pin and mini-card is a real `<button>`; the pin's
  * visible content is decorative and its accessible name is the restaurant name
@@ -75,16 +80,35 @@ const MAP_CONTROL_SURFACE =
   "shadow-md motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
 
 /**
- * Approximate rendered height of the opaque carousel band in px — the ONE
- * retune point when the mini-cards change size: `pt-3` (12) + card (~121:
- * `py-2` + name + location line + 30px chip row + the meta row's divider +
- * `mt-1.5`/`pt-1.5` + caption line + border) + `pb-3` (12). Derived from it:
- * the live map's `FIT_PADDING.bottom` and selection-pan offset
- * (`DirectoryMapLive.tsx`) and the recenter FAB's `bottom-[157px]` (band + a
+ * Rendered height of the opaque carousel band in px — the ONE retune point
+ * when the mini-cards change size. The scroller is the box measured here: it
+ * owns the fill and the vertical padding, while its positioning shell adds no
+ * box of its own and the edge fade is `absolute inset-y-0`. Summed top to
+ * bottom:
+ *
+ * ```
+ *   12  scroller pt-3
+ *    1  card border-top
+ *    8  card py-2
+ *   20  name row (the 20px index chip / the 20px text-body-sm line)
+ *   18  location line (mt-0.5 + a 16px text-caption line)
+ *   36  signals row (mt-1.5 + min-h-[30px], the badge family's height)
+ *   33  meta row (mt-2 + 1px divider + pt-2 + a 16px text-caption line)
+ *    8  card py-2
+ *    1  card border-bottom
+ *   12  scroller pb-3
+ *  ---
+ *  149
+ * ```
+ *
+ * The selected card compensates its extra border with `px-[11px] py-[7px]`, so
+ * selecting never changes the band's height. Derived from this constant: the
+ * live map's `FIT_PADDING.bottom` and selection-pan offset
+ * (`DirectoryMapLive.tsx`) and the recenter FAB's `bottom-[161px]` (band + a
  * 12px gap — Tailwind can't interpolate a JS constant into a class, so that
- * one is restated below).
+ * one is restated below and pinned by a test).
  */
-export const CAROUSEL_BAND_PX = 145;
+export const CAROUSEL_BAND_PX = 149;
 
 /**
  * Invoke `onUserSelect` exactly when a selection change was caused by a user
@@ -240,6 +264,10 @@ function cardAccessibleName(vm: RestaurantCardVM): string {
   // bare rather than adding a sentence to every unattested card in the band.
   parts.push(vm.activity.updatedLabel);
   if (vm.activity.hasActivity) parts.push(ACTIVITY_NAME_CLARIFIER);
+  // The meta row's right slot. Sighted users see a glyph + a bare number; AT
+  // must hear the noun, because "4" announced right after a safety label is
+  // exactly the ambiguity ADR-007 forbids. Absent at zero, like the chip.
+  if (vm.activity.happyPatronsLabel !== null) parts.push(vm.activity.happyPatronsLabel);
   return parts.join(", ");
 }
 
@@ -339,12 +367,15 @@ export function MapPinButton({
   );
 }
 
+/** Clearance between the top of the carousel band and the recenter FAB, in px. */
+export const RECENTER_FAB_GAP_PX = 12;
+
 /**
  * Recenter FAB. In the live map path `onClick` re-fits the camera to the
  * current pins; in the CSS-placeholder fallback it is passed no handler and
- * stays an unwired affordance. `bottom-[157px]` = {@link CAROUSEL_BAND_PX} +
- * a 12px gap, restated as a literal because Tailwind arbitrary values can't
- * interpolate a JS constant.
+ * stays an unwired affordance. `bottom-[161px]` = {@link CAROUSEL_BAND_PX} +
+ * {@link RECENTER_FAB_GAP_PX}, restated as a literal because Tailwind arbitrary
+ * values can't interpolate a JS constant; a test pins the two together.
  */
 export function RecenterFab({ onClick }: { onClick?: () => void }) {
   return (
@@ -352,7 +383,7 @@ export function RecenterFab({ onClick }: { onClick?: () => void }) {
       type="button"
       aria-label="Recenter map"
       {...(onClick ? { onClick } : {})}
-      className={`absolute bottom-[157px] right-4 z-[11] inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}
+      className={`absolute bottom-[161px] right-4 z-[11] inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface text-brand-strong hover:bg-brand-soft ${MAP_CONTROL_SURFACE}`}
     >
       <LocateFixed className="size-5" strokeWidth={2.25} aria-hidden="true" />
     </button>
@@ -500,8 +531,11 @@ function useWheelHorizontalScroll(containerEl: RefObject<HTMLDivElement | null>)
  * correlation aid: it is `aria-hidden`, the card's accessible name
  * (`cardAccessibleName`) never carries it, and safety meaning still comes
  * from the chip row below (colour + icon + label).
- * Text-dense slim cards: name, the shared "city · distance" location line, and
- * the same trust row rules as the browse list card (`ListingCard`): headline
+ * Text-dense slim cards carrying the browse card's anatomy minus the media
+ * slot: name, the shared "city · distance" location line, the signals row, the
+ * divider, and the meta row (activity line + happy-patron count). Same slots,
+ * same order, same emptiness rules — only the widths differ.
+ * The trust row follows the browse list card's rules (`ListingCard`): headline
  * `SafetySignal` (or the bot-provenance hint when there is no verdict but a
  * live bot suggestion, or nothing at all when neither), plus the incident
  * add-on chip whenever `hasRecentIncident` — recent harm must flag the
@@ -704,9 +738,13 @@ export function MapCarousel({
         tabIndex={-1}
         onPointerDown={onUserBandInput}
         onWheel={onUserBandInput}
+        // The scroller owns the band's opaque fill and its `pt-3`/`pb-3`, so it
+        // is the box {@link CAROUSEL_BAND_PX} measures; the shell adds none.
         // scroll-pr-10 = the fade's width: focus-driven minimal scrolls (a
         // tabbed-to heart/chevron) park the card clear of the fade instead of
-        // flush under its most opaque zone, so focus rings stay unwashed.
+        // flush under its most opaque zone, so focus rings stay unwashed. It is
+        // a scroll padding, independent of the card width, so it needs no
+        // retune when the mini-card resizes.
         className="flex gap-3 overflow-x-auto scroll-pr-10 bg-background px-4 pb-3 pt-3 shadow-[0_-8px_20px_rgba(76,50,120,0.1)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {entries.map(({ vm }, entryIndex) => {
@@ -718,16 +756,20 @@ export function MapCarousel({
             // inside the mini-card <button> would be invalid HTML + a
             // nested-interactive a11y defect. The wrapper carries the fixed
             // carousel-entry width; the mini-card button fills it, and FavoriteButton
-            // is raised over it (`absolute … z-10`). The carousel's own opaque
-            // `bg-background` band + z-10 stacking (documented above) still keep low
-            // pins behind the whole band, so nothing here weakens that invariant.
+            // is raised over it (`absolute … z-10`). The scroller's opaque
+            // `bg-background` fill under the shell's `z-10` (documented above) still
+            // keeps low pins behind the whole band, so nothing here weakens that
+            // invariant.
             <div
               key={vm.id}
               ref={(node) => {
                 if (node) cardEls.current.set(vm.id, node);
                 else cardEls.current.delete(vm.id);
               }}
-              className="relative w-[200px] shrink-0"
+              // 224px: the mini-card carries the browse card's full meta row —
+              // activity line and patron count — and a narrower box cannot hold
+              // both without squeezing the name.
+              className="relative w-[224px] shrink-0"
             >
               <button
                 type="button"
@@ -747,8 +789,14 @@ export function MapCarousel({
                     onSelect(vm.id);
                   }
                 }}
-                className={`block w-full rounded-card bg-surface px-3 py-2 text-left shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
-                  selected ? "border-2 border-brand" : "border border-border"
+                // The selected card's thicker border is paid for out of its own
+                // padding (`px-[11px] py-[7px]` vs `px-3 py-2`), so selecting a
+                // card never changes its height — and never changes the band's
+                // (see {@link CAROUSEL_BAND_PX}).
+                className={`block w-full rounded-card bg-surface text-left shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring ${
+                  selected
+                    ? "border-2 border-brand px-[11px] py-[7px]"
+                    : "border border-border px-3 py-2"
                 }`}
               >
                 {/* pr-14 keeps the two text rows clear of the overlaid heart
@@ -771,7 +819,7 @@ export function MapCarousel({
                   </span>
                 </span>
                 {/* The same location line the list card renders, from one shared
-                  component so the two surfaces cannot disagree. At 200px only the
+                  component so the two surfaces cannot disagree. At 224px only the
                   city truncates — the distance always stays whole. `pr-14` keeps
                   it clear of the overlaid heart. */}
                 <CardLocationLine
@@ -785,9 +833,15 @@ export function MapCarousel({
                   same height; overflow scrolls sideways like ListingCard's
                   row. `mr-10` ends the scroll box before the chevron overlay,
                   so a safety chip can never slide underneath it, and the
-                  right-edge mask fades clipped content so an overflowing
-                  label reads as scrollable, not truncated. */}
-                <span className="mr-10 mt-1.5 flex min-h-[30px] items-center gap-1.5 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%_-_16px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  shared right-edge fade marks clipped content as scrollable
+                  rather than truncated. Card-local, and unrelated to the
+                  band's own edge fade below. */}
+                <span
+                  className={cn(
+                    "mr-10 mt-1.5 flex min-h-[30px] items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                    SCROLL_FADE_RIGHT
+                  )}
+                >
                   {vm.safetyState ? (
                     <SafetySignal state={vm.safetyState} />
                   ) : vm.suggestedByBot ? (
@@ -802,33 +856,48 @@ export function MapCarousel({
                     clean on the map. */}
                   {vm.hasRecentIncident ? <SafetySignal state="incident" /> : null}
                 </span>
-                {/* Meta row — the browse card's anatomy (divider + activity line),
-                  mirrored as closely as a 200px card allows: the activity line
-                  only, since the happy-patron count cannot share this width with
-                  it. Plain text, not the tooltip trigger the browse card and the
+                {/* Meta row — the browse card's sixth slot in full: the activity
+                  line on the left and the happy-patron count on the right, same
+                  order, same meaning.
+
+                  Plain text, not the tooltip trigger the browse card and the
                   detail hero use: a <button> inside this card's own <button>
-                  would be invalid HTML and a nested-interactive a11y defect. The
-                  clarifier reaches AT through `cardAccessibleName` instead,
-                  which also folds in the line itself (`aria-label` hides button
-                  content). `mr-12` clears the chevron overlay (`right-3` +
-                  `size-9` = 48px), which sits at this row's height. */}
+                  would be invalid HTML and a nested-interactive a11y defect —
+                  which is also why the label carries no dotted underline here,
+                  since there is nothing to open. The clarifier reaches AT
+                  through `cardAccessibleName` instead, which also folds in the
+                  line itself and the patron phrase (`aria-label` hides button
+                  content).
+
+                  `pr-11`, not a margin: the divider is structure and must span
+                  the full card width like the browse card's. The padding is what
+                  clears the chevron overlay, whose inner edge sits 35px from this
+                  padding box (`right-3` + `size-9` = 48px from the card's border
+                  box, less the 1px border and the 12px `px-3`), leaving a 9px gap. */}
                 <span
                   data-testid="carousel-activity"
-                  className="mr-12 mt-1.5 flex items-center gap-1.5 border-t border-border pt-1.5 text-caption text-muted-foreground"
+                  className="mt-2 flex items-center justify-between gap-2 border-t border-border pr-11 pt-2 text-caption"
                 >
-                  <Clock className="size-3.5 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{vm.activity.updatedLabel}</span>
+                  <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-muted-foreground">
+                    <Clock className="size-3.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{vm.activity.updatedLabel}</span>
+                  </span>
+                  {/* Glyph + bare number at this width; the noun rides in the
+                    shared component's visually-hidden text and in
+                    `cardAccessibleName`. Absent at zero, as on the browse card. */}
+                  <HappyPatrons meta={vm.activity} size="compact" />
                 </span>
               </button>
 
               <FavoriteButton
                 listingId={vm.id}
                 listingName={vm.name}
-                // The default overlay chrome with `top-2` instead of `top-3`: the
-                // heart and the chevron below it would otherwise touch on a card
-                // this short (see {@link CAROUSEL_BAND_PX} for the card's height
-                // breakdown), so the heart gives the pair its gap.
-                className="absolute right-3 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm backdrop-blur transition-colors hover:text-brand"
+                // The shared overlay chrome, raised to `top-2`: on a card this
+                // short (see {@link CAROUSEL_BAND_PX} for the height breakdown)
+                // the heart and the chevron below it would otherwise touch, so
+                // the heart gives the pair its gap. Composed, never restated, so
+                // the two surfaces cannot draw different hearts.
+                className={cn(FAVORITE_OVERLAY_CHROME, "top-2")}
               />
 
               {/* Chevron link — the accessible way to open the listing, and a
@@ -836,8 +905,10 @@ export function MapCarousel({
                 button). Muted while unselected; selected uses the `primary`
                 pair, whose dark-mode value is pinned for AA foreground
                 contrast where the lightened dark `brand` is not (styling.md).
-                Sits under the heart in the card's right rail; the trust row's
-                `mr-10` keeps chips clear of it. */}
+                Anchored at the card's bottom-right so it lands at the meta
+                row's right end, past the patron count: the meta row's `pr-11`
+                and the signals row's `mr-10` are what keep content clear of
+                it, so it overlays only empty space. */}
               <Link
                 to="/listings/$id"
                 params={{ id: vm.id }}
