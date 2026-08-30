@@ -36,7 +36,7 @@
     "includes": [
       "**",
       "!**/app/routeTree.gen.ts",
-      "!**/scripts/seed-listings.generated.json",
+      "!**/scripts/*.generated.json",
       "!**/node_modules",
       "!**/.output",
       "!**/.nitro",
