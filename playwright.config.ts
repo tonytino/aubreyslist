@@ -16,8 +16,9 @@ export default defineConfig({
     // Default E2E project: the full suite EXCEPT the a11y spec. The a11y spec
     // runs in its own always-on, DB-free CI lane (.github/workflows/a11y.yml) so
     // it must not be double-discovered/double-counted here in the DB-gated
-    // `integration-e2e` lane (.github/workflows/ci.yml). `pnpm test:e2e` runs
-    // this project only (it is listed first / is the non-a11y project).
+    // `integration-e2e` lane (.github/workflows/ci.yml), which targets this
+    // project with `--project=chromium`. A bare `pnpm test:e2e` runs every
+    // project, this one included — pass `--project` to run one lane.
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },

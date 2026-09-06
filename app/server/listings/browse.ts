@@ -587,8 +587,8 @@ type CeliacTrustSubquery = ReturnType<typeof celiacTrustSubquery>;
  * "Near me": the `distance` case orders by the great-circle (haversine)
  * distance from `coords` to each listing's stored lat/lng, ascending — the
  * same formula as the pure `haversineKm` helper, in SQL. With no coords
- * (geolocation denied/unavailable, or SSR) it falls back to the alphabetical
- * default rather than erroring.
+ * (geolocation denied/unavailable, or SSR) it falls back to
+ * {@link DISTANCE_FALLBACK_SORT} ("recency") rather than erroring.
  *
  * Every sort ends with `name ASC` as a stable tiebreaker, so the order is
  * deterministic (no row shuffling between requests).
