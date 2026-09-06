@@ -28,9 +28,9 @@ blockExoticSubdeps: true
 
 # Dependency version pins. Moved here from the package.json `pnpm.overrides`
 # field, which pnpm 11 no longer reads (see https://pnpm.io/settings). Several
-# of these are security floors (shell-quote, h3, tar, ws, qs, fast-uri,
-# minimatch, brace-expansion), so keeping them effective is part of the same
-# supply-chain posture.
+# of these are security floors (browserslist, shell-quote, h3, tar, ws, qs,
+# fast-uri, minimatch, brace-expansion), so keeping them effective is part of
+# the same supply-chain posture.
 #
 # brace-expansion + minimatch are floored TOGETHER, and the pairing is
 # load-bearing — brace-expansion must never be raised past v2 without minimatch
@@ -65,16 +65,17 @@ blockExoticSubdeps: true
 # Floor minimatch at ^10 so the last v2 consumers (archiver → readdir-glob, and
 # glob@10) move off it and a single brace-expansion@5.0.8 can serve the tree.
 overrides:
+  browserslist: "^4.28.7"
   shell-quote: "^1.8.4"
   h3: "^1.15.9"
   nitropack: "^2.13.4"
   tar: "^7.5.21"
   ws: "^8.21.0"
-  fast-uri: "^3.1.5"
+  fast-uri: "^3.1.6"
   minimatch: "^10.2.5"
   brace-expansion: "5.0.9"
   "@babel/core": "^7.29.6"
-  qs: "^6.15.2"
+  qs: "^6.16.0"
   diff: "^8.0.3"
   "@esbuild-kit/core-utils>esbuild": "^0.25.0"
   tsx>esbuild: "^0.28.1"
