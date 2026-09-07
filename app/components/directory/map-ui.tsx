@@ -80,7 +80,7 @@ const MAP_CONTROL_SURFACE =
   "shadow-md motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring";
 
 /**
- * Rendered height of the opaque carousel band in px — the ONE retune point
+ * Rendered height of the opaque carousel band in px — the one retune point
  * when the mini-cards change size. The scroller is the box measured here: it
  * owns the fill and the vertical padding, while its positioning shell adds no
  * box of its own and the edge fade is `absolute inset-y-0`. Summed top to
@@ -112,7 +112,7 @@ export const CAROUSEL_BAND_PX = 149;
 
 /**
  * Invoke `onUserSelect` exactly when a selection change was caused by a user
- * tap on a pin/mini-card — the ONE discriminator shared by both selection-sync
+ * tap on a pin/mini-card — the one discriminator shared by both selection-sync
  * surfaces (the carousel's scroll-into-view and the live map's pan), so their
  * notion of "user selection" can never drift. `selectedId` itself carries no
  * cause, so the cause is inferred from the transition; skipped by design:
@@ -216,7 +216,7 @@ function indexNumberClass(index: number): string {
 }
 
 /**
- * The ONE incident add-on gate: a recent incident riding any non-incident
+ * The one incident add-on gate: a recent incident riding any non-incident
  * headline (a `null` headline included) both decorates the pin dot and is
  * appended to the accessible name. `pinAccessibleName` and the badge render
  * in `MapPinButton` must share this predicate, so the spoken and the visible
@@ -227,7 +227,7 @@ function showsIncidentAddOn(vm: RestaurantCardVM): boolean {
 }
 
 /**
- * The ONE accessible-name construction for both the pin and the mini-card
+ * The one accessible-name construction for both the pin and the mini-card
  * (`aria-label` overrides button content, so anything visual-only inside —
  * like the incident add-on chip — is invisible to AT unless folded in here).
  * A recent incident is appended per {@link showsIncidentAddOn}: what sighted
