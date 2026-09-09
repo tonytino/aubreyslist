@@ -21,5 +21,16 @@
         ]
       }
     ]
+  },
+  "extraKnownMarketplaces": {
+    "claude-code-hooks": {
+      "source": {
+        "source": "github",
+        "repo": "tonytino/claude-code-hooks"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "block-self-bind-schedule@claude-code-hooks": true
   }
 }
