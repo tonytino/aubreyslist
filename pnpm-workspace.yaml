@@ -77,6 +77,7 @@ overrides:
   "@babel/core": "^7.29.6"
   qs: "^6.16.0"
   diff: "^8.0.3"
+  js-yaml: "^4.3.2"
   "@esbuild-kit/core-utils>esbuild": "^0.25.0"
   tsx>esbuild: "^0.28.1"
 
