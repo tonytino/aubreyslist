@@ -64,7 +64,7 @@
     "hono": "^4.13.7",
     "iron-webcrypto": "^2.0.0",
     "lucide-react": "^1.31.0",
-    "motion": "^13.1.0",
+    "motion": "^14.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "sonner": "^2.0.8",
