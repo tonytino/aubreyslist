@@ -25,7 +25,7 @@ cp .env.example .env   # then fill in DATABASE_URL — see docs/agents/environme
 pnpm dev
 ```
 
-Running E2E tests? Install browsers first with `pnpm test:e2e:install`.
+Running E2E tests? Install Chromium first with `pnpm test:e2e:install`.
 
 ## For Agents
 
