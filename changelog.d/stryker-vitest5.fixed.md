@@ -1,0 +1,2 @@
+- `[manual]` Bumped `@stryker-mutator/core` and `@stryker-mutator/vitest-runner` to `^10.1.1`. Under 9.6.1 the mutation gate ran 0 tests per mutant on vitest 5, so it scored 0.00. Vitest 5 joins test names with `' > '`, and Stryker 9's per-test filter still joined them with spaces, so the filter matched no tests. Stryker 10 uses the new separator.
+- `[manual]` Scoped the `@babel/core` override to the 7.x line (`@babel/core@<8`). Stryker 10's instrumenter needs Babel 8, and the global override forced it back to core 7, which crashed instrumentation.
