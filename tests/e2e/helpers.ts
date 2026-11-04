@@ -27,6 +27,18 @@ export async function waitForHydration(page: Page): Promise<void> {
 }
 
 /**
+ * Wait for the open Radix menu's enter animation to finish.
+ *
+ * axe samples computed colors mid-fade (opacity < 1), so contrast ratios vary
+ * between runs. Visibility alone does not mean the animation has ended.
+ */
+export async function waitForMenuAnimations(page: Page): Promise<void> {
+  await page
+    .locator('[role="menu"][data-state="open"]')
+    .evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+}
+
+/**
  * Wait for the browse route's own hydration commit (see the
  * `data-browse-hydrated` stamp in app/routes/index.tsx).
  *

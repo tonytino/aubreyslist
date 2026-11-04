@@ -1,0 +1,1 @@
+- `[manual]` Speed up the CI Playwright install by fetching only Chromium, and wait for the mobile menu animation to finish before the axe scan so the a11y lane stops failing intermittently on color-contrast.

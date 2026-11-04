@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { runAxeScan, waitForHydration } from "./helpers";
+import { runAxeScan, waitForHydration, waitForMenuAnimations } from "./helpers";
 
 /**
  * Accessibility gate.
@@ -107,6 +107,7 @@ test.describe("mobile header (375px)", () => {
     await nav.getByRole("button", { name: "Open menu" }).click();
     // Wait for the portaled panel to be present before scanning.
     await expect(page.getByRole("menuitem", { name: "Browse" })).toBeVisible();
+    await waitForMenuAnimations(page);
 
     {
       const { violations, summary } = await runAxeScan(page);
