@@ -1,6 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
-import { routerWithQueryClient } from "@tanstack/react-router-with-query";
+import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { routeTree } from "./routeTree.gen";
 
 // TanStack Start's Vite plugin imports `getRouter` from this file via the
@@ -16,20 +16,18 @@ export function getRouter() {
     },
   });
 
-  // routerWithQueryClient dehydrates loader-prefetched query data on the
-  // server and hydrates it on the client — no manual hydration setup.
-  return routerWithQueryClient(
-    createTanStackRouter({
-      routeTree,
-      context: { queryClient },
-      defaultPreload: "intent",
-      defaultPreloadStaleTime: 0,
-      Wrap: ({ children }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      ),
-    }),
-    queryClient
-  );
+  const router = createTanStackRouter({
+    routeTree,
+    context: { queryClient },
+    defaultPreload: "intent",
+    defaultPreloadStaleTime: 0,
+  });
+
+  // Dehydrates loader-prefetched query data on the server, hydrates it on the
+  // client, and wraps the router in a QueryClientProvider.
+  setupRouterSsrQueryIntegration({ router, queryClient });
+
+  return router;
 }
 
 declare module "@tanstack/react-router" {
