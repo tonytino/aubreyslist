@@ -18,8 +18,8 @@ import { runWithStartContext } from "@tanstack/start-storage-context";
  *
  * Usage: `await callServerFn(() => myServerFn({ data: { ... } }))`.
  */
-export function callServerFn<T>(fn: () => T | Promise<T>, request?: Request): Promise<T> {
-  return runWithStartContext(
+export async function callServerFn<T>(fn: () => T | Promise<T>, request?: Request): Promise<T> {
+  return await runWithStartContext(
     {
       // The pipeline only reads `request` and `contextAfterGlobalMiddlewares`
       // on the server path; the rest satisfy the context's type contract and

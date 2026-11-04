@@ -22,7 +22,7 @@ is *how the client caches, shares, and refetches it.* They compose:
   demand, or kept fresh (`staleTime`, invalidation, mutations). The `queryFn`
   can be a server function.
 
-Query is wired SSR-aware (see `app/router.tsx` — `routerWithQueryClient` + a
+Query is wired SSR-aware (see `app/router.tsx` — `setupRouterSsrQueryIntegration` + a
 `QueryClient` in router context). Prefetch in a loader so data is dehydrated
 into the HTML and hydrated on the client with no loading flash:
 

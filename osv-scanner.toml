@@ -40,5 +40,8 @@
 # adding an entry here is `safe:human`.
 #
 # ── Current waivers ──────────────────────────────────────────────────────────
-# None. The file exists so the mechanism is discoverable the moment it is first
-# needed, rather than being invented under time pressure during an incident.
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2026-11-11
+reason = "deepmerge@4.3.1 (low, prototype poisoning in mergeObject); no fixed version is published. Path: @tanstack/nitro-v2-vite-plugin -> nitropack -> @rollup/plugin-node-resolve -> deepmerge, which merges plugin options at build time only; deepmerge is absent from .output/server. Approved by repo owner 2026-11-04, 7-day window: on expiry take the fix if published, else re-review."
