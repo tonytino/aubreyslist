@@ -12,6 +12,8 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
+  // `pnpm test:e2e:install` installs only Chromium. A non-Chromium project
+  // needs that script extended.
   projects: [
     // Default E2E project: the full suite EXCEPT the a11y spec. The a11y spec
     // runs in its own always-on, DB-free CI lane (.github/workflows/a11y.yml) so

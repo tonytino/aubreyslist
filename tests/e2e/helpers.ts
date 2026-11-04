@@ -33,9 +33,15 @@ export async function waitForHydration(page: Page): Promise<void> {
  * between runs. Visibility alone does not mean the animation has ended.
  */
 export async function waitForMenuAnimations(page: Page): Promise<void> {
-  await page
-    .locator('[role="menu"][data-state="open"]')
-    .evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+  await page.locator('[role="menu"][data-state="open"]').evaluate((el) =>
+    Promise.allSettled(
+      el
+        .getAnimations({ subtree: true })
+        // An infinite animation never finishes, so skip it.
+        .filter((a) => a.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY)
+        .map((a) => a.finished)
+    )
+  );
 }
 
 /**
