@@ -359,11 +359,11 @@ jobs:
           DATABASE_URL: ${{ secrets.CI_E2E_DATABASE_URL }}
 
       # TODO: cache `~/.cache/ms-playwright` keyed on the OS +
-      # hashFiles('pnpm-lock.yaml') to skip re-downloading Playwright browsers
+      # hashFiles('pnpm-lock.yaml') to skip re-downloading Playwright Chromium
       # on every run. Deferred until a Playwright-version-pinned
       # actions/cache commit SHA can be supplied (the repo pins every action by
       # SHA + `# vX.Y.Z`, so no tag-pinned action is added here).
-      - name: Install Playwright browsers
+      - name: Install Playwright Chromium
         if: steps.e2e.outputs.enabled == 'true'
         run: pnpm test:e2e:install
 

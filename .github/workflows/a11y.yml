@@ -26,6 +26,8 @@ jobs:
   a11y:
     name: Accessibility (axe-core)
     runs-on: ubuntu-latest
+    # A normal run takes about 2 min. Fail fast if an apt mirror stalls.
+    timeout-minutes: 15
 
     steps:
       # SHAs copied verbatim from .github/workflows/ci.yml (the repo pins every
