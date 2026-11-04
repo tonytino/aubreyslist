@@ -1,0 +1,2 @@
+- `[manual]` Updated TanStack Start, Router, and Query to clear a critical TanStack Start vulnerability that was blocking production deploys, and moved SSR query hydration to `@tanstack/react-router-ssr-query`, the replacement for the retired `react-router-with-query`.
+- `[manual]` Raised the security floors for fast-uri, brace-expansion, minimatch, glob, node-forge, seroval, serialize-javascript, source-map-js, and qs to versions that fix their published advisories.
