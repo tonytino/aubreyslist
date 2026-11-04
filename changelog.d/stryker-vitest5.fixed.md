@@ -1,0 +1,2 @@
+- `[manual]` Bumped `@stryker-mutator/core` and `@stryker-mutator/vitest-runner` to `^10.1.1`, whose test-name filter matches vitest 5's `' > '` separator, so the mutation gate runs tests again instead of scoring 0.00.
+- `[manual]` Scoped the `@babel/core` override to the 7.x line (`@babel/core@<8`). Stryker 10's instrumenter needs Babel 8, and the global override forced it back to core 7, which crashed instrumentation.
