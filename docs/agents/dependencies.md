@@ -76,7 +76,8 @@ versions are **not** all the same minor (e.g. `react-start@1.168.x` depends on
 **When updating TanStack versions:**
 
 1. Bump the top-level `@tanstack/*` ranges in `package.json` together
-   (`react-router`, `react-start`, `router-cli`, `nitro-v2-vite-plugin`) —
+   (`react-router`, `react-start`, `react-router-ssr-query`, `router-cli`,
+   `nitro-v2-vite-plugin`, `start-storage-context`) —
    never one in isolation.
 2. Run `pnpm install` and inspect the `pnpm-lock.yaml` diff: confirm a single
    coherent set with no leftover old-line packages (e.g. no stray

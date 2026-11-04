@@ -47,16 +47,25 @@ blockExoticSubdeps: true
 # compiling a BRACE-CONTAINING pattern throws. A green build proves nothing
 # here; re-verify the pairing by resolving the tree, not by trusting CI.
 #
+# brace-expansion is exact-pinned: GHSA-mh99-v99m-4gvg is fixed only on the 5.x
+# line (no 2.x/3.x backports), so every copy must be 5.x, which in turn holds
+# minimatch at a line that uses the named `.expand`.
+#
 # The minimatch and glob keys are global, so they are CEILINGS as well as
 # floors. minimatch ^11 overrides @stryker-mutator/core's declared `~10.2.4`,
 # and glob ^14 overrides archiver-utils' ^10 and @vercel/nft's / Sentry's ^13 —
-# all three call APIs glob 14 still exports (`glob`, `sync`). Both majors were
-# required: GHSA-g3hv-75wg-m249 (minimatch, fixed 11.0.1) and
-# GHSA-3g3m-2fjr-6pw4 (glob, fixed 14.0.2) have no backports to the older lines.
+# all three call APIs glob 14 still exports (`glob`, `sync`). They clear
+# GHSA-g3hv-75wg-m249 (minimatch 11.0.1) and GHSA-3g3m-2fjr-6pw4 (glob 14.0.2),
+# which have no backports to the older lines.
+# Remove the minimatch key once @stryker-mutator/core declares minimatch >=11.
+# Remove the glob key once archiver-utils, @vercel/nft and
+# @sentry/bundler-plugins declare glob >=14.0.2.
 #
-# seroval and seroval-plugins move in lock-step and stay on the 1.6 line that
-# @tanstack/router-core declares (^1.6.7); GHSA-f86p-h4j2-7qgj is fixed in
-# 1.6.11.
+# seroval and seroval-plugins move in lock-step. `~1.6.11` is a deliberate
+# ceiling below 1.7.x: it clears GHSA-f86p-h4j2-7qgj (fixed 1.6.11) without
+# taking an unvetted minor into the SSR serializer.
+# Remove both keys once the resolved @tanstack/router-core declares
+# seroval >=1.6.11.
 overrides:
   browserslist: "^4.28.7"
   shell-quote: "^1.8.4"
