@@ -66,6 +66,11 @@ blockExoticSubdeps: true
 # taking an unvetted minor into the SSR serializer.
 # Remove both keys once the resolved @tanstack/router-core declares
 # seroval >=1.6.11.
+#
+# @babel/core is floored on the 7.x line ONLY (`@babel/core@<8`). A bare key
+# also forced @stryker-mutator/instrumenter 10 (which declares ~8.0.0) back onto
+# core 7, so Babel 7 parsed the AST and Babel 8's generator crashed printing it
+# (TSFunctionType `parameters` was renamed `params`).
 overrides:
   browserslist: "^4.28.7"
   shell-quote: "^1.8.4"
@@ -76,7 +81,7 @@ overrides:
   fast-uri: "^3.1.9"
   minimatch: "^11.0.1"
   brace-expansion: "5.0.12"
-  "@babel/core": "^7.29.6"
+  "@babel/core@<8": "^7.29.6"
   qs: "^6.16.1"
   diff: "^8.0.3"
   glob: "^14.0.2"
