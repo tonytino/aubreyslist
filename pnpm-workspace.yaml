@@ -30,8 +30,8 @@ blockExoticSubdeps: true
 # field, which pnpm 11 no longer reads (see https://pnpm.io/settings). Several
 # of these are security floors (browserslist, shell-quote, h3, tar, ws, qs,
 # fast-uri, minimatch, brace-expansion, glob, node-forge, seroval,
-# serialize-javascript, source-map-js), so keeping them effective is part of the
-# same supply-chain posture.
+# serialize-javascript, source-map-js, @babel/core), so keeping them effective is
+# part of the same supply-chain posture.
 #
 # brace-expansion + minimatch are floored TOGETHER, and the pairing is
 # load-bearing: the brace-expansion major pinned here must be the one the pinned
@@ -67,10 +67,12 @@ blockExoticSubdeps: true
 # Remove both keys once the resolved @tanstack/router-core declares
 # seroval >=1.6.11.
 #
-# @babel/core is floored on the 7.x line ONLY (`@babel/core@<8`). A bare key
-# also forced @stryker-mutator/instrumenter 10 (which declares ~8.0.0) back onto
-# core 7, so Babel 7 parsed the AST and Babel 8's generator crashed printing it
-# (TSFunctionType `parameters` was renamed `params`).
+# @babel/core is floored on the 7.x line only (`@babel/core@<8`), which clears
+# GHSA-4x5r-pxfx-6jf8. The 8.x line is left unfloored on purpose: 8.0.9 is past
+# the fix. A bare key would also force @stryker-mutator/instrumenter 10 (which
+# declares ~8.0.0) back onto core 7, where Babel 7 parses the AST and Babel 8's
+# generator crashes printing it (TSFunctionType `parameters` became `params`).
+# Remove once no Babel 7 consumer resolves below 7.29.6.
 overrides:
   browserslist: "^4.28.7"
   shell-quote: "^1.8.4"
