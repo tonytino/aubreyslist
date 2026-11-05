@@ -26,6 +26,9 @@ const EXPECTED_LABELS = [
   "skip-changelog",
   "review:adversarial-passed",
   "skip-review",
+  "visuals:none",
+  "visuals:generate",
+  "visuals:still-valid",
 ];
 
 describe("LABELS", () => {

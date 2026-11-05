@@ -104,6 +104,25 @@ export const LABELS = [
     color: "ededed",
     description: "Bypasses the adversarial-review gate (trivial/human-only change)",
   },
+
+  // ── Visuals ─────────────────────────────────────────────────────────────────
+  // Drive .github/workflows/pr-visuals.yml. Descriptions mirror tonytino/agent-kit.
+  {
+    name: "visuals:none",
+    color: "c5def5",
+    description: "No UI impact. The pr-visuals check passes.",
+  },
+  {
+    name: "visuals:generate",
+    color: "1d76db",
+    description: "Capture before/after visuals into the PR body. Removed after the run starts.",
+  },
+  {
+    name: "visuals:still-valid",
+    color: "0e8a16",
+    description:
+      "The visuals still match this commit. Use after changes that do not affect the UI.",
+  },
 ];
 
 /**
