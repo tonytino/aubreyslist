@@ -39,7 +39,9 @@ of truth); this skill routes you.
    result **matches the artifact**. Then **`pnpm preflight`**.
 6. **Open the PR** with `Fixes AUB-<n>`, **`safe:human`** + required `type:*` /
    `size:*` labels, a `changelog.d/` fragment, and the `## Adversarial review`
-   block. Move the issue to **`In Review`**.
+   block. Write a scenarios block for the redesigned pages and apply
+   `visuals:generate`, never `visuals:none` (`docs/agents/pr-visuals.md`). Move
+   the issue to **`In Review`**.
 7. **Drive CI green, then stop.** Subscribe to PR activity (`subscribe_pr_activity`)
    and re-kick on failures until green — then **hand it to the human to merge**.
    Never self-merge. After merge, archive the Linear issue (250-issue cap).
