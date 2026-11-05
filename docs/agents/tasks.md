@@ -198,4 +198,6 @@ gh issue edit <NUMBER> --remove-label "status:in-progress" --add-label "status:b
 | `type:chore` | Maintenance / tooling |
 | `type:docs` | Documentation |
 | `skip-changelog` | PR intentionally ships without a changelog fragment |
-| `visuals:none` / `visuals:generate` / `visuals:still-valid` | Drive the pr-visuals check. See `docs/agents/pr-visuals.md` |
+| `visuals:none` | No UI impact. The pr-visuals check passes. See `docs/agents/pr-visuals.md` |
+| `visuals:generate` | Capture before/after visuals into the PR body. The job removes this label. |
+| `visuals:still-valid` | The visuals still match this commit. Use after changes that do not affect the UI. The job removes this label. |

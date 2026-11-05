@@ -115,13 +115,13 @@ export const LABELS = [
   {
     name: "visuals:generate",
     color: "1d76db",
-    description: "Capture before/after visuals into the PR body. Removed after the run starts.",
+    description: "Capture before/after visuals into the PR body. The job removes this label.",
   },
   {
     name: "visuals:still-valid",
     color: "0e8a16",
     description:
-      "The visuals still match this commit. Use after changes that do not affect the UI.",
+      "The visuals still match this commit. Use after changes that do not affect the UI. The job removes this label.",
   },
 ];
 

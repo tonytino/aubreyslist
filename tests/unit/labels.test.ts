@@ -51,6 +51,19 @@ describe("LABELS", () => {
     expect(otherTypeColors).not.toContain(epic.color);
   });
 
+  it("mirrors the tonytino/agent-kit pr-visuals label descriptions", () => {
+    const descriptionOf = (name: string) =>
+      LABELS.find((l: { name: string }) => l.name === name)?.description;
+    expect(descriptionOf("visuals:none")).toBe("No UI impact. The pr-visuals check passes.");
+    expect(descriptionOf("visuals:generate")).toBe(
+      "Capture before/after visuals into the PR body. The job removes this label."
+    );
+    expect(descriptionOf("visuals:still-valid")).toBe(
+      "The visuals still match this commit. Use after changes that do not affect the UI. " +
+        "The job removes this label."
+    );
+  });
+
   it("gives every label a 6-digit hex color and a non-empty description", () => {
     for (const label of LABELS) {
       expect(label.name, "label has a name").toBeTruthy();

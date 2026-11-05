@@ -2,14 +2,11 @@ name: pr-visuals
 
 # Label-driven before/after visuals in the PR body. Usage: docs/agents/pr-visuals.md.
 # A label removed with GITHUB_TOKEN starts no new run, so `check` runs in the same run,
-# after `generate` and `still-valid`. Fork PRs get a read-only token and cannot generate.
+# after `generate` and `still-valid`. `edited` runs only `check`.
+# Fork PRs get a read-only token and cannot generate.
 on:
   pull_request:
-    types: [opened, reopened, synchronize, labeled, unlabeled]
-
-concurrency:
-  group: pr-visuals-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled]
 
 permissions: {}
 
@@ -17,6 +14,10 @@ jobs:
   generate:
     if: github.event.action == 'labeled' && github.event.label.name == 'visuals:generate'
     runs-on: ubuntu-latest
+    # One writer per PR. queue: max keeps every pending run, so no label request is dropped.
+    concurrency:
+      group: pr-visuals-write-${{ github.event.pull_request.number }}
+      queue: max
     permissions:
       contents: write
       pull-requests: write
@@ -24,33 +25,43 @@ jobs:
       deployments: read
     env:
       # Repo secret. JSON headers sent only to the before and after origins (Vercel bypass).
+      # Requires "after.environment" in .github/pr-visuals.json.
       PR_VISUALS_HEADERS: ${{ secrets.PR_VISUALS_HEADERS }}
     steps:
-      - uses: tonytino/agent-kit/pr-visuals@v0.1.0
+      - uses: tonytino/agent-kit/pr-visuals@8872dc8400cf5693308c45368c5d5da1c80c1921 # pr-visuals-v0.1.0
         with:
           mode: generate
 
   still-valid:
     if: github.event.action == 'labeled' && github.event.label.name == 'visuals:still-valid'
     runs-on: ubuntu-latest
+    concurrency:
+      group: pr-visuals-write-${{ github.event.pull_request.number }}
+      queue: max
     permissions:
       contents: read
       pull-requests: write
       issues: write
     steps:
-      - uses: tonytino/agent-kit/pr-visuals@v0.1.0
+      - uses: tonytino/agent-kit/pr-visuals@8872dc8400cf5693308c45368c5d5da1c80c1921 # pr-visuals-v0.1.0
         with:
           mode: still-valid
 
   check:
+    name: pr-visuals-check
     needs: [generate, still-valid]
     # Dependabot is exempt: it cannot write a scenarios block or apply labels. A skipped job
     # satisfies a required check.
     if: ${{ !cancelled() && github.event.pull_request.user.login != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
+    # The check reads the current PR state, so a newer check can replace an older one.
+    concurrency:
+      group: pr-visuals-check-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       pull-requests: read
+      issues: read
     steps:
-      - uses: tonytino/agent-kit/pr-visuals@v0.1.0
+      - uses: tonytino/agent-kit/pr-visuals@8872dc8400cf5693308c45368c5d5da1c80c1921 # pr-visuals-v0.1.0
         with:
           mode: check
