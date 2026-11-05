@@ -51,8 +51,8 @@ describe("LABELS", () => {
     expect(otherTypeColors).not.toContain(epic.color);
   });
 
-  it("mirrors the tonytino/agent-kit pr-visuals label descriptions", () => {
-    // Source: pr-visuals/examples/pr-visuals.yml in tonytino/agent-kit.
+  it("mirrors the tonytino/agent-sdk pr-visuals label descriptions", () => {
+    // Source: pr-visuals/examples/pr-visuals.yml in tonytino/agent-sdk.
     const descriptionOf = (name: string) =>
       LABELS.find((l: { name: string }) => l.name === name)?.description;
     expect(descriptionOf("visuals:none")).toBe("No UI impact. The pr-visuals check passes.");
