@@ -13,8 +13,8 @@ source of truth for this repo — read it before changing anything.
 - Every worker output goes through the specialist review panel (`review-loop`
   skill, 2 reviews per lens).
 - Ship via PR: exactly one each of `type:*` / `size:*` / `safe:*` labels, a
-  `## TL;DR` section, an `## Adversarial review` block, and a `changelog.d/`
-  fragment.
+  `## TL;DR` section, an `## Adversarial review` block, a `changelog.d/`
+  fragment, and a `visuals:*` label (`docs/agents/pr-visuals.md`).
 - `safe:agent` = babysit CI, resolve conflicts, self-merge once green (runbook
   in `docs/agents/orchestration.md`). `safe:human` = drive CI green, then stop —
   a human always clicks merge. Owner-gated surfaces are always `safe:human`

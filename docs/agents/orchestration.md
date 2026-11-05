@@ -222,6 +222,10 @@ PR once CI passes"). For `safe:human` PRs, see the next section.
    scope.
 2. **Merge conflicts are your job.** Rebase onto `main` (or merge `main` in),
    resolve, and re-drive CI — don't hand conflicts to the human.
+   - After any push or rebase, re-apply `visuals:still-valid` (no UI change) or
+     `visuals:generate`. After `generate`, wait for that run's own
+     `pr-visuals-check`: a check from another event can be red while `generate`
+     waits up to 15 min for the Preview deployment (`docs/agents/pr-visuals.md`).
 3. **Preconditions before merging** — verify all of:
    - All required checks are green.
    - `review:adversarial-passed` plus a well-formed panel record (or

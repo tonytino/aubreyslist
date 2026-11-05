@@ -23,8 +23,6 @@ The tool is `pr-visuals` from `tonytino/agent-kit`. Its agent skill covers the f
 | `visuals:generate` | Capture before/after visuals into the PR body. The job removes this label. |
 | `visuals:still-valid` | The visuals still match this commit. Use after changes that do not affect the UI. The job removes this label. |
 
-`scripts/labels.mjs` defines them.
-
 ## Scenarios block
 
 An HTML comment in the PR body. Keep exactly one. List only the pages and flows the PR
@@ -57,6 +55,8 @@ Watch the run (`gh run watch`), then read the job comment (`gh pr view <number> 
   `visuals:generate`.
 - Before-side `Not present before this PR`: expected for new pages and UI. Does not fail the
   check.
+- No successful Preview deployment: `generate` times out after 15 minutes. Fix the deploy
+  first, then apply `visuals:generate`.
 - The label stays on and no comment appears: remove the label, then add it again.
 
 ## After new commits
@@ -80,11 +80,10 @@ The check fails as stale when the latest capture is for an older commit.
 - Dependabot PRs skip the check.
 - Fork PRs cannot generate. A maintainer pushes the branch to this repo and opens a new PR.
 
-## Owner setup (@tonytino)
+## Setup facts
 
-1. Create the repo secret `PR_VISUALS_HEADERS`. Value, using the Vercel Protection Bypass for
-   Automation secret:
-   `{"x-vercel-protection-bypass":"<secret>","x-vercel-set-bypass-cookie":"true"}`.
-   Previews are SSO-protected, so `generate` cannot reach them without it.
-2. Create the labels: `node scripts/labels.mjs`.
-3. In the `main` ruleset, require the status check `pr-visuals-check`.
+- Repo secret `PR_VISUALS_HEADERS` holds the Vercel Protection Bypass for Automation headers:
+  `{"x-vercel-protection-bypass":"<secret>","x-vercel-set-bypass-cookie":"true"}`. Previews are
+  SSO-protected, so `generate` cannot reach them without it.
+- `scripts/labels.mjs` defines the `visuals:*` labels.
+- `pr-visuals-check` is a required status on `main`.
