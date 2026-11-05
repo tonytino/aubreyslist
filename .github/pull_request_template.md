@@ -21,10 +21,10 @@ Resolves #
 
 - [ ]
 
-## Visuals
+## Visual scenarios
 <!-- No UI impact: apply `visuals:none`. UI change: add a scenarios block that lists only the
-changed pages and flows, then apply `visuals:generate`. The job writes the visuals into this
-body. Block format: docs/agents/pr-visuals.md. -->
+changed pages and flows, then apply `visuals:generate`. The job appends a `## Visuals` section
+at the end of this body. Block format: docs/agents/pr-visuals.md. -->
 
 ## Propagation
 <!-- Fill this out if this PR changes anything an existing instance would care about. -->

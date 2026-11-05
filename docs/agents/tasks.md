@@ -123,8 +123,8 @@ gh pr create --title "<type>: <description>"
 ```
 
 The PR body is auto-populated from `.github/pull_request_template.md` — fill in
-its sections (`## Summary`, `Resolves #<NUMBER>`, `## Test plan`, the
-Propagation checklist) rather than writing a body from scratch. Web sessions
+its sections (`## Summary`, `Resolves #<NUMBER>`, `## Test plan`,
+`## Visual scenarios`, the Propagation checklist) rather than writing a body from scratch. Web sessions
 opening PRs through the GitHub MCP mirror the same structure. The
 `Resolves #<NUMBER>` link auto-closes the issue on merge.
 
@@ -141,8 +141,12 @@ enforces this and names any missing dimension):
 
 These usually carry over from the issue; add any that are missing.
 
-**Dependabot PRs are exempt** from the `pr-labels` gate (and from `pr-tldr` and
-the adversarial-review gate): a bot can't run the labeling/review workflow.
+Every PR also needs a `visuals:*` label for the `pr-visuals-check` status:
+`visuals:none`, or a scenarios block plus `visuals:generate`. See
+`docs/agents/pr-visuals.md`.
+
+**Dependabot PRs are exempt** from the `pr-labels` gate (and from `pr-tldr`,
+the adversarial-review gate, and `pr-visuals-check`): a bot can't run the labeling/review workflow.
 `.github/dependabot.yml` applies the labels it can know up front
 (`dependencies`, `skip-changelog`, `safe:human`); the `pr-title` and
 `owner-review` gates still run on its PRs.
@@ -198,6 +202,6 @@ gh issue edit <NUMBER> --remove-label "status:in-progress" --add-label "status:b
 | `type:chore` | Maintenance / tooling |
 | `type:docs` | Documentation |
 | `skip-changelog` | PR intentionally ships without a changelog fragment |
-| `visuals:none` | No UI impact. The pr-visuals check passes. See `docs/agents/pr-visuals.md` |
-| `visuals:generate` | Capture before/after visuals into the PR body. The job removes this label. |
-| `visuals:still-valid` | The visuals still match this commit. Use after changes that do not affect the UI. The job removes this label. |
+| `visuals:none` | No UI impact; `pr-visuals-check` passes. See `docs/agents/pr-visuals.md` |
+| `visuals:generate` | Capture before/after visuals into the PR body. See `docs/agents/pr-visuals.md` |
+| `visuals:still-valid` | Visuals still match this commit (no UI change). See `docs/agents/pr-visuals.md` |

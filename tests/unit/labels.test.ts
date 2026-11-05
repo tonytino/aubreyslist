@@ -52,6 +52,7 @@ describe("LABELS", () => {
   });
 
   it("mirrors the tonytino/agent-kit pr-visuals label descriptions", () => {
+    // Source: pr-visuals/examples/pr-visuals.yml in tonytino/agent-kit.
     const descriptionOf = (name: string) =>
       LABELS.find((l: { name: string }) => l.name === name)?.description;
     expect(descriptionOf("visuals:none")).toBe("No UI impact. The pr-visuals check passes.");
