@@ -28,7 +28,7 @@ jobs:
       # Requires "after.environment" in .github/pr-visuals.json.
       PR_VISUALS_HEADERS: ${{ secrets.PR_VISUALS_HEADERS }}
     steps:
-      - uses: tonytino/agent-sdk/pr-visuals@54cfaccfa492f476b4a04fba23591d1fbfd002ed # pr-visuals-v0.1.0
+      - uses: tonytino/agent-kit/pr-visuals@5805cfda09f036c8c43bbb09181edbcb6fb26a26 # pr-visuals-v0.1.0
         with:
           mode: generate
 
@@ -43,7 +43,7 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - uses: tonytino/agent-sdk/pr-visuals@54cfaccfa492f476b4a04fba23591d1fbfd002ed # pr-visuals-v0.1.0
+      - uses: tonytino/agent-kit/pr-visuals@5805cfda09f036c8c43bbb09181edbcb6fb26a26 # pr-visuals-v0.1.0
         with:
           mode: still-valid
 
@@ -62,6 +62,6 @@ jobs:
       pull-requests: read
       issues: read
     steps:
-      - uses: tonytino/agent-sdk/pr-visuals@54cfaccfa492f476b4a04fba23591d1fbfd002ed # pr-visuals-v0.1.0
+      - uses: tonytino/agent-kit/pr-visuals@5805cfda09f036c8c43bbb09181edbcb6fb26a26 # pr-visuals-v0.1.0
         with:
           mode: check

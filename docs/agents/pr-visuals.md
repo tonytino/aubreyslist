@@ -12,8 +12,8 @@ To apply a label: `gh pr edit <number> --add-label <label>` (or the GitHub MCP).
 Only the CI job's result comment passes the check. A visuals block you write or paste into
 the body does not.
 
-The tool is `pr-visuals` from `tonytino/agent-sdk`. Its agent skill covers the full flow:
-[`SKILL.md`](https://github.com/tonytino/agent-sdk/blob/main/pr-visuals/skills/pr-visuals/SKILL.md).
+The tool is `pr-visuals` from `tonytino/agent-kit`. Its agent skill covers the full flow:
+[`SKILL.md`](https://github.com/tonytino/agent-kit/blob/main/pr-visuals/skills/pr-visuals/SKILL.md).
 
 ## Labels
 
@@ -44,7 +44,7 @@ changes, one scenario per distinct change. Never capture the whole app.
 - Add `"video": true` only when motion or a multi-step flow is the change.
 
 Full format and limits:
-[`references/scenarios.md`](https://github.com/tonytino/agent-sdk/blob/main/pr-visuals/skills/pr-visuals/references/scenarios.md).
+[`references/scenarios.md`](https://github.com/tonytino/agent-kit/blob/main/pr-visuals/skills/pr-visuals/references/scenarios.md).
 
 ## Read the result
 
@@ -74,7 +74,7 @@ The check fails as stale when the latest capture is for an older commit.
 - Before is production (`https://www.aubreys-list.com`). After is the Vercel `Preview`
   deployment for the head commit, awaited up to 15 minutes.
 - Workflow: `.github/workflows/pr-visuals.yml`. Images go to the orphan branch `pr-visuals`.
-  Do not delete it. agent-sdk writes a `vercel.json` there that turns off Vercel deployments
+  Do not delete it. agent-kit writes a `vercel.json` there that turns off Vercel deployments
   of that branch.
 - Captures show what the pages render. Do not capture pages with secrets or personal data.
 - Dependabot PRs skip the check.

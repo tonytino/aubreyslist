@@ -106,7 +106,7 @@ export const LABELS = [
   },
 
   // ── Visuals ─────────────────────────────────────────────────────────────────
-  // Drive .github/workflows/pr-visuals.yml. Descriptions mirror tonytino/agent-sdk.
+  // Drive .github/workflows/pr-visuals.yml. Descriptions mirror tonytino/agent-kit.
   {
     name: "visuals:none",
     color: "c5def5",
