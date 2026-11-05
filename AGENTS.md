@@ -28,6 +28,7 @@ Source of truth for all agents in this repo. Read this file fully before making 
 | Planning, epics, tracked work (Linear)        | `docs/agents/linear.md`       |
 | Epics via GitHub issues (legacy/in-flight)    | `docs/agents/issues.md`       |
 | Acting on Vercel preview comments (visual feedback) | `docs/agents/preview-feedback.md` |
+| Before/after visuals on a PR (`visuals:*` labels) | `docs/agents/pr-visuals.md` |
 | Orchestrating agents, reviewing agent output  | `docs/agents/orchestration.md` |
 | Redesigning a page (design → approval → code)  | `docs/agents/design-orchestration.md` |
 | Routes, pages, navigation                     | `docs/agents/routing.md`      |

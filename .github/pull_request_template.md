@@ -21,6 +21,15 @@ Resolves #
 
 - [ ]
 
+## Visuals
+<!-- No UI impact: delete the scenarios block below and apply `visuals:none`.
+UI change: edit the block to list only the changed pages and flows, then apply
+`visuals:generate`. The tool writes the visuals into this body. See docs/agents/pr-visuals.md. -->
+
+<!-- pr-visuals:scenarios
+{ "scenarios": [ { "name": "Home", "path": "/" } ] }
+-->
+
 ## Propagation
 <!-- Fill this out if this PR changes anything an existing instance would care about. -->
 
