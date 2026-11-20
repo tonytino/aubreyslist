@@ -11,5 +11,6 @@
       "deviceScaleFactor": 3
     }
   },
-  "fullPage": true
+  "fullPage": true,
+  "darkMode": true
 }

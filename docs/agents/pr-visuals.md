@@ -73,6 +73,8 @@ The check fails as stale when the latest capture is for an older commit.
   effect after it merges.
 - Before is production (`https://www.aubreys-list.com`). After is the Vercel `Preview`
   deployment for the head commit, awaited up to 15 minutes.
+- `darkMode` is on. Each scenario also gets an After (dark) column: the preview with the
+  `dark` color scheme. Its failures fail the check like after-side failures.
 - Workflow: `.github/workflows/pr-visuals.yml`. Images go to the orphan branch `pr-visuals`.
   Do not delete it. agent-kit writes a `vercel.json` there that turns off Vercel deployments
   of that branch.

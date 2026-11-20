@@ -1,0 +1,1 @@
+- `[manual]` PR visuals add an After (dark) column (agent-kit pr-visuals 0.2.0).
