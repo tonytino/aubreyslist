@@ -70,6 +70,12 @@ export const ALLOWLIST = new Set(
 // make on its own. Match is by package name and its reported license string.
 export const REVIEWED_EXCEPTIONS = [
   {
+    name: "sentry",
+    license: "FSL-1.1-Apache-2.0",
+    reason:
+      "Sentry's CLI, a transitive *build-time* dep of @sentry/bundler-plugins (via @sentry/tanstackstart-react 11). Uploads source maps during the build, never shipped in the app bundle and not modified by us. FSL only restricts competing commercial use and converts to Apache-2.0 after 2 years. Owner-approved for #429.",
+  },
+  {
     name: "lightningcss",
     license: "MPL-2.0",
     reason:

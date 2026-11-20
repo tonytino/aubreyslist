@@ -64,6 +64,15 @@ export default defineConfig({
     // build-time tooling (never shipped to the client), so reading it here does
     // not breach the "no process.env outside app/env.ts" rule, which governs app
     // runtime code and secrets. See docs/agents/environment.md.
-    nitroV2Plugin(process.env.VERCEL ? { preset: "vercel" } : undefined),
+    //
+    // `externals.inline: ["lucide-react"]` bundles lucide into the server output
+    // instead of leaving it as a traced external. Its `exports` map lists a
+    // `node` condition (CJS) ahead of `import` (ESM), so Node resolves the CJS
+    // entry at runtime, but Nitro's file trace copies only the ESM build.
+    // Inlining avoids ERR_MODULE_NOT_FOUND during SSR.
+    nitroV2Plugin({
+      ...(process.env.VERCEL ? { preset: "vercel" } : {}),
+      externals: { inline: ["lucide-react"] },
+    }),
   ],
 });

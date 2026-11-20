@@ -87,7 +87,7 @@ overrides:
   qs: "^6.16.1"
   diff: "^8.0.3"
   glob: "^14.0.2"
-  node-forge: "^1.4.1"
+  node-forge: "^1.4.3"
   seroval: "~1.6.11"
   seroval-plugins: "~1.6.11"
   serialize-javascript: "^7.1.3"
@@ -99,12 +99,11 @@ overrides:
 # from pnpm 9, which ran every dependency's scripts unconditionally). Only the
 # packages set to `true` here may run postinstall/build scripts — an explicit
 # allowlist that shrinks install-time attack surface. Each needs its script for
-# a real reason: esbuild / @parcel/watcher / @sentry/cli fetch or compile a
+# a real reason: esbuild / @parcel/watcher fetch or compile a
 # native binary, @biomejs/biome downloads its platform binary, lefthook installs
 # git hooks. Refresh candidates with `pnpm approve-builds`.
 allowBuilds:
   "@biomejs/biome": true
   "@parcel/watcher": true
-  "@sentry/cli": true
   esbuild: true
   lefthook: true
