@@ -165,7 +165,9 @@ Per `docs/agents/linear.md`'s claim→branch→PR flow:
    **`safe:human`** — always. Put **`Fixes AUB-<n>`** in the body so merge
    transitions the issue to **Done**. Include the **`## Adversarial review`**
    section (panel record or escalation block) so the CI `adversarial-review` gate
-   passes (`docs/agents/orchestration.md`).
+   passes (`docs/agents/orchestration.md`). Write a scenarios block for the
+   redesigned pages and apply `visuals:generate`, never `visuals:none`
+   (`docs/agents/pr-visuals.md`).
 2. **Move the issue to `In Review`** (`save_issue`). The merged PR closes it —
    never set `Done` by hand.
 3. **Drive CI to green, do not merge.** Subscribe to PR activity
