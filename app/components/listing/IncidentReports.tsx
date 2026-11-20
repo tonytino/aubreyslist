@@ -482,6 +482,7 @@ function IncidentEditForm({
 export function todayForDateInput(now: Date = new Date()): string {
   const localDay = toCalendarDayString(now);
   const utcDay = now.toISOString().slice(0, 10);
+  // biome-ignore lint/complexity/useMathMinMax: these are YYYY-MM-DD strings; Math.min would coerce them to NaN.
   return localDay < utcDay ? localDay : utcDay;
 }
 

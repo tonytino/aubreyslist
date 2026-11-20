@@ -168,6 +168,7 @@ async function renderMap(
     resultSetPending,
   };
   const listeners = new Set<() => void>();
+  // biome-ignore lint/correctness/noComponentHookFactories: test harness built once per render call; it closes over this call's mutable `box`/spies and is mounted exactly once as the route component.
   function Harness() {
     const [, force] = useReducer((n: number) => n + 1, 0);
     useEffect(() => {

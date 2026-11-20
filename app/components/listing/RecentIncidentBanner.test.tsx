@@ -48,16 +48,16 @@ describe("RecentIncidentBanner", () => {
 // Mirrors the listing-detail route's banner-visibility decision:
 //   const recent = findRecentIncident(incidents, now);
 //   {recent ? <RecentIncidentBanner occurredOn={recent.occurredOn} .../> : null}
+const bannerNow = new Date("2026-06-28T12:00:00Z");
+
+function BannerForIncidents({ incidents }: { incidents: Array<{ occurredOn: string }> }) {
+  const recent = findRecentIncident(incidents, bannerNow);
+  return recent ? (
+    <RecentIncidentBanner occurredOn={recent.occurredOn} nowMs={bannerNow.getTime()} />
+  ) : null;
+}
+
 describe("recent-incident banner visibility (route composition)", () => {
-  const now = new Date("2026-06-28T12:00:00Z");
-
-  function BannerForIncidents({ incidents }: { incidents: Array<{ occurredOn: string }> }) {
-    const recent = findRecentIncident(incidents, now);
-    return recent ? (
-      <RecentIncidentBanner occurredOn={recent.occurredOn} nowMs={now.getTime()} />
-    ) : null;
-  }
-
   it("renders the banner when a recent incident exists", () => {
     render(<BannerForIncidents incidents={[{ occurredOn: "2026-06-20" }]} />);
     expect(screen.getByRole("status", { name: "Recent incident warning" })).toBeInTheDocument();
