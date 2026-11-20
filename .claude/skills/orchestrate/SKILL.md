@@ -30,7 +30,8 @@ ship per PR conventions (`skip-review` is the sanctioned bypass).
 5. **Ship the PR.** Conventional-Commit title; one each of `type:*` / `size:*`
    / `safe:*`; `## TL;DR`; `## Adversarial review` block +
    `review:adversarial-passed` (or `skip-review`); `changelog.d/` fragment (or
-   `skip-changelog`); `Fixes AUB-<n>`. Check the owner-review gate: if the diff
+   `skip-changelog`); a `visuals:*` label (`docs/agents/pr-visuals.md`);
+   `Fixes AUB-<n>`. Check the owner-review gate: if the diff
    touches an owner-gated surface it MUST be `safe:human`
    (`docs/agents/governance.md` — a local check command lives there).
 6. **Merge or hand off.**
