@@ -66,10 +66,10 @@ export default defineConfig({
     // runtime code and secrets. See docs/agents/environment.md.
     //
     // `externals.inline: ["lucide-react"]` bundles lucide into the server output
-    // instead of leaving it as a traced external. Since lucide-react 1.61 its
-    // `exports` map lists a `node` condition (CJS) ahead of `import` (ESM): Node
-    // resolves the CJS entry at runtime, but Nitro's file trace copies only the
-    // ESM build, so every SSR render 500'd with ERR_MODULE_NOT_FOUND.
+    // instead of leaving it as a traced external. Its `exports` map lists a
+    // `node` condition (CJS) ahead of `import` (ESM), so Node resolves the CJS
+    // entry at runtime, but Nitro's file trace copies only the ESM build.
+    // Inlining avoids ERR_MODULE_NOT_FOUND during SSR.
     nitroV2Plugin({
       ...(process.env.VERCEL ? { preset: "vercel" } : {}),
       externals: { inline: ["lucide-react"] },
