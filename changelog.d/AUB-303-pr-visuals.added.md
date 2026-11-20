@@ -1,0 +1,1 @@
+- `[manual]` Added the pr-visuals check: label-driven before/after screenshots in PR bodies (`docs/agents/pr-visuals.md`).
