@@ -87,7 +87,7 @@ overrides:
   qs: "^6.16.1"
   diff: "^8.0.3"
   glob: "^14.0.2"
-  node-forge: "^1.4.1"
+  node-forge: "^1.4.3"
   seroval: "~1.6.11"
   seroval-plugins: "~1.6.11"
   serialize-javascript: "^7.1.3"

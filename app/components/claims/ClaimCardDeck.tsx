@@ -83,7 +83,7 @@ export function ClaimCardDeck({
   cardCaption,
 }: ClaimCardDeckProps) {
   const initialIndex = initialAttribute ? CLAIM_ATTRIBUTES.indexOf(initialAttribute) : 0;
-  const [index, setIndex] = useState(initialIndex >= 0 ? initialIndex : 0);
+  const [index, setIndex] = useState(Math.max(initialIndex, 0));
   const [view, setView] = useState<"cards" | "summary">("cards");
   // Single-card Edit mode: answer (or Back) resolves immediately.
   const [single, setSingle] = useState(initialAttribute !== undefined);

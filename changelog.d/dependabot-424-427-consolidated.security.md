@@ -1,0 +1,2 @@
+- `[manual]` Consolidated dependabot updates #424–#427: 23 minor/patch npm bumps, `@sentry/tanstackstart-react` 10 → 11, `pnpm/action-setup` 6.1.1 and `github/codeql-action` 4.39.3, plus `hono` 4.13.18 and a raised `node-forge` floor (`^1.4.3`) to clear the osv-scanner advisories (GHSA-4m76-xfj5-7975, GHSA-h7mg-cq63-vhpq, and four node-forge GHSAs).
+- `[manual]` Inlined `lucide-react` into the Nitro server bundle so the production server no longer 500s on SSR after lucide-react's new `exports` map; disabled Biome 2.6's new Markdown formatter and fixed its new lint findings.
